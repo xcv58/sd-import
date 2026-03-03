@@ -959,8 +959,6 @@ class SwiftDialogProgressWindow:
         return self.proc is not None and self.proc.poll() is None
 
     def _send(self, line: str) -> None:
-        if not self.is_alive():
-            return
         try:
             with self.command_file.open("a") as f:
                 f.write(line.replace("\n", " ").strip() + "\n")
@@ -1694,7 +1692,8 @@ def command_run(args: argparse.Namespace, conn: sqlite3.Connection, config: Dict
         choice = ""
 
     if args.auto_import or choice == "Import New":
-        if args.notify and persistent_window is None:
+        pending_copy_files = int(summary.get("new_files", 0)) + int(summary.get("conflict_files", 0))
+        if args.notify and persistent_window is None and pending_copy_files > 0:
             persistent_window = start_persistent_status_window(
                 state_dir=state_dir,
                 title="SD Import",

@@ -408,6 +408,21 @@ class ProgressWindowTests(unittest.TestCase):
             self.assertIn("quit:", content)
             self.assertIsNone(win.proc)
 
+    def test_update_writes_even_if_proc_not_alive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            command_file = Path(tmp) / "dialog-command.log"
+            win = sd_import.SwiftDialogProgressWindow("/usr/local/bin/dialog", command_file)
+            proc = mock.Mock()
+            proc.poll.return_value = 0
+            win.proc = proc
+
+            win.update(percent=12.5, progress_text="Preparing...", message="Test message")
+
+            content = command_file.read_text()
+            self.assertIn("progress: 12", content)
+            self.assertIn("progresstext: Preparing...", content)
+            self.assertIn("message: Test message", content)
+
 
 if __name__ == "__main__":
     unittest.main()
