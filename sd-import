@@ -1,0 +1,85 @@
+#!/bin/bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PY=/usr/bin/python3
+CORE="$ROOT_DIR/sd_import.py"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  sd-import auto [LOCATION]
+  sd-import retry-latest
+  sd-import list-mounts [--json]
+  sd-import list-jobs [LIMIT|--limit N|--json]
+  sd-import prune [--days N] [--dry-run] [--vacuum]
+  sd-import <any sd_import.py args>
+
+Examples:
+  sd-import auto NYC
+  sd-import retry-latest
+  sd-import list-mounts --json
+  sd-import prune --days 180 --vacuum
+  sd-import run --input /Volumes/SDCARD --location NYC --notify
+EOF
+}
+
+latest_job_id() {
+  "$PY" - <<'PY'
+import sqlite3
+from pathlib import Path
+p = Path.home()/'.sd-import'/'state.db'
+if not p.exists():
+    print("")
+    raise SystemExit(0)
+conn = sqlite3.connect(p)
+row = conn.execute("SELECT job_id FROM jobs ORDER BY created_at DESC LIMIT 1").fetchone()
+print(row[0] if row else "")
+PY
+}
+
+if [[ $# -eq 0 ]]; then
+  usage
+  exit 0
+fi
+
+case "$1" in
+  auto)
+    shift
+    if [[ $# -gt 0 && -n "${1:-}" ]]; then
+      "$PY" "$CORE" auto --notify --location "$1"
+    else
+      "$PY" "$CORE" auto --notify
+    fi
+    ;;
+  retry-latest)
+    JOB_ID="$(latest_job_id)"
+    if [[ -z "$JOB_ID" ]]; then
+      echo "No jobs found"
+      exit 1
+    fi
+    "$PY" "$CORE" retry --job-id "$JOB_ID"
+    ;;
+  list-jobs)
+    shift
+    if [[ $# -eq 0 ]]; then
+      "$PY" "$CORE" list-jobs --limit 15
+    else
+      "$PY" "$CORE" list-jobs "$@"
+    fi
+    ;;
+  list-mounts)
+    shift
+    "$PY" "$CORE" list-mounts "$@"
+    ;;
+  prune)
+    shift
+    "$PY" "$CORE" prune "$@"
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    "$PY" "$CORE" "$@"
+    ;;
+esac

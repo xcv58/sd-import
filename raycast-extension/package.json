@@ -1,0 +1,78 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "sd-import",
+  "title": "SD Import",
+  "description": "Trigger and manage local SD import jobs",
+  "icon": "assets/icon.png",
+  "author": "xcv58",
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "auto-import",
+      "title": "SD Import Auto",
+      "subtitle": "Run auto scan for latest mounted card",
+      "description": "Trigger auto scan + interactive notification flow",
+      "mode": "no-view",
+      "arguments": [
+        {
+          "name": "location",
+          "type": "text",
+          "placeholder": "Optional location label"
+        }
+      ]
+    },
+    {
+      "name": "retry-latest",
+      "title": "SD Import Retry Latest",
+      "subtitle": "Retry failed/pending copies",
+      "description": "Retry copy for the latest job",
+      "mode": "no-view"
+    },
+    {
+      "name": "manual-volume-import",
+      "title": "SD Import Select Volume",
+      "subtitle": "Pick mounted removable volume manually",
+      "description": "Select a mounted removable volume and run import/scan",
+      "mode": "view",
+      "arguments": [
+        {
+          "name": "location",
+          "type": "text",
+          "placeholder": "Optional location label"
+        }
+      ]
+    },
+    {
+      "name": "jobs-dashboard",
+      "title": "SD Import Jobs",
+      "subtitle": "Browse, import, retry jobs",
+      "description": "Show recent jobs and actions",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "launcherPath",
+      "type": "textfield",
+      "required": true,
+      "title": "sd-import Path",
+      "description": "Absolute path to the sd-import launcher",
+      "default": "/Users/xcv58/work/macos-automation/sd-import"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.99.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.12.0",
+    "eslint": "^9.22.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2"
+  },
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "lint": "ray lint",
+    "fix-lint": "ray lint --fix"
+  }
+}

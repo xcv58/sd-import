@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.xcv58.sd-import</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/xcv58/work/macos-automation/sd_import.py</string>
+    <string>auto</string>
+    <string>--notify</string>
+    <string>--photos-base</string>
+    <string>/Users/xcv58/Pictures/Photos</string>
+    <string>--videos-base</string>
+    <string>/Users/xcv58/Downloads</string>
+  </array>
+
+  <key>StartOnMount</key>
+  <true/>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/xcv58/.sd-import/launchd.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/xcv58/.sd-import/launchd.err.log</string>
+</dict>
+</plist>
