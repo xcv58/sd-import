@@ -1,6 +1,8 @@
 import { getPreferenceValues } from "@raycast/api";
 import { execFile } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -34,7 +36,7 @@ export type RemovableMount = {
 
 export async function runSdImport(args: string[]) {
   const prefs = getPreferenceValues<Preferences>();
-  const launcherPath = prefs.launcherPath;
+  const launcherPath = expandPath(prefs.launcherPath);
 
   if (!launcherPath) {
     throw new Error("Preference launcherPath is empty");
@@ -46,6 +48,20 @@ export async function runSdImport(args: string[]) {
   return execFileAsync(launcherPath, args, {
     maxBuffer: 10 * 1024 * 1024,
   });
+}
+
+function expandPath(input: string): string {
+  const raw = (input || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  let expanded = raw;
+  if (expanded === "~" || expanded.startsWith("~/")) {
+    expanded = path.join(os.homedir(), expanded.slice(2));
+  }
+  expanded = expanded.replace(/\$\{HOME\}|\$HOME/g, os.homedir());
+  return path.resolve(expanded);
 }
 
 export function parseJsonOrNull<T>(text: string): T | null {

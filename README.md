@@ -10,7 +10,7 @@ This repo provides a deterministic SD-card importer with:
 - preview report before import
 - manual CLI trigger for debug/retry
 - Raycast extension + Alfred wrapper
-- one canonical launcher script (`/Users/xcv58/work/macos-automation/sd-import`)
+- one canonical launcher script (`$HOME/work/macos-automation/sd-import`)
 
 ## Why this solves your "yesterday + today" case
 
@@ -30,21 +30,21 @@ Folder naming:
 One-line install from this repo:
 
 ```bash
-cd /Users/xcv58/work/macos-automation && ./install.sh
+cd $HOME/work/macos-automation && ./install.sh
 ```
 
 Optional: include Raycast extension import prompt:
 
 ```bash
-cd /Users/xcv58/work/macos-automation && ./install.sh --with-raycast
+cd $HOME/work/macos-automation && ./install.sh --with-raycast
 ```
 
 Optional: custom destination roots:
 
 ```bash
-cd /Users/xcv58/work/macos-automation && ./install.sh \
-  --photos-base /Users/xcv58/Pictures/Photos \
-  --videos-base /Users/xcv58/Downloads
+cd $HOME/work/macos-automation && ./install.sh \
+  --photos-base $HOME/Pictures/Photos \
+  --videos-base $HOME/Downloads
 ```
 
 What `install.sh` configures:
@@ -74,7 +74,7 @@ Create `~/.sd-import/config.json`:
 Smoke test manually:
 
 ```bash
-/Users/xcv58/work/macos-automation/sd-import run \
+$HOME/work/macos-automation/sd-import run \
   --input /Volumes/YOUR_SD_CARD \
   --location NYC \
   --notify
@@ -125,13 +125,13 @@ Notes:
 ### Auto detect removable mount and run interactive flow
 
 ```bash
-/Users/xcv58/work/macos-automation/sd-import auto
+$HOME/work/macos-automation/sd-import auto
 ```
 
 ### Manual scan only (no copy)
 
 ```bash
-/Users/xcv58/work/macos-automation/sd-import scan \
+$HOME/work/macos-automation/sd-import scan \
   --input /Volumes/YOUR_SD_CARD \
   --location NYC
 ```
@@ -139,19 +139,19 @@ Notes:
 ### Import/retry by job id
 
 ```bash
-/Users/xcv58/work/macos-automation/sd-import import --job-id 20260303-005507
-/Users/xcv58/work/macos-automation/sd-import import --job-id 20260303-005507 --progress-ui
-/Users/xcv58/work/macos-automation/sd-import retry --job-id 20260303-005507
-/Users/xcv58/work/macos-automation/sd-import retry --job-id 20260303-005507 --progress-ui
-/Users/xcv58/work/macos-automation/sd-import retry-latest
+$HOME/work/macos-automation/sd-import import --job-id 20260303-005507
+$HOME/work/macos-automation/sd-import import --job-id 20260303-005507 --progress-ui
+$HOME/work/macos-automation/sd-import retry --job-id 20260303-005507
+$HOME/work/macos-automation/sd-import retry --job-id 20260303-005507 --progress-ui
+$HOME/work/macos-automation/sd-import retry-latest
 ```
 
 ### Live copy status (CLI/debug)
 
 ```bash
-/Users/xcv58/work/macos-automation/sd-import status
-/Users/xcv58/work/macos-automation/sd-import status --job-id 20260303-005507 --follow
-/Users/xcv58/work/macos-automation/sd-import status --follow --json
+$HOME/work/macos-automation/sd-import status
+$HOME/work/macos-automation/sd-import status --job-id 20260303-005507 --follow
+$HOME/work/macos-automation/sd-import status --follow --json
 ```
 
 Progress JSON path:
@@ -161,9 +161,9 @@ Progress JSON path:
 ### Debug jobs
 
 ```bash
-/Users/xcv58/work/macos-automation/sd-import list-mounts --json
-/Users/xcv58/work/macos-automation/sd-import list-jobs
-/Users/xcv58/work/macos-automation/sd-import show-job --job-id 20260303-005507
+$HOME/work/macos-automation/sd-import list-mounts --json
+$HOME/work/macos-automation/sd-import list-jobs
+$HOME/work/macos-automation/sd-import show-job --job-id 20260303-005507
 ```
 
 ### Prune old history (retention)
@@ -172,20 +172,23 @@ Prunes `jobs` and `job_files` older than N days, plus their report files in `~/.
 It does **not** prune `items` (dedupe fingerprints), so dedupe history is preserved.
 
 ```bash
-/Users/xcv58/work/macos-automation/sd-import prune --days 180 --dry-run
-/Users/xcv58/work/macos-automation/sd-import prune --days 180 --vacuum
+$HOME/work/macos-automation/sd-import prune --days 180 --dry-run
+$HOME/work/macos-automation/sd-import prune --days 180 --vacuum
 ```
 
 ## launchd auto-run on SD insert
 
 `install.sh` already installs launchd for you.
-Template plist (for reference): `/Users/xcv58/work/macos-automation/launchd/com.xcv58.sd-import.plist`
+Template plist (for reference): `$HOME/work/macos-automation/launchd/com.xcv58.sd-import.plist`
+The reference plist contains `/Users/YOUR_USER/...` placeholders because launchd requires absolute paths and does not expand `$HOME`.
 
 Install:
 
 ```bash
 mkdir -p ~/Library/LaunchAgents
-cp /Users/xcv58/work/macos-automation/launchd/com.xcv58.sd-import.plist ~/Library/LaunchAgents/
+sed "s|/Users/YOUR_USER|$HOME|g" \
+  "$HOME/work/macos-automation/launchd/com.xcv58.sd-import.plist" \
+  > ~/Library/LaunchAgents/com.xcv58.sd-import.plist
 launchctl bootout gui/$(id -u)/com.xcv58.sd-import >/dev/null 2>&1 || true
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.xcv58.sd-import.plist
 launchctl enable gui/$(id -u)/com.xcv58.sd-import
@@ -209,7 +212,7 @@ Logs:
 
 Use the local extension:
 
-- `/Users/xcv58/work/macos-automation/raycast-extension`
+- `$HOME/work/macos-automation/raycast-extension`
 - Import with Raycast `Import Extension` and point to that folder.
 - Includes commands:
   - `SD Import Auto`
@@ -219,7 +222,7 @@ Use the local extension:
 
 ## Alfred
 
-Use `/Users/xcv58/work/macos-automation/alfred/sd-import-auto.sh` in a Script Filter / Run Script workflow.
+Use `$HOME/work/macos-automation/alfred/sd-import-auto.sh` in a Script Filter / Run Script workflow.
 
 ## Suggested additional features
 
@@ -232,6 +235,6 @@ Use `/Users/xcv58/work/macos-automation/alfred/sd-import-auto.sh` in a Script Fi
 ## Tests
 
 ```bash
-cd /Users/xcv58/work/macos-automation
+cd $HOME/work/macos-automation
 python3 -m unittest discover -s tests -v
 ```

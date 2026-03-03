@@ -57,7 +57,7 @@
       "required": true,
       "title": "sd-import Path",
       "description": "Absolute path to the sd-import launcher",
-      "default": "/Users/xcv58/work/macos-automation/sd-import"
+      "default": "$HOME/work/macos-automation/sd-import"
     }
   ],
   "dependencies": {
