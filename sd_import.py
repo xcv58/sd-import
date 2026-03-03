@@ -4,8 +4,8 @@ Deterministic SD card importer for macOS.
 
 Features:
 - Auto/mount trigger entrypoint for launchd.
-- SQLite-backed dedupe by content hash and size.
-- Interactive actionable notifications via alerter.
+- SQLite-backed dedupe by lightweight metadata fingerprint.
+- Interactive actionable dialogs via swiftDialog.
 - Preview reports for review before import.
 - CLI commands for scan/import/retry/debug.
 """
@@ -24,9 +24,10 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
 PHOTO_EXTENSIONS = {
@@ -41,6 +42,8 @@ PHOTO_EXTENSIONS = {
     ".arw",
     ".raf",
 }
+
+TERMINAL_PROGRESS_STATES = {"completed", "completed_with_errors", "failed", "aborted", "idle"}
 
 
 def now_local_iso() -> str:
@@ -59,6 +62,24 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+def atomic_write_text(path: Path, content: str) -> None:
+    ensure_dir(path.parent)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(content)
+    os.replace(tmp_path, path)
+
+
+def write_json_atomic(path: Path, payload: Dict[str, Any]) -> None:
+    atomic_write_text(path, json.dumps(payload, indent=2))
+
+
+def read_json_file(path: Path) -> Optional[Dict[str, Any]]:
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return None
+
+
 def has_command(name: str) -> bool:
     if shutil.which(name) is not None:
         return True
@@ -69,12 +90,35 @@ def has_command(name: str) -> bool:
     return any(p.exists() and os.access(p, os.X_OK) for p in fallback_paths)
 
 
-def sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(chunk_size), b""):
-            h.update(chunk)
-    return h.hexdigest()
+def metadata_fingerprint(file_size: int, mtime_iso: str) -> str:
+    # Fast non-content fingerprint: stable across repeated scans of unchanged files.
+    payload = f"{file_size}|{mtime_iso}"
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+
+
+def format_bytes(num_bytes: float) -> str:
+    value = float(max(0.0, num_bytes))
+    units = ["B", "KB", "MB", "GB", "TB"]
+    for unit in units:
+        if value < 1024.0 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)}{unit}"
+            return f"{value:.1f}{unit}"
+        value /= 1024.0
+    return f"{value:.1f}TB"
+
+
+def format_duration(seconds: Optional[float]) -> str:
+    if seconds is None:
+        return "?"
+    s = int(max(0, seconds))
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    if h > 0:
+        return f"{h}h{m:02d}m"
+    if m > 0:
+        return f"{m}m{sec:02d}s"
+    return f"{sec}s"
 
 
 def classify_ext(ext: str) -> Optional[str]:
@@ -88,6 +132,142 @@ def classify_ext(ext: str) -> Optional[str]:
 
 def capture_date_from_mtime(stat_result: os.stat_result) -> str:
     return dt.datetime.fromtimestamp(stat_result.st_mtime).date().isoformat()
+
+
+def _parse_date_from_text(text: str) -> Optional[str]:
+    s = (text or "").strip()
+    if not s or s == "(null)":
+        return None
+
+    # Matches: 2026-03-03, 2026:03:03, or datetime prefixed with those formats.
+    m = re.search(r"(\d{4})[-:](\d{2})[-:](\d{2})", s)
+    if not m:
+        return None
+    return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+
+
+def capture_date_from_exiftool(file_path: Path, media_type: str) -> Optional[str]:
+    if shutil.which("exiftool") is None:
+        return None
+    if media_type == "photo":
+        tags = ["DateTimeOriginal", "CreateDate", "MediaCreateDate"]
+    else:
+        tags = ["MediaCreateDate", "CreateDate", "TrackCreateDate"]
+
+    cmd = ["exiftool", "-s3", "-d", "%Y-%m-%d"] + [f"-{tag}" for tag in tags] + [str(file_path)]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+
+    for line in (proc.stdout or "").splitlines():
+        parsed = _parse_date_from_text(line)
+        if parsed:
+            return parsed
+    return None
+
+
+def capture_dates_from_exiftool_batch(
+    media_files: List[Tuple[Path, str]],
+    batch_size: int = 200,
+    progress_cb: Optional[Callable[[int, int], None]] = None,
+) -> Dict[str, str]:
+    if shutil.which("exiftool") is None or not media_files:
+        return {}
+
+    # Use a single exiftool process per chunk instead of per file to speed up prepare stage.
+    tags = ["DateTimeOriginal", "CreateDate", "MediaCreateDate", "TrackCreateDate"]
+    media_type_by_path = {str(p): t for p, t in media_files}
+    result: Dict[str, str] = {}
+
+    total = len(media_files)
+    done = 0
+    for i in range(0, total, max(1, batch_size)):
+        chunk = media_files[i : i + batch_size]
+        cmd = ["exiftool", "-j", "-d", "%Y-%m-%d"] + [f"-{tag}" for tag in tags] + [str(p) for p, _ in chunk]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        except Exception:
+            done += len(chunk)
+            if progress_cb:
+                progress_cb(done, total)
+            continue
+
+        if not (proc.stdout or "").strip():
+            done += len(chunk)
+            if progress_cb:
+                progress_cb(done, total)
+            continue
+        try:
+            rows = json.loads(proc.stdout)
+        except Exception:
+            done += len(chunk)
+            if progress_cb:
+                progress_cb(done, total)
+            continue
+        if not isinstance(rows, list):
+            done += len(chunk)
+            if progress_cb:
+                progress_cb(done, total)
+            continue
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            source = str(row.get("SourceFile") or "")
+            if not source:
+                continue
+            media_type = media_type_by_path.get(source, "photo")
+            if media_type == "photo":
+                ordered_tags = ["DateTimeOriginal", "CreateDate", "MediaCreateDate", "TrackCreateDate"]
+            else:
+                ordered_tags = ["MediaCreateDate", "CreateDate", "TrackCreateDate", "DateTimeOriginal"]
+            for tag in ordered_tags:
+                parsed = _parse_date_from_text(str(row.get(tag) or ""))
+                if parsed:
+                    result[source] = parsed
+                    break
+        done += len(chunk)
+        if progress_cb:
+            progress_cb(done, total)
+
+    return result
+
+
+def capture_date_from_mdls(file_path: Path) -> Optional[str]:
+    if shutil.which("mdls") is None:
+        return None
+    try:
+        proc = subprocess.run(
+            ["mdls", "-raw", "-name", "kMDItemContentCreationDate", str(file_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    return _parse_date_from_text(proc.stdout)
+
+
+def capture_date_for_file(file_path: Path, media_type: str, stat_result: os.stat_result) -> str:
+    for candidate in (
+        capture_date_from_exiftool(file_path, media_type),
+        capture_date_from_mdls(file_path),
+    ):
+        if candidate:
+            return candidate
+    return capture_date_from_mtime(stat_result)
+
+
+def capture_date_fallback_without_exiftool(file_path: Path, stat_result: os.stat_result) -> str:
+    mdls_date = capture_date_from_mdls(file_path)
+    if mdls_date:
+        return mdls_date
+    return capture_date_from_mtime(stat_result)
 
 
 def iter_files(root: Path) -> Iterable[Path]:
@@ -200,37 +380,56 @@ def discover_removable_mounts(ignore_volume_regex: Optional[str]) -> List[Dict[s
     except Exception:
         return mounts
 
-    disk_ids = plist.get("AllDisksAndPartitions", [])
+    disks = plist.get("AllDisksAndPartitions", [])
     ignore_re = re.compile(ignore_volume_regex) if ignore_volume_regex else None
+    seen_mount_paths = set()
 
-    for disk in disk_ids:
-        dev = disk.get("DeviceIdentifier")
-        if not dev:
-            continue
-        info = get_diskutil_info(f"/dev/{dev}")
-        mount_path = info.get("MountPoint")
-        if not mount_path:
-            continue
-        if info.get("RemovableMedia") is not True:
-            continue
+    for disk in disks:
+        dev_ids: List[str] = []
+        whole_dev = disk.get("DeviceIdentifier")
+        if whole_dev:
+            dev_ids.append(whole_dev)
+        for part in disk.get("Partitions", []):
+            part_dev = part.get("DeviceIdentifier")
+            if part_dev:
+                dev_ids.append(part_dev)
 
-        volume_name = info.get("VolumeName") or Path(mount_path).name
-        if ignore_re and ignore_re.search(volume_name):
-            continue
+        for dev in dev_ids:
+            info = get_diskutil_info(f"/dev/{dev}")
+            mount_path = info.get("MountPoint")
+            if not mount_path:
+                continue
+            if info.get("RemovableMedia") is not True:
+                continue
 
-        try:
-            mounted_at = Path(mount_path).stat().st_mtime
-        except FileNotFoundError:
-            continue
+            # Disk images should not trigger camera-card import workflows.
+            bus_protocol = str(info.get("BusProtocol") or "")
+            media_name = str(info.get("MediaName") or "")
+            if bus_protocol == "Disk Image" or media_name == "Disk Image":
+                continue
 
-        mounts.append(
-            {
-                "mount_path": mount_path,
-                "volume_name": volume_name,
-                "volume_uuid": info.get("VolumeUUID"),
-                "mounted_at": mounted_at,
-            }
-        )
+            volume_name = info.get("VolumeName") or Path(mount_path).name
+            if ignore_re and ignore_re.search(volume_name):
+                continue
+            if mount_path in seen_mount_paths:
+                continue
+
+            try:
+                mounted_at = Path(mount_path).stat().st_mtime
+            except FileNotFoundError:
+                continue
+            if not isinstance(mounted_at, (int, float)) or mounted_at <= 0:
+                mounted_at = time.time()
+
+            mounts.append(
+                {
+                    "mount_path": mount_path,
+                    "volume_name": volume_name,
+                    "volume_uuid": info.get("VolumeUUID"),
+                    "mounted_at": mounted_at,
+                }
+            )
+            seen_mount_paths.add(mount_path)
 
     mounts.sort(key=lambda m: m["mounted_at"], reverse=True)
     return mounts
@@ -250,8 +449,8 @@ def make_photo_dest_dir(photos_base: Path, capture_date: str, location: str) -> 
     return photos_base / f"{capture_date} {safe_location}"
 
 
-def make_video_dest_dir(videos_base: Path) -> Path:
-    return videos_base / f"tmp-{today_iso()}-videos"
+def make_video_dest_dir(videos_base: Path, capture_date: str) -> Path:
+    return videos_base / f"tmp-{capture_date}-videos"
 
 
 def write_report(report_path: Path, summary: Dict[str, Any], files: List[Dict[str, Any]]) -> None:
@@ -305,7 +504,8 @@ def existing_hash_matches(path: Path, expected_hash: str, expected_size: int) ->
         return False
     if st.st_size != expected_size:
         return False
-    return sha256_file(path) == expected_hash
+    existing_mtime = dt.datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")
+    return metadata_fingerprint(st.st_size, existing_mtime) == expected_hash
 
 
 def resolve_destination_path(candidate: Path, expected_hash: str, expected_size: int) -> Tuple[Optional[Path], Optional[str]]:
@@ -329,7 +529,130 @@ def resolve_destination_path(candidate: Path, expected_hash: str, expected_size:
         counter += 1
 
 
-def show_action_notification(title: str, message: str, report_path: Path) -> str:
+def copy_file_with_progress(
+    src: Path,
+    dst: Path,
+    chunk_size: int = 16 * 1024 * 1024,
+    on_chunk: Optional[Callable[[int], None]] = None,
+) -> None:
+    with src.open("rb") as src_f, dst.open("wb") as dst_f:
+        while True:
+            chunk = src_f.read(chunk_size)
+            if not chunk:
+                break
+            dst_f.write(chunk)
+            if on_chunk:
+                on_chunk(len(chunk))
+    shutil.copystat(src, dst)
+
+
+def show_prompt_notification(
+    title: str,
+    message: str,
+    actions: Optional[str] = None,
+    close_label: str = "Skip",
+    timeout_seconds: int = 120,
+    close_first: bool = True,
+    prefer_swiftdialog: bool = True,
+    allow_legacy_fallback: bool = True,
+) -> str:
+    def _run_swiftdialog_prompt(primary_action: str, secondary_action: str) -> str:
+        dialog_bin = detect_swiftdialog_binary()
+        if not dialog_bin:
+            return ""
+        button1 = secondary_action if close_first else primary_action
+        button2 = primary_action if close_first else secondary_action
+        cmd = [
+            dialog_bin,
+            "--title",
+            title,
+            "--message",
+            message,
+            "--button1text",
+            button1,
+            "--button2text",
+            button2,
+            "--timer",
+            str(max(1, int(timeout_seconds))),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        rc = proc.returncode
+        if rc == 0:
+            return button1
+        if rc == 2:
+            return button2
+        if rc in (4, 20):
+            return "@TIMEOUT"
+        if rc in (5, 10):
+            return "@CLOSED"
+        if rc != 0 and (proc.stderr or "").strip():
+            print(f"swiftDialog prompt failed (rc={rc}): {proc.stderr.strip()}", file=sys.stderr)
+        return ""
+
+    def _run_swiftdialog_info() -> bool:
+        dialog_bin = detect_swiftdialog_binary()
+        if not dialog_bin:
+            return False
+        proc = subprocess.run(
+            [dialog_bin, "--notification", "--title", title, "--message", message],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0:
+            return True
+        if (proc.stderr or "").strip():
+            print(f"swiftDialog notification failed: {proc.stderr.strip()}", file=sys.stderr)
+        return False
+
+    def _run_dialog_prompt(primary_action: str, secondary_action: str) -> str:
+        safe_message = message.replace("\\", "\\\\").replace('"', '\\"')
+        safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
+        safe_primary = primary_action.replace("\\", "\\\\").replace('"', '\\"')
+        safe_secondary = secondary_action.replace("\\", "\\\\").replace('"', '\\"')
+        button_left = safe_secondary if close_first else safe_primary
+        button_right = safe_primary if close_first else safe_secondary
+        default_button = button_left if close_first else button_right
+        script = [
+            f'display dialog "{safe_message}" with title "{safe_title}" buttons {{"{button_left}", "{button_right}"}} default button "{default_button}" giving up after {int(timeout_seconds)}',
+        ]
+        proc = subprocess.run(["osascript", "-e", script[0]], capture_output=True, text=True)
+        if proc.returncode != 0:
+            err = (proc.stderr or "").strip()
+            if err:
+                print(f"dialog prompt failed: {err}", file=sys.stderr)
+            return ""
+        out = (proc.stdout or "").strip()
+        if f"button returned:{primary_action}" in out:
+            return primary_action
+        if f"button returned:{secondary_action}" in out:
+            return secondary_action
+        if "gave up:true" in out:
+            return "@TIMEOUT"
+        return ""
+
+    if actions:
+        primary_action = actions.split(",")[0].strip()
+        if prefer_swiftdialog:
+            swift_choice = _run_swiftdialog_prompt(primary_action, close_label)
+            if swift_choice:
+                return swift_choice
+            if not allow_legacy_fallback:
+                return ""
+
+        dialog_choice = _run_dialog_prompt(primary_action, close_label)
+        if dialog_choice:
+            return dialog_choice
+        if not allow_legacy_fallback:
+            return ""
+    else:
+        if prefer_swiftdialog and _run_swiftdialog_info():
+            return ""
+        if prefer_swiftdialog and not allow_legacy_fallback:
+            return ""
+
+    if not allow_legacy_fallback:
+        return ""
+
     if has_command("alerter"):
         cmd = [
             "alerter",
@@ -337,23 +660,142 @@ def show_action_notification(title: str, message: str, report_path: Path) -> str
             title,
             "--message",
             message,
-            "--actions",
-            "Review,Import New",
-            "--closeLabel",
-            "Skip",
             "--timeout",
-            "120",
+            str(timeout_seconds),
+            "--ignore-dnd",
         ]
+        if actions:
+            cmd.extend(["--actions", actions, "--close-label", close_label])
         proc = subprocess.run(cmd, capture_output=True, text=True)
-        choice = (proc.stdout or "").strip()
-        if choice == "Review":
-            subprocess.run(["open", str(report_path)], check=False)
-        return choice
+        if proc.returncode != 0:
+            print(f"alerter failed: {proc.stderr.strip()}", file=sys.stderr)
+        else:
+            choice = (proc.stdout or "").strip()
+            if actions:
+                primary_action = actions.split(",")[0].strip()
+                if choice in ("", "@TIMEOUT", "@CLOSED"):
+                    return choice
+            return choice
 
     # Fallback to informational notification only.
-    script = f'display notification "{message}" with title "{title}"'
+    safe_message = message.replace("\\", "\\\\").replace('"', '\\"')
+    safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
+    script = f'display notification "{safe_message}" with title "{safe_title}"'
     subprocess.run(["osascript", "-e", script], check=False)
     return ""
+
+
+def show_info_notification(title: str, message: str, timeout_seconds: int = 5) -> None:
+    show_prompt_notification(
+        title=title,
+        message=message,
+        actions=None,
+        close_label="",
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def show_import_preview_decision(
+    summary: Dict[str, Any],
+    report_md: Path,
+    timeout_seconds: int = 120,
+    use_swiftdialog: bool = True,
+    allow_legacy_fallback: bool = True,
+) -> str:
+    title = "SD Import Preview"
+    overview = (
+        f"Volume: {summary.get('volume_name') or '-'}\n"
+        f"New: {summary.get('new_files', 0)}\n"
+        f"Known: {summary.get('known_files', 0)}\n"
+        f"Conflicts: {summary.get('conflict_files', 0)}\n"
+        f"Unsupported: {summary.get('unsupported_files', 0)}\n\n"
+        "Choose Import New to continue, or Open Report for full details."
+    )
+
+    dialog_bin = detect_swiftdialog_binary() if use_swiftdialog else None
+    if dialog_bin:
+        while True:
+            proc = subprocess.run(
+                [
+                    dialog_bin,
+                    "--title",
+                    title,
+                    "--message",
+                    overview,
+                    "--button1text",
+                    "Skip",
+                    "--button2text",
+                    "Import New",
+                    "--infobuttontext",
+                    "Open Report",
+                    "--timer",
+                    str(max(1, int(timeout_seconds))),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            rc = proc.returncode
+            if rc == 0:
+                return "Skip"
+            if rc == 2:
+                return "Import New"
+            if rc == 3:
+                subprocess.run(["open", str(report_md)], check=False)
+                continue
+            if rc in (4, 20):
+                return "@TIMEOUT"
+            if rc in (5, 10):
+                return "Skip"
+            err = (proc.stderr or "").strip()
+            if err:
+                print(f"swiftDialog preview failed (rc={rc}): {err}", file=sys.stderr)
+            break
+        if not allow_legacy_fallback:
+            return "@CLOSED"
+
+    if not allow_legacy_fallback:
+        return "@CLOSED"
+
+    while True:
+        safe_message = overview.replace("\\", "\\\\").replace('"', '\\"')
+        safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
+        script = (
+            f'display dialog "{safe_message}" with title "{safe_title}" '
+            f'buttons {{"Skip", "Open Report", "Import New"}} '
+            f'default button "Skip" giving up after {int(timeout_seconds)}'
+        )
+        proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+        if proc.returncode == 0:
+            out = (proc.stdout or "").strip()
+            if "button returned:Import New" in out:
+                return "Import New"
+            if "button returned:Open Report" in out:
+                subprocess.run(["open", str(report_md)], check=False)
+                continue
+            if "button returned:Skip" in out:
+                return "Skip"
+            if "gave up:true" in out:
+                return "@TIMEOUT"
+        else:
+            err = (proc.stderr or "").strip()
+            if err:
+                print(f"preview dialog failed: {err}", file=sys.stderr)
+            break
+
+    while True:
+        choice = show_prompt_notification(
+            title=title,
+            message=overview,
+            actions="Import New,Open Report",
+            close_label="Skip",
+            timeout_seconds=timeout_seconds,
+            close_first=True,
+            prefer_swiftdialog=False,
+        )
+        if choice == "Open Report":
+            subprocess.run(["open", str(report_md)], check=False)
+            continue
+        return choice
 
 
 def begin_job(
@@ -392,6 +834,231 @@ def finalize_job_scan(conn: sqlite3.Connection, job_id: str, summary: Dict[str, 
     )
 
 
+def get_state_dir_from_conn(conn: sqlite3.Connection) -> Path:
+    return Path(conn.execute("PRAGMA database_list").fetchone()[2]).parent
+
+
+def progress_path_for_job(state_dir: Path, job_id: str) -> Path:
+    return state_dir / "progress" / f"{job_id}.json"
+
+
+def latest_progress_path(state_dir: Path) -> Optional[Path]:
+    progress_dir = state_dir / "progress"
+    if not progress_dir.exists():
+        return None
+    candidates = [p for p in progress_dir.glob("*.json") if p.is_file()]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
+def format_progress_line(payload: Dict[str, Any]) -> str:
+    status = str(payload.get("status") or "unknown")
+    percent = float(payload.get("percent") or 0.0)
+    done_files = int(payload.get("done_files") or 0)
+    total_files = int(payload.get("total_files") or 0)
+    processed_bytes = float(payload.get("processed_bytes") or 0.0)
+    total_bytes = float(payload.get("total_bytes") or 0.0)
+    throughput_bps = float(payload.get("throughput_bps") or 0.0)
+    eta_seconds = payload.get("eta_seconds")
+    eta_text = format_duration(float(eta_seconds)) if eta_seconds is not None else "?"
+    current_file = payload.get("current_file") or "-"
+    return (
+        f"[{status}] {percent:.1f}% "
+        f"{done_files}/{total_files} files "
+        f"{format_bytes(processed_bytes)}/{format_bytes(total_bytes)} "
+        f"{format_bytes(throughput_bps)}/s ETA {eta_text} "
+        f"current={current_file}"
+    )
+
+
+def detect_swiftdialog_binary() -> Optional[str]:
+    candidates: List[str] = []
+    in_path = shutil.which("dialog")
+    if in_path:
+        candidates.append(in_path)
+    candidates.extend(["/usr/local/bin/dialog", "/opt/homebrew/bin/dialog"])
+
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        p = Path(candidate)
+        if not p.exists() or not os.access(p, os.X_OK):
+            continue
+        try:
+            proc = subprocess.run(
+                [candidate, "--version"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=2,
+            )
+        except Exception:
+            continue
+        output = f"{proc.stdout}\n{proc.stderr}".lower()
+        if "swiftdialog" in output or "dialog-" in output:
+            return candidate
+        try:
+            help_proc = subprocess.run(
+                [candidate, "--help"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=2,
+            )
+        except Exception:
+            continue
+        help_output = f"{help_proc.stdout}\n{help_proc.stderr}".lower()
+        if "swiftdialog" in help_output:
+            return candidate
+    return None
+
+
+class SwiftDialogProgressWindow:
+    def __init__(self, dialog_bin: str, command_file: Path) -> None:
+        self.dialog_bin = dialog_bin
+        self.command_file = command_file
+        self.proc: Optional[subprocess.Popen[Any]] = None
+
+    def start(self, title: str, message: str) -> bool:
+        ensure_dir(self.command_file.parent)
+        self.command_file.write_text("")
+        cmd = [
+            self.dialog_bin,
+            "--title",
+            title,
+            "--message",
+            message,
+            "--progress",
+            "0",
+            "--progresstext",
+            "Preparing import...",
+            "--button1text",
+            "Dismiss",
+            "--ontop",
+            "--moveable",
+            "--commandfile",
+            str(self.command_file),
+        ]
+        try:
+            self.proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return True
+        except Exception:
+            self.proc = None
+            return False
+
+    def is_alive(self) -> bool:
+        return self.proc is not None and self.proc.poll() is None
+
+    def _send(self, line: str) -> None:
+        if not self.is_alive():
+            return
+        try:
+            with self.command_file.open("a") as f:
+                f.write(line.replace("\n", " ").strip() + "\n")
+        except Exception:
+            pass
+
+    def set_dismiss_enabled(self, enabled: bool) -> None:
+        self._send("button1: enable" if enabled else "button1: disable")
+
+    def activate(self) -> None:
+        self._send("activate:")
+
+    def update(self, percent: float, progress_text: str, message: Optional[str] = None) -> None:
+        pct = max(0, min(100, int(percent)))
+        self._send(f"progress: {pct}")
+        if progress_text:
+            self._send(f"progresstext: {progress_text}")
+        if message:
+            self._send(f"message: {message}")
+
+    def close(self, final_message: str) -> None:
+        self._send("progress: 100")
+        self._send("progresstext: Completed")
+        if final_message:
+            self._send(f"message: {final_message}")
+        self.set_dismiss_enabled(True)
+        self.activate()
+
+    def quit(self, wait_seconds: float = 1.0) -> None:
+        if not self.is_alive():
+            self.proc = None
+            return
+        self._send("quit:")
+        if self.proc is None:
+            return
+        timeout = max(0.1, float(wait_seconds))
+        try:
+            self.proc.wait(timeout=timeout)
+        except Exception:
+            try:
+                self.proc.terminate()
+            except Exception:
+                pass
+            try:
+                self.proc.wait(timeout=0.5)
+            except Exception:
+                try:
+                    self.proc.kill()
+                except Exception:
+                    pass
+        self.proc = None
+
+
+def start_persistent_status_window(
+    state_dir: Path,
+    title: str,
+    message: str,
+    progress_text: str,
+) -> Optional[SwiftDialogProgressWindow]:
+    dialog_bin = detect_swiftdialog_binary()
+    if not dialog_bin:
+        return None
+
+    session_id = make_job_id()
+    command_file = state_dir / "progress" / f"{session_id}.dialog.log"
+    win = SwiftDialogProgressWindow(dialog_bin, command_file)
+    if not win.start(title=title, message=message):
+        return None
+    win.set_dismiss_enabled(False)
+    win.update(percent=0, progress_text=progress_text, message=message)
+    return win
+
+
+def should_debounce_mount(conn: sqlite3.Connection, mount_path: str, debounce_seconds: float) -> bool:
+    if debounce_seconds <= 0:
+        return False
+    state_dir = get_state_dir_from_conn(conn)
+    ensure_dir(state_dir)
+    debounce_file = state_dir / "mount_debounce.json"
+    now_ts = time.time()
+
+    payload: Dict[str, Any] = {}
+    if debounce_file.exists():
+        try:
+            payload = json.loads(debounce_file.read_text())
+        except Exception:
+            payload = {}
+
+    last_mount = payload.get("mount_path")
+    last_ts = float(payload.get("last_ts") or 0.0)
+    if last_mount == mount_path and (now_ts - last_ts) < debounce_seconds:
+        return True
+
+    payload = {"mount_path": mount_path, "last_ts": now_ts}
+    debounce_file.write_text(json.dumps(payload))
+    return False
+
+
 def scan_mount(
     conn: sqlite3.Connection,
     mount_path: Path,
@@ -399,6 +1066,7 @@ def scan_mount(
     photos_base: Path,
     videos_base: Path,
     job_id: Optional[str] = None,
+    scan_progress: Optional[Callable[[str, Optional[float]], None]] = None,
 ) -> Dict[str, Any]:
     if not mount_path.exists() or not mount_path.is_dir():
         raise RuntimeError(f"mount path is not a directory: {mount_path}")
@@ -417,10 +1085,16 @@ def scan_mount(
     conflict_files = 0
 
     rows_for_report: List[Dict[str, Any]] = []
+    indexed_files: List[Tuple[Path, os.stat_result, str, Optional[str], str, str, str]] = []
+    media_for_batch: List[Tuple[Path, str]] = []
 
-    for file_path in iter_files(mount_path):
-        scanned_files += 1
-
+    file_paths = list(iter_files(mount_path))
+    total_to_index = len(file_paths)
+    for idx, file_path in enumerate(file_paths, start=1):
+        scanned_files = idx
+        if scan_progress and (idx % 250 == 0 or idx == total_to_index):
+            pct = 35.0 if total_to_index == 0 else (idx / total_to_index) * 35.0
+            scan_progress(f"Indexed {idx}/{total_to_index} files...", pct)
         try:
             st = file_path.stat()
         except FileNotFoundError:
@@ -432,6 +1106,33 @@ def scan_mount(
         filename = file_path.name
         mtime = dt.datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")
 
+        indexed_files.append((file_path, st, ext, media_type, rel_path, filename, mtime))
+        if media_type:
+            media_for_batch.append((file_path, media_type))
+
+    if scan_progress:
+        scan_progress(f"Indexed {len(indexed_files)} files. Reading capture dates...", 40.0)
+    capture_date_map = capture_dates_from_exiftool_batch(
+        media_for_batch,
+        progress_cb=(
+            (lambda done, total: scan_progress(
+                f"Reading capture dates {done}/{total}...",
+                40.0 + ((done / total) * 25.0 if total > 0 else 25.0),
+            ))
+            if scan_progress
+            else None
+        ),
+    )
+    if scan_progress:
+        scan_progress(
+            f"Capture-date metadata ready for {len(capture_date_map)}/{len(media_for_batch)} media files.",
+            65.0,
+        )
+
+    for idx, (file_path, st, ext, media_type, rel_path, filename, mtime) in enumerate(indexed_files, start=1):
+        if scan_progress and (idx % 250 == 0 or idx == len(indexed_files)):
+            pct = 100.0 if len(indexed_files) == 0 else 65.0 + (idx / len(indexed_files)) * 35.0
+            scan_progress(f"Analyzing {idx}/{len(indexed_files)} files...", pct)
         if media_type is None:
             unsupported_files += 1
             conn.execute(
@@ -444,23 +1145,30 @@ def scan_mount(
             )
             continue
 
-        content_hash = sha256_file(file_path)
+        content_hash = metadata_fingerprint(st.st_size, mtime)
         exists = conn.execute(
             "SELECT 1 FROM items WHERE hash=? AND size=? LIMIT 1",
             (content_hash, st.st_size),
         ).fetchone()
 
+        capture_date = capture_date_map.get(str(file_path))
+        if not capture_date:
+            # KNOWN files already have dedupe identity; avoid expensive fallback lookups.
+            if exists:
+                capture_date = capture_date_from_mtime(st)
+            else:
+                capture_date = capture_date_fallback_without_exiftool(file_path, st)
+
         if media_type == "photo":
-            capture_date = capture_date_from_mtime(st)
             dest_dir = make_photo_dest_dir(photos_base, capture_date, location)
         else:
-            dest_dir = make_video_dest_dir(videos_base)
+            dest_dir = make_video_dest_dir(videos_base, capture_date)
 
         decision = "KNOWN" if exists else "NEW"
         copy_status = "SKIPPED" if exists else "PENDING"
         dest_path = str(dest_dir / filename)
 
-        # Early conflict signal: destination file exists with different hash.
+        # Early conflict signal: destination file exists with different metadata fingerprint.
         if decision == "NEW" and Path(dest_path).exists():
             if not existing_hash_matches(Path(dest_path), content_hash, st.st_size):
                 decision = "CONFLICT"
@@ -513,6 +1221,7 @@ def scan_mount(
                 "media_type": media_type,
                 "hash": content_hash,
                 "decision": decision,
+                "capture_date": capture_date,
                 "dest_dir": str(dest_dir),
                 "dest_path": dest_path,
                 "error": error,
@@ -539,14 +1248,28 @@ def scan_mount(
 
     finalize_job_scan(conn, job_id, summary, final_report_path)
     conn.commit()
+    if scan_progress:
+        scan_progress("Scan complete.", 100.0)
 
     return summary
 
 
-def import_new_files(conn: sqlite3.Connection, job_id: str) -> Dict[str, Any]:
+def import_new_files(
+    conn: sqlite3.Connection,
+    job_id: str,
+    show_progress_ui: bool = False,
+    progress_window: Optional[SwiftDialogProgressWindow] = None,
+) -> Dict[str, Any]:
+    job_row = conn.execute(
+        "SELECT job_id, volume_name, report_path FROM jobs WHERE job_id=? LIMIT 1",
+        (job_id,),
+    ).fetchone()
+    if not job_row:
+        raise RuntimeError(f"job not found: {job_id}")
+
     rows = conn.execute(
         """
-        SELECT id, src_path, filename, size, hash, dest_dir, decision, copy_status
+        SELECT id, src_path, rel_path, filename, size, mtime, media_type, hash, dest_dir, decision, copy_status
         FROM job_files
         WHERE job_id=?
           AND decision IN ('NEW', 'CONFLICT')
@@ -560,19 +1283,161 @@ def import_new_files(conn: sqlite3.Connection, job_id: str) -> Dict[str, Any]:
     skipped_files = 0
     failed_files = 0
 
+    total_files = len(rows)
+    total_bytes = sum(int(r["size"] or 0) for r in rows)
+    done_files = 0
+    processed_bytes_done = 0
+    copied_bytes_done = 0
+    active_file_bytes = 0
+    current_file: Optional[str] = None
+    current_source_path: Optional[str] = None
+
+    started_at = now_local_iso()
+    started_epoch = time.time()
+    progress_status = "copying"
+    last_progress_emit_epoch = 0.0
+
+    state_dir = get_state_dir_from_conn(conn)
+    progress_path = progress_path_for_job(state_dir, job_id)
+    progress_cmd_path = state_dir / "progress" / f"{job_id}.dialog.log"
+    dialog_window: Optional[SwiftDialogProgressWindow] = progress_window
+    if dialog_window:
+        dialog_window.set_dismiss_enabled(False)
+        dialog_window.update(percent=0, progress_text="Starting copy...", message=f"Job {job_id}\nPreparing files...")
+    elif show_progress_ui:
+        dialog_bin = detect_swiftdialog_binary()
+        if dialog_bin:
+            candidate_window = SwiftDialogProgressWindow(dialog_bin, progress_cmd_path)
+            dialog_title = "SD Import Progress"
+            dialog_message = f"{job_row['volume_name'] or 'SD Card'}\n{job_id}"
+            if candidate_window.start(dialog_title, dialog_message):
+                dialog_window = candidate_window
+                dialog_window.set_dismiss_enabled(False)
+
+    def emit_progress(force: bool = False) -> None:
+        nonlocal last_progress_emit_epoch
+        now_epoch = time.time()
+        if not force and (now_epoch - last_progress_emit_epoch) < 0.75:
+            return
+
+        display_processed_bytes = min(total_bytes, processed_bytes_done + active_file_bytes)
+        display_copied_bytes = copied_bytes_done + active_file_bytes
+        elapsed_seconds = max(0.0, now_epoch - started_epoch)
+        throughput_bps = (display_processed_bytes / elapsed_seconds) if elapsed_seconds > 0 else 0.0
+        remaining_bytes = max(0, total_bytes - display_processed_bytes)
+        eta_seconds: Optional[float]
+        if remaining_bytes == 0:
+            eta_seconds = 0.0
+        elif throughput_bps > 1:
+            eta_seconds = remaining_bytes / throughput_bps
+        else:
+            eta_seconds = None
+
+        if total_bytes > 0:
+            percent = (display_processed_bytes / total_bytes) * 100.0
+        elif total_files > 0:
+            percent = (done_files / total_files) * 100.0
+        else:
+            percent = 100.0
+
+        payload: Dict[str, Any] = {
+            "job_id": job_id,
+            "volume_name": job_row["volume_name"],
+            "status": progress_status,
+            "started_at": started_at,
+            "updated_at": now_local_iso(),
+            "elapsed_seconds": round(elapsed_seconds, 3),
+            "total_files": total_files,
+            "done_files": done_files,
+            "imported_files": imported_files,
+            "skipped_files": skipped_files,
+            "failed_files": failed_files,
+            "total_bytes": int(total_bytes),
+            "processed_bytes": int(display_processed_bytes),
+            "copied_bytes": int(display_copied_bytes),
+            "throughput_bps": round(throughput_bps, 2),
+            "eta_seconds": round(float(eta_seconds), 1) if eta_seconds is not None else None,
+            "percent": round(percent, 2),
+            "current_file": current_file,
+            "current_source_path": current_source_path,
+            "report_path": job_row["report_path"],
+        }
+        write_json_atomic(progress_path, payload)
+
+        if dialog_window:
+            dialog_line = (
+                f"{percent:.1f}% • {done_files}/{total_files} files • "
+                f"{format_bytes(display_processed_bytes)}/{format_bytes(total_bytes)} • "
+                f"{format_bytes(throughput_bps)}/s • ETA {format_duration(eta_seconds)}"
+            )
+            dialog_message = f"Job {job_id}"
+            if current_file:
+                dialog_message += f"\nCurrent: {current_file}"
+            dialog_window.update(percent=percent, progress_text=dialog_line, message=dialog_message)
+
+        last_progress_emit_epoch = now_epoch
+
+    emit_progress(force=True)
+
     for row in rows:
         src = Path(row["src_path"])
         filename = row["filename"]
         expected_size = int(row["size"])
-        expected_hash = row["hash"]
-        dest_dir = Path(row["dest_dir"])
-
         if not src.exists():
+            current_file = filename
+            current_source_path = str(src)
+            active_file_bytes = 0
+            emit_progress(force=True)
             failed_files += 1
+            done_files += 1
+            processed_bytes_done += expected_size
             conn.execute(
                 "UPDATE job_files SET copy_status='FAILED', error=? WHERE id=?",
                 ("source file missing", row["id"]),
             )
+            current_file = None
+            current_source_path = None
+            active_file_bytes = 0
+            emit_progress(force=True)
+            continue
+
+        mtime = row["mtime"]
+        if not mtime:
+            mtime = dt.datetime.fromtimestamp(src.stat().st_mtime).isoformat(timespec="seconds")
+        expected_hash = row["hash"]
+        dest_dir = Path(row["dest_dir"])
+
+        current_file = filename
+        current_source_path = str(src)
+        active_file_bytes = 0
+        emit_progress(force=True)
+
+        if not expected_hash:
+            src_st = src.stat()
+            mtime = dt.datetime.fromtimestamp(src_st.st_mtime).isoformat(timespec="seconds")
+            expected_size = int(src_st.st_size)
+            expected_hash = metadata_fingerprint(expected_size, mtime)
+            conn.execute(
+                "UPDATE job_files SET hash=?, size=?, mtime=? WHERE id=?",
+                (expected_hash, expected_size, mtime, row["id"]),
+            )
+
+        already_imported = conn.execute(
+            "SELECT 1 FROM items WHERE hash=? AND size=? LIMIT 1",
+            (expected_hash, expected_size),
+        ).fetchone()
+        if already_imported:
+            skipped_files += 1
+            done_files += 1
+            processed_bytes_done += expected_size
+            conn.execute(
+                "UPDATE job_files SET copy_status='SKIPPED', error=? WHERE id=?",
+                ("already_imported_hash", row["id"]),
+            )
+            current_file = None
+            current_source_path = None
+            active_file_bytes = 0
+            emit_progress(force=True)
             continue
 
         ensure_dir(dest_dir)
@@ -581,6 +1446,8 @@ def import_new_files(conn: sqlite3.Connection, job_id: str) -> Dict[str, Any]:
 
         if target is None:
             skipped_files += 1
+            done_files += 1
+            processed_bytes_done += expected_size
             conn.execute(
                 "UPDATE job_files SET copy_status='SKIPPED', error=? WHERE id=?",
                 (skip_reason, row["id"]),
@@ -589,26 +1456,44 @@ def import_new_files(conn: sqlite3.Connection, job_id: str) -> Dict[str, Any]:
                 "INSERT OR IGNORE INTO items (hash, size, first_seen_at, first_job_id, first_source_path) VALUES (?, ?, ?, ?, ?)",
                 (expected_hash, expected_size, now_local_iso(), job_id, str(src)),
             )
+            current_file = None
+            current_source_path = None
+            active_file_bytes = 0
+            emit_progress(force=True)
             continue
 
         tmp_target = target.with_suffix(target.suffix + ".part")
         try:
-            shutil.copy2(src, tmp_target)
-            copied_hash = sha256_file(tmp_target)
-            if copied_hash != expected_hash:
-                raise RuntimeError("hash mismatch after copy")
+            def on_chunk(chunk_size: int) -> None:
+                nonlocal active_file_bytes
+                active_file_bytes = min(expected_size, active_file_bytes + chunk_size)
+                emit_progress(force=False)
+
+            copy_file_with_progress(src, tmp_target, on_chunk=on_chunk)
+            copied_size = tmp_target.stat().st_size
+            if copied_size != expected_size:
+                raise RuntimeError("size mismatch after copy")
             os.replace(tmp_target, target)
         except Exception as exc:
             failed_files += 1
+            done_files += 1
+            processed_bytes_done += expected_size
             if tmp_target.exists():
                 tmp_target.unlink(missing_ok=True)
             conn.execute(
                 "UPDATE job_files SET copy_status='FAILED', error=? WHERE id=?",
                 (str(exc), row["id"]),
             )
+            current_file = None
+            current_source_path = None
+            active_file_bytes = 0
+            emit_progress(force=True)
             continue
 
         imported_files += 1
+        done_files += 1
+        processed_bytes_done += expected_size
+        copied_bytes_done += expected_size
         conn.execute(
             "UPDATE job_files SET copy_status='COPIED', dest_path=?, error=NULL WHERE id=?",
             (str(target), row["id"]),
@@ -617,6 +1502,10 @@ def import_new_files(conn: sqlite3.Connection, job_id: str) -> Dict[str, Any]:
             "INSERT OR IGNORE INTO items (hash, size, first_seen_at, first_job_id, first_source_path) VALUES (?, ?, ?, ?, ?)",
             (expected_hash, expected_size, now_local_iso(), job_id, str(src)),
         )
+        current_file = None
+        current_source_path = None
+        active_file_bytes = 0
+        emit_progress(force=True)
 
     conn.execute(
         """
@@ -631,11 +1520,25 @@ def import_new_files(conn: sqlite3.Connection, job_id: str) -> Dict[str, Any]:
     )
     conn.commit()
 
+    if total_files == 0:
+        progress_status = "idle"
+    elif failed_files > 0:
+        progress_status = "completed_with_errors"
+    else:
+        progress_status = "completed"
+    emit_progress(force=True)
+
+    if dialog_window:
+        dialog_window.close(
+            f"Done: {imported_files} imported, {skipped_files} skipped, {failed_files} failed"
+        )
+
     return {
         "job_id": job_id,
         "imported_files": imported_files,
         "skipped_files": skipped_files,
         "failed_files": failed_files,
+        "progress_path": str(progress_path),
     }
 
 
@@ -708,13 +1611,13 @@ def command_scan(args: argparse.Namespace, conn: sqlite3.Connection, config: Dic
 
 
 def command_import(args: argparse.Namespace, conn: sqlite3.Connection) -> int:
-    result = import_new_files(conn, args.job_id)
+    result = import_new_files(conn, args.job_id, show_progress_ui=args.progress_ui)
     print(json.dumps(result, indent=2))
     return 0
 
 
 def command_retry(args: argparse.Namespace, conn: sqlite3.Connection) -> int:
-    result = import_new_files(conn, args.job_id)
+    result = import_new_files(conn, args.job_id, show_progress_ui=args.progress_ui)
     print(json.dumps(result, indent=2))
     return 0
 
@@ -723,6 +1626,27 @@ def command_run(args: argparse.Namespace, conn: sqlite3.Connection, config: Dict
     mount_path = Path(args.input).expanduser().resolve()
     vol_info = get_diskutil_info(str(mount_path))
     location = choose_location(config, args.location, vol_info.get("VolumeName"))
+    state_dir = get_state_dir_from_conn(conn)
+    persistent_window = getattr(args, "progress_window", None)
+
+    if args.notify and persistent_window is None:
+        persistent_window = start_persistent_status_window(
+            state_dir=state_dir,
+            title="SD Import",
+            message=f"{mount_path.name}\nStarting scan...",
+            progress_text="Waiting for scan...",
+        )
+    if persistent_window:
+        persistent_window.set_dismiss_enabled(False)
+        persistent_window.update(percent=0, progress_text="Scanning files...", message=f"{mount_path.name}\nScanning...")
+
+    def scan_progress_update(text: str, percent: Optional[float] = None) -> None:
+        if persistent_window:
+            persistent_window.update(
+                percent=(percent if percent is not None else 0),
+                progress_text=text,
+                message=f"{mount_path.name}\n{text}",
+            )
 
     summary = scan_mount(
         conn=conn,
@@ -730,6 +1654,7 @@ def command_run(args: argparse.Namespace, conn: sqlite3.Connection, config: Dict
         location=location,
         photos_base=Path(args.photos_base).expanduser(),
         videos_base=Path(args.videos_base).expanduser(),
+        scan_progress=scan_progress_update if persistent_window else None,
     )
 
     report_md = Path(conn.execute("SELECT report_path FROM jobs WHERE job_id=?", (summary["job_id"],)).fetchone()[0])
@@ -738,21 +1663,59 @@ def command_run(args: argparse.Namespace, conn: sqlite3.Connection, config: Dict
         f"{summary['volume_name']}: {summary['new_files']} new, "
         f"{summary['known_files']} known, {summary['conflict_files']} conflicts"
     )
+    if persistent_window:
+        persistent_window.update(
+            percent=0,
+            progress_text="Scan complete, waiting for confirmation",
+            message=f"Job {summary['job_id']}\n{message}",
+        )
 
-    choice = ""
+    action = "none"
     if args.notify:
-        choice = show_action_notification("SD Import", message, report_md)
+        if persistent_window:
+            persistent_window.quit()
+            persistent_window = None
+        choice = show_import_preview_decision(
+            summary=summary,
+            report_md=report_md,
+            timeout_seconds=120,
+            use_swiftdialog=True,
+            allow_legacy_fallback=False,
+        )
+        if choice == "Import New":
+            action = "import_confirmed"
+        elif choice == "Skip":
+            action = "skipped_by_user"
+        elif choice in ("@TIMEOUT", "@CLOSED", ""):
+            action = "no_response_or_timeout"
+        else:
+            action = choice
+    else:
+        choice = ""
 
     if args.auto_import or choice == "Import New":
-        result = import_new_files(conn, summary["job_id"])
+        if args.notify and persistent_window is None:
+            persistent_window = start_persistent_status_window(
+                state_dir=state_dir,
+                title="SD Import",
+                message=f"{summary['volume_name']}\nPreparing files...",
+                progress_text="Starting copy...",
+            )
+        result = import_new_files(
+            conn,
+            summary["job_id"],
+            show_progress_ui=(args.notify and persistent_window is None),
+            progress_window=persistent_window,
+        )
         print(json.dumps({"summary": summary, "import": result}, indent=2))
         return 0
 
-    if choice == "Review":
-        # report already opened in notifier callback
-        pass
+    if persistent_window:
+        persistent_window.close(
+            f"No import started.\nAction: {action}\n{message}\nClick Dismiss to close."
+        )
 
-    print(json.dumps({"summary": summary, "action": choice or "none"}, indent=2))
+    print(json.dumps({"summary": summary, "action": action}, indent=2))
     return 0
 
 
@@ -762,7 +1725,16 @@ def command_auto(args: argparse.Namespace, conn: sqlite3.Connection, config: Dic
         m = Path(args.input).expanduser().resolve()
         mounts = [{"mount_path": str(m), "volume_name": m.name, "volume_uuid": None, "mounted_at": m.stat().st_mtime}]
     else:
-        mounts = discover_removable_mounts(config.get("ignore_volume_regex"))
+        mounts = []
+        deadline = time.time() + max(0.0, args.mount_wait_seconds)
+        poll_seconds = max(0.1, args.mount_poll_seconds)
+        while True:
+            mounts = discover_removable_mounts(config.get("ignore_volume_regex"))
+            if mounts:
+                break
+            if time.time() >= deadline:
+                break
+            time.sleep(poll_seconds)
 
     if not mounts:
         print("No removable mounted volumes found.")
@@ -771,6 +1743,100 @@ def command_auto(args: argparse.Namespace, conn: sqlite3.Connection, config: Dic
     selected = mounts if args.all_mounts else mounts[:1]
     exit_code = 0
     for m in selected:
+        state_dir = get_state_dir_from_conn(conn)
+        persistent_window: Optional[SwiftDialogProgressWindow] = None
+        if args.notify and args.auto_import:
+            persistent_window = start_persistent_status_window(
+                state_dir=state_dir,
+                title="SD Import",
+                message=f"{m['volume_name']} mounted",
+                progress_text="Starting scan...",
+            )
+
+        if should_debounce_mount(conn, m["mount_path"], args.debounce_seconds):
+            print(
+                json.dumps(
+                    {
+                        "mount_path": m["mount_path"],
+                        "volume_name": m["volume_name"],
+                        "action": "debounced_duplicate_mount_event",
+                    },
+                    indent=2,
+                )
+            )
+            if persistent_window:
+                persistent_window.close(
+                    f"Duplicate mount event debounced for {m['volume_name']}.\nClick Dismiss to close."
+                )
+            continue
+
+        if args.notify and not args.auto_import:
+            continue_choice = show_prompt_notification(
+                title="SD Card Inserted",
+                message=f"{m['volume_name']} mounted. Continue import flow?",
+                actions="Continue",
+                close_label="Skip",
+                timeout_seconds=120,
+                prefer_swiftdialog=True,
+                allow_legacy_fallback=False,
+            )
+            if continue_choice == "Continue":
+                pass
+            elif continue_choice == "Skip":
+                print(
+                    json.dumps(
+                        {
+                            "mount_path": m["mount_path"],
+                            "volume_name": m["volume_name"],
+                            "action": "skipped_by_user",
+                            "choice": continue_choice,
+                        },
+                        indent=2,
+                    )
+                )
+                if persistent_window:
+                    persistent_window.close(
+                        f"Skipped by user for {m['volume_name']}.\nClick Dismiss to close."
+                    )
+                continue
+            else:
+                print(
+                    json.dumps(
+                        {
+                            "mount_path": m["mount_path"],
+                            "volume_name": m["volume_name"],
+                            "action": "no_response_or_timeout",
+                            "choice": continue_choice or "",
+                        },
+                        indent=2,
+                    )
+                )
+                if persistent_window:
+                    persistent_window.close(
+                        f"No response/timeout for {m['volume_name']}.\nClick Dismiss to close."
+                )
+                continue
+
+            if args.notify and persistent_window is None:
+                persistent_window = start_persistent_status_window(
+                    state_dir=state_dir,
+                    title="SD Import",
+                    message=f"{m['volume_name']} mounted",
+                    progress_text="Continue clicked, starting scan...",
+                )
+
+            show_info_notification(
+                title="SD Import",
+                message=f"Scanning {m['volume_name']}...",
+                timeout_seconds=4,
+            )
+            if persistent_window:
+                persistent_window.update(
+                    percent=0,
+                    progress_text="Continue clicked, starting scan...",
+                    message=f"{m['volume_name']}\nScanning...",
+                )
+
         run_args = argparse.Namespace(
             input=m["mount_path"],
             location=args.location,
@@ -778,11 +1844,43 @@ def command_auto(args: argparse.Namespace, conn: sqlite3.Connection, config: Dic
             videos_base=args.videos_base,
             notify=args.notify,
             auto_import=args.auto_import,
+            progress_window=persistent_window,
         )
         code = command_run(run_args, conn, config)
         if code != 0:
             exit_code = code
     return exit_code
+
+
+def command_status(args: argparse.Namespace, state_dir: Path) -> int:
+    if args.job_id:
+        progress_path = progress_path_for_job(state_dir, args.job_id)
+    else:
+        progress_path = latest_progress_path(state_dir)
+
+    if not progress_path or not progress_path.exists():
+        print("No progress file found.")
+        return 1
+
+    last_seen: Optional[str] = None
+    while True:
+        payload = read_json_file(progress_path)
+        if payload is None:
+            print(f"Could not parse progress file: {progress_path}", file=sys.stderr)
+            return 1
+
+        serialized = json.dumps(payload, sort_keys=True)
+        if serialized != last_seen:
+            if args.json_output:
+                print(json.dumps(payload, indent=2))
+            else:
+                print(format_progress_line(payload))
+            last_seen = serialized
+
+        status = str(payload.get("status") or "")
+        if not args.follow or status in TERMINAL_PROGRESS_STATES:
+            return 0
+        time.sleep(max(0.1, args.interval))
 
 
 def command_list_mounts(args: argparse.Namespace, config: Dict[str, Any]) -> int:
@@ -972,9 +2070,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_import = sub.add_parser("import", help="Import NEW/CONFLICT files from a job")
     p_import.add_argument("--job-id", required=True)
+    p_import.add_argument("--progress-ui", action="store_true", default=False, help="Show swiftDialog progress window")
 
     p_retry = sub.add_parser("retry", help="Retry failed/pending copies for a job")
     p_retry.add_argument("--job-id", required=True)
+    p_retry.add_argument("--progress-ui", action="store_true", default=False, help="Show swiftDialog progress window")
 
     p_run = sub.add_parser("run", help="Scan then optionally notify and import")
     p_run.add_argument("--input", required=True)
@@ -986,6 +2086,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_auto = sub.add_parser("auto", help="Pick removable mount(s) and run the same flow")
     p_auto.add_argument("--input", default=None, help="Optional explicit mount path (for debug)")
     p_auto.add_argument("--all-mounts", action="store_true", default=False)
+    p_auto.add_argument(
+        "--mount-wait-seconds",
+        type=float,
+        default=12.0,
+        help="When auto-detecting mount path, wait up to N seconds for removable mount to appear",
+    )
+    p_auto.add_argument(
+        "--mount-poll-seconds",
+        type=float,
+        default=1.0,
+        help="Polling interval while waiting for removable mount detection",
+    )
+    p_auto.add_argument(
+        "--debounce-seconds",
+        type=float,
+        default=20.0,
+        help="Ignore duplicate auto-trigger events for the same mount path within N seconds",
+    )
     p_auto.add_argument("--notify", action="store_true", default=True)
     p_auto.add_argument("--no-notify", dest="notify", action="store_false")
     p_auto.add_argument("--auto-import", action="store_true", default=False)
@@ -993,6 +2111,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_mounts = sub.add_parser("list-mounts", help="List currently mounted removable volumes")
     p_mounts.add_argument("--json", dest="json_output", action="store_true", default=False)
+
+    p_status = sub.add_parser("status", help="Show import progress from progress JSON")
+    p_status.add_argument("--job-id", default=None, help="Job ID (default: latest progress file)")
+    p_status.add_argument("--follow", action="store_true", default=False, help="Refresh until import reaches terminal status")
+    p_status.add_argument("--interval", type=float, default=1.0, help="Follow polling interval in seconds")
+    p_status.add_argument("--json", dest="json_output", action="store_true", default=False)
 
     p_list = sub.add_parser("list-jobs", help="List recent jobs")
     p_list.add_argument("--limit", type=int, default=15)
@@ -1023,10 +2147,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     ensure_dir(state_dir)
     config = load_json(config_path)
 
-    lock_fd = acquire_lock(lock_path)
-    if lock_fd is None:
-        print("Another sd_import process is running; skipping.", file=sys.stderr)
-        return 2
+    lock_fd: Optional[int] = None
+    lock_required_commands = {"scan", "import", "retry", "run", "auto", "prune"}
+    if args.command in lock_required_commands:
+        lock_fd = acquire_lock(lock_path)
+        if lock_fd is None:
+            print("Another sd_import process is running; skipping.", file=sys.stderr)
+            return 2
 
     conn = connect_db(db_path)
     try:
@@ -1042,6 +2169,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             return command_auto(args, conn, config)
         if args.command == "list-mounts":
             return command_list_mounts(args, config)
+        if args.command == "status":
+            return command_status(args, state_dir)
         if args.command == "list-jobs":
             return command_list_jobs(args, conn)
         if args.command == "show-job":
@@ -1052,7 +2181,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
     finally:
         conn.close()
-        release_lock(lock_fd)
+        if lock_fd is not None:
+            release_lock(lock_fd)
 
 
 if __name__ == "__main__":

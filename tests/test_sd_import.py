@@ -1,7 +1,12 @@
 import tempfile
 import unittest
 from pathlib import Path
+import os
 import sys
+import json
+import io
+import argparse
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,6 +141,272 @@ class PruneHistoryTests(unittest.TestCase):
         self.assertEqual(result["jobs_matched"], 0)
         self.assertEqual(result["job_files_matched"], 0)
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0], 2)
+
+
+class MetadataDedupeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.mount = self.root / "mount"
+        self.photos = self.root / "photos"
+        self.videos = self.root / "videos"
+        self.mount.mkdir(parents=True, exist_ok=True)
+        self.photos.mkdir(parents=True, exist_ok=True)
+        self.videos.mkdir(parents=True, exist_ok=True)
+        self.db_path = self.root / "state.db"
+        self.conn = sd_import.connect_db(self.db_path)
+
+    def tearDown(self) -> None:
+        self.conn.close()
+        self.tmp.cleanup()
+
+    def test_scan_import_rescan_uses_metadata_fingerprint(self) -> None:
+        file_path = self.mount / "IMG_0001.JPG"
+        file_path.write_bytes(b"sample-image-bytes")
+        fixed_mtime = 1_700_000_000
+        os.utime(file_path, (fixed_mtime, fixed_mtime))
+
+        summary1 = sd_import.scan_mount(
+            conn=self.conn,
+            mount_path=self.mount,
+            location="TEST",
+            photos_base=self.photos,
+            videos_base=self.videos,
+        )
+        self.assertEqual(summary1["new_files"], 1)
+        self.assertEqual(summary1["known_files"], 0)
+
+        row = self.conn.execute(
+            "SELECT hash, size, mtime FROM job_files WHERE job_id=? AND media_type='photo' LIMIT 1",
+            (summary1["job_id"],),
+        ).fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(
+            row["hash"],
+            sd_import.metadata_fingerprint(int(row["size"]), str(row["mtime"])),
+        )
+
+        import_result = sd_import.import_new_files(self.conn, summary1["job_id"])
+        self.assertEqual(import_result["imported_files"], 1)
+        self.assertEqual(import_result["failed_files"], 0)
+        progress_path = Path(import_result["progress_path"])
+        self.assertTrue(progress_path.exists())
+        progress = json.loads(progress_path.read_text())
+        self.assertEqual(progress["job_id"], summary1["job_id"])
+        self.assertEqual(progress["status"], "completed")
+        self.assertEqual(progress["total_files"], 1)
+        self.assertEqual(progress["done_files"], 1)
+        self.assertEqual(progress["imported_files"], 1)
+
+        summary2 = sd_import.scan_mount(
+            conn=self.conn,
+            mount_path=self.mount,
+            location="TEST",
+            photos_base=self.photos,
+            videos_base=self.videos,
+        )
+        self.assertEqual(summary2["new_files"], 0)
+        self.assertEqual(summary2["known_files"], 1)
+
+
+class CaptureDateTests(unittest.TestCase):
+    def test_parse_date_from_text_supports_common_formats(self) -> None:
+        self.assertEqual(sd_import._parse_date_from_text("2026-03-03"), "2026-03-03")
+        self.assertEqual(sd_import._parse_date_from_text("2026:03:03 08:12:44"), "2026-03-03")
+        self.assertIsNone(sd_import._parse_date_from_text("(null)"))
+
+    def test_scan_mount_uses_capture_date_for_photo_and_video_dirs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            mount = root / "mount"
+            photos = root / "photos"
+            videos = root / "videos"
+            db_path = root / "state.db"
+            mount.mkdir(parents=True, exist_ok=True)
+            photos.mkdir(parents=True, exist_ok=True)
+            videos.mkdir(parents=True, exist_ok=True)
+
+            (mount / "IMG_0001.JPG").write_bytes(b"photo-bytes")
+            (mount / "VID_0001.MP4").write_bytes(b"video-bytes")
+            capture_map = {
+                str(mount / "IMG_0001.JPG"): "2024-07-15",
+                str(mount / "VID_0001.MP4"): "2024-07-15",
+            }
+
+            conn = sd_import.connect_db(db_path)
+            try:
+                with mock.patch("sd_import.capture_dates_from_exiftool_batch", return_value=capture_map):
+                    summary = sd_import.scan_mount(
+                        conn=conn,
+                        mount_path=mount,
+                        location="TEST",
+                        photos_base=photos,
+                        videos_base=videos,
+                    )
+
+                rows = conn.execute(
+                    "SELECT media_type, dest_dir FROM job_files WHERE job_id=? ORDER BY media_type",
+                    (summary["job_id"],),
+                ).fetchall()
+            finally:
+                conn.close()
+
+            by_type = {row["media_type"]: row["dest_dir"] for row in rows}
+            self.assertEqual(by_type["photo"], str(photos / "2024-07-15 TEST"))
+            self.assertEqual(by_type["video"], str(videos / "tmp-2024-07-15-videos"))
+
+
+class ExifBatchTests(unittest.TestCase):
+    def test_capture_dates_from_exiftool_batch(self) -> None:
+        files = [(Path("/tmp/A.JPG"), "photo"), (Path("/tmp/B.MP4"), "video")]
+        payload = [
+            {"SourceFile": "/tmp/A.JPG", "DateTimeOriginal": "2024:07:15 10:00:00"},
+            {"SourceFile": "/tmp/B.MP4", "MediaCreateDate": "2025:01:02 03:04:05"},
+        ]
+        with mock.patch("sd_import.shutil.which", return_value="/opt/homebrew/bin/exiftool"):
+            with mock.patch("sd_import.subprocess.run", return_value=mock.Mock(stdout=json.dumps(payload), returncode=0)):
+                result = sd_import.capture_dates_from_exiftool_batch(files, batch_size=10)
+
+        self.assertEqual(result["/tmp/A.JPG"], "2024-07-15")
+        self.assertEqual(result["/tmp/B.MP4"], "2025-01-02")
+
+
+class StatusCommandTests(unittest.TestCase):
+    def test_status_reads_latest_progress_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp)
+            progress_dir = state_dir / "progress"
+            progress_dir.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "job_id": "job-1",
+                "status": "copying",
+                "percent": 42.5,
+                "done_files": 3,
+                "total_files": 10,
+                "processed_bytes": 1234,
+                "total_bytes": 9999,
+                "throughput_bps": 1000,
+                "eta_seconds": 8.0,
+                "current_file": "VID_0001.MP4",
+            }
+            (progress_dir / "job-1.json").write_text(json.dumps(payload))
+
+            args = argparse.Namespace(job_id=None, follow=False, interval=0.1, json_output=True)
+            fake_stdout = io.StringIO()
+            with mock.patch("sys.stdout", new=fake_stdout):
+                exit_code = sd_import.command_status(args, state_dir)
+
+            self.assertEqual(exit_code, 0)
+            out_payload = json.loads(fake_stdout.getvalue())
+            self.assertEqual(out_payload["job_id"], "job-1")
+            self.assertEqual(out_payload["status"], "copying")
+
+
+class PreviewDialogTests(unittest.TestCase):
+    def test_swiftdialog_open_report_then_import(self) -> None:
+        summary = {
+            "volume_name": "CARD",
+            "new_files": 2,
+            "known_files": 10,
+            "conflict_files": 1,
+            "unsupported_files": 5,
+        }
+        report_md = Path("/tmp/fake-report.md")
+
+        with mock.patch("sd_import.detect_swiftdialog_binary", return_value="/usr/local/bin/dialog"):
+            with mock.patch("sd_import.subprocess.run") as mocked_run:
+                dialog_calls = {"count": 0}
+
+                def run_side_effect(cmd, *args, **kwargs):
+                    if cmd and cmd[0] == "open":
+                        return mock.Mock(returncode=0, stderr="")
+                    if cmd and cmd[0] == "/usr/local/bin/dialog":
+                        dialog_calls["count"] += 1
+                        if dialog_calls["count"] == 1:
+                            return mock.Mock(returncode=3, stderr="")  # Open Report (info button)
+                        return mock.Mock(returncode=2, stderr="")  # Import New
+                    return mock.Mock(returncode=0, stderr="")
+
+                mocked_run.side_effect = run_side_effect
+                choice = sd_import.show_import_preview_decision(summary, report_md, timeout_seconds=60)
+
+        self.assertEqual(choice, "Import New")
+        open_calls = [c for c in mocked_run.call_args_list if c.args and c.args[0] and c.args[0][0] == "open"]
+        self.assertEqual(len(open_calls), 1)
+        self.assertEqual(open_calls[0].args[0][1], str(report_md))
+
+    def test_preview_no_legacy_fallback_returns_closed(self) -> None:
+        summary = {
+            "volume_name": "CARD",
+            "new_files": 0,
+            "known_files": 0,
+            "conflict_files": 0,
+            "unsupported_files": 0,
+        }
+        report_md = Path("/tmp/fake-report.md")
+
+        with mock.patch("sd_import.detect_swiftdialog_binary", return_value=None):
+            with mock.patch("sd_import.subprocess.run") as mocked_run:
+                choice = sd_import.show_import_preview_decision(
+                    summary,
+                    report_md,
+                    timeout_seconds=60,
+                    use_swiftdialog=True,
+                    allow_legacy_fallback=False,
+                )
+
+        self.assertEqual(choice, "@CLOSED")
+        self.assertEqual(mocked_run.call_count, 0)
+
+
+class PromptNotificationTests(unittest.TestCase):
+    def test_prompt_no_legacy_fallback_returns_empty_when_swiftdialog_missing(self) -> None:
+        with mock.patch("sd_import.detect_swiftdialog_binary", return_value=None):
+            with mock.patch("sd_import.subprocess.run") as mocked_run:
+                choice = sd_import.show_prompt_notification(
+                    title="SD Card Inserted",
+                    message="Continue?",
+                    actions="Continue",
+                    close_label="Skip",
+                    timeout_seconds=30,
+                    prefer_swiftdialog=True,
+                    allow_legacy_fallback=False,
+                )
+
+        self.assertEqual(choice, "")
+        self.assertEqual(mocked_run.call_count, 0)
+
+
+class ProgressWindowTests(unittest.TestCase):
+    def test_close_does_not_quit_window(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            command_file = Path(tmp) / "dialog-command.log"
+            win = sd_import.SwiftDialogProgressWindow("/usr/local/bin/dialog", command_file)
+            win.proc = mock.Mock()
+            win.proc.poll.return_value = None
+
+            win.close("Done")
+
+            content = command_file.read_text()
+            self.assertIn("progress: 100", content)
+            self.assertIn("progresstext: Completed", content)
+            self.assertIn("message: Done", content)
+            self.assertNotIn("quit:", content)
+
+    def test_quit_writes_quit_and_clears_proc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            command_file = Path(tmp) / "dialog-command.log"
+            win = sd_import.SwiftDialogProgressWindow("/usr/local/bin/dialog", command_file)
+            proc = mock.Mock()
+            proc.poll.return_value = None
+            proc.wait.return_value = None
+            win.proc = proc
+
+            win.quit(wait_seconds=0.1)
+
+            content = command_file.read_text()
+            self.assertIn("quit:", content)
+            self.assertIsNone(win.proc)
 
 
 if __name__ == "__main__":

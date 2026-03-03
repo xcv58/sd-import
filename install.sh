@@ -121,6 +121,67 @@ PY
   log "alerter installed"
 }
 
+install_exiftool() {
+  if command -v exiftool >/dev/null 2>&1; then
+    log "exiftool found in PATH"
+    return
+  fi
+
+  if command -v brew >/dev/null 2>&1; then
+    log "Installing exiftool via Homebrew"
+    if brew list --versions exiftool >/dev/null 2>&1; then
+      log "exiftool already installed in Homebrew"
+    else
+      brew install exiftool
+    fi
+    if command -v exiftool >/dev/null 2>&1; then
+      log "exiftool installed"
+      return
+    fi
+  fi
+
+  log "exiftool not installed; capture-date extraction may fall back to mtime"
+}
+
+has_swiftdialog() {
+  local cand
+  local in_path
+  in_path="$(command -v dialog || true)"
+  for cand in "$in_path" /usr/local/bin/dialog /opt/homebrew/bin/dialog; do
+    [[ -n "$cand" ]] || continue
+    [[ -x "$cand" ]] || continue
+    if "$cand" --version 2>&1 | grep -qi "swiftDialog"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+install_swiftdialog() {
+  if has_swiftdialog; then
+    log "swiftDialog found"
+    return
+  fi
+
+  if ! command -v brew >/dev/null 2>&1; then
+    log "Homebrew not found; skipping swiftDialog install"
+    return
+  fi
+
+  log "Installing swiftDialog via Homebrew cask"
+  if brew list --cask swiftdialog >/dev/null 2>&1; then
+    log "swiftDialog already installed in Homebrew"
+  else
+    brew install --cask swiftdialog || true
+  fi
+
+  if has_swiftdialog; then
+    log "swiftDialog installed"
+  else
+    log "swiftDialog install not available; desktop progress window will be skipped"
+  fi
+}
+
 install_launcher() {
   ln -sfn "$ROOT_DIR/sd-import" "$LOCAL_BIN/sd-import"
   log "symlinked $LOCAL_BIN/sd-import -> $ROOT_DIR/sd-import"
@@ -223,6 +284,8 @@ PY
 }
 
 install_alerter
+install_exiftool
+install_swiftdialog
 install_launcher
 write_default_config_if_missing
 

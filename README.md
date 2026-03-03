@@ -3,8 +3,10 @@
 This repo provides a deterministic SD-card importer with:
 
 - auto trigger on mount (`launchd` + `StartOnMount`)
-- interactive actionable notifications (`alerter`)
-- dedupe with SQLite (`~/.sd-import/state.db`) by `sha256 + size`
+- interactive actionable dialogs via `swiftDialog`
+- dedupe with SQLite (`~/.sd-import/state.db`) by metadata fingerprint (`size + mtime`)
+- destination folders grouped by capture date (EXIF/QuickTime/metadata, fallback to mtime)
+- live copy progress state in `~/.sd-import/progress/<job_id>.json`
 - preview report before import
 - manual CLI trigger for debug/retry
 - Raycast extension + Alfred wrapper
@@ -12,9 +14,16 @@ This repo provides a deterministic SD-card importer with:
 
 ## Why this solves your "yesterday + today" case
 
-Imported files are tracked by content hash, not folder path.
+Imported files are tracked by metadata fingerprint (`size + mtime`), not folder path.
 
-If you rename/delete destination folders or edit in Lightroom, re-inserting the same card will still skip yesterday's originals (same hash) and import only new content.
+If you rename/delete destination folders or edit in Lightroom, re-inserting the same card will still skip yesterday's originals (same fingerprint) and import only new content.
+
+Folder naming:
+
+- photos: `~/Pictures/Photos/YYYY-MM-DD <location>/`
+- videos: `~/Downloads/tmp-YYYY-MM-DD-videos/`
+
+`YYYY-MM-DD` is taken from capture date metadata when available (EXIF/QuickTime/Spotlight), with mtime as fallback.
 
 ## Install
 
@@ -40,7 +49,9 @@ cd /Users/xcv58/work/macos-automation && ./install.sh \
 
 What `install.sh` configures:
 
-- installs `alerter` (falls back to GitHub binary in `~/.local/bin/alerter`)
+- installs `alerter` (legacy fallback; GitHub binary in `~/.local/bin/alerter`)
+- installs `exiftool` via Homebrew when available (for reliable capture-date extraction)
+- installs `swiftDialog` via Homebrew cask when available (desktop prompts + progress window)
 - symlinks `sd-import` to `~/.local/bin/sd-import`
 - writes `~/Library/LaunchAgents/com.xcv58.sd-import.plist`
 - enables and kickstarts launchd service
@@ -73,13 +84,41 @@ Smoke test manually:
 
 On mount (or manual `run`):
 
-1. Script scans files and computes summary.
-2. `alerter` shows action buttons:
-   - `Review`: opens report (`~/.sd-import/reports/<job_id>.md`)
-   - `Import New`: copies only files marked `NEW`/`CONFLICT`
-   - `Skip`: no copy
+1. Immediate `swiftDialog` decision prompt appears: `Skip` or `Continue`.
+2. If `Continue`, a `swiftDialog` status window shows scan/prepare progress (`indexing`, `capture metadata`, `analyzing`).
+3. A `swiftDialog` preview prompt appears with counts (`new/known/conflicts/unsupported`); choose `Open Report`, `Import New`, or `Skip`.
+4. During copy, a `swiftDialog` status window shows live progress, stays on top, and is moveable.
+5. When copy finishes (or is skipped), the status window remains open until you click `Dismiss`.
 
 No action can accidentally copy known files because copy is gated by dedupe state.
+
+Notes:
+
+- Duplicate mount events are debounced (20s default) to avoid double prompts.
+- In `--notify` flows, actionable prompts are `swiftDialog`-only (safe timeout/skip if no response).
+- If actionable notification is not responded to, flow ends with `no_response_or_timeout` in logs.
+
+Performance note:
+
+- Dedupe now uses a lightweight metadata fingerprint (`size + mtime`) instead of full content hashing.
+- Capture-date extraction uses batched `exiftool` reads during scan (instead of per-file calls) to keep prepare stage faster.
+- This keeps scan/import fast, but is less strict than full-file SHA-256 dedupe.
+
+## SSH / Headless Mode
+
+CLI works over SSH without desktop access. Use `--no-notify` to avoid GUI notifications:
+
+```bash
+~/.local/bin/sd-import auto --no-notify --auto-import --input /Volumes/YOUR_SD_CARD --location NYC
+~/.local/bin/sd-import scan --input /Volumes/YOUR_SD_CARD --location NYC
+~/.local/bin/sd-import import --job-id <JOB_ID>
+```
+
+Notes:
+
+- Raycast/Alfred and `swiftDialog` prompts require a GUI user session.
+- `launchd` LaunchAgent auto-mount trigger also depends on a logged-in GUI session.
+- For fully headless hosts, trigger `sd-import` from SSH/cron/manual scripts instead.
 
 ## CLI commands
 
@@ -101,9 +140,23 @@ No action can accidentally copy known files because copy is gated by dedupe stat
 
 ```bash
 /Users/xcv58/work/macos-automation/sd-import import --job-id 20260303-005507
+/Users/xcv58/work/macos-automation/sd-import import --job-id 20260303-005507 --progress-ui
 /Users/xcv58/work/macos-automation/sd-import retry --job-id 20260303-005507
+/Users/xcv58/work/macos-automation/sd-import retry --job-id 20260303-005507 --progress-ui
 /Users/xcv58/work/macos-automation/sd-import retry-latest
 ```
+
+### Live copy status (CLI/debug)
+
+```bash
+/Users/xcv58/work/macos-automation/sd-import status
+/Users/xcv58/work/macos-automation/sd-import status --job-id 20260303-005507 --follow
+/Users/xcv58/work/macos-automation/sd-import status --follow --json
+```
+
+Progress JSON path:
+
+- `~/.sd-import/progress/<job_id>.json`
 
 ### Debug jobs
 
@@ -171,7 +224,6 @@ Use `/Users/xcv58/work/macos-automation/alfred/sd-import-auto.sh` in a Script Fi
 ## Suggested additional features
 
 - import policy by card serial/volume UUID (different destinations per card)
-- EXIF/QuickTime capture date extraction (instead of mtime)
 - quarantine mode: copy new files to staging, review, then promote
 - checksum manifest export (`job_id.manifest.csv`) for audit trail
 - optional webhook/Slack summary after each job
