@@ -1,11 +1,13 @@
 import tempfile
 import unittest
 from pathlib import Path
+import datetime as dt
 import os
 import sys
 import json
 import io
 import argparse
+import plistlib
 from unittest import mock
 
 
@@ -14,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import sd_import  # noqa: E402
+from sd_import_modules import common as common_mod  # noqa: E402
 
 
 class PruneHistoryTests(unittest.TestCase):
@@ -235,7 +238,7 @@ class CaptureDateTests(unittest.TestCase):
 
             conn = sd_import.connect_db(db_path)
             try:
-                with mock.patch("sd_import.capture_dates_from_exiftool_batch", return_value=capture_map):
+                with mock.patch("sd_import_modules.scan.capture_dates_from_exiftool_batch", return_value=capture_map):
                     summary = sd_import.scan_mount(
                         conn=conn,
                         mount_path=mount,
@@ -264,16 +267,16 @@ class DiskutilDetectionTests(unittest.TestCase):
         def fake_access(path, mode):
             return str(path) == "/usr/sbin/diskutil"
 
-        with mock.patch("sd_import.shutil.which", return_value=None):
-            with mock.patch.object(sd_import.Path, "exists", fake_exists):
-                with mock.patch("sd_import.os.access", side_effect=fake_access):
+        with mock.patch("sd_import_modules.common.shutil.which", return_value=None):
+            with mock.patch.object(common_mod.Path, "exists", fake_exists):
+                with mock.patch("sd_import_modules.common.os.access", side_effect=fake_access):
                     self.assertEqual(sd_import.detect_diskutil_binary(), "/usr/sbin/diskutil")
 
     def test_get_diskutil_info_uses_detected_binary(self) -> None:
         fake_plist = {"VolumeName": "CARD"}
-        with mock.patch("sd_import.detect_diskutil_binary", return_value="/usr/sbin/diskutil"):
-            with mock.patch("sd_import.subprocess.run") as mocked_run:
-                mocked_run.return_value = mock.Mock(stdout=sd_import.plistlib.dumps(fake_plist), returncode=0)
+        with mock.patch("sd_import_modules.db.detect_diskutil_binary", return_value="/usr/sbin/diskutil"):
+            with mock.patch("sd_import_modules.db.subprocess.run") as mocked_run:
+                mocked_run.return_value = mock.Mock(stdout=plistlib.dumps(fake_plist), returncode=0)
                 result = sd_import.get_diskutil_info("/Volumes/CARD")
 
         self.assertEqual(result.get("VolumeName"), "CARD")
@@ -290,8 +293,8 @@ class ExifBatchTests(unittest.TestCase):
             {"SourceFile": "/tmp/A.JPG", "DateTimeOriginal": "2024:07:15 10:00:00"},
             {"SourceFile": "/tmp/B.MP4", "MediaCreateDate": "2025:01:02 03:04:05"},
         ]
-        with mock.patch("sd_import.shutil.which", return_value="/opt/homebrew/bin/exiftool"):
-            with mock.patch("sd_import.subprocess.run", return_value=mock.Mock(stdout=json.dumps(payload), returncode=0)):
+        with mock.patch("sd_import_modules.scan.shutil.which", return_value="/opt/homebrew/bin/exiftool"):
+            with mock.patch("sd_import_modules.scan.subprocess.run", return_value=mock.Mock(stdout=json.dumps(payload), returncode=0)):
                 result = sd_import.capture_dates_from_exiftool_batch(files, batch_size=10)
 
         self.assertEqual(result["/tmp/A.JPG"], "2024-07-15")
@@ -329,6 +332,93 @@ class StatusCommandTests(unittest.TestCase):
             self.assertEqual(out_payload["status"], "copying")
 
 
+class LocationSelectionTests(unittest.TestCase):
+    def test_requested_location_has_highest_priority(self) -> None:
+        config = {
+            "default_location": "DEFAULT",
+            "location_by_volume": {"CARD": "MAPPED"},
+        }
+        location = sd_import.choose_location(config, requested_location="REQUESTED", volume_name="CARD")
+        self.assertEqual(location, "REQUESTED")
+
+    def test_volume_mapping_used_when_request_missing(self) -> None:
+        config = {
+            "default_location": "DEFAULT",
+            "location_by_volume": {"CARD": "MAPPED"},
+        }
+        location = sd_import.choose_location(config, requested_location=None, volume_name="CARD")
+        self.assertEqual(location, "MAPPED")
+
+    def test_default_used_when_no_request_or_mapping(self) -> None:
+        config = {
+            "default_location": "DEFAULT",
+            "location_by_volume": {"OTHER": "MAPPED"},
+        }
+        location = sd_import.choose_location(config, requested_location=None, volume_name="CARD")
+        self.assertEqual(location, "DEFAULT")
+
+
+class MountDebounceTests(unittest.TestCase):
+    def test_same_mount_is_debounced_within_window(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = sd_import.connect_db(Path(tmp) / "state.db")
+            try:
+                first = sd_import.should_debounce_mount(conn, "/Volumes/CARD", debounce_seconds=20.0)
+                second = sd_import.should_debounce_mount(conn, "/Volumes/CARD", debounce_seconds=20.0)
+            finally:
+                conn.close()
+
+        self.assertFalse(first)
+        self.assertTrue(second)
+
+    def test_different_mount_not_debounced(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = sd_import.connect_db(Path(tmp) / "state.db")
+            try:
+                sd_import.should_debounce_mount(conn, "/Volumes/CARD-A", debounce_seconds=20.0)
+                second = sd_import.should_debounce_mount(conn, "/Volumes/CARD-B", debounce_seconds=20.0)
+            finally:
+                conn.close()
+
+        self.assertFalse(second)
+
+
+class DestinationResolutionTests(unittest.TestCase):
+    def test_returns_candidate_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "IMG_0001.JPG"
+            resolved, reason = sd_import.resolve_destination_path(target, expected_hash="abc", expected_size=1)
+
+        self.assertEqual(resolved, target)
+        self.assertIsNone(reason)
+
+    def test_skips_when_existing_file_matches_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "IMG_0001.JPG"
+            target.write_bytes(b"same-bytes")
+            st = target.stat()
+            mtime_iso = dt.datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")
+            expected_hash = sd_import.metadata_fingerprint(st.st_size, mtime_iso)
+
+            resolved, reason = sd_import.resolve_destination_path(target, expected_hash=expected_hash, expected_size=st.st_size)
+
+        self.assertIsNone(resolved)
+        self.assertEqual(reason, "already_exists_same_hash")
+
+    def test_allocates_copy_suffix_for_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp)
+            target = parent / "IMG_0001.JPG"
+            copy1 = parent / "IMG_0001-copy-1.JPG"
+            target.write_bytes(b"old-target")
+            copy1.write_bytes(b"old-copy")
+
+            resolved, reason = sd_import.resolve_destination_path(target, expected_hash="new-hash", expected_size=9999)
+
+        self.assertEqual(resolved, parent / "IMG_0001-copy-2.JPG")
+        self.assertIsNone(reason)
+
+
 class PreviewDialogTests(unittest.TestCase):
     def test_swiftdialog_open_report_then_import(self) -> None:
         summary = {
@@ -340,8 +430,8 @@ class PreviewDialogTests(unittest.TestCase):
         }
         report_md = Path("/tmp/fake-report.md")
 
-        with mock.patch("sd_import.detect_swiftdialog_binary", return_value="/usr/local/bin/dialog"):
-            with mock.patch("sd_import.subprocess.run") as mocked_run:
+        with mock.patch("sd_import_modules.ui.detect_swiftdialog_binary", return_value="/usr/local/bin/dialog"):
+            with mock.patch("sd_import_modules.ui.subprocess.run") as mocked_run:
                 dialog_calls = {"count": 0}
 
                 def run_side_effect(cmd, *args, **kwargs):
@@ -372,8 +462,8 @@ class PreviewDialogTests(unittest.TestCase):
         }
         report_md = Path("/tmp/fake-report.md")
 
-        with mock.patch("sd_import.detect_swiftdialog_binary", return_value=None):
-            with mock.patch("sd_import.subprocess.run") as mocked_run:
+        with mock.patch("sd_import_modules.ui.detect_swiftdialog_binary", return_value=None):
+            with mock.patch("sd_import_modules.ui.subprocess.run") as mocked_run:
                 choice = sd_import.show_import_preview_decision(
                     summary,
                     report_md,
@@ -388,8 +478,8 @@ class PreviewDialogTests(unittest.TestCase):
 
 class PromptNotificationTests(unittest.TestCase):
     def test_prompt_no_legacy_fallback_returns_empty_when_swiftdialog_missing(self) -> None:
-        with mock.patch("sd_import.detect_swiftdialog_binary", return_value=None):
-            with mock.patch("sd_import.subprocess.run") as mocked_run:
+        with mock.patch("sd_import_modules.ui.detect_swiftdialog_binary", return_value=None):
+            with mock.patch("sd_import_modules.ui.subprocess.run") as mocked_run:
                 choice = sd_import.show_prompt_notification(
                     title="SD Card Inserted",
                     message="Continue?",
@@ -404,8 +494,8 @@ class PromptNotificationTests(unittest.TestCase):
         self.assertEqual(mocked_run.call_count, 0)
 
     def test_swiftdialog_prompt_primary_action_is_button1_when_close_first_false(self) -> None:
-        with mock.patch("sd_import.detect_swiftdialog_binary", return_value="/usr/local/bin/dialog"):
-            with mock.patch("sd_import.subprocess.run", return_value=mock.Mock(returncode=0, stderr="")) as mocked_run:
+        with mock.patch("sd_import_modules.ui.detect_swiftdialog_binary", return_value="/usr/local/bin/dialog"):
+            with mock.patch("sd_import_modules.ui.subprocess.run", return_value=mock.Mock(returncode=0, stderr="")) as mocked_run:
                 choice = sd_import.show_prompt_notification(
                     title="SD Card Inserted",
                     message="Continue?",

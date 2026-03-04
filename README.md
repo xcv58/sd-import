@@ -9,8 +9,20 @@ This repo provides a deterministic SD-card importer with:
 - live copy progress state in `~/.sd-import/progress/<job_id>.json`
 - preview report before import
 - manual CLI trigger for debug/retry
-- Raycast extension + Alfred wrapper
+- Raycast extension
 - one canonical launcher script (`$HOME/work/macos-automation/sd-import`)
+
+## Internal Architecture
+
+`sd_import.py` is now a thin CLI/orchestration layer. Core behavior is split into:
+
+- `sd_import_modules/db.py` - SQLite schema, mount discovery, job state
+- `sd_import_modules/scan.py` - file scan, metadata capture-date extraction, report generation
+- `sd_import_modules/importer.py` - copy/retry pipeline, progress state, dedupe-safe destination resolve
+- `sd_import_modules/ui.py` - `swiftDialog` prompts/preview/progress window integration
+- `sd_import_modules/common.py` - shared utility functions (IDs, JSON IO, formatting)
+
+This keeps future UI work separate from import correctness logic.
 
 ## Why this solves your "yesterday + today" case
 
@@ -82,21 +94,17 @@ $HOME/work/macos-automation/sd-import run \
 
 ## Interactive notification flow
 
-On mount (or manual `run`):
+On mount (or manual `run`), the flow is:
 
-1. Immediate `swiftDialog` decision prompt appears: `Skip` or `Continue`.
-2. If `Continue`, a `swiftDialog` status window shows scan/prepare progress (`indexing`, `capture metadata`, `analyzing`).
-3. A `swiftDialog` preview prompt appears with counts (`new/known/conflicts/unsupported`); choose `Open Report`, `Import New`, or `Skip`.
-4. During copy, a `swiftDialog` status window shows live progress, stays on top, and is moveable.
-5. When copy finishes (or is skipped), the status window remains open until you click `Dismiss`.
+1. `Skip` / `Continue` prompt.
+2. Scan + preview summary (`new/known/conflicts/unsupported`).
+3. Optional import with live copy progress, then `Dismiss`.
 
-No action can accidentally copy known files because copy is gated by dedupe state.
+Safety:
 
-Notes:
-
-- Duplicate mount events are debounced (20s default) to avoid double prompts.
-- In `--notify` flows, actionable prompts are `swiftDialog`-only (safe timeout/skip if no response).
-- If actionable notification is not responded to, flow ends with `no_response_or_timeout` in logs.
+- Known files are never copied again (dedupe gate).
+- Duplicate mount events are debounced (20s default).
+- If no prompt response, the run exits as `no_response_or_timeout`.
 
 Performance note:
 
@@ -104,98 +112,18 @@ Performance note:
 - Capture-date extraction uses batched `exiftool` reads during scan (instead of per-file calls) to keep prepare stage faster.
 - This keeps scan/import fast, but is less strict than full-file SHA-256 dedupe.
 
-## SSH / Headless Mode
+## Daily usage (recommended)
 
-CLI works over SSH without desktop access. Use `--no-notify` to avoid GUI notifications:
+Typical flow after install:
 
-```bash
-~/.local/bin/sd-import auto --no-notify --auto-import --input /Volumes/YOUR_SD_CARD --location NYC
-~/.local/bin/sd-import scan --input /Volumes/YOUR_SD_CARD --location NYC
-~/.local/bin/sd-import import --job-id <JOB_ID>
-```
-
-Notes:
-
-- Raycast/Alfred and `swiftDialog` prompts require a GUI user session.
-- `launchd` LaunchAgent auto-mount trigger also depends on a logged-in GUI session.
-- For fully headless hosts, trigger `sd-import` from SSH/cron/manual scripts instead.
-
-## CLI commands
-
-### Auto detect removable mount and run interactive flow
-
-```bash
-$HOME/work/macos-automation/sd-import auto
-```
-
-### Manual scan only (no copy)
-
-```bash
-$HOME/work/macos-automation/sd-import scan \
-  --input /Volumes/YOUR_SD_CARD \
-  --location NYC
-```
-
-### Import/retry by job id
-
-```bash
-$HOME/work/macos-automation/sd-import import --job-id 20260303-005507
-$HOME/work/macos-automation/sd-import import --job-id 20260303-005507 --progress-ui
-$HOME/work/macos-automation/sd-import retry --job-id 20260303-005507
-$HOME/work/macos-automation/sd-import retry --job-id 20260303-005507 --progress-ui
-$HOME/work/macos-automation/sd-import retry-latest
-```
-
-### Live copy status (CLI/debug)
-
-```bash
-$HOME/work/macos-automation/sd-import status
-$HOME/work/macos-automation/sd-import status --job-id 20260303-005507 --follow
-$HOME/work/macos-automation/sd-import status --follow --json
-```
-
-Progress JSON path:
-
-- `~/.sd-import/progress/<job_id>.json`
-
-### Debug jobs
-
-```bash
-$HOME/work/macos-automation/sd-import list-mounts --json
-$HOME/work/macos-automation/sd-import list-jobs
-$HOME/work/macos-automation/sd-import show-job --job-id 20260303-005507
-```
-
-### Prune old history (retention)
-
-Prunes `jobs` and `job_files` older than N days, plus their report files in `~/.sd-import/reports/`.
-It does **not** prune `items` (dedupe fingerprints), so dedupe history is preserved.
-
-```bash
-$HOME/work/macos-automation/sd-import prune --days 180 --dry-run
-$HOME/work/macos-automation/sd-import prune --days 180 --vacuum
-```
+- Keep `launchd` enabled and just insert SD cards.
+- Use Raycast for manual control (`SD Import Auto`, `SD Import Select Volume`, `SD Import Retry Latest`, `SD Import Jobs`).
+- Use CLI only for debugging or recovery.
 
 ## launchd auto-run on SD insert
 
-`install.sh` already installs launchd for you.
-Template plist (for reference): `$HOME/work/macos-automation/launchd/com.xcv58.sd-import.plist`
-The reference plist contains `/Users/YOUR_USER/...` placeholders because launchd requires absolute paths and does not expand `$HOME`.
-
-Install:
-
-```bash
-mkdir -p ~/Library/LaunchAgents
-sed "s|/Users/YOUR_USER|$HOME|g" \
-  "$HOME/work/macos-automation/launchd/com.xcv58.sd-import.plist" \
-  > ~/Library/LaunchAgents/com.xcv58.sd-import.plist
-launchctl bootout gui/$(id -u)/com.xcv58.sd-import >/dev/null 2>&1 || true
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.xcv58.sd-import.plist
-launchctl enable gui/$(id -u)/com.xcv58.sd-import
-launchctl kickstart -k gui/$(id -u)/com.xcv58.sd-import
-```
-
-Toggle:
+`install.sh` installs and enables launchd automatically.
+If needed, toggle manually:
 
 ```bash
 launchctl disable gui/$(id -u)/com.xcv58.sd-import
@@ -220,17 +148,15 @@ Use the local extension:
   - `SD Import Retry Latest`
   - `SD Import Jobs`
 
-## Alfred
+## CLI (debug/recovery)
 
-Use `$HOME/work/macos-automation/alfred/sd-import-auto.sh` in a Script Filter / Run Script workflow.
-
-## Suggested additional features
-
-- import policy by card serial/volume UUID (different destinations per card)
-- quarantine mode: copy new files to staging, review, then promote
-- checksum manifest export (`job_id.manifest.csv`) for audit trail
-- optional webhook/Slack summary after each job
-- conflict policy options: `skip` / `rename-copy` / `prompt`
+```bash
+$HOME/work/macos-automation/sd-import auto
+$HOME/work/macos-automation/sd-import retry-latest
+$HOME/work/macos-automation/sd-import list-jobs
+$HOME/work/macos-automation/sd-import show-job --job-id <JOB_ID>
+$HOME/work/macos-automation/sd-import status --job-id <JOB_ID> --follow
+```
 
 ## Tests
 
