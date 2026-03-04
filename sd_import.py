@@ -90,6 +90,24 @@ def has_command(name: str) -> bool:
     return any(p.exists() and os.access(p, os.X_OK) for p in fallback_paths)
 
 
+def detect_diskutil_binary() -> Optional[str]:
+    candidates: List[str] = []
+    in_path = shutil.which("diskutil")
+    if in_path:
+        candidates.append(in_path)
+    candidates.extend(["/usr/sbin/diskutil", "/usr/bin/diskutil"])
+
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        p = Path(candidate)
+        if p.exists() and os.access(p, os.X_OK):
+            return candidate
+    return None
+
+
 def metadata_fingerprint(file_size: int, mtime_iso: str) -> str:
     # Fast non-content fingerprint: stable across repeated scans of unchanged files.
     payload = f"{file_size}|{mtime_iso}"
@@ -355,9 +373,12 @@ def connect_db(db_path: Path) -> sqlite3.Connection:
 
 
 def get_diskutil_info(path: str) -> Dict[str, Any]:
+    diskutil_bin = detect_diskutil_binary()
+    if not diskutil_bin:
+        return {}
     try:
         proc = subprocess.run(
-            ["diskutil", "info", "-plist", path],
+            [diskutil_bin, "info", "-plist", path],
             capture_output=True,
             text=False,
             check=True,
@@ -369,9 +390,12 @@ def get_diskutil_info(path: str) -> Dict[str, Any]:
 
 def discover_removable_mounts(ignore_volume_regex: Optional[str]) -> List[Dict[str, Any]]:
     mounts: List[Dict[str, Any]] = []
+    diskutil_bin = detect_diskutil_binary()
+    if not diskutil_bin:
+        return mounts
     try:
         proc = subprocess.run(
-            ["diskutil", "list", "-plist"],
+            [diskutil_bin, "list", "-plist"],
             capture_output=True,
             text=False,
             check=True,
@@ -572,10 +596,16 @@ def show_prompt_notification(
             button1,
             "--button2text",
             button2,
-            "--timer",
-            str(max(1, int(timeout_seconds))),
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=max(1, int(timeout_seconds)),
+            )
+        except subprocess.TimeoutExpired:
+            return "@TIMEOUT"
         rc = proc.returncode
         if rc == 0:
             return button1
@@ -715,36 +745,41 @@ def show_import_preview_decision(
     dialog_bin = detect_swiftdialog_binary() if use_swiftdialog else None
     if dialog_bin:
         while True:
-            proc = subprocess.run(
-                [
-                    dialog_bin,
-                    "--title",
-                    title,
-                    "--message",
-                    overview,
-                    "--button1text",
-                    "Skip",
-                    "--button2text",
-                    "Import New",
-                    "--infobuttontext",
-                    "Open Report",
-                    "--timer",
-                    str(max(1, int(timeout_seconds))),
-                ],
-                capture_output=True,
-                text=True,
-            )
+            try:
+                proc = subprocess.run(
+                    [
+                        dialog_bin,
+                        "--title",
+                        title,
+                        "--message",
+                        overview,
+                        "--button1text",
+                        "Import New",
+                        "--button2text",
+                        "Skip",
+                        "--infobuttontext",
+                        "Open Report",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=max(1, int(timeout_seconds)),
+                )
+            except subprocess.TimeoutExpired:
+                return "@TIMEOUT"
+
             rc = proc.returncode
-            if rc == 0:
+            if rc == 4:
+                return "@TIMEOUT"
+            if rc == 20:
+                return "@TIMEOUT"
+            if rc in (5, 10):
                 return "Skip"
-            if rc == 2:
-                return "Import New"
             if rc == 3:
                 subprocess.run(["open", str(report_md)], check=False)
                 continue
-            if rc in (4, 20):
-                return "@TIMEOUT"
-            if rc in (5, 10):
+            if rc == 0:
+                return "Import New"
+            if rc == 2:
                 return "Skip"
             err = (proc.stderr or "").strip()
             if err:
@@ -762,7 +797,7 @@ def show_import_preview_decision(
         script = (
             f'display dialog "{safe_message}" with title "{safe_title}" '
             f'buttons {{"Skip", "Open Report", "Import New"}} '
-            f'default button "Skip" giving up after {int(timeout_seconds)}'
+            f'default button "Import New" giving up after {int(timeout_seconds)}'
         )
         proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
         if proc.returncode == 0:
@@ -789,7 +824,7 @@ def show_import_preview_decision(
             actions="Import New,Open Report",
             close_label="Skip",
             timeout_seconds=timeout_seconds,
-            close_first=True,
+            close_first=False,
             prefer_swiftdialog=False,
         )
         if choice == "Open Report":
@@ -1661,6 +1696,7 @@ def command_run(args: argparse.Namespace, conn: sqlite3.Connection, config: Dict
         f"{summary['volume_name']}: {summary['new_files']} new, "
         f"{summary['known_files']} known, {summary['conflict_files']} conflicts"
     )
+    pending_copy_files = int(summary.get("new_files", 0)) + int(summary.get("conflict_files", 0))
     if persistent_window:
         persistent_window.update(
             percent=0,
@@ -1692,7 +1728,6 @@ def command_run(args: argparse.Namespace, conn: sqlite3.Connection, config: Dict
         choice = ""
 
     if args.auto_import or choice == "Import New":
-        pending_copy_files = int(summary.get("new_files", 0)) + int(summary.get("conflict_files", 0))
         if args.notify and persistent_window is None and pending_copy_files > 0:
             persistent_window = start_persistent_status_window(
                 state_dir=state_dir,
@@ -1703,7 +1738,7 @@ def command_run(args: argparse.Namespace, conn: sqlite3.Connection, config: Dict
         result = import_new_files(
             conn,
             summary["job_id"],
-            show_progress_ui=(args.notify and persistent_window is None),
+            show_progress_ui=(args.notify and persistent_window is None and pending_copy_files > 0),
             progress_window=persistent_window,
         )
         print(json.dumps({"summary": summary, "import": result}, indent=2))
@@ -1776,6 +1811,7 @@ def command_auto(args: argparse.Namespace, conn: sqlite3.Connection, config: Dic
                 actions="Continue",
                 close_label="Skip",
                 timeout_seconds=120,
+                close_first=False,
                 prefer_swiftdialog=True,
                 allow_legacy_fallback=False,
             )

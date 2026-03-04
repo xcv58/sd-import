@@ -256,6 +256,33 @@ class CaptureDateTests(unittest.TestCase):
             self.assertEqual(by_type["video"], str(videos / "tmp-2024-07-15-videos"))
 
 
+class DiskutilDetectionTests(unittest.TestCase):
+    def test_detect_diskutil_binary_falls_back_to_usr_sbin(self) -> None:
+        def fake_exists(self):
+            return str(self) == "/usr/sbin/diskutil"
+
+        def fake_access(path, mode):
+            return str(path) == "/usr/sbin/diskutil"
+
+        with mock.patch("sd_import.shutil.which", return_value=None):
+            with mock.patch.object(sd_import.Path, "exists", fake_exists):
+                with mock.patch("sd_import.os.access", side_effect=fake_access):
+                    self.assertEqual(sd_import.detect_diskutil_binary(), "/usr/sbin/diskutil")
+
+    def test_get_diskutil_info_uses_detected_binary(self) -> None:
+        fake_plist = {"VolumeName": "CARD"}
+        with mock.patch("sd_import.detect_diskutil_binary", return_value="/usr/sbin/diskutil"):
+            with mock.patch("sd_import.subprocess.run") as mocked_run:
+                mocked_run.return_value = mock.Mock(stdout=sd_import.plistlib.dumps(fake_plist), returncode=0)
+                result = sd_import.get_diskutil_info("/Volumes/CARD")
+
+        self.assertEqual(result.get("VolumeName"), "CARD")
+        self.assertTrue(mocked_run.called)
+        cmd = mocked_run.call_args.args[0]
+        self.assertEqual(cmd[0], "/usr/sbin/diskutil")
+        self.assertEqual(cmd[1:3], ["info", "-plist"])
+
+
 class ExifBatchTests(unittest.TestCase):
     def test_capture_dates_from_exiftool_batch(self) -> None:
         files = [(Path("/tmp/A.JPG"), "photo"), (Path("/tmp/B.MP4"), "video")]
@@ -324,7 +351,7 @@ class PreviewDialogTests(unittest.TestCase):
                         dialog_calls["count"] += 1
                         if dialog_calls["count"] == 1:
                             return mock.Mock(returncode=3, stderr="")  # Open Report (info button)
-                        return mock.Mock(returncode=2, stderr="")  # Import New
+                        return mock.Mock(returncode=0, stderr="")  # Import New
                     return mock.Mock(returncode=0, stderr="")
 
                 mocked_run.side_effect = run_side_effect
@@ -375,6 +402,27 @@ class PromptNotificationTests(unittest.TestCase):
 
         self.assertEqual(choice, "")
         self.assertEqual(mocked_run.call_count, 0)
+
+    def test_swiftdialog_prompt_primary_action_is_button1_when_close_first_false(self) -> None:
+        with mock.patch("sd_import.detect_swiftdialog_binary", return_value="/usr/local/bin/dialog"):
+            with mock.patch("sd_import.subprocess.run", return_value=mock.Mock(returncode=0, stderr="")) as mocked_run:
+                choice = sd_import.show_prompt_notification(
+                    title="SD Card Inserted",
+                    message="Continue?",
+                    actions="Continue",
+                    close_label="Skip",
+                    timeout_seconds=30,
+                    close_first=False,
+                    prefer_swiftdialog=True,
+                    allow_legacy_fallback=False,
+                )
+
+        self.assertEqual(choice, "Continue")
+        cmd = mocked_run.call_args.args[0]
+        i1 = cmd.index("--button1text")
+        i2 = cmd.index("--button2text")
+        self.assertEqual(cmd[i1 + 1], "Continue")
+        self.assertEqual(cmd[i2 + 1], "Skip")
 
 
 class ProgressWindowTests(unittest.TestCase):
