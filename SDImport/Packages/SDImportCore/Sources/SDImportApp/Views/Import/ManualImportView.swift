@@ -1,0 +1,171 @@
+import SwiftUI
+
+struct ManualImportView: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                pathSection
+                actionSection
+
+                if let progress = model.importProgress {
+                    ImportProgressPanel(progress: progress)
+                }
+
+                if let summary = model.currentSummary {
+                    ScanSummaryView(summary: summary)
+                    ImportPreviewView()
+                }
+
+                if let result = model.currentResult {
+                    ImportResultView(result: result)
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 980, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle("Import")
+        .toolbar {
+            ToolbarItemGroup {
+                Button {
+                    model.scan()
+                } label: {
+                    Label("Scan", systemImage: "magnifyingglass")
+                }
+                .disabled(model.isWorking)
+
+                Button {
+                    model.importCurrentJob()
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                }
+                .disabled(model.isWorking || model.currentSummary == nil || model.previewTotals().copyFiles == 0)
+            }
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Manual Import")
+                .font(.title)
+                .fontWeight(.semibold)
+            Text(model.statusMessage)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var pathSection: some View {
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+            GridRow {
+                Text("Card or source")
+                    .foregroundStyle(.secondary)
+                FolderField(path: $model.cardPath, action: model.chooseCardFolder)
+            }
+
+            switch model.organizationPreset {
+            case .classicDatedFolders:
+                GridRow {
+                    Text("Photos")
+                        .foregroundStyle(.secondary)
+                    FolderField(path: $model.photosPath, action: model.choosePhotosFolder)
+                }
+                GridRow {
+                    Text("Videos")
+                        .foregroundStyle(.secondary)
+                    FolderField(path: $model.videosPath, action: model.chooseVideosFolder)
+                }
+            case .shootSessionsByDate:
+                GridRow {
+                    Text("Library")
+                        .foregroundStyle(.secondary)
+                    FolderField(path: $model.photosPath, action: model.choosePhotosFolder)
+                }
+            case .footageBackup:
+                GridRow {
+                    Text("Footage")
+                        .foregroundStyle(.secondary)
+                    FolderField(path: $model.videosPath, action: model.chooseVideosFolder)
+                }
+            }
+
+            GridRow {
+                Text("Location")
+                    .foregroundStyle(.secondary)
+                TextField("Location", text: $model.location)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 220)
+            }
+        }
+        .gridColumnAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var actionSection: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                actionButtons
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                actionButtons
+            }
+        }
+    }
+
+    private var actionButtons: some View {
+        Group {
+            Button {
+                model.scan()
+            } label: {
+                Label("Scan Card", systemImage: "magnifyingglass")
+            }
+            .keyboardShortcut(.return, modifiers: [.command])
+            .disabled(model.isWorking)
+
+            Button {
+                model.importCurrentJob()
+            } label: {
+                Label("Import Planned Files", systemImage: "square.and.arrow.down")
+            }
+            .disabled(model.isWorking || model.currentSummary == nil || model.previewTotals().copyFiles == 0)
+
+            if model.isWorking, model.importProgress != nil {
+                Button {
+                    model.cancelImport()
+                } label: {
+                    Label("Cancel", systemImage: "xmark.circle")
+                }
+            }
+
+            if model.isWorking {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+    }
+}
+
+private struct FolderField: View {
+    @Binding var path: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField("Folder path", text: $path)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(1)
+                .frame(minWidth: 180, maxWidth: 420)
+            Button {
+                action()
+            } label: {
+                Image(systemName: "folder")
+            }
+            .help("Choose folder")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}

@@ -6,3 +6,7 @@ raycast-extension/node_modules/
 raycast-extension/.output/
 
 .tmp/
+
+.build/
+SDImport/Packages/*/.build/
+dist/
