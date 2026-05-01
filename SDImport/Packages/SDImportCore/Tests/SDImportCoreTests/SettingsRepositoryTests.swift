@@ -16,12 +16,35 @@ struct SettingsRepositoryTests {
             defaultLocation: "Gardens",
             historyRetention: .days(365),
             autoPromptEnabled: true,
-            hasCompletedOnboarding: true
+            hasCompletedOnboarding: true,
+            lastWorkflowProfile: .footageBackup,
+            workflowProfilesByVolume: [
+                "uuid:card": .photoImport
+            ]
         )
 
         try repository.saveConfiguration(configuration)
 
         #expect(try repository.fetchConfiguration() == configuration)
+    }
+
+    @Test("decodes older app configuration without workflow fields")
+    func decodesOlderConfigurationWithoutWorkflowFields() throws {
+        let json = """
+        {
+          "sourcePath": "/Volumes/CARD",
+          "photosPath": "/Users/example/Pictures",
+          "videosPath": "/Users/example/Movies",
+          "defaultLocation": "Gardens",
+          "autoPromptEnabled": true,
+          "hasCompletedOnboarding": true
+        }
+        """
+
+        let configuration = try JSONDecoder().decode(AppConfiguration.self, from: Data(json.utf8))
+
+        #expect(configuration.lastWorkflowProfile == .mixedShootSession)
+        #expect(configuration.workflowProfilesByVolume.isEmpty)
     }
 
     @Test("stores and resolves folder bookmarks")

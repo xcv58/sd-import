@@ -28,6 +28,37 @@ public struct VolumeDetector: Sendable {
         )
     }
 
+    public func mountedVolumes(
+        under rootURL: URL = URL(fileURLWithPath: "/Volumes", isDirectory: true),
+        fileManager: FileManager = .default
+    ) -> [MountedVolume] {
+        let keys: Set<URLResourceKey> = [
+            .volumeNameKey,
+            .volumeUUIDStringKey,
+            .volumeIsRemovableKey,
+            .volumeIsEjectableKey
+        ]
+        guard
+            let urls = try? fileManager.contentsOfDirectory(
+                at: rootURL,
+                includingPropertiesForKeys: Array(keys),
+                options: [.skipsHiddenFiles]
+            )
+        else {
+            return []
+        }
+
+        return likelyImportVolumes(from: urls.map(mountedVolume(from:)))
+    }
+
+    public func likelyImportVolumes(from volumes: [MountedVolume]) -> [MountedVolume] {
+        volumes
+            .filter(isLikelyImportVolume)
+            .sorted {
+                $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+    }
+
     public func isLikelyImportVolume(_ volume: MountedVolume) -> Bool {
         let lowercasedName = volume.name.lowercased()
         guard !ignoredNameFragments.contains(where: lowercasedName.contains) else {

@@ -42,8 +42,11 @@ final class AppModel: ObservableObject {
     @Published var historyRetention: RetentionPolicy
     @Published var autoPromptEnabled: Bool
     @Published var hasCompletedOnboarding: Bool
+    @Published var workflowProfile: ImportWorkflowProfile
     @Published var importMediaSelection: ImportMediaSelection
     @Published var organizationPreset: ImportOrganizationPreset
+    @Published var mediaContentProfile: MediaContentProfile?
+    @Published var photoPairSummary: PhotoPairSummary?
     @Published var previewSessions: [ImportPreviewSession] = []
     @Published var currentSummary: ScanSummary?
     @Published var currentResult: ImportResult?
@@ -51,6 +54,10 @@ final class AppModel: ObservableObject {
     @Published var jobs: [ImportJob] = []
     @Published var selectedJobID: String?
     @Published var selectedJobFiles: [JobFileRecord] = []
+    @Published var availableSourceVolumes: [MountedVolume] = []
+    @Published var sourceValidation: PathValidationResult = .empty(purpose: .source)
+    @Published var photosValidation: PathValidationResult = .empty(purpose: .destination)
+    @Published var videosValidation: PathValidationResult = .empty(purpose: .destination)
     @Published var pendingMountedVolume: MountedVolume?
     @Published var statusMessage = ""
     @Published var isWorking = false
@@ -66,6 +73,8 @@ final class AppModel: ObservableObject {
     private var bookmarkStore: BookmarkStore?
     private var importTask: Task<Void, Never>?
     private var mountObserver: MountEventObserver?
+    private var workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
+    private var workflowProfileWasManuallyChosenForCurrentJob = false
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -76,12 +85,16 @@ final class AppModel: ObservableObject {
         self.historyRetention = .defaultPolicy
         self.autoPromptEnabled = defaults.bool(forKey: DefaultsKeys.autoPromptEnabled)
         self.hasCompletedOnboarding = defaults.bool(forKey: DefaultsKeys.hasCompletedOnboarding)
+        let storedWorkflowProfile = ImportWorkflowProfile(
+            rawValue: defaults.string(forKey: DefaultsKeys.workflowProfile) ?? ""
+        ) ?? .mixedShootSession
+        self.workflowProfile = storedWorkflowProfile
         self.importMediaSelection = ImportMediaSelection(
             rawValue: defaults.string(forKey: DefaultsKeys.importMediaSelection) ?? ""
-        ) ?? .photosAndVideos
+        ) ?? storedWorkflowProfile.mediaSelection
         self.organizationPreset = ImportOrganizationPreset(
             rawValue: defaults.string(forKey: DefaultsKeys.organizationPreset) ?? ""
-        ) ?? .shootSessionsByDate
+        ) ?? storedWorkflowProfile.organizationPreset
         bootstrap()
     }
 
@@ -125,6 +138,8 @@ final class AppModel: ObservableObject {
             try loadStoredConfiguration()
             let recovery = try RecoveryService(jobRepository: JobRepository(pool: pool))
                 .recoverInterruptedImports()
+            refreshAvailableSourceVolumes()
+            validatePaths()
             refreshHistory()
             startMountObserver()
             statusMessage = legacyImportMessage
@@ -142,6 +157,7 @@ final class AppModel: ObservableObject {
         defaults.set(location, forKey: DefaultsKeys.location)
         defaults.set(autoPromptEnabled, forKey: DefaultsKeys.autoPromptEnabled)
         defaults.set(hasCompletedOnboarding, forKey: DefaultsKeys.hasCompletedOnboarding)
+        defaults.set(workflowProfile.rawValue, forKey: DefaultsKeys.workflowProfile)
         defaults.set(importMediaSelection.rawValue, forKey: DefaultsKeys.importMediaSelection)
         defaults.set(organizationPreset.rawValue, forKey: DefaultsKeys.organizationPreset)
 
@@ -158,6 +174,7 @@ final class AppModel: ObservableObject {
     func chooseCardFolder() {
         if let path = FilePanelPresenter.chooseDirectory(title: "Choose SD Card or Source Folder", initialPath: cardPath) {
             cardPath = path
+            sourcePathDidChange()
             savePreferences()
         }
     }
@@ -165,6 +182,7 @@ final class AppModel: ObservableObject {
     func choosePhotosFolder() {
         if let path = FilePanelPresenter.chooseDirectory(title: "Choose Photo Destination", initialPath: photosPath) {
             photosPath = path
+            validatePaths()
             savePreferences()
         }
     }
@@ -172,13 +190,64 @@ final class AppModel: ObservableObject {
     func chooseVideosFolder() {
         if let path = FilePanelPresenter.chooseDirectory(title: "Choose Video Destination", initialPath: videosPath) {
             videosPath = path
+            validatePaths()
             savePreferences()
         }
+    }
+
+    func refreshAvailableSourceVolumes() {
+        availableSourceVolumes = VolumeDetector().mountedVolumes()
+    }
+
+    func selectSourceVolume(_ volume: MountedVolume) {
+        cardPath = volume.mountURL.path
+        sourcePathDidChange()
+        savePreferences()
+    }
+
+    func sourcePathDidChange() {
+        currentSummary = nil
+        currentResult = nil
+        importProgress = nil
+        previewSessions = []
+        selectedJobFiles = []
+        mediaContentProfile = nil
+        photoPairSummary = nil
+        workflowProfileWasManuallyChosenForCurrentJob = false
+        validatePaths()
+    }
+
+    func validatePaths() {
+        let validator = PathValidator()
+        sourceValidation = validator.validate(path: cardPath, purpose: .source)
+        photosValidation = validator.validate(path: photosPath, purpose: .destination)
+        videosValidation = validator.validate(path: videosPath, purpose: .destination)
+    }
+
+    var canScan: Bool {
+        !isWorking && sourceValidation.isUsable && requiredDestinationPathsAreUsable()
+    }
+
+    var canImportPlannedFiles: Bool {
+        !isWorking
+            && currentSummary != nil
+            && previewTotals().copyFiles > 0
+            && sourceValidation.isUsable
+            && requiredDestinationPathsAreUsable()
     }
 
     func scan() {
         guard let databaseURL else {
             statusMessage = "Database is not ready"
+            return
+        }
+        validatePaths()
+        guard sourceValidation.isUsable else {
+            statusMessage = sourceValidation.message
+            return
+        }
+        guard requiredDestinationPathsAreUsable() else {
+            statusMessage = "Check destination folders"
             return
         }
 
@@ -221,6 +290,7 @@ final class AppModel: ObservableObject {
                     self.selectedJobID = summary.jobID
                     self.jobs = jobs
                     self.selectedJobFiles = files
+                    self.applyRecommendationAfterScan(files: files, summary: summary)
                     self.rebuildPreviewSessions(files: files, defaultLabel: location)
                     self.statusMessage = "Scan complete"
                     self.isWorking = false
@@ -241,11 +311,19 @@ final class AppModel: ObservableObject {
             importMediaSelection = .videosOnly
         }
 
+        if let matchedProfile = ImportWorkflowProfile.matching(
+            mediaSelection: importMediaSelection,
+            organizationPreset: organizationPreset
+        ) {
+            workflowProfile = matchedProfile
+        }
+
         for index in previewSessions.indices {
             previewSessions[index].includePhotos = importMediaSelection.includes(.photo)
             previewSessions[index].includeVideos = importMediaSelection.includes(.video)
             previewSessions[index].includeSidecars = organizationPreset == .footageBackup
         }
+        workflowProfileWasManuallyChosenForCurrentJob = true
         savePreferences()
     }
 
@@ -253,7 +331,29 @@ final class AppModel: ObservableObject {
         if organizationPreset == .footageBackup {
             importMediaSelection = .videosOnly
             applyMediaSelectionToPreviewSessions()
+        } else if let matchedProfile = ImportWorkflowProfile.matching(
+            mediaSelection: importMediaSelection,
+            organizationPreset: organizationPreset
+        ) {
+            workflowProfile = matchedProfile
         }
+        validatePaths()
+        savePreferences()
+    }
+
+    func applyWorkflowProfile(_ profile: ImportWorkflowProfile, userInitiated: Bool = true) {
+        workflowProfile = profile
+        importMediaSelection = profile.mediaSelection
+        organizationPreset = profile.organizationPreset
+        for index in previewSessions.indices {
+            previewSessions[index].includePhotos = profile.mediaSelection.includes(.photo)
+            previewSessions[index].includeVideos = profile.mediaSelection.includes(.video)
+            previewSessions[index].includeSidecars = profile.includesSidecarsByDefault
+        }
+        if userInitiated {
+            workflowProfileWasManuallyChosenForCurrentJob = true
+        }
+        validatePaths()
         savePreferences()
     }
 
@@ -313,6 +413,15 @@ final class AppModel: ObservableObject {
             statusMessage = "Database is not ready"
             return
         }
+        validatePaths()
+        guard sourceValidation.isUsable else {
+            statusMessage = sourceValidation.message
+            return
+        }
+        guard requiredDestinationPathsAreUsable() else {
+            statusMessage = "Check destination folders"
+            return
+        }
 
         let sessions = previewSessions
         let organizationPreset = organizationPreset
@@ -327,6 +436,8 @@ final class AppModel: ObservableObject {
         currentResult = nil
         importProgress = nil
         statusMessage = "Preparing import..."
+        rememberWorkflowPreferenceForCurrentVolume()
+        savePreferences()
 
         importTask = Task.detached(priority: .userInitiated) {
             do {
@@ -425,6 +536,7 @@ final class AppModel: ObservableObject {
         pendingMountedVolume = nil
         selection = .import
         cardPath = volume.mountURL.path
+        sourcePathDidChange()
         savePreferences()
         scan()
     }
@@ -578,6 +690,71 @@ final class AppModel: ObservableObject {
         Imported: \(job.importedFiles)
         Failed: \(job.failedFiles)
         """
+    }
+
+    private func requiredDestinationPathsAreUsable() -> Bool {
+        requiredDestinationValidations().allSatisfy(\.isUsable)
+    }
+
+    private func requiredDestinationValidations() -> [PathValidationResult] {
+        switch organizationPreset {
+        case .classicDatedFolders:
+            var validations: [PathValidationResult] = []
+            if importMediaSelection.includes(.photo) {
+                validations.append(photosValidation)
+            }
+            if importMediaSelection.includes(.video) {
+                validations.append(videosValidation)
+            }
+            return validations
+        case .shootSessionsByDate:
+            return [photosValidation]
+        case .footageBackup:
+            return [videosValidation]
+        }
+    }
+
+    private func applyRecommendationAfterScan(files: [JobFileRecord], summary: ScanSummary) {
+        let rememberedProfile = workflowPreference(for: summary)
+        let contentProfile = ImportWorkflowRecommender().recommend(
+            files: files,
+            rememberedProfile: rememberedProfile,
+            fallbackProfile: workflowProfile
+        )
+        mediaContentProfile = contentProfile
+        photoPairSummary = PhotoPairDetector().summarize(files: files)
+
+        guard !workflowProfileWasManuallyChosenForCurrentJob else {
+            return
+        }
+
+        applyWorkflowProfile(contentProfile.recommendedWorkflow, userInitiated: false)
+    }
+
+    private func workflowPreference(for summary: ScanSummary) -> ImportWorkflowProfile? {
+        guard let key = volumePreferenceKey(uuid: summary.volumeUUID, name: summary.volumeName) else {
+            return nil
+        }
+        return workflowProfilesByVolume[key]
+    }
+
+    private func rememberWorkflowPreferenceForCurrentVolume() {
+        guard let currentSummary else {
+            return
+        }
+        if let key = volumePreferenceKey(uuid: currentSummary.volumeUUID, name: currentSummary.volumeName) {
+            workflowProfilesByVolume[key] = workflowProfile
+        }
+    }
+
+    private func volumePreferenceKey(uuid: String?, name: String?) -> String? {
+        if let uuid = uuid?.trimmingCharacters(in: .whitespacesAndNewlines), !uuid.isEmpty {
+            return "uuid:\(uuid)"
+        }
+        if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return "name:\(name.lowercased(with: Locale(identifier: "en_US_POSIX")))"
+        }
+        return nil
     }
 
     private func rebuildPreviewSessions(files: [JobFileRecord], defaultLabel: String) {
@@ -806,6 +983,10 @@ final class AppModel: ObservableObject {
         historyRetention = configuration.historyRetention
         autoPromptEnabled = configuration.autoPromptEnabled
         hasCompletedOnboarding = configuration.hasCompletedOnboarding
+        workflowProfile = configuration.lastWorkflowProfile
+        workflowProfilesByVolume = configuration.workflowProfilesByVolume
+        importMediaSelection = workflowProfile.mediaSelection
+        organizationPreset = workflowProfile.organizationPreset
 
         if try settingsRepository.fetchConfiguration() == nil {
             try settingsRepository.saveConfiguration(currentConfiguration())
@@ -820,7 +1001,9 @@ final class AppModel: ObservableObject {
             defaultLocation: location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "TODO" : location,
             historyRetention: historyRetention,
             autoPromptEnabled: autoPromptEnabled,
-            hasCompletedOnboarding: hasCompletedOnboarding
+            hasCompletedOnboarding: hasCompletedOnboarding,
+            lastWorkflowProfile: workflowProfile,
+            workflowProfilesByVolume: workflowProfilesByVolume
         )
     }
 
@@ -891,6 +1074,7 @@ private enum DefaultsKeys {
     static let location = "SDImport.location"
     static let autoPromptEnabled = "SDImport.autoPromptEnabled"
     static let hasCompletedOnboarding = "SDImport.hasCompletedOnboarding"
+    static let workflowProfile = "SDImport.workflowProfile"
     static let importMediaSelection = "SDImport.importMediaSelection"
     static let organizationPreset = "SDImport.organizationPreset"
 }

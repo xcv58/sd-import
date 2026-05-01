@@ -264,6 +264,61 @@ Dependencies:
 
 - Slices 1-7 should be stable first.
 
+## Slice 9: Source Selection And Path Validation
+
+Status: `[x]`
+
+Goal:
+
+- Let users pick a detected mounted SD card directly from the Import UI.
+- Validate source and destination paths before scan/import.
+- Show inline feedback when paths are missing, unmounted, or unusable.
+
+Detailed plan:
+
+- `docs/source-selection-validation-plan.md`
+
+Code scope:
+
+- Core path validation helper.
+- Mounted-volume listing in `VolumeDetector`.
+- `AppModel` validation state and preflight checks.
+- `ManualImportView` detected-card menu and validation feedback.
+
+Verification:
+
+- Unit tests for source/destination validation and mounted-volume filtering.
+- Manual checks for mounted card selection, missing source, missing destination,
+  and card removed after scan.
+
+## Slice 10: Media-Aware Workflow Profiles
+
+Status: `[x]`
+
+Goal:
+
+- Recommend the right workflow after scan based on whether the card is photo-only,
+  video-only, or mixed.
+- Make one-type-at-a-time imports feel first-class while preserving mixed shoot
+  sessions.
+
+Detailed plan:
+
+- `docs/media-aware-workflow-plan.md`
+
+Code scope:
+
+- New workflow profile model and recommender in `SDImportCore`.
+- `AppModel` applies the recommendation after scan.
+- `ImportPreviewView` leads with a workflow choice and hides irrelevant controls.
+- Settings remember global/per-volume workflow preferences.
+
+Verification:
+
+- Unit tests for photo-only, video-only, dominant, mixed, and empty recommendations.
+- Manual preview checks for photo cards, video cards with sidecars, and mixed cards.
+- Existing import, history, recovery, and packaging checks remain green.
+
 ## Always-On Verification
 
 Run after every slice:

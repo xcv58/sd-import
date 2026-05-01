@@ -41,6 +41,45 @@ struct MountDetectionTests {
         #expect(detector.isLikelyImportVolume(backup) == false)
     }
 
+    @Test("volume detector sorts likely import volumes and removes ignored volumes")
+    func detectorSortsLikelyImportVolumesAndRemovesIgnoredVolumes() {
+        let detector = VolumeDetector()
+        let volumes = [
+            MountedVolume(
+                id: "backup",
+                name: "Time Machine Backups",
+                mountURL: URL(fileURLWithPath: "/Volumes/Time Machine Backups", isDirectory: true),
+                volumeUUID: nil,
+                isRemovable: true
+            ),
+            MountedVolume(
+                id: "b",
+                name: "B CARD",
+                mountURL: URL(fileURLWithPath: "/Volumes/B CARD", isDirectory: true),
+                volumeUUID: nil,
+                isRemovable: true
+            ),
+            MountedVolume(
+                id: "a",
+                name: "A CARD",
+                mountURL: URL(fileURLWithPath: "/Volumes/A CARD", isDirectory: true),
+                volumeUUID: nil,
+                isRemovable: true
+            ),
+            MountedVolume(
+                id: "disk-image",
+                name: "Installer.dmg",
+                mountURL: URL(fileURLWithPath: "/Volumes/Installer.dmg", isDirectory: true),
+                volumeUUID: nil,
+                isRemovable: true
+            )
+        ]
+
+        let likelyVolumes = detector.likelyImportVolumes(from: volumes)
+
+        #expect(likelyVolumes.map(\.name) == ["A CARD", "B CARD"])
+    }
+
     @Test("mount debouncer suppresses repeated paths inside interval")
     func debouncerSuppressesRepeatedPaths() {
         var debouncer = MountDebouncer(interval: 10)

@@ -1,3 +1,4 @@
+import SDImportCore
 import SwiftUI
 
 struct ManualImportView: View {
@@ -36,15 +37,28 @@ struct ManualImportView: View {
                 } label: {
                     Label("Scan", systemImage: "magnifyingglass")
                 }
-                .disabled(model.isWorking)
+                .disabled(!model.canScan)
 
                 Button {
                     model.importCurrentJob()
                 } label: {
                     Label("Import", systemImage: "square.and.arrow.down")
                 }
-                .disabled(model.isWorking || model.currentSummary == nil || model.previewTotals().copyFiles == 0)
+                .disabled(!model.canImportPlannedFiles)
             }
+        }
+        .onAppear {
+            model.refreshAvailableSourceVolumes()
+            model.validatePaths()
+        }
+        .onChange(of: model.cardPath) {
+            model.sourcePathDidChange()
+        }
+        .onChange(of: model.photosPath) {
+            model.validatePaths()
+        }
+        .onChange(of: model.videosPath) {
+            model.validatePaths()
         }
     }
 
@@ -63,7 +77,7 @@ struct ManualImportView: View {
             GridRow {
                 Text("Card or source")
                     .foregroundStyle(.secondary)
-                FolderField(path: $model.cardPath, action: model.chooseCardFolder)
+                SourceField()
             }
 
             switch model.organizationPreset {
@@ -71,24 +85,40 @@ struct ManualImportView: View {
                 GridRow {
                     Text("Photos")
                         .foregroundStyle(.secondary)
-                    FolderField(path: $model.photosPath, action: model.choosePhotosFolder)
+                    FolderField(
+                        path: $model.photosPath,
+                        validation: model.photosValidation,
+                        action: model.choosePhotosFolder
+                    )
                 }
                 GridRow {
                     Text("Videos")
                         .foregroundStyle(.secondary)
-                    FolderField(path: $model.videosPath, action: model.chooseVideosFolder)
+                    FolderField(
+                        path: $model.videosPath,
+                        validation: model.videosValidation,
+                        action: model.chooseVideosFolder
+                    )
                 }
             case .shootSessionsByDate:
                 GridRow {
                     Text("Library")
                         .foregroundStyle(.secondary)
-                    FolderField(path: $model.photosPath, action: model.choosePhotosFolder)
+                    FolderField(
+                        path: $model.photosPath,
+                        validation: model.photosValidation,
+                        action: model.choosePhotosFolder
+                    )
                 }
             case .footageBackup:
                 GridRow {
                     Text("Footage")
                         .foregroundStyle(.secondary)
-                    FolderField(path: $model.videosPath, action: model.chooseVideosFolder)
+                    FolderField(
+                        path: $model.videosPath,
+                        validation: model.videosValidation,
+                        action: model.chooseVideosFolder
+                    )
                 }
             }
 
@@ -124,14 +154,14 @@ struct ManualImportView: View {
                 Label("Scan Card", systemImage: "magnifyingglass")
             }
             .keyboardShortcut(.return, modifiers: [.command])
-            .disabled(model.isWorking)
+            .disabled(!model.canScan)
 
             Button {
                 model.importCurrentJob()
             } label: {
                 Label("Import Planned Files", systemImage: "square.and.arrow.down")
             }
-            .disabled(model.isWorking || model.currentSummary == nil || model.previewTotals().copyFiles == 0)
+            .disabled(!model.canImportPlannedFiles)
 
             if model.isWorking, model.importProgress != nil {
                 Button {
@@ -149,23 +179,89 @@ struct ManualImportView: View {
     }
 }
 
+private struct SourceField: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                TextField("Card or source path", text: $model.cardPath)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1)
+                    .frame(minWidth: 180, maxWidth: 420)
+
+                Menu {
+                    if model.availableSourceVolumes.isEmpty {
+                        Text("No cards detected")
+                    } else {
+                        ForEach(model.availableSourceVolumes) { volume in
+                            Button {
+                                model.selectSourceVolume(volume)
+                            } label: {
+                                Text(volume.name)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "sdcard")
+                }
+                .help("Select mounted card")
+
+                Button {
+                    model.refreshAvailableSourceVolumes()
+                    model.validatePaths()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Refresh mounted cards")
+
+                Button {
+                    model.chooseCardFolder()
+                } label: {
+                    Image(systemName: "folder")
+                }
+                .help("Choose source folder")
+            }
+
+            ValidationStatusView(result: model.sourceValidation)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct FolderField: View {
     @Binding var path: String
+    let validation: PathValidationResult
     let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            TextField("Folder path", text: $path)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1)
-                .frame(minWidth: 180, maxWidth: 420)
-            Button {
-                action()
-            } label: {
-                Image(systemName: "folder")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                TextField("Folder path", text: $path)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1)
+                    .frame(minWidth: 180, maxWidth: 420)
+                Button {
+                    action()
+                } label: {
+                    Image(systemName: "folder")
+                }
+                .help("Choose folder")
             }
-            .help("Choose folder")
+
+            ValidationStatusView(result: validation)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ValidationStatusView: View {
+    let result: PathValidationResult
+
+    var body: some View {
+        Label(result.message, systemImage: result.isUsable ? "checkmark.circle" : "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(result.isUsable ? Color.secondary : Color.orange)
+            .lineLimit(1)
     }
 }
