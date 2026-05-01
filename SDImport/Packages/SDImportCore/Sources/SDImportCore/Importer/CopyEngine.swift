@@ -40,9 +40,15 @@ public struct CopyEngine {
             }
 
             if fileManager.fileExists(atPath: destinationURL.path) {
-                try fileManager.removeItem(at: destinationURL)
+                _ = try fileManager.replaceItemAt(
+                    destinationURL,
+                    withItemAt: temporaryURL,
+                    backupItemName: nil,
+                    options: [.usingNewMetadataOnly]
+                )
+            } else {
+                try fileManager.moveItem(at: temporaryURL, to: destinationURL)
             }
-            try fileManager.moveItem(at: temporaryURL, to: destinationURL)
 
             if let modificationDate {
                 try fileManager.setAttributes(

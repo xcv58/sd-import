@@ -32,6 +32,26 @@ struct CopyEngineTests {
         #expect(largestChunk <= 1024 * 1024)
     }
 
+    @Test("replaces existing destination without pre-deleting it")
+    func replacesExistingDestination() throws {
+        let directory = try temporaryDirectory()
+        let source = directory.appendingPathComponent("source.bin")
+        let destination = directory.appendingPathComponent("destination.bin")
+        let replacement = Data("replacement".utf8)
+        try Data("original".utf8).write(to: destination)
+        try replacement.write(to: source)
+
+        try CopyEngine().copyFile(
+            from: source,
+            to: destination,
+            expectedSize: Int64(replacement.count),
+            modificationDate: nil
+        )
+
+        #expect(try Data(contentsOf: destination) == replacement)
+        #expect(FileManager.default.fileExists(atPath: destination.path + ".part") == false)
+    }
+
     private func createPatternFile(at url: URL, byteCount: Int) throws {
         FileManager.default.createFile(atPath: url.path, contents: nil)
         let handle = try FileHandle(forWritingTo: url)

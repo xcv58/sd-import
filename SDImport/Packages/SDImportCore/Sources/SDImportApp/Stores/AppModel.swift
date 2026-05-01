@@ -98,12 +98,37 @@ final class AppModel: ObservableObject {
             dedupeRepository = DedupeRepository(pool: pool)
             settingsRepository = SettingsRepository(pool: pool)
             bookmarkStore = BookmarkStore(pool: pool)
+            let legacyImportMessage: String?
+            do {
+                let summary = try LegacyStateImporter(
+                    legacyLocation: LegacyStateImporter.defaultLegacyLocation(),
+                    nativeStateDirectory: stateURL
+                ).importLegacyState(
+                    into: pool,
+                    defaultPhotosRoot: expanded(photosPath),
+                    defaultVideosRoot: expanded(videosPath)
+                )
+
+                if summary.didImport {
+                    let importedRecords = summary.jobsImported
+                        + summary.jobFilesImported
+                        + summary.nativeFingerprintsImported
+                    legacyImportMessage = importedRecords > 0
+                        ? "Imported legacy SD Import history"
+                        : "Imported legacy SD Import settings"
+                } else {
+                    legacyImportMessage = nil
+                }
+            } catch {
+                legacyImportMessage = "Legacy import skipped: \(error)"
+            }
             try loadStoredConfiguration()
             let recovery = try RecoveryService(jobRepository: JobRepository(pool: pool))
                 .recoverInterruptedImports()
             refreshHistory()
             startMountObserver()
-            statusMessage = recovery.recoveredJobs > 0 ? "Recovered interrupted import" : "Ready"
+            statusMessage = legacyImportMessage
+                ?? (recovery.recoveredJobs > 0 ? "Recovered interrupted import" : "Ready")
         } catch {
             setupError = String(describing: error)
             statusMessage = "Setup failed"
