@@ -8,6 +8,7 @@ REPO_FULL_NAME="${GITHUB_REPOSITORY:-xcv58/macos-automation}"
 APP_VERSION="${APP_VERSION:-1.0}"
 APP_BUILD="${APP_BUILD:-1}"
 RELEASE_TAG="${RELEASE_TAG:-v$APP_VERSION}"
+RELEASE_TARGET="${RELEASE_TARGET:-$(git -C "$ROOT_DIR" rev-parse HEAD)}"
 RELEASE_TITLE="${RELEASE_TITLE:-SD Import $APP_VERSION}"
 RELEASE_NOTES_FILE="${RELEASE_NOTES_FILE:-}"
 SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-xcv58-sd-import}"
@@ -35,6 +36,7 @@ Common optional environment:
   APP_VERSION                 default: 1.0
   APP_BUILD                   default: 1
   RELEASE_TAG                 default: v\$APP_VERSION
+  RELEASE_TARGET              default: current git HEAD
   RELEASE_TITLE               default: SD Import \$APP_VERSION
   RELEASE_NOTES_FILE
   SPARKLE_ACCOUNT             default: xcv58-sd-import
@@ -131,12 +133,14 @@ if gh release view "$RELEASE_TAG" --repo "$REPO_FULL_NAME" >/dev/null 2>&1; then
     --clobber
   gh release edit "$RELEASE_TAG" \
     --repo "$REPO_FULL_NAME" \
+    --target "$RELEASE_TARGET" \
     --title "$RELEASE_TITLE" \
     --notes-file "$release_notes_for_github" \
     --latest
 else
   gh release create "$RELEASE_TAG" "$DMG_PATH" "$ZIP_PATH" "$APPCAST_PATH" "$UPDATE_NOTES_PATH" \
     --repo "$REPO_FULL_NAME" \
+    --target "$RELEASE_TARGET" \
     --title "$RELEASE_TITLE" \
     --notes-file "$release_notes_for_github" \
     --latest
