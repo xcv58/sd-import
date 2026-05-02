@@ -2,17 +2,7 @@ import AppKit
 import Foundation
 import SDImportCore
 
-struct ImportPreviewSession: Identifiable, Hashable, Sendable {
-    var id: String { date }
-    let date: String
-    var label: String
-    let photoCount: Int
-    let videoCount: Int
-    let unsupportedCount: Int
-    var includePhotos: Bool
-    var includeVideos: Bool
-    var includeSidecars: Bool
-}
+typealias ImportPreviewSession = ImportPlanSession
 
 struct ImportPreviewRow: Identifiable, Hashable {
     let id: Int64
@@ -362,30 +352,29 @@ final class AppModel: ObservableObject {
             return []
         }
 
-        let roots = DestinationRoots(
-            photosURL: URL(fileURLWithPath: expanded(photosPath), isDirectory: true),
-            videosURL: URL(fileURLWithPath: expanded(videosPath), isDirectory: true)
+        let builder = ImportPlanBuilder(
+            sessions: previewSessions,
+            organizationPreset: organizationPreset,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: expanded(photosPath), isDirectory: true),
+                videosURL: URL(fileURLWithPath: expanded(videosPath), isDirectory: true)
+            ),
+            fallbackLocation: location,
+            volumeName: currentSummary.volumeName
         )
 
         return selectedJobFiles.compactMap { file in
             guard let id = file.id else {
                 return nil
             }
-            let plan = Self.planFile(
-                file,
-                sessions: previewSessions,
-                organizationPreset: organizationPreset,
-                roots: roots,
-                fallbackLocation: location,
-                volumeName: currentSummary.volumeName
-            )
+            let plan = builder.plan(file: file)
             return ImportPreviewRow(
                 id: id,
                 filename: file.filename,
-                date: Self.sessionDate(for: file),
+                date: ImportPlanBuilder.sessionDate(for: file),
                 mediaKind: file.mediaKind,
                 sourcePath: file.relativePath ?? file.sourcePath,
-                destinationPath: plan.update?.plannedDestinationPath,
+                destinationPath: plan.destinationPath,
                 status: plan.status,
                 willCopy: plan.willCopy,
                 size: file.size
@@ -405,10 +394,11 @@ final class AppModel: ObservableObject {
     }
 
     func importCurrentJob() {
-        guard let jobID = currentSummary?.jobID ?? selectedJobID else {
+        guard let currentSummary else {
             statusMessage = "No scanned job selected"
             return
         }
+        let jobID = currentSummary.jobID
         guard let databaseURL else {
             statusMessage = "Database is not ready"
             return
@@ -430,28 +420,44 @@ final class AppModel: ObservableObject {
             videosURL: URL(fileURLWithPath: expanded(videosPath), isDirectory: true)
         )
         let fallbackLocation = location
-        let volumeName = currentSummary?.volumeName
+        let volumeName = currentSummary.volumeName
 
-        isWorking = true
-        currentResult = nil
-        importProgress = nil
-        statusMessage = "Preparing import..."
         rememberWorkflowPreferenceForCurrentVolume()
         savePreferences()
 
-        importTask = Task.detached(priority: .userInitiated) {
-            do {
-                let repositories = try Self.makeRepositories(databaseURL: databaseURL)
-                let filesForPlan = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
-                let updates = Self.planUpdates(
-                    files: filesForPlan,
+        startImport(
+            jobID: jobID,
+            databaseURL: databaseURL,
+            planMode: .rebuild(
+                ImportPlanBuilder(
                     sessions: sessions,
                     organizationPreset: organizationPreset,
                     roots: roots,
                     fallbackLocation: fallbackLocation,
                     volumeName: volumeName
                 )
-                try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: updates)
+            )
+        )
+    }
+
+    private func startImport(
+        jobID: String,
+        databaseURL: URL,
+        planMode: ImportPlanMode
+    ) {
+        isWorking = true
+        currentResult = nil
+        importProgress = nil
+        statusMessage = "Preparing import..."
+
+        importTask = Task.detached(priority: .userInitiated) {
+            do {
+                let repositories = try Self.makeRepositories(databaseURL: databaseURL)
+                let filesForPlan = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                let updates = planMode.updates(files: filesForPlan)
+                if !updates.isEmpty {
+                    try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: updates)
+                }
 
                 let engine = ImportEngine(
                     jobRepository: repositories.jobRepository,
@@ -588,11 +594,19 @@ final class AppModel: ObservableObject {
     }
 
     func retrySelectedJob() {
-        guard selectedJobID != nil else {
+        guard let selectedJobID else {
+            return
+        }
+        guard let databaseURL else {
+            statusMessage = "Database is not ready"
             return
         }
         currentSummary = nil
-        importCurrentJob()
+        startImport(
+            jobID: selectedJobID,
+            databaseURL: databaseURL,
+            planMode: .existing
+        )
     }
 
     func completeOnboarding() {
@@ -759,7 +773,7 @@ final class AppModel: ObservableObject {
 
     private func rebuildPreviewSessions(files: [JobFileRecord], defaultLabel: String) {
         let existing = Dictionary(uniqueKeysWithValues: previewSessions.map { ($0.date, $0) })
-        let grouped = Dictionary(grouping: files) { Self.sessionDate(for: $0) }
+        let grouped = Dictionary(grouping: files) { ImportPlanBuilder.sessionDate(for: $0) }
         let includePhotos = organizationPreset == .footageBackup ? false : importMediaSelection.includes(.photo)
         let includeVideos = importMediaSelection.includes(.video)
         let includeSidecars = organizationPreset == .footageBackup
@@ -778,173 +792,6 @@ final class AppModel: ObservableObject {
                 includeSidecars: prior?.includeSidecars ?? includeSidecars
             )
         }
-    }
-
-    private nonisolated static func planUpdates(
-        files: [JobFileRecord],
-        sessions: [ImportPreviewSession],
-        organizationPreset: ImportOrganizationPreset,
-        roots: DestinationRoots,
-        fallbackLocation: String,
-        volumeName: String?
-    ) -> [JobFilePlanUpdate] {
-        files.compactMap { file in
-            planFile(
-                file,
-                sessions: sessions,
-                organizationPreset: organizationPreset,
-                roots: roots,
-                fallbackLocation: fallbackLocation,
-                volumeName: volumeName
-            ).update
-        }
-    }
-
-    private nonisolated static func planFile(
-        _ file: JobFileRecord,
-        sessions: [ImportPreviewSession],
-        organizationPreset: ImportOrganizationPreset,
-        roots: DestinationRoots,
-        fallbackLocation: String,
-        volumeName: String?
-    ) -> (update: JobFilePlanUpdate?, willCopy: Bool, status: String) {
-        guard let id = file.id else {
-            return (nil, false, "Not ready")
-        }
-
-        let date = sessionDate(for: file)
-        let session = sessions.first { $0.date == date }
-        let label = session?.label.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-            ?? fallbackLocation.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-            ?? "TODO"
-
-        let isFootageSidecar = organizationPreset == .footageBackup
-            && file.mediaKind == .unsupported
-            && (session?.includeSidecars ?? true)
-
-        if (file.mediaKind == .unsupported || file.decision == .unsupported) && !isFootageSidecar {
-            return (
-                JobFilePlanUpdate(
-                    id: id,
-                    decision: .unsupported,
-                    destinationDirectory: nil,
-                    plannedDestinationPath: nil,
-                    copyStatus: .skipped,
-                    error: "unsupported"
-                ),
-                false,
-                "Unsupported"
-            )
-        }
-
-        let included: Bool
-        switch file.mediaKind {
-        case .photo:
-            included = session?.includePhotos ?? true
-        case .video:
-            included = session?.includeVideos ?? true
-        case .unsupported:
-            included = isFootageSidecar
-        }
-
-        guard included else {
-            return (
-                JobFilePlanUpdate(
-                    id: id,
-                    decision: file.decision,
-                    destinationDirectory: nil,
-                    plannedDestinationPath: nil,
-                    copyStatus: .skipped,
-                    error: "excluded_by_import_selection"
-                ),
-                false,
-                "Excluded"
-            )
-        }
-
-        if file.decision == .known || file.copyStatus == .copied {
-            return (
-                JobFilePlanUpdate(
-                    id: id,
-                    decision: .known,
-                    destinationDirectory: file.destinationDirectory,
-                    plannedDestinationPath: file.plannedDestinationPath,
-                    copyStatus: .skipped,
-                    error: nil
-                ),
-                false,
-                "Known"
-            )
-        }
-
-        let planner = DestinationPlanner()
-        guard let destinationURL = planner.destinationURL(
-            filename: file.filename,
-            mediaKind: file.mediaKind,
-            captureDate: date,
-            sessionLabel: label,
-            roots: roots,
-            organizationPreset: organizationPreset,
-            relativePath: file.relativePath,
-            volumeName: volumeName
-        ) else {
-            return (
-                JobFilePlanUpdate(
-                    id: id,
-                    decision: file.decision,
-                    destinationDirectory: nil,
-                    plannedDestinationPath: nil,
-                    copyStatus: .skipped,
-                    error: "no_destination"
-                ),
-                false,
-                "No destination"
-            )
-        }
-
-        let fingerprint = FileFingerprint.compute(
-            size: file.size,
-            modificationDateString: file.modificationDateString,
-            identityHint: file.relativePath ?? file.filename
-        )
-        let resolver = ConflictResolver()
-        switch resolver.resolveDestination(candidate: destinationURL, expectedFingerprint: fingerprint) {
-        case .skip(let reason):
-            return (
-                JobFilePlanUpdate(
-                    id: id,
-                    decision: .known,
-                    destinationDirectory: destinationURL.deletingLastPathComponent().path,
-                    plannedDestinationPath: destinationURL.path,
-                    copyStatus: .skipped,
-                    error: reason
-                ),
-                false,
-                "Already exists"
-            )
-        case .copy(let resolvedURL):
-            let isConflict = resolvedURL != destinationURL
-            let copyStatus = file.mediaKind == .unsupported ? "Sidecar" : "Will copy"
-            return (
-                JobFilePlanUpdate(
-                    id: id,
-                    decision: isConflict ? .conflict : .new,
-                    destinationDirectory: resolvedURL.deletingLastPathComponent().path,
-                    plannedDestinationPath: resolvedURL.path,
-                    copyStatus: .pending,
-                    error: isConflict ? "destination file exists with different content" : nil
-                ),
-                true,
-                isConflict ? "Rename" : copyStatus
-            )
-        }
-    }
-
-    private nonisolated static func sessionDate(for file: JobFileRecord) -> String {
-        if let captureDate = file.captureDate, !captureDate.isEmpty {
-            return captureDate
-        }
-        return String(file.modificationDateString.prefix(10))
     }
 
     nonisolated private static func makeRepositories(databaseURL: URL) throws -> (
@@ -1063,6 +910,20 @@ final class AppModel: ObservableObject {
                 return "Importing \(percent)% at \(speed)/s"
             }
             return "Importing \(progress.doneFiles) of \(progress.totalFiles) files"
+        }
+    }
+}
+
+private enum ImportPlanMode: Sendable {
+    case rebuild(ImportPlanBuilder)
+    case existing
+
+    func updates(files: [JobFileRecord]) -> [JobFilePlanUpdate] {
+        switch self {
+        case .rebuild(let builder):
+            return builder.updates(files: files)
+        case .existing:
+            return []
         }
     }
 }

@@ -223,6 +223,49 @@ struct MediaScannerImportTests {
         #expect(files.first?.copyStatus == .copied)
     }
 
+    @Test("retry preserves copied file history when another file failed")
+    func retryPreservesCopiedFileHistory() throws {
+        let fixture = try Fixture()
+        let copiedSource = fixture.mountURL.appendingPathComponent("IMG_COPIED.JPG")
+        let failedSource = fixture.mountURL.appendingPathComponent("IMG_FAILED.JPG")
+        let copiedBytes = Data("copied-image-bytes".utf8)
+        let failedBytes = Data("failed-image-bytes".utf8)
+        try fixture.writeFile(copiedSource, bytes: copiedBytes)
+        try fixture.writeFile(failedSource, bytes: failedBytes)
+
+        _ = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-partial-retry")
+        )
+        try FileManager.default.removeItem(at: failedSource)
+
+        let firstResult = try fixture.importEngine.importFiles(jobID: "job-partial-retry")
+        let filesAfterFirstImport = try fixture.jobRepository.fetchJobFiles(jobID: "job-partial-retry")
+        let copiedBeforeRetry = try #require(filesAfterFirstImport.first { $0.filename == "IMG_COPIED.JPG" })
+        let copiedDestinationBeforeRetry = try #require(copiedBeforeRetry.finalDestinationPath)
+        let copiedCompletedAtBeforeRetry = try #require(copiedBeforeRetry.completedAt)
+
+        #expect(firstResult.importedFiles == 1)
+        #expect(firstResult.failedFiles == 1)
+        #expect(copiedBeforeRetry.copyStatus == .copied)
+
+        try fixture.writeFile(failedSource, bytes: failedBytes)
+        let retryResult = try fixture.importEngine.importFiles(jobID: "job-partial-retry")
+        let filesAfterRetry = try fixture.jobRepository.fetchJobFiles(jobID: "job-partial-retry")
+        let copiedAfterRetry = try #require(filesAfterRetry.first { $0.filename == "IMG_COPIED.JPG" })
+        let failedAfterRetry = try #require(filesAfterRetry.first { $0.filename == "IMG_FAILED.JPG" })
+        let maybeJob = try fixture.jobRepository.fetchJob(id: "job-partial-retry")
+        let job = try #require(maybeJob)
+
+        #expect(retryResult.importedFiles == 1)
+        #expect(copiedAfterRetry.copyStatus == .copied)
+        #expect(copiedAfterRetry.finalDestinationPath == copiedDestinationBeforeRetry)
+        #expect(copiedAfterRetry.completedAt == copiedCompletedAtBeforeRetry)
+        #expect(failedAfterRetry.copyStatus == .copied)
+        #expect(job.importedFiles == 2)
+        #expect(job.failedFiles == 0)
+        #expect(job.status == .imported)
+    }
+
     @Test("cancel during copy removes active part file and keeps file retryable")
     func cancelDuringCopyRemovesPartFile() throws {
         let fixture = try Fixture()
