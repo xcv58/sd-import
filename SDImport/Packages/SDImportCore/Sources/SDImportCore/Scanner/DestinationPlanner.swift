@@ -1,0 +1,114 @@
+import Foundation
+
+public struct DestinationPlanner: Sendable {
+    public init() {}
+
+    public func destinationDirectory(
+        for mediaKind: MediaKind,
+        captureDate: String,
+        location: String,
+        roots: DestinationRoots
+    ) -> URL? {
+        switch mediaKind {
+        case .photo:
+            let safeLocation = location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "TODO" : location
+            return roots.photosURL.appendingPathComponent("\(captureDate) \(safeLocation)", isDirectory: true)
+        case .video:
+            return roots.videosURL.appendingPathComponent("tmp-\(captureDate)-videos", isDirectory: true)
+        case .unsupported:
+            return nil
+        }
+    }
+
+    public func destinationURL(
+        filename: String,
+        mediaKind: MediaKind,
+        captureDate: String,
+        location: String,
+        roots: DestinationRoots
+    ) -> URL? {
+        destinationDirectory(
+            for: mediaKind,
+            captureDate: captureDate,
+            location: location,
+            roots: roots
+        )?.appendingPathComponent(filename, isDirectory: false)
+    }
+
+    public func destinationURL(
+        filename: String,
+        mediaKind: MediaKind,
+        captureDate: String,
+        sessionLabel: String,
+        roots: DestinationRoots,
+        organizationPreset: ImportOrganizationPreset,
+        relativePath: String? = nil,
+        volumeName: String? = nil
+    ) -> URL? {
+        switch organizationPreset {
+        case .classicDatedFolders:
+            return destinationURL(
+                filename: filename,
+                mediaKind: mediaKind,
+                captureDate: captureDate,
+                location: sessionLabel,
+                roots: roots
+            )
+
+        case .shootSessionsByDate:
+            guard mediaKind != .unsupported else {
+                return nil
+            }
+            let sessionDirectory = roots.photosURL
+                .appendingPathComponent(year(from: captureDate), isDirectory: true)
+                .appendingPathComponent("\(captureDate) \(safeComponent(sessionLabel, fallback: "TODO"))", isDirectory: true)
+            let mediaDirectory = mediaKind == .photo ? "Photos" : "Video"
+            return sessionDirectory
+                .appendingPathComponent(mediaDirectory, isDirectory: true)
+                .appendingPathComponent(filename, isDirectory: false)
+
+        case .footageBackup:
+            guard mediaKind == .video || mediaKind == .unsupported else {
+                return nil
+            }
+            let sessionDirectory = roots.videosURL
+                .appendingPathComponent(year(from: captureDate), isDirectory: true)
+                .appendingPathComponent("\(captureDate) \(safeComponent(sessionLabel, fallback: "Footage"))", isDirectory: true)
+                .appendingPathComponent("Card \(safeComponent(volumeName, fallback: "Unknown"))", isDirectory: true)
+            return appendRelativePath(relativePath ?? filename, to: sessionDirectory)
+        }
+    }
+
+    private func year(from captureDate: String) -> String {
+        guard captureDate.count >= 4 else {
+            return "Unknown Year"
+        }
+        return String(captureDate.prefix(4))
+    }
+
+    private func safeComponent(_ value: String?, fallback: String) -> String {
+        let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let source = trimmed.isEmpty ? fallback : trimmed
+        let invalid = CharacterSet(charactersIn: "/:")
+        return source
+            .components(separatedBy: invalid)
+            .joined(separator: "-")
+    }
+
+    private func appendRelativePath(_ relativePath: String, to root: URL) -> URL {
+        let components = relativePath
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .map(String.init)
+            .filter { !$0.isEmpty && $0 != "." && $0 != ".." }
+
+        guard !components.isEmpty else {
+            return root.appendingPathComponent("Unknown", isDirectory: false)
+        }
+
+        return components.dropLast().reduce(root) { partial, component in
+            partial.appendingPathComponent(safeComponent(component, fallback: "Folder"), isDirectory: true)
+        }
+        .appendingPathComponent(safeComponent(components.last, fallback: "File"), isDirectory: false)
+    }
+}
