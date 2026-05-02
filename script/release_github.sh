@@ -12,7 +12,7 @@ RELEASE_TITLE="${RELEASE_TITLE:-SD Import $APP_VERSION}"
 RELEASE_NOTES_FILE="${RELEASE_NOTES_FILE:-}"
 SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-xcv58-sd-import}"
 SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://github.com/$REPO_FULL_NAME/releases/latest/download/appcast.xml}"
-SPARKLE_DOWNLOAD_URL_PREFIX="${SPARKLE_DOWNLOAD_URL_PREFIX:-https://github.com/$REPO_FULL_NAME/releases/download/$RELEASE_TAG}"
+SPARKLE_DOWNLOAD_URL_PREFIX="${SPARKLE_DOWNLOAD_URL_PREFIX:-https://github.com/$REPO_FULL_NAME/releases/download/$RELEASE_TAG/}"
 DMG_PATH="$DIST_DIR/SD-Import.dmg"
 ZIP_PATH="$DIST_DIR/SD-Import.zip"
 APPCAST_PATH="$UPDATES_DIR/appcast.xml"
@@ -126,7 +126,7 @@ if [[ -n "$RELEASE_NOTES_FILE" ]]; then
 fi
 
 if gh release view "$RELEASE_TAG" --repo "$REPO_FULL_NAME" >/dev/null 2>&1; then
-  gh release upload "$RELEASE_TAG" "$DMG_PATH" "$ZIP_PATH" "$APPCAST_PATH" \
+  gh release upload "$RELEASE_TAG" "$DMG_PATH" "$ZIP_PATH" "$APPCAST_PATH" "$UPDATE_NOTES_PATH" \
     --repo "$REPO_FULL_NAME" \
     --clobber
   gh release edit "$RELEASE_TAG" \
@@ -135,7 +135,7 @@ if gh release view "$RELEASE_TAG" --repo "$REPO_FULL_NAME" >/dev/null 2>&1; then
     --notes-file "$release_notes_for_github" \
     --latest
 else
-  gh release create "$RELEASE_TAG" "$DMG_PATH" "$ZIP_PATH" "$APPCAST_PATH" \
+  gh release create "$RELEASE_TAG" "$DMG_PATH" "$ZIP_PATH" "$APPCAST_PATH" "$UPDATE_NOTES_PATH" \
     --repo "$REPO_FULL_NAME" \
     --title "$RELEASE_TITLE" \
     --notes-file "$release_notes_for_github" \
