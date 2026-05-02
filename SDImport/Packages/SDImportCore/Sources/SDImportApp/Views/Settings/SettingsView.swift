@@ -1,8 +1,10 @@
 import SDImportCore
+import Sparkle
 import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
+    let updater: SPUUpdater?
 
     var body: some View {
         TabView {
@@ -15,8 +17,13 @@ struct SettingsView: View {
                 .tabItem {
                     Label("General", systemImage: "gearshape")
                 }
+
+            updates
+                .tabItem {
+                    Label("Updates", systemImage: "arrow.clockwise")
+                }
         }
-        .frame(width: 560, height: 320)
+        .frame(width: 560, height: 340)
     }
 
     private var destinations: some View {
@@ -63,6 +70,13 @@ struct SettingsView: View {
                     model.savePreferences()
                     model.updateLoginItemRegistration()
                 }
+        }
+        .padding(20)
+    }
+
+    private var updates: some View {
+        Form {
+            UpdaterSettingsView(updater: updater)
         }
         .padding(20)
     }

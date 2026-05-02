@@ -319,6 +319,60 @@ Verification:
 - Manual preview checks for photo cards, video cards with sidecars, and mixed cards.
 - Existing import, history, recovery, and packaging checks remain green.
 
+## Slice 11: Sparkle 2 In-App Updates
+
+Status: `[ ]`
+
+Goal:
+
+- Add safe automatic updates for users who install the direct-download app
+  outside the Mac App Store.
+- Keep SwiftPM as the source/module layout, but use a thin Xcode packaging
+  project as the owner of public app archives, Sparkle embedding, entitlements,
+  nested signatures, and Developer ID export.
+- Use Sparkle 2 rather than a custom updater.
+
+Detailed plan:
+
+- `docs/native-v1-implementation-plan.md`, M7.
+
+Code scope:
+
+- Add Sparkle 2 to the main app target.
+- Wire `SPUStandardUpdaterController` and a `Check for Updates...` menu item.
+- Add release-only `SUFeedURL`, `SUPublicEDKey`,
+  `CFBundleShortVersionString`, and monotonically increasing
+  `CFBundleVersion`.
+- Add update preferences for automatic checks/downloads using Sparkle defaults.
+- Add a pre-update path if the bundled login item must quit before the app
+  bundle can be replaced.
+
+Release scope:
+
+- Generate Sparkle EdDSA keys and keep the private key outside git.
+- Generate appcasts with Sparkle tooling.
+- Host signed/notarized archives, release notes, and appcast files on GitHub
+  Releases, R2/S3, or another HTTPS static host.
+- Decide whether beta updates use Sparkle channels or a separate beta appcast.
+
+Verification:
+
+- Install an older signed/notarized release, publish a newer signed/notarized
+  release, and update through Sparkle.
+- Manual `Check for Updates...` finds, installs, and relaunches into the newer
+  version.
+- Automatic update checks find the newer version on the configured interval.
+- The updated bundle contains the updated `SDImportAgent` login item and it
+  still prompts after reboot/login.
+- Sparkle rejects a tampered or incorrectly signed archive.
+- Gatekeeper accepts the updated app.
+
+Dependencies:
+
+- Slice 8 must provide a reliable signed/notarized distribution artifact.
+- Public updater builds should use the Xcode archive/export packaging path
+  before Sparkle is enabled for users.
+
 ## Always-On Verification
 
 Run after every slice:
