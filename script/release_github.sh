@@ -122,6 +122,11 @@ SPARKLE_ACCOUNT="$SPARKLE_ACCOUNT" \
 SPARKLE_DOWNLOAD_URL_PREFIX="$SPARKLE_DOWNLOAD_URL_PREFIX" \
 "$ROOT_DIR/script/generate_appcast.sh" "$UPDATES_DIR"
 
+if ! grep -q 'sparkle:edSignature=' "$APPCAST_PATH"; then
+  echo "Generated appcast is missing Sparkle EdDSA signatures; refusing to publish." >&2
+  exit 2
+fi
+
 release_notes_for_github="$UPDATE_NOTES_PATH"
 if [[ -n "$RELEASE_NOTES_FILE" ]]; then
   release_notes_for_github="$RELEASE_NOTES_FILE"

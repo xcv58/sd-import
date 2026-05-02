@@ -61,15 +61,40 @@ if [[ -n "$SPARKLE_PRIVATE_KEY_FILE" && -n "$SPARKLE_PRIVATE_KEY" ]]; then
   exit 2
 fi
 
+run_generate_appcast() {
+  local output
+  local status
+
+  set +e
+  if [[ -n "$SPARKLE_PRIVATE_KEY" ]]; then
+    output="$(printf '%s' "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST" "${appcast_args[@]}" "$UPDATES_DIR" 2>&1)"
+    status=$?
+  else
+    output="$("$GENERATE_APPCAST" "${appcast_args[@]}" "$UPDATES_DIR" 2>&1)"
+    status=$?
+  fi
+  set -e
+
+  if [[ -n "$output" ]]; then
+    printf '%s\n' "$output"
+  fi
+
+  if (( status != 0 )); then
+    exit "$status"
+  fi
+
+  if [[ "$output" == *"does not match key EdDSA"* ]]; then
+    echo "Sparkle appcast signing failed: the private key does not match SUPublicEDKey in the update archive." >&2
+    exit 2
+  fi
+}
+
 if [[ -n "$SPARKLE_PRIVATE_KEY_FILE" ]]; then
   appcast_args+=(--ed-key-file "$SPARKLE_PRIVATE_KEY_FILE")
-  exec "$GENERATE_APPCAST" "${appcast_args[@]}" "$UPDATES_DIR"
 fi
 
 if [[ -n "$SPARKLE_PRIVATE_KEY" ]]; then
   appcast_args+=(--ed-key-file -)
-  printf '%s' "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST" "${appcast_args[@]}" "$UPDATES_DIR"
-  exit $?
 fi
 
-exec "$GENERATE_APPCAST" "${appcast_args[@]}" "$UPDATES_DIR"
+run_generate_appcast
