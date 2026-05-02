@@ -1,9 +1,11 @@
 import SwiftUI
 
 @main
+@MainActor
 struct SDImportApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
+    private let appUpdater = AppUpdater()
 
     var body: some Scene {
         WindowGroup("SD Import") {
@@ -12,6 +14,10 @@ struct SDImportApp: App {
                 .frame(minWidth: 760, minHeight: 560)
         }
         .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesView(updater: appUpdater.updater)
+            }
+
             CommandGroup(after: .newItem) {
                 Button("Import From Card...") {
                     model.selection = .import
@@ -26,7 +32,7 @@ struct SDImportApp: App {
         }
 
         Settings {
-            SettingsView()
+            SettingsView(updater: appUpdater.updater)
                 .environmentObject(model)
         }
     }
