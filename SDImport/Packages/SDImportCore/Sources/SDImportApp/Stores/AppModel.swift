@@ -28,7 +28,11 @@ final class AppModel: ObservableObject {
     @Published var cardPath: String
     @Published var photosPath: String
     @Published var videosPath: String
-    @Published var location: String
+    @Published var location: String {
+        didSet {
+            syncPreviewSessionLabels(from: oldValue, to: location)
+        }
+    }
     @Published var historyRetention: RetentionPolicy
     @Published var autoPromptEnabled: Bool
     @Published var hasCompletedOnboarding: Bool
@@ -384,6 +388,29 @@ final class AppModel: ObservableObject {
                 willCopy: plan.willCopy,
                 size: file.size
             )
+        }
+    }
+
+    private func syncPreviewSessionLabels(from previousLocation: String, to nextLocation: String) {
+        guard !previewSessions.isEmpty else {
+            return
+        }
+
+        let previousLabel = Self.defaultSessionLabel(for: previousLocation)
+        let nextLabel = Self.defaultSessionLabel(for: nextLocation)
+        guard previousLabel != nextLabel else {
+            return
+        }
+
+        var sessions = previewSessions
+        var didUpdate = false
+        for index in sessions.indices where Self.defaultSessionLabel(for: sessions[index].label) == previousLabel {
+            sessions[index].label = nextLabel
+            didUpdate = true
+        }
+
+        if didUpdate {
+            previewSessions = sessions
         }
     }
 
@@ -802,13 +829,14 @@ final class AppModel: ObservableObject {
         let includePhotos = organizationPreset == .footageBackup ? false : importMediaSelection.includes(.photo)
         let includeVideos = importMediaSelection.includes(.video)
         let includeSidecars = workflowProfile.includesSidecarsByDefault
+        let normalizedDefaultLabel = Self.defaultSessionLabel(for: defaultLabel)
 
         previewSessions = grouped.keys.sorted().map { date in
             let files = grouped[date] ?? []
             let prior = existing[date]
             return ImportPreviewSession(
                 date: date,
-                label: prior?.label ?? defaultLabel.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "TODO",
+                label: prior?.label ?? normalizedDefaultLabel,
                 photoCount: files.filter { $0.mediaKind == .photo }.count,
                 videoCount: files.filter { $0.mediaKind == .video }.count,
                 unsupportedCount: files.filter { $0.mediaKind == .unsupported }.count,
@@ -817,6 +845,10 @@ final class AppModel: ObservableObject {
                 includeSidecars: prior?.includeSidecars ?? includeSidecars
             )
         }
+    }
+
+    private static func defaultSessionLabel(for location: String) -> String {
+        location.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "TODO"
     }
 
     nonisolated private static func makeRepositories(databaseURL: URL) throws -> (
