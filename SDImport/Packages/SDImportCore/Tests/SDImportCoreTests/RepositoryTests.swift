@@ -76,6 +76,58 @@ struct RepositoryTests {
 
         #expect(try repository.contains(fingerprint))
     }
+
+    @Test("forgets imported fingerprints for a job")
+    func forgetsImportedFingerprintsForJob() throws {
+        let pool = try migratedPool()
+        let jobRepository = JobRepository(pool: pool)
+        let dedupeRepository = DedupeRepository(pool: pool)
+        let fingerprint = FileFingerprint.compute(
+            size: 17,
+            modificationDateString: "2023-11-14T22:13:20",
+            identityHint: "DCIM/IMG_0001.JPG"
+        )
+
+        try jobRepository.insertJob(
+            ImportJob(
+                id: "job-1",
+                createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+                mountPath: "/Volumes/CARD",
+                location: "TEST",
+                photosRoot: "/tmp/photos",
+                videosRoot: "/tmp/videos",
+                status: .imported
+            )
+        )
+        try jobRepository.insertJobFile(
+            JobFileRecord(
+                jobID: "job-1",
+                sourcePath: "/Volumes/CARD/DCIM/IMG_0001.JPG",
+                relativePath: "DCIM/IMG_0001.JPG",
+                filename: "IMG_0001.JPG",
+                ext: ".jpg",
+                size: 17,
+                modificationDateString: "2023-11-14T22:13:20",
+                mediaKind: .photo,
+                fingerprint: fingerprint.value,
+                captureDate: "2024-07-15",
+                decision: .new,
+                destinationDirectory: "/tmp/photos/2024-07-15 TEST",
+                plannedDestinationPath: "/tmp/photos/2024-07-15 TEST/IMG_0001.JPG",
+                copyStatus: .copied
+            )
+        )
+
+        try dedupeRepository.recordImported(
+            fingerprint,
+            jobID: "job-1",
+            sourcePath: "/Volumes/CARD/DCIM/IMG_0001.JPG"
+        )
+
+        #expect(try dedupeRepository.contains(fingerprint))
+        #expect(try dedupeRepository.forgetImportedFiles(jobID: "job-1") == 1)
+        #expect(try dedupeRepository.contains(fingerprint) == false)
+    }
 }
 
 func migratedPool() throws -> DatabasePool {

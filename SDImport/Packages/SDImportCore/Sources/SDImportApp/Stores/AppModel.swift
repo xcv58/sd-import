@@ -195,6 +195,11 @@ final class AppModel: ObservableObject {
         savePreferences()
     }
 
+    var selectedSourceVolume: MountedVolume? {
+        let expandedPath = expanded(cardPath)
+        return availableSourceVolumes.first { $0.mountURL.path == expandedPath }
+    }
+
     func sourcePathDidChange() {
         currentSummary = nil
         currentResult = nil
@@ -311,7 +316,7 @@ final class AppModel: ObservableObject {
         for index in previewSessions.indices {
             previewSessions[index].includePhotos = importMediaSelection.includes(.photo)
             previewSessions[index].includeVideos = importMediaSelection.includes(.video)
-            previewSessions[index].includeSidecars = organizationPreset == .footageBackup
+            previewSessions[index].includeSidecars = workflowProfile.includesSidecarsByDefault
         }
         workflowProfileWasManuallyChosenForCurrentJob = true
         savePreferences()
@@ -519,7 +524,7 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     self.currentResult = nil
                     self.importProgress = nil
-                    self.statusMessage = "Import failed: \(error)"
+                    self.statusMessage = "Import failed: \(Self.errorMessage(for: error))"
                     self.isWorking = false
                     self.importTask = nil
                 }
@@ -681,6 +686,26 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func forgetImportedFiles(for job: ImportJob) {
+        guard let dedupeRepository else {
+            statusMessage = "Import history is not ready"
+            return
+        }
+
+        do {
+            let deleted = try dedupeRepository.forgetImportedFiles(jobID: job.id)
+            refreshHistory()
+            if selectedJobID == job.id {
+                loadJobDetail(jobID: job.id)
+            }
+            statusMessage = deleted == 1
+                ? "Forgot 1 imported file"
+                : "Forgot \(deleted) imported files"
+        } catch {
+            statusMessage = "Could not forget imported files: \(error)"
+        }
+    }
+
     func selectedJob() -> ImportJob? {
         guard let selectedJobID else {
             return nil
@@ -776,7 +801,7 @@ final class AppModel: ObservableObject {
         let grouped = Dictionary(grouping: files) { ImportPlanBuilder.sessionDate(for: $0) }
         let includePhotos = organizationPreset == .footageBackup ? false : importMediaSelection.includes(.photo)
         let includeVideos = importMediaSelection.includes(.video)
-        let includeSidecars = organizationPreset == .footageBackup
+        let includeSidecars = workflowProfile.includesSidecarsByDefault
 
         previewSessions = grouped.keys.sorted().map { date in
             let files = grouped[date] ?? []
@@ -911,6 +936,16 @@ final class AppModel: ObservableObject {
             }
             return "Importing \(progress.doneFiles) of \(progress.totalFiles) files"
         }
+    }
+
+    nonisolated private static func errorMessage(for error: Error) -> String {
+        if case let SDImportError.insufficientDestinationSpace(path, requiredBytes, availableBytes) = error {
+            let required = ByteCountFormatter.string(fromByteCount: requiredBytes, countStyle: .file)
+            let available = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+            return "Not enough space in \(path). Need \(required), available \(available)."
+        }
+
+        return String(describing: error)
     }
 }
 

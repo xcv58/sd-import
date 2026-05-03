@@ -76,11 +76,11 @@ struct DestinationPlannerTests {
             organizationPreset: .shootSessionsByDate
         )
 
-        #expect(photoURL?.path == "/tmp/library/2026/2026-04-29 Gardens by the Bay/Photos/IMG_0001.JPG")
-        #expect(videoURL?.path == "/tmp/library/2026/2026-04-29 Gardens by the Bay/Video/C0001.MP4")
+        #expect(photoURL?.path == "/tmp/library/2026-04-29 Gardens by the Bay/Photos/IMG_0001.JPG")
+        #expect(videoURL?.path == "/tmp/library/2026-04-29 Gardens by the Bay/Video/C0001.MP4")
     }
 
-    @Test("plans footage backup by card relative path")
+    @Test("plans flat footage backup by card")
     func plansFootageBackup() {
         let roots = DestinationRoots(
             photosURL: URL(fileURLWithPath: "/tmp/library", isDirectory: true),
@@ -99,10 +99,10 @@ struct DestinationPlannerTests {
             volumeName: "Untitled"
         )
 
-        #expect(videoURL?.path == "/tmp/footage/2026/2026-04-30 Singapore Trip/Card Untitled/PRIVATE/M4ROOT/CLIP/C0001.MP4")
+        #expect(videoURL?.path == "/tmp/footage/2026-04-30 Singapore Trip/Card Untitled/C0001.MP4")
     }
 
-    @Test("plans footage backup sidecars by card relative path")
+    @Test("plans flat footage backup sidecars by card")
     func plansFootageBackupSidecars() {
         let roots = DestinationRoots(
             photosURL: URL(fileURLWithPath: "/tmp/library", isDirectory: true),
@@ -121,6 +121,6 @@ struct DestinationPlannerTests {
             volumeName: "Untitled"
         )
 
-        #expect(sidecarURL?.path == "/tmp/footage/2026/2026-04-30 Singapore Trip/Card Untitled/PRIVATE/M4ROOT/CLIP/C0001.XML")
+        #expect(sidecarURL?.path == "/tmp/footage/2026-04-30 Singapore Trip/Card Untitled/C0001.XML")
     }
 }

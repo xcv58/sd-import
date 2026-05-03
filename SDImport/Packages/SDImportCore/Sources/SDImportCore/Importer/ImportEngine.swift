@@ -6,19 +6,22 @@ public struct ImportEngine {
     private let dedupeRepository: DedupeRepository
     private let conflictResolver: ConflictResolver
     private let copyEngine: CopyEngine
+    private let destinationSpaceChecker: DestinationSpaceChecker
 
     public init(
         fileManager: FileManager = .default,
         jobRepository: JobRepository,
         dedupeRepository: DedupeRepository,
         conflictResolver: ConflictResolver = ConflictResolver(),
-        copyEngine: CopyEngine = CopyEngine()
+        copyEngine: CopyEngine = CopyEngine(),
+        destinationSpaceChecker: DestinationSpaceChecker = DestinationSpaceChecker()
     ) {
         self.fileManager = fileManager
         self.jobRepository = jobRepository
         self.dedupeRepository = dedupeRepository
         self.conflictResolver = conflictResolver
         self.copyEngine = copyEngine
+        self.destinationSpaceChecker = destinationSpaceChecker
     }
 
     @discardableResult
@@ -43,6 +46,15 @@ public struct ImportEngine {
         var copiedBytes: Int64 = 0
         var activeFileBytes: Int64 = 0
         var currentFile: JobFileRecord?
+
+        let spaceCheck = try destinationSpaceChecker.check(files: files)
+        if let failure = spaceCheck.failures.first {
+            throw SDImportError.insufficientDestinationSpace(
+                path: failure.displayPath,
+                requiredBytes: failure.requiredBytes,
+                availableBytes: failure.availableBytes
+            )
+        }
 
         try jobRepository.updateJobStatus(id: jobID, status: .importing, startedAt: startedAt)
 

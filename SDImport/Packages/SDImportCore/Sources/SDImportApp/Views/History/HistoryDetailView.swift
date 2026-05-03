@@ -3,6 +3,8 @@ import SwiftUI
 
 struct HistoryDetailView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var isShowingForgetConfirmation = false
+
     let job: ImportJob?
     let files: [JobFileRecord]
 
@@ -85,6 +87,21 @@ struct HistoryDetailView: View {
                 Label("Reveal Report", systemImage: "doc.text.magnifyingglass")
             }
             .disabled(job.summaryMarkdownPath == nil && job.summaryJSONPath == nil)
+
+            Button(role: .destructive) {
+                isShowingForgetConfirmation = true
+            } label: {
+                Label("Forget Files", systemImage: "trash")
+            }
+            .disabled(files.allSatisfy { $0.fingerprint == nil })
+            .alert("Forget imported files?", isPresented: $isShowingForgetConfirmation) {
+                Button("Forget Files", role: .destructive) {
+                    model.forgetImportedFiles(for: job)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("SD Import will keep the copied files and job history, but files from this import can be imported again for another destination.")
+            }
         }
     }
 
