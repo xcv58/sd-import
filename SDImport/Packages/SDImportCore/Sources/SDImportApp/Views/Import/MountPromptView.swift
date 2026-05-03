@@ -23,12 +23,16 @@ struct MountPromptView: View {
                 }
             }
 
+            Text("SD Import found supported media on this volume. Scan it now to preview what will be copied.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
             HStack {
                 Spacer()
                 Button("Skip") {
                     skipAction()
                 }
-                Button("Continue") {
+                Button("Scan This Card") {
                     continueAction()
                 }
                 .keyboardShortcut(.defaultAction)

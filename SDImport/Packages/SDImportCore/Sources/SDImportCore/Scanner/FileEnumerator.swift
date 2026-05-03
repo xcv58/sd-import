@@ -7,7 +7,10 @@ public struct FileEnumerator {
         self.fileManager = fileManager
     }
 
-    public func mediaCandidateFiles(in rootURL: URL) -> [URL] {
+    public func mediaCandidateFiles(
+        in rootURL: URL,
+        shouldCancel: () -> Bool = { false }
+    ) throws -> [URL] {
         guard let enumerator = fileManager.enumerator(
             at: rootURL,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -18,6 +21,9 @@ public struct FileEnumerator {
 
         var urls: [URL] = []
         for case let url as URL in enumerator {
+            if shouldCancel() {
+                throw SDImportError.cancelled
+            }
             if url.lastPathComponent.hasPrefix(".") {
                 if isDirectory(url) {
                     enumerator.skipDescendants()

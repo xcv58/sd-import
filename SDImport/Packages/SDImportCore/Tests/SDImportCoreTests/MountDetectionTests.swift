@@ -111,6 +111,35 @@ struct MountDetectionTests {
         #expect(likelyVolumes.map(\.name) == ["A CARD", "B CARD"])
     }
 
+    @Test("volume detector finds importable media before prompting")
+    func detectorFindsImportableMedia() throws {
+        let directory = try temporaryDirectory()
+        let mediaDirectory = directory.appendingPathComponent("DCIM", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDirectory, withIntermediateDirectories: true)
+        try Data([1, 2, 3]).write(to: mediaDirectory.appendingPathComponent("IMG_0001.JPG"))
+
+        #expect(VolumeDetector().containsImportableMedia(at: directory))
+    }
+
+    @Test("volume detector does not stop at early sidecar files")
+    func detectorDoesNotStopAtEarlySidecarFiles() throws {
+        let directory = try temporaryDirectory()
+        for index in 0..<600 {
+            try Data([1]).write(to: directory.appendingPathComponent("SIDE\(index).XML"))
+        }
+        try Data([1, 2, 3]).write(to: directory.appendingPathComponent("C0001.MOV"))
+
+        #expect(VolumeDetector().containsImportableMedia(at: directory))
+    }
+
+    @Test("volume detector ignores volumes without importable media")
+    func detectorIgnoresVolumesWithoutImportableMedia() throws {
+        let directory = try temporaryDirectory()
+        try Data([1, 2, 3]).write(to: directory.appendingPathComponent("notes.txt"))
+
+        #expect(VolumeDetector().containsImportableMedia(at: directory) == false)
+    }
+
     @Test("mount debouncer suppresses repeated paths inside interval")
     func debouncerSuppressesRepeatedPaths() {
         var debouncer = MountDebouncer(interval: 10)

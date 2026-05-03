@@ -354,7 +354,7 @@ public struct LegacyStateImporter {
                 mountPath: row["mount_path"],
                 volumeName: row["volume_name"],
                 volumeUUID: row["volume_uuid"],
-                location: (row["location"] as String?).nilIfEmpty ?? "TODO",
+                location: (row["location"] as String?).nilIfEmpty ?? "Untitled",
                 status: row["status"],
                 scannedFiles: row["scanned_files"],
                 newFiles: row["new_files"],

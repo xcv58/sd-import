@@ -62,7 +62,10 @@ public struct MediaScanner {
     }
 
     @discardableResult
-    public func scan(_ request: ScanRequest) throws -> ScanSummary {
+    public func scan(
+        _ request: ScanRequest,
+        shouldCancel: () -> Bool = { false }
+    ) throws -> ScanSummary {
         var files: [JobFileRecord] = []
         var scannedFiles = 0
         var newFiles = 0
@@ -70,16 +73,30 @@ public struct MediaScanner {
         var unsupportedFiles = 0
         var conflictFiles = 0
 
-        for fileURL in fileEnumerator.mediaCandidateFiles(in: request.mountURL) {
+        for fileURL in try fileEnumerator.mediaCandidateFiles(in: request.mountURL, shouldCancel: shouldCancel) {
+            if shouldCancel() {
+                throw SDImportError.cancelled
+            }
             scannedFiles += 1
             let attributes = try attributes(for: fileURL)
             let ext = fileURL.pathExtension.isEmpty ? "" : ".\(fileURL.pathExtension.lowercased())"
             let mediaKind = classifier.classify(extension: ext)
             let relativePath = relativePath(for: fileURL, rootURL: request.mountURL)
             let modificationDateString = FileFingerprint.pythonCompatibleModificationDateString(attributes.modificationDate)
+            let fingerprint = FileFingerprint.compute(
+                size: attributes.size,
+                modificationDate: attributes.modificationDate,
+                modificationDateString: modificationDateString,
+                identityHint: relativePath
+            )
+            let alreadyImported = try dedupeRepository.contains(fingerprint)
 
             guard mediaKind != .unsupported else {
-                unsupportedFiles += 1
+                if alreadyImported {
+                    knownFiles += 1
+                } else {
+                    unsupportedFiles += 1
+                }
                 files.append(
                     JobFileRecord(
                         jobID: request.jobID,
@@ -90,9 +107,9 @@ public struct MediaScanner {
                         size: attributes.size,
                         modificationDateString: modificationDateString,
                         mediaKind: .unsupported,
-                        fingerprint: nil,
+                        fingerprint: fingerprint.value,
                         captureDate: nil,
-                        decision: .unsupported,
+                        decision: alreadyImported ? .known : .unsupported,
                         destinationDirectory: nil,
                         plannedDestinationPath: nil,
                         copyStatus: .skipped
@@ -101,13 +118,6 @@ public struct MediaScanner {
                 continue
             }
 
-            let fingerprint = FileFingerprint.compute(
-                size: attributes.size,
-                modificationDate: attributes.modificationDate,
-                modificationDateString: modificationDateString,
-                identityHint: relativePath
-            )
-            let alreadyImported = try dedupeRepository.contains(fingerprint)
             let captureDate = captureDateReader.captureDate(
                 for: fileURL,
                 mediaKind: mediaKind,
@@ -173,6 +183,10 @@ public struct MediaScanner {
                     error: error
                 )
             )
+        }
+
+        if shouldCancel() {
+            throw SDImportError.cancelled
         }
 
         let summary = ScanSummary(

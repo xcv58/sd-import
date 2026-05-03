@@ -323,15 +323,15 @@ def command_auto(args: argparse.Namespace, conn: sqlite3.Connection, config: Dic
         if args.notify and not args.auto_import:
             continue_choice = show_prompt_notification(
                 title="SD Card Inserted",
-                message=f"{m['volume_name']} mounted. Continue import flow?",
-                actions="Continue",
+                message=f"{m['volume_name']} mounted with supported media. Scan it now?",
+                actions="Scan This Card",
                 close_label="Skip",
                 timeout_seconds=120,
                 close_first=False,
                 prefer_swiftdialog=True,
                 allow_legacy_fallback=False,
             )
-            if continue_choice == "Continue":
+            if continue_choice == "Scan This Card":
                 pass
             elif continue_choice == "Skip":
                 print(

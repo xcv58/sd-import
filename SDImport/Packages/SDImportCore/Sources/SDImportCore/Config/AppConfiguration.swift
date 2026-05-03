@@ -40,7 +40,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
             sourcePath: "/Volumes",
             photosPath: homeDirectory.appendingPathComponent("Pictures/Photos", isDirectory: true).path,
             videosPath: homeDirectory.appendingPathComponent("Downloads", isDirectory: true).path,
-            defaultLocation: "TODO"
+            defaultLocation: "Untitled"
         )
     }
 

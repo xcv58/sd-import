@@ -30,6 +30,7 @@ struct ImportWorkflowRecommenderTests {
         #expect(profile.recommendedWorkflow == .footageBackup)
         #expect(profile.confidence == .exact)
         #expect(profile.sidecarCount == 2)
+        #expect(profile.recommendedWorkflow.includesSidecarsByDefault)
     }
 
     @Test("uses dominant content when one media type clearly wins")

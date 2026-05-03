@@ -22,6 +22,27 @@ struct ImportPreviewTotals: Hashable {
     let copyBytes: Int64
 }
 
+struct ImportPreviewDestination: Identifiable, Hashable {
+    var id: String { path }
+    let path: String
+    let title: String
+    let fileCount: Int
+    let byteCount: Int64
+}
+
+struct ImportPreviewSpaceRequirement: Identifiable, Hashable {
+    var id: String { volumeID }
+    let volumeID: String
+    let displayPath: String
+    let requiredBytes: Int64
+    let availableBytes: Int64
+    let totalBytes: Int64?
+
+    var isSatisfied: Bool {
+        requiredBytes <= availableBytes
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var selection: SidebarItem = .import
@@ -73,13 +94,14 @@ final class AppModel: ObservableObject {
     private var mountObserver: MountEventObserver?
     private var workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
     private var workflowProfileWasManuallyChosenForCurrentJob = false
+    private var knownImportedPreviewFileIDs: Set<Int64> = []
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.cardPath = defaults.string(forKey: DefaultsKeys.cardPath) ?? "/Volumes"
         self.photosPath = defaults.string(forKey: DefaultsKeys.photosPath) ?? "\(home)/Pictures/Photos"
         self.videosPath = defaults.string(forKey: DefaultsKeys.videosPath) ?? "\(home)/Downloads"
-        self.location = defaults.string(forKey: DefaultsKeys.location) ?? "TODO"
+        self.location = defaults.string(forKey: DefaultsKeys.location) ?? "Untitled"
         self.historyRetention = .defaultPolicy
         self.autoPromptEnabled = defaults.bool(forKey: DefaultsKeys.autoPromptEnabled)
         self.hasCompletedOnboarding = defaults.bool(forKey: DefaultsKeys.hasCompletedOnboarding)
@@ -214,6 +236,7 @@ final class AppModel: ObservableObject {
         importProgress = nil
         previewSessions = []
         selectedJobFiles = []
+        knownImportedPreviewFileIDs = []
         mediaContentProfile = nil
         photoPairSummary = nil
         workflowProfileWasManuallyChosenForCurrentJob = false
@@ -232,9 +255,10 @@ final class AppModel: ObservableObject {
     }
 
     var canImportPlannedFiles: Bool {
-        !isWorking
+        let rows = previewRows()
+        return !isWorking
             && currentSummary != nil
-            && previewTotals().copyFiles > 0
+            && previewTotals(rows: rows).copyFiles > 0
             && sourceValidation.isUsable
             && requiredDestinationPathsAreUsable()
     }
@@ -268,11 +292,12 @@ final class AppModel: ObservableObject {
         let cardPath = expanded(cardPath)
         let photosPath = expanded(photosPath)
         let videosPath = expanded(videosPath)
-        let location = location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "TODO" : location
+        let location = Self.defaultSessionLabel(for: location)
         let reportsURL = reportsURL
 
-        Task.detached(priority: .userInitiated) {
+        importTask = Task.detached(priority: .userInitiated) {
             do {
+                try Task.checkCancellation()
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
                 let scanner = MediaScanner(
                     jobRepository: repositories.jobRepository,
@@ -288,26 +313,55 @@ final class AppModel: ObservableObject {
                     ),
                     reportsDirectoryURL: reportsURL
                 )
-                let summary = try scanner.scan(request)
-                let jobs = try repositories.jobRepository.listJobs(limit: 100)
+                let summary = try scanner.scan(request) {
+                    Task.isCancelled
+                }
+                try Task.checkCancellation()
+                let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
                 let files = try repositories.jobRepository.fetchJobFiles(jobID: summary.jobID)
+                try Task.checkCancellation()
 
                 await MainActor.run {
                     self.currentSummary = summary
                     self.selectedJobID = summary.jobID
                     self.jobs = jobs
                     self.selectedJobFiles = files
+                    self.knownImportedPreviewFileIDs = Self.knownImportedFileIDs(
+                        files: files,
+                        dedupeRepository: repositories.dedupeRepository
+                    )
                     self.applyRecommendationAfterScan(files: files, summary: summary)
                     self.rebuildPreviewSessions(files: files, defaultLabel: location)
                     self.statusMessage = "Scan complete"
                     self.isWorking = false
+                    self.importTask = nil
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.currentSummary = nil
+                    self.previewSessions = []
+                    self.knownImportedPreviewFileIDs = []
+                    self.statusMessage = "Scan cancelled"
+                    self.isWorking = false
+                    self.importTask = nil
+                }
+            } catch SDImportError.cancelled {
+                await MainActor.run {
+                    self.currentSummary = nil
+                    self.previewSessions = []
+                    self.knownImportedPreviewFileIDs = []
+                    self.statusMessage = "Scan cancelled"
+                    self.isWorking = false
+                    self.importTask = nil
                 }
             } catch {
                 await MainActor.run {
                     self.currentSummary = nil
                     self.previewSessions = []
+                    self.knownImportedPreviewFileIDs = []
                     self.statusMessage = "Scan failed: \(error)"
                     self.isWorking = false
+                    self.importTask = nil
                 }
             }
         }
@@ -376,7 +430,7 @@ final class AppModel: ObservableObject {
                 photosURL: URL(fileURLWithPath: expanded(photosPath), isDirectory: true),
                 videosURL: URL(fileURLWithPath: expanded(videosPath), isDirectory: true)
             ),
-            fallbackLocation: location,
+            fallbackLocation: Self.defaultSessionLabel(for: location),
             volumeName: currentSummary.volumeName
         )
 
@@ -423,7 +477,10 @@ final class AppModel: ObservableObject {
     }
 
     func previewTotals() -> ImportPreviewTotals {
-        let rows = previewRows()
+        previewTotals(rows: previewRows())
+    }
+
+    func previewTotals(rows: [ImportPreviewRow]) -> ImportPreviewTotals {
         return ImportPreviewTotals(
             copyFiles: rows.filter(\.willCopy).count,
             skippedFiles: rows.filter { !$0.willCopy }.count,
@@ -431,6 +488,71 @@ final class AppModel: ObservableObject {
                 row.willCopy ? total + row.size : total
             }
         )
+    }
+
+    func previewDestinationDirectories(rows: [ImportPreviewRow]) -> [ImportPreviewDestination] {
+        let grouped = Dictionary(grouping: rows.filter(\.willCopy)) { row in
+            row.destinationPath.map {
+                URL(fileURLWithPath: $0, isDirectory: false).deletingLastPathComponent().path
+            } ?? "Unknown"
+        }
+
+        return grouped
+            .map { path, rows in
+                ImportPreviewDestination(
+                    path: path,
+                    title: URL(fileURLWithPath: path, isDirectory: true).lastPathComponent,
+                    fileCount: rows.count,
+                    byteCount: rows.reduce(Int64(0)) { $0 + $1.size }
+                )
+            }
+            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    func previewSpaceRequirements(rows: [ImportPreviewRow]) -> [ImportPreviewSpaceRequirement] {
+        var grouped: [String: (capacity: VolumeCapacity, requiredBytes: Int64)] = [:]
+        let rowsNeedingSpace = rows.filter { row in
+            row.willCopy
+                && row.size > 0
+                && !isKnownImportedFile(row)
+        }
+        let requiredByDirectory = Dictionary(grouping: rowsNeedingSpace) { row in
+            row.destinationPath.map {
+                URL(fileURLWithPath: $0, isDirectory: false).deletingLastPathComponent().path
+            }
+        }
+
+        for (destinationDirectory, directoryRows) in requiredByDirectory {
+            guard let destinationDirectory else {
+                continue
+            }
+            guard let capacity = try? DestinationSpaceChecker.fileSystemCapacity(for: destinationDirectory) else {
+                continue
+            }
+            let requiredBytes = directoryRows.reduce(Int64(0)) { $0 + $1.size }
+
+            let existing = grouped[capacity.volumeID]
+            grouped[capacity.volumeID] = (
+                capacity: existing?.capacity ?? capacity,
+                requiredBytes: (existing?.requiredBytes ?? 0) + requiredBytes
+            )
+        }
+
+        return grouped.values
+            .map { item in
+                ImportPreviewSpaceRequirement(
+                    volumeID: item.capacity.volumeID,
+                    displayPath: item.capacity.displayPath,
+                    requiredBytes: item.requiredBytes,
+                    availableBytes: item.capacity.availableBytes,
+                    totalBytes: item.capacity.totalBytes
+                )
+            }
+            .sorted { $0.displayPath.localizedStandardCompare($1.displayPath) == .orderedAscending }
+    }
+
+    private func isKnownImportedFile(_ row: ImportPreviewRow) -> Bool {
+        knownImportedPreviewFileIDs.contains(row.id)
     }
 
     func importCurrentJob() {
@@ -456,6 +578,17 @@ final class AppModel: ObservableObject {
             statusMessage = "Check destination folders"
             return
         }
+        if let dedupeRepository {
+            knownImportedPreviewFileIDs = Self.knownImportedFileIDs(
+                files: selectedJobFiles,
+                dedupeRepository: dedupeRepository
+            )
+        }
+        let rows = previewRows()
+        if let failure = previewSpaceRequirements(rows: rows).first(where: { !$0.isSatisfied }) {
+            statusMessage = "Not enough space in \(failure.displayPath)"
+            return
+        }
 
         let sessions = previewSessions
         let organizationPreset = organizationPreset
@@ -463,7 +596,7 @@ final class AppModel: ObservableObject {
             photosURL: URL(fileURLWithPath: expanded(photosPath), isDirectory: true),
             videosURL: URL(fileURLWithPath: expanded(videosPath), isDirectory: true)
         )
-        let fallbackLocation = location
+        let fallbackLocation = Self.defaultSessionLabel(for: location)
         let volumeName = currentSummary.volumeName
 
         rememberWorkflowPreferenceForCurrentVolume()
@@ -515,6 +648,9 @@ final class AppModel: ObservableObject {
                     jobID: jobID,
                     onProgress: { progress in
                         latestProgress = progress
+                        if progress.status == "aborted" {
+                            return
+                        }
 
                         let now = Date()
                         let shouldPublish = progress.status != "copying"
@@ -533,10 +669,13 @@ final class AppModel: ObservableObject {
                         Task.isCancelled
                     }
                 )
-                let jobs = try repositories.jobRepository.listJobs(limit: 100)
+                let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
                 let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
 
                 await MainActor.run {
+                    guard self.importTask != nil else {
+                        return
+                    }
                     self.currentResult = result
                     self.importProgress = latestProgress
                     self.jobs = jobs
@@ -555,6 +694,7 @@ final class AppModel: ObservableObject {
                         self.selectedJobFiles = snapshot.files
                     }
                     self.currentResult = nil
+                    self.importProgress = nil
                     self.statusMessage = "Import cancelled"
                     self.isWorking = false
                     self.importTask = nil
@@ -624,7 +764,7 @@ final class AppModel: ObservableObject {
 
         historyRefreshTask = Task.detached(priority: .userInitiated) {
             do {
-                let snapshot = try Self.historySnapshot(
+                let snapshot = try Self.historyListSnapshot(
                     databaseURL: databaseURL,
                     selectedJobID: selectedJobID
                 )
@@ -634,10 +774,13 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     self.jobs = snapshot.jobs
                     self.selectedJobID = snapshot.selectedJobID
-                    self.selectedJobFiles = snapshot.files
+                    self.selectedJobFiles = []
                     self.isHistoryLoading = false
                     self.isHistoryDetailLoading = false
                     self.historyRefreshTask = nil
+                    if let selectedJobID = snapshot.selectedJobID {
+                        self.loadJobDetail(jobID: selectedJobID)
+                    }
                 }
             } catch {
                 guard !Task.isCancelled else {
@@ -701,6 +844,14 @@ final class AppModel: ObservableObject {
 
     func retrySelectedJob() {
         guard let selectedJobID else {
+            return
+        }
+        guard !isWorking else {
+            statusMessage = "Finish the current scan or import first"
+            return
+        }
+        guard selectedJob()?.canRetryImport == true else {
+            statusMessage = "Only failed, cancelled, or partial imports can be retried"
             return
         }
         guard let databaseURL else {
@@ -922,7 +1073,7 @@ final class AppModel: ObservableObject {
     }
 
     private static func defaultSessionLabel(for location: String) -> String {
-        location.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "TODO"
+        location.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Untitled"
     }
 
     nonisolated private static func makeRepositories(databaseURL: URL) throws -> (
@@ -942,22 +1093,40 @@ final class AppModel: ObservableObject {
     ) throws -> (jobs: [ImportJob], files: [JobFileRecord]) {
         let repositories = try makeRepositories(databaseURL: databaseURL)
         return (
-            try repositories.jobRepository.listJobs(limit: 100),
+            try repositories.jobRepository.listImportHistoryJobs(limit: 100),
             try repositories.jobRepository.fetchJobFiles(jobID: jobID)
         )
     }
 
-    nonisolated private static func historySnapshot(
+    nonisolated private static func historyListSnapshot(
         databaseURL: URL,
         selectedJobID: String?
-    ) throws -> (jobs: [ImportJob], selectedJobID: String?, files: [JobFileRecord]) {
+    ) throws -> (jobs: [ImportJob], selectedJobID: String?) {
         let repositories = try makeRepositories(databaseURL: databaseURL)
-        let jobs = try repositories.jobRepository.listJobs(limit: 100).filter(\.isImportHistoryEntry)
+        let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
         let selectedJobID = selectedJobID.flatMap { id in
             jobs.contains { $0.id == id } ? id : nil
         } ?? jobs.first?.id
-        let files = try selectedJobID.map { try repositories.jobRepository.fetchJobFiles(jobID: $0) } ?? []
-        return (jobs, selectedJobID, files)
+        return (jobs, selectedJobID)
+    }
+
+    nonisolated private static func knownImportedFileIDs(
+        files: [JobFileRecord],
+        dedupeRepository: DedupeRepository
+    ) -> Set<Int64> {
+        Set(
+            files.compactMap { file in
+                guard let id = file.id else {
+                    return nil
+                }
+                let fingerprint = FileFingerprint.compute(
+                    size: file.size,
+                    modificationDateString: file.modificationDateString,
+                    identityHint: file.relativePath ?? file.filename
+                )
+                return ((try? dedupeRepository.contains(fingerprint)) == true) ? id : nil
+            }
+        )
     }
 
     private func loadStoredConfiguration() throws {
@@ -989,7 +1158,7 @@ final class AppModel: ObservableObject {
             sourcePath: expanded(cardPath),
             photosPath: expanded(photosPath),
             videosPath: expanded(videosPath),
-            defaultLocation: location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "TODO" : location,
+            defaultLocation: Self.defaultSessionLabel(for: location),
             historyRetention: historyRetention,
             autoPromptEnabled: autoPromptEnabled,
             hasCompletedOnboarding: hasCompletedOnboarding,

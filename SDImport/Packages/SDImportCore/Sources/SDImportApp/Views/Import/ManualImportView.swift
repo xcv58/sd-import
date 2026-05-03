@@ -86,6 +86,7 @@ struct ManualImportView: View {
                     Text("Photos")
                         .foregroundStyle(.secondary)
                     FolderField(
+                        title: "Photos",
                         path: $model.photosPath,
                         validation: model.photosValidation,
                         action: model.choosePhotosFolder
@@ -95,6 +96,7 @@ struct ManualImportView: View {
                     Text("Videos")
                         .foregroundStyle(.secondary)
                     FolderField(
+                        title: "Videos",
                         path: $model.videosPath,
                         validation: model.videosValidation,
                         action: model.chooseVideosFolder
@@ -105,6 +107,7 @@ struct ManualImportView: View {
                     Text("Library")
                         .foregroundStyle(.secondary)
                     FolderField(
+                        title: "Library",
                         path: $model.photosPath,
                         validation: model.photosValidation,
                         action: model.choosePhotosFolder
@@ -115,6 +118,7 @@ struct ManualImportView: View {
                     Text("Footage")
                         .foregroundStyle(.secondary)
                     FolderField(
+                        title: "Footage",
                         path: $model.videosPath,
                         validation: model.videosValidation,
                         action: model.chooseVideosFolder
@@ -123,11 +127,14 @@ struct ManualImportView: View {
             }
 
             GridRow {
-                Text("Location")
+                Text("Shoot name")
                     .foregroundStyle(.secondary)
-                TextField("Location", text: $model.location)
+                TextField("Shoot name", text: $model.location)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 220)
+                    .onSubmit {
+                        model.savePreferences()
+                    }
             }
         }
         .gridColumnAlignment(.leading)
@@ -159,11 +166,11 @@ struct ManualImportView: View {
             Button {
                 model.importCurrentJob()
             } label: {
-                Label("Import Planned Files", systemImage: "square.and.arrow.down")
+                Label(importButtonTitle, systemImage: "square.and.arrow.down")
             }
             .disabled(!model.canImportPlannedFiles)
 
-            if model.isWorking, model.importProgress != nil {
+            if model.isWorking {
                 Button {
                     model.cancelImport()
                 } label: {
@@ -176,6 +183,14 @@ struct ManualImportView: View {
                     .controlSize(.small)
             }
         }
+    }
+
+    private var importButtonTitle: String {
+        let total = model.previewTotals().copyFiles
+        guard total > 0 else {
+            return "Copy Files"
+        }
+        return total == 1 ? "Copy 1 File" : "Copy \(total) Files"
     }
 }
 
@@ -206,6 +221,7 @@ private struct SourceField: View {
                     Image(systemName: "sdcard")
                 }
                 .help("Select mounted card")
+                .accessibilityLabel("Select mounted card")
 
                 Button {
                     model.refreshAvailableSourceVolumes()
@@ -214,6 +230,7 @@ private struct SourceField: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .help("Refresh mounted cards")
+                .accessibilityLabel("Refresh mounted cards")
 
                 Button {
                     model.chooseCardFolder()
@@ -221,6 +238,7 @@ private struct SourceField: View {
                     Image(systemName: "folder")
                 }
                 .help("Choose source folder")
+                .accessibilityLabel("Choose source folder")
             }
 
             if let selectedVolume = model.selectedSourceVolume {
@@ -268,6 +286,7 @@ private extension MountedVolume {
 }
 
 private struct FolderField: View {
+    let title: String
     @Binding var path: String
     let validation: PathValidationResult
     let action: () -> Void
@@ -275,7 +294,7 @@ private struct FolderField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                TextField("Folder path", text: $path)
+                TextField("\(title) folder path", text: $path)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1)
                     .frame(minWidth: 180, maxWidth: 420)
@@ -284,7 +303,8 @@ private struct FolderField: View {
                 } label: {
                     Image(systemName: "folder")
                 }
-                .help("Choose folder")
+                .help("Choose \(title.lowercased()) folder")
+                .accessibilityLabel("Choose \(title.lowercased()) folder")
             }
 
             ValidationStatusView(result: validation)

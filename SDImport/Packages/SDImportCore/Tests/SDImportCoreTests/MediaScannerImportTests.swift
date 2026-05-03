@@ -154,13 +154,13 @@ struct MediaScannerImportTests {
         #expect(finalProgress.throughputBytesPerSecond > 0)
         #expect(
             finalProgress.recentFiles.contains {
-                $0.filename == "IMG_0002.JPG" && $0.status == .copied && $0.detail == "Verified"
+                $0.filename == "IMG_0002.JPG" && $0.status == .copied && $0.detail == "Size checked"
             }
         )
 
         let report = try String(contentsOf: fixture.reportsURL.appendingPathComponent("job-progress.md"))
         #expect(report.contains("## Copied Files"))
-        #expect(report.contains("Verified"))
+        #expect(report.contains("Copied"))
     }
 
     @Test("import checks destination space before copying")
@@ -209,6 +209,40 @@ struct MediaScannerImportTests {
         )
     }
 
+    @Test("import space check ignores files already imported after scan")
+    func importSpaceCheckIgnoresFilesAlreadyImportedAfterScan() throws {
+        let fixture = try Fixture()
+        let source = fixture.mountURL.appendingPathComponent("IMG_DEDUPE.JPG")
+        try fixture.writeFile(source, bytes: Data(repeating: 7, count: 1_024))
+
+        _ = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-first")
+        )
+        _ = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-second")
+        )
+        _ = try fixture.importEngine.importFiles(jobID: "job-first")
+
+        let photosPath = fixture.photosURL.path
+        let constrainedEngine = ImportEngine(
+            jobRepository: fixture.jobRepository,
+            dedupeRepository: fixture.dedupeRepository,
+            destinationSpaceChecker: DestinationSpaceChecker { _ in
+                VolumeCapacity(
+                    volumeID: "tiny",
+                    displayPath: photosPath,
+                    availableBytes: 0,
+                    totalBytes: 1_024
+                )
+            }
+        )
+        let result = try constrainedEngine.importFiles(jobID: "job-second")
+
+        #expect(result.importedFiles == 0)
+        #expect(result.skippedFiles == 1)
+        #expect(result.failedFiles == 0)
+    }
+
     @Test("planned footage backup sidecars import as flat files")
     func plannedFootageBackupSidecarsImport() throws {
         let fixture = try Fixture()
@@ -244,8 +278,32 @@ struct MediaScannerImportTests {
 
         #expect(summary.unsupportedFiles == 1)
         #expect(sidecar.mediaKind == .unsupported)
+        #expect(sidecar.fingerprint != nil)
         #expect(result.importedFiles == 1)
         #expect(FileManager.default.fileExists(atPath: destinationURL.path))
+
+        let rescan = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-sidecar-rescan")
+        )
+        let rescannedFiles = try fixture.jobRepository.fetchJobFiles(jobID: "job-sidecar-rescan")
+        #expect(rescan.knownFiles == 1)
+        #expect(rescannedFiles.first?.decision == .known)
+    }
+
+    @Test("scan cancellation exits before writing a job")
+    func scanCancellationExitsBeforeWritingJob() throws {
+        let fixture = try Fixture()
+        let source = fixture.mountURL.appendingPathComponent("IMG_CANCEL.JPG")
+        try fixture.writeFile(source, bytes: Data("cancel".utf8))
+
+        do {
+            _ = try fixture.scanner.scan(fixture.scanRequest(jobID: "job-cancelled-scan")) {
+                true
+            }
+            Issue.record("Expected scan cancellation")
+        } catch SDImportError.cancelled {
+            #expect(try fixture.jobRepository.fetchJob(id: "job-cancelled-scan") == nil)
+        }
     }
 
     @Test("retry imports failed file and refreshes job totals")

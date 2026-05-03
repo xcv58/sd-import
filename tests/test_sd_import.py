@@ -17,6 +17,30 @@ if str(ROOT) not in sys.path:
 
 import sd_import  # noqa: E402
 from sd_import_modules import common as common_mod  # noqa: E402
+from sd_import_modules import db as db_mod  # noqa: E402
+
+
+class MountFilterTests(unittest.TestCase):
+    def test_ignored_volume_names_include_recovery(self) -> None:
+        self.assertTrue(db_mod.is_ignored_volume_name("Recovery"))
+        self.assertTrue(db_mod.is_ignored_volume_name("Macintosh HD"))
+        self.assertFalse(db_mod.is_ignored_volume_name("EOS_DIGITAL"))
+
+    def test_mount_contains_importable_media_after_many_sidecars(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for index in range(600):
+                (root / f"SIDE{index}.XML").write_text("<xml />")
+            (root / "C0001.MOV").write_bytes(b"video")
+
+            self.assertTrue(db_mod.mount_contains_importable_media(str(root)))
+
+    def test_mount_without_importable_media_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "notes.txt").write_text("not media")
+
+            self.assertFalse(db_mod.mount_contains_importable_media(str(root)))
 
 
 class PruneHistoryTests(unittest.TestCase):
@@ -210,6 +234,38 @@ class MetadataDedupeTests(unittest.TestCase):
         )
         self.assertEqual(summary2["new_files"], 0)
         self.assertEqual(summary2["known_files"], 1)
+
+    def test_retry_refreshes_job_totals_after_failed_file_succeeds(self) -> None:
+        file_path = self.mount / "IMG_RETRY.JPG"
+        file_path.write_bytes(b"retry-image-bytes")
+        fixed_mtime = 1_700_000_000
+        os.utime(file_path, (fixed_mtime, fixed_mtime))
+
+        summary = sd_import.scan_mount(
+            conn=self.conn,
+            mount_path=self.mount,
+            location="TEST",
+            photos_base=self.photos,
+            videos_base=self.videos,
+        )
+        file_path.unlink()
+
+        failed_result = sd_import.import_new_files(self.conn, summary["job_id"])
+        self.assertEqual(failed_result["failed_files"], 1)
+
+        file_path.write_bytes(b"retry-image-bytes")
+        os.utime(file_path, (fixed_mtime, fixed_mtime))
+        retry_result = sd_import.import_new_files(self.conn, summary["job_id"])
+        job = self.conn.execute(
+            "SELECT imported_files, skipped_files, failed_files, status FROM jobs WHERE job_id=?",
+            (summary["job_id"],),
+        ).fetchone()
+
+        self.assertEqual(retry_result["imported_files"], 1)
+        self.assertEqual(job["imported_files"], 1)
+        self.assertEqual(job["skipped_files"], 0)
+        self.assertEqual(job["failed_files"], 0)
+        self.assertEqual(job["status"], "IMPORTED")
 
 
 class CaptureDateTests(unittest.TestCase):

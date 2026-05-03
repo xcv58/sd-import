@@ -16,19 +16,29 @@ enum HistoryJobPresentation {
     }
 
     static func displayName(for job: ImportJob) -> String {
-        if let volumeName = job.volumeName?.trimmingCharacters(in: .whitespacesAndNewlines), !volumeName.isEmpty {
-            return volumeName
-        }
         let location = job.location.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !location.isEmpty, location != "TODO" {
+        if !isPlaceholderName(location) {
             return location
+        }
+        if let volumeName = job.volumeName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !isPlaceholderName(volumeName) {
+            return volumeName
         }
         let mountName = URL(fileURLWithPath: job.mountPath).lastPathComponent
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !mountName.isEmpty {
+        if !isPlaceholderName(mountName) {
             return mountName
         }
         return "Import Job"
+    }
+
+    private static func isPlaceholderName(_ value: String) -> Bool {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(with: Locale(identifier: "en_US_POSIX"))
+        return normalized.isEmpty
+            || normalized == "todo"
+            || normalized == "untitled"
+            || normalized == "no name"
     }
 
     private static func statusTitle(for job: ImportJob) -> String {

@@ -116,8 +116,9 @@ NOTARYTOOL_PROFILE="SDImportNotary" \
 ```
 
 Every public release should include a short, user-facing changelog in the
-release notes. Prefer writing a `RELEASE_NOTES_FILE` with 3-8 high-level bullets
-that explain what changed for users. If no notes file is provided, the release
+release notes. Write `docs/releases/sd-import-$APP_VERSION.md` with 3-8
+high-level bullets that explain what changed for users, or pass
+`RELEASE_NOTES_FILE` explicitly. If no notes file is available, the release
 script generates a basic changelog from commit subjects instead of publishing a
 generic placeholder.
 

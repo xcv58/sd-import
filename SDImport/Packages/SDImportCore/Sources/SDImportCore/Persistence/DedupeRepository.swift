@@ -46,30 +46,11 @@ public struct DedupeRepository {
     @discardableResult
     public func forgetImportedFiles(jobID: String) throws -> Int {
         try pool.write { db in
-            let rows = try Row.fetchAll(
-                db,
-                sql: """
-                SELECT DISTINCT hash, size
-                FROM job_files
-                WHERE job_id = ?
-                    AND hash IS NOT NULL
-                """,
+            try db.execute(
+                sql: "DELETE FROM items WHERE first_job_id = ?",
                 arguments: [jobID]
             )
-
-            var deleted = 0
-            for row in rows {
-                try db.execute(
-                    sql: "DELETE FROM items WHERE hash = ? AND size = ?",
-                    arguments: [
-                        row["hash"] as String,
-                        row["size"] as Int64
-                    ]
-                )
-                deleted += db.changesCount
-            }
-
-            return deleted
+            return db.changesCount
         }
     }
 }

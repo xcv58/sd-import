@@ -99,7 +99,7 @@ public struct ImportPlanBuilder: Sendable {
         let session = sessions.first { $0.date == date }
         let label = session?.label.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             ?? fallbackLocation.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-            ?? "TODO"
+            ?? "Untitled"
 
         let isFootageSidecar = organizationPreset == .footageBackup
             && file.mediaKind == .unsupported

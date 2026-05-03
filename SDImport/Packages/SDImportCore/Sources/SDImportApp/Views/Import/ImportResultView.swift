@@ -40,14 +40,14 @@ struct ImportResultView: View {
         folderSummaries.first?.path
     }
 
-    private var verificationTitle: String {
+    private var copyStatusTitle: String {
         if result.importedFiles == 0 {
             return "No Copies"
         }
-        return result.failedFiles == 0 ? "Verified" : "Copied Files Verified"
+        return result.failedFiles == 0 ? "Copied" : "Copied with Errors"
     }
 
-    private var verificationColor: Color {
+    private var copyStatusColor: Color {
         result.importedFiles > 0 && result.failedFiles == 0 ? .green : .secondary
     }
 
@@ -57,9 +57,9 @@ struct ImportResultView: View {
                 Text("Copy Receipt")
                     .font(.headline)
                 Spacer()
-                Label(verificationTitle, systemImage: result.importedFiles == 0 ? "minus.circle" : "checkmark.seal")
+                Label(copyStatusTitle, systemImage: result.importedFiles == 0 ? "minus.circle" : "checkmark.seal")
                     .font(.caption)
-                    .foregroundStyle(verificationColor)
+                    .foregroundStyle(copyStatusColor)
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], alignment: .leading, spacing: 12) {

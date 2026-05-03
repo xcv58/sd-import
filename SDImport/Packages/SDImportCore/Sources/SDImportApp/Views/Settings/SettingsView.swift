@@ -20,8 +20,20 @@ struct SettingsView: View {
         }
         .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Settings")
+        .onAppear {
+            model.validatePaths()
+        }
         .onDisappear {
             model.savePreferences()
+        }
+        .onChange(of: model.cardPath) {
+            model.sourcePathDidChange()
+        }
+        .onChange(of: model.photosPath) {
+            model.validatePaths()
+        }
+        .onChange(of: model.videosPath) {
+            model.validatePaths()
         }
     }
 
@@ -40,20 +52,23 @@ struct SettingsView: View {
             FolderSettingRow(
                 title: "Card or source",
                 path: $model.cardPath,
+                validation: model.sourceValidation,
                 action: model.chooseCardFolder
             )
             FolderSettingRow(
                 title: "Photos",
                 path: $model.photosPath,
+                validation: model.photosValidation,
                 action: model.choosePhotosFolder
             )
             FolderSettingRow(
                 title: "Videos",
                 path: $model.videosPath,
+                validation: model.videosValidation,
                 action: model.chooseVideosFolder
             )
-            LabeledContent("Location") {
-                TextField("Location", text: $model.location)
+            LabeledContent("Shoot name") {
+                TextField("Shoot name", text: $model.location)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 280)
                     .onSubmit {
@@ -117,23 +132,59 @@ private struct SettingsSection<Content: View>: View {
 private struct FolderSettingRow: View {
     let title: String
     @Binding var path: String
+    let validation: PathValidationResult
     let action: () -> Void
 
     var body: some View {
         LabeledContent(title) {
-            HStack(spacing: 8) {
-                TextField(title, text: $path)
-                    .textFieldStyle(.roundedBorder)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    TextField(title, text: $path)
+                        .textFieldStyle(.roundedBorder)
 
-                Button {
-                    action()
-                } label: {
-                    Image(systemName: "folder")
+                    Button {
+                        action()
+                    } label: {
+                        Image(systemName: "folder")
+                    }
+                    .help("Choose \(title.lowercased())")
+                    .accessibilityLabel("Choose \(title.lowercased())")
                 }
-                .help("Choose \(title.lowercased())")
+
+                PathStatusLine(result: validation)
+
+                if validation.isUsable, let capacityText {
+                    Label(capacityText, systemImage: "internaldrive")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: 520)
         }
+    }
+
+    private var capacityText: String? {
+        guard let capacity = try? DestinationSpaceChecker.fileSystemCapacity(for: path) else {
+            return nil
+        }
+        let available = ByteCountFormatter.string(fromByteCount: capacity.availableBytes, countStyle: .file)
+        if let totalBytes = capacity.totalBytes {
+            let total = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+            return "\(available) available of \(total)"
+        }
+        return "\(available) available"
+    }
+}
+
+private struct PathStatusLine: View {
+    let result: PathValidationResult
+
+    var body: some View {
+        Label(result.message, systemImage: result.isUsable ? "checkmark.circle" : "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(result.isUsable ? Color.secondary : Color.orange)
+            .lineLimit(1)
     }
 }
 

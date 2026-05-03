@@ -5,19 +5,22 @@ struct ImportPreviewView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
+        let rows = model.previewRows()
+        let totals = model.previewTotals(rows: rows)
+
         VStack(alignment: .leading, spacing: 14) {
-            header
+            header(totals: totals)
             controls
             sessionList
-            fileList
+            destinationSummary(rows: rows)
+            fileList(rows: rows, totals: totals)
         }
         .padding(16)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private var header: some View {
-        let totals = model.previewTotals()
-        return HStack(alignment: .firstTextBaseline) {
+    private func header(totals: ImportPreviewTotals) -> some View {
+        HStack(alignment: .firstTextBaseline) {
             Text("Import Preview")
                 .font(.headline)
             Spacer()
@@ -151,17 +154,77 @@ struct ImportPreviewView: View {
         }
     }
 
-    private var fileList: some View {
-        let rows = model.previewRows()
-        return VStack(alignment: .leading, spacing: 8) {
+    @ViewBuilder
+    private func destinationSummary(rows: [ImportPreviewRow]) -> some View {
+        let destinations = model.previewDestinationDirectories(rows: rows)
+        let requirements = model.previewSpaceRequirements(rows: rows)
+        let excludedCount = rows.filter { $0.status == "Excluded" }.count
+
+        if !destinations.isEmpty || !requirements.isEmpty || excludedCount > 0 {
+            VStack(alignment: .leading, spacing: 8) {
+                Divider()
+
+                if !destinations.isEmpty {
+                    Text("Will Copy To")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+
+                    ForEach(destinations.prefix(3)) { destination in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "folder")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 16)
+                                Text(destination.title)
+                                    .lineLimit(1)
+                                Text("\(destination.fileCount) files, \(byteString(destination.byteCount))")
+                                    .foregroundStyle(.secondary)
+                                Spacer(minLength: 0)
+                            }
+                            Text(destination.path)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                        }
+                        .font(.caption)
+                    }
+
+                    if destinations.count > 3 {
+                        Text("\(destinations.count - 3) more destinations")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if !requirements.isEmpty {
+                    ForEach(requirements) { requirement in
+                        Label(spaceText(for: requirement), systemImage: requirement.isSatisfied ? "checkmark.circle" : "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(requirement.isSatisfied ? Color.secondary : Color.orange)
+                    }
+                }
+
+                if excludedCount > 0 {
+                    Label("\(excludedCount) supported files are excluded by the current import selection", systemImage: "minus.circle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
+    }
+
+    private func fileList(rows: [ImportPreviewRow], totals: ImportPreviewTotals) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             Divider()
             HStack {
                 Text("Files")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 Spacer()
-                if model.previewTotals().skippedFiles > 0 {
-                    Text("\(model.previewTotals().skippedFiles) skipped")
+                if totals.skippedFiles > 0 {
+                    Text("\(totals.skippedFiles) skipped")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -189,10 +252,26 @@ struct ImportPreviewView: View {
     private func byteString(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
+
+    private func spaceText(for requirement: ImportPreviewSpaceRequirement) -> String {
+        let required = byteString(requirement.requiredBytes)
+        let available = byteString(requirement.availableBytes)
+        if requirement.isSatisfied {
+            return "\(required) needed, \(available) available at \(requirement.displayPath)"
+        }
+        return "Not enough space: \(required) needed, \(available) available at \(requirement.displayPath)"
+    }
 }
 
 private struct ImportPreviewRowView: View {
     let row: ImportPreviewRow
+
+    private var destinationText: String {
+        if let destinationPath = row.destinationPath {
+            return destinationPath
+        }
+        return row.willCopy ? "Destination pending" : row.status
+    }
 
     var body: some View {
         Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
@@ -211,10 +290,11 @@ private struct ImportPreviewRowView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 58, alignment: .leading)
 
-                Text(row.destinationPath ?? row.sourcePath)
+                Text(destinationText)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .foregroundStyle(row.willCopy ? .primary : .secondary)
+                    .help(row.destinationPath ?? row.sourcePath)
             }
         }
         .font(.callout)

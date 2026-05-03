@@ -11,6 +11,31 @@ from typing import Any, Dict, List, Optional
 
 from .common import detect_diskutil_binary, ensure_dir, now_local_iso
 
+IMPORTABLE_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".heif",
+    ".heic",
+    ".dng",
+    ".raw",
+    ".cr2",
+    ".nef",
+    ".arw",
+    ".raf",
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".mkv",
+}
+
+IGNORED_VOLUME_FRAGMENTS = (
+    "time machine",
+    "backup",
+    "recovery",
+    "preboot",
+    "macintosh hd",
+)
+
 
 def connect_db(db_path: Path) -> sqlite3.Connection:
     ensure_dir(db_path.parent)
@@ -94,6 +119,29 @@ def get_diskutil_info(path: str) -> Dict[str, Any]:
         return {}
 
 
+def is_ignored_volume_name(volume_name: str) -> bool:
+    lowercased = volume_name.lower()
+    return any(fragment in lowercased for fragment in IGNORED_VOLUME_FRAGMENTS)
+
+
+def mount_contains_importable_media(mount_path: str, max_files: int = 20_000) -> bool:
+    inspected_files = 0
+    try:
+        for path in Path(mount_path).rglob("*"):
+            if path.name.startswith("."):
+                continue
+            if not path.is_file():
+                continue
+            inspected_files += 1
+            if path.suffix.lower() in IMPORTABLE_EXTENSIONS:
+                return True
+            if inspected_files >= max_files:
+                return False
+    except OSError:
+        return False
+    return False
+
+
 def discover_removable_mounts(ignore_volume_regex: Optional[str]) -> List[Dict[str, Any]]:
     mounts: List[Dict[str, Any]] = []
     diskutil_bin = detect_diskutil_binary()
@@ -138,7 +186,11 @@ def discover_removable_mounts(ignore_volume_regex: Optional[str]) -> List[Dict[s
                 continue
 
             volume_name = info.get("VolumeName") or Path(mount_path).name
+            if is_ignored_volume_name(str(volume_name)):
+                continue
             if ignore_re and ignore_re.search(volume_name):
+                continue
+            if not mount_contains_importable_media(mount_path):
                 continue
             if mount_path in seen_mount_paths:
                 continue

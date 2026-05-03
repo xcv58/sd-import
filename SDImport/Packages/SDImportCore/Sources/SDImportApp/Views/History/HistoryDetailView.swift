@@ -79,6 +79,7 @@ struct HistoryDetailView: View {
             } label: {
                 Label("Retry", systemImage: "arrow.counterclockwise")
             }
+            .disabled(model.isWorking || !job.canRetryImport)
             Button {
                 model.copySummary(for: job)
             } label: {
@@ -101,14 +102,14 @@ struct HistoryDetailView: View {
             } label: {
                 Label("Forget Files", systemImage: "trash")
             }
-            .disabled(files.allSatisfy { $0.fingerprint == nil })
+            .disabled(model.isWorking || (job.importedFiles == 0 && files.allSatisfy { $0.copyStatus != .copied }))
             .alert("Forget imported files?", isPresented: $isShowingForgetConfirmation) {
                 Button("Forget Files", role: .destructive) {
                     model.forgetImportedFiles(for: job)
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("SD Import will keep the copied files and job history, but files from this import can be imported again for another destination.")
+                Text("SD Import will keep the copied files and job history. Files first imported by this job can be imported again for another destination.")
             }
         }
     }
@@ -244,6 +245,7 @@ private struct HistoryFileRow: View {
                 Label("Reveal", systemImage: "arrow.up.right.square")
             }
             .disabled(revealPath == nil)
+            .accessibilityLabel("Reveal \(file.filename)")
         }
         .padding(.vertical, 6)
     }
@@ -277,7 +279,7 @@ private struct HistoryFileRow: View {
         case .pending:
             return "Pending"
         case .copied:
-            return "Verified"
+            return "Copied"
         case .skipped:
             return "Skipped"
         case .failed:

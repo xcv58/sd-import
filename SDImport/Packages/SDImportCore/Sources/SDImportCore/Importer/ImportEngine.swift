@@ -53,7 +53,24 @@ public struct ImportEngine {
         var recentFiles: [ImportProgressFileEvent] = []
         var progressEventSequence = 0
 
-        let spaceCheck = try destinationSpaceChecker.check(files: files)
+        let filesNeedingDestinationSpace = try files.filter { file in
+            let fingerprint = fingerprint(for: file)
+            if try dedupeRepository.contains(fingerprint) {
+                return false
+            }
+            guard let plannedDestinationPath = file.plannedDestinationPath else {
+                return true
+            }
+            let candidate = URL(fileURLWithPath: plannedDestinationPath, isDirectory: false)
+            switch conflictResolver.resolveDestination(candidate: candidate, expectedFingerprint: fingerprint) {
+            case .skip:
+                return false
+            case .copy:
+                return true
+            }
+        }
+
+        let spaceCheck = try destinationSpaceChecker.check(files: filesNeedingDestinationSpace)
         if let failure = spaceCheck.failures.first {
             throw SDImportError.insufficientDestinationSpace(
                 path: failure.displayPath,
@@ -180,17 +197,7 @@ public struct ImportEngine {
                 continue
             }
 
-            let fingerprint = FileFingerprint(
-                size: file.size,
-                modificationDate: modificationDate(from: file.modificationDateString) ?? Date(timeIntervalSince1970: 0),
-                modificationDateString: file.modificationDateString,
-                identityHint: file.relativePath ?? file.filename,
-                value: FileFingerprint.compute(
-                    size: file.size,
-                    modificationDateString: file.modificationDateString,
-                    identityHint: file.relativePath ?? file.filename
-                ).value
-            )
+            let fingerprint = fingerprint(for: file)
 
             if try dedupeRepository.contains(fingerprint) {
                 skippedFiles += 1
@@ -277,7 +284,7 @@ public struct ImportEngine {
                     recordFileEvent(
                         file: file,
                         status: .copied,
-                        detail: "Verified",
+                        detail: "Size checked",
                         destinationPath: destinationURL.path
                     )
                 } catch SDImportError.cancelled {
@@ -332,6 +339,20 @@ public struct ImportEngine {
         formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         return formatter.date(from: string)
+    }
+
+    private func fingerprint(for file: JobFileRecord) -> FileFingerprint {
+        FileFingerprint(
+            size: file.size,
+            modificationDate: modificationDate(from: file.modificationDateString) ?? Date(timeIntervalSince1970: 0),
+            modificationDateString: file.modificationDateString,
+            identityHint: file.relativePath ?? file.filename,
+            value: FileFingerprint.compute(
+                size: file.size,
+                modificationDateString: file.modificationDateString,
+                identityHint: file.relativePath ?? file.filename
+            ).value
+        )
     }
 
     private func rewriteReportIfPossible(jobID: String) {
