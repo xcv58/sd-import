@@ -120,12 +120,23 @@ Footage Backup:
 <videosRoot>/<YYYY-MM-DD> <session label>/Card <volume name>/<filename>
 ```
 
+One Shoot Folder grouping uses one date-range folder for the selected import
+instead of one folder per capture date. If the media spans one day, the folder
+uses `<YYYY-MM-DD> <session label>`. If the media spans multiple days, the
+folder uses `<YYYY-MM-DD> to <YYYY-MM-DD> <session label>`.
+
+```text
+<photosRoot>/<YYYY-MM-DD> to <YYYY-MM-DD> <session label>/<filename>
+<videosRoot>/<YYYY-MM-DD> to <YYYY-MM-DD> <session label>/<filename>
+```
+
 Rules:
 
 - Empty location labels are treated as `Untitled`.
 - Destination roots are user-selected folders.
 - The job stores the destination roots used at scan/import time.
 - Footage Backup uses flat files under the generated card folder for videos and selected sidecar files.
+- One Shoot Folder grouping flattens selected files directly under the generated shoot folder.
 
 ## Decisions
 

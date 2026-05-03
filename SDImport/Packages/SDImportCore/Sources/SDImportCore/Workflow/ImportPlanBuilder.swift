@@ -54,6 +54,7 @@ public struct ImportFilePlan: Sendable {
 public struct ImportPlanBuilder: Sendable {
     public let sessions: [ImportPlanSession]
     public let organizationPreset: ImportOrganizationPreset
+    public let folderGrouping: ImportFolderGrouping
     public let roots: DestinationRoots
     public let fallbackLocation: String
     public let volumeName: String?
@@ -61,22 +62,39 @@ public struct ImportPlanBuilder: Sendable {
     public init(
         sessions: [ImportPlanSession],
         organizationPreset: ImportOrganizationPreset,
+        folderGrouping: ImportFolderGrouping = .byDay,
         roots: DestinationRoots,
         fallbackLocation: String,
         volumeName: String?
     ) {
         self.sessions = sessions
         self.organizationPreset = organizationPreset
+        self.folderGrouping = folderGrouping
         self.roots = roots
         self.fallbackLocation = fallbackLocation
         self.volumeName = volumeName
     }
 
     public func updates(files: [JobFileRecord]) -> [JobFilePlanUpdate] {
-        files.compactMap { plan(file: $0).update }
+        plans(files: files).compactMap(\.update)
+    }
+
+    public func plans(files: [JobFileRecord]) -> [ImportFilePlan] {
+        var reservedDestinationPaths: Set<String> = []
+        return files.map {
+            plan(file: $0, reservedDestinationPaths: &reservedDestinationPaths)
+        }
     }
 
     public func plan(file: JobFileRecord) -> ImportFilePlan {
+        var reservedDestinationPaths: Set<String> = []
+        return plan(file: file, reservedDestinationPaths: &reservedDestinationPaths)
+    }
+
+    private func plan(
+        file: JobFileRecord,
+        reservedDestinationPaths: inout Set<String>
+    ) -> ImportFilePlan {
         guard let id = file.id else {
             return ImportFilePlan(
                 update: nil,
@@ -97,9 +115,8 @@ public struct ImportPlanBuilder: Sendable {
 
         let date = Self.sessionDate(for: file)
         let session = sessions.first { $0.date == date }
-        let label = session?.label.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-            ?? fallbackLocation.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-            ?? "Untitled"
+        let label = folderLabel(for: session)
+        let folderDate = folderDate(for: date)
 
         let isFootageSidecar = organizationPreset == .footageBackup
             && file.mediaKind == .unsupported
@@ -167,10 +184,11 @@ public struct ImportPlanBuilder: Sendable {
         guard let destinationURL = planner.destinationURL(
             filename: file.filename,
             mediaKind: file.mediaKind,
-            captureDate: date,
+            captureDate: folderDate,
             sessionLabel: label,
             roots: roots,
             organizationPreset: organizationPreset,
+            folderGrouping: folderGrouping,
             relativePath: file.relativePath,
             volumeName: volumeName
         ) else {
@@ -211,6 +229,11 @@ public struct ImportPlanBuilder: Sendable {
                 destinationPath: destinationURL.path
             )
         case .copy(let resolvedURL):
+            let batchResolution = reserveUniqueBatchDestination(
+                resolvedURL,
+                reservedDestinationPaths: &reservedDestinationPaths
+            )
+            let resolvedURL = batchResolution.url
             let isConflict = resolvedURL != destinationURL
             let copyStatus = file.mediaKind == .unsupported ? "Sidecar" : "Will copy"
             return ImportFilePlan(
@@ -220,7 +243,7 @@ public struct ImportPlanBuilder: Sendable {
                     destinationDirectory: resolvedURL.deletingLastPathComponent().path,
                     plannedDestinationPath: resolvedURL.path,
                     copyStatus: .pending,
-                    error: isConflict ? "destination file exists with different content" : nil
+                    error: batchResolution.reason ?? (isConflict ? "destination file exists with different content" : nil)
                 ),
                 willCopy: true,
                 status: isConflict ? "Rename" : copyStatus,
@@ -229,11 +252,76 @@ public struct ImportPlanBuilder: Sendable {
         }
     }
 
+    private func folderLabel(for session: ImportPlanSession?) -> String {
+        if folderGrouping == .oneShootFolder {
+            return fallbackLocation.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                ?? sessions.first?.label.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                ?? "Untitled"
+        }
+
+        return session?.label.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            ?? fallbackLocation.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            ?? "Untitled"
+    }
+
+    private func folderDate(for date: String) -> String {
+        switch folderGrouping {
+        case .byDay:
+            return date
+        case .oneShootFolder:
+            let dateRange = Self.dateRangeTitle(for: sessions.map(\.date))
+            return dateRange == "Undated" ? date : dateRange
+        }
+    }
+
+    private func reserveUniqueBatchDestination(
+        _ url: URL,
+        reservedDestinationPaths: inout Set<String>
+    ) -> (url: URL, reason: String?) {
+        let key = reservedKey(for: url)
+        if !reservedDestinationPaths.contains(key) {
+            reservedDestinationPaths.insert(key)
+            return (url, nil)
+        }
+
+        let directory = url.deletingLastPathComponent()
+        let stem = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+        var counter = 1
+
+        while true {
+            let suffix = ext.isEmpty ? "" : ".\(ext)"
+            let next = directory.appendingPathComponent("\(stem)-copy-\(counter)\(suffix)", isDirectory: false)
+            let nextKey = reservedKey(for: next)
+            if !reservedDestinationPaths.contains(nextKey)
+                && !FileManager.default.fileExists(atPath: next.path) {
+                reservedDestinationPaths.insert(nextKey)
+                return (next, "destination file name repeats in this import")
+            }
+            counter += 1
+        }
+    }
+
+    private func reservedKey(for url: URL) -> String {
+        url.standardizedFileURL.path.lowercased(with: Locale(identifier: "en_US_POSIX"))
+    }
+
     public static func sessionDate(for file: JobFileRecord) -> String {
         if let captureDate = file.captureDate, !captureDate.isEmpty {
             return captureDate
         }
         return String(file.modificationDateString.prefix(10))
+    }
+
+    public static func dateRangeTitle(for dates: [String]) -> String {
+        let sortedDates = Array(Set(dates.filter { !$0.isEmpty })).sorted()
+        guard let first = sortedDates.first else {
+            return "Undated"
+        }
+        guard let last = sortedDates.last, last != first else {
+            return first
+        }
+        return "\(first) to \(last)"
     }
 }
 

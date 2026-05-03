@@ -57,4 +57,131 @@ struct ImportPlanBuilderTests {
         #expect(plan.destinationPath == originalDestination)
         #expect(builder.updates(files: [file]).isEmpty)
     }
+
+    @Test("one shoot folder uses a date range and flat destinations")
+    func oneShootFolderUsesDateRangeAndFlatDestinations() throws {
+        let files = [
+            jobFile(
+                id: 1,
+                filename: "IMG_0001.JPG",
+                relativePath: "DCIM/100/IMG_0001.JPG",
+                mediaKind: .photo,
+                captureDate: "2026-05-02"
+            ),
+            jobFile(
+                id: 2,
+                filename: "C0001.MP4",
+                relativePath: "PRIVATE/M4ROOT/CLIP/C0001.MP4",
+                mediaKind: .video,
+                captureDate: "2026-05-04"
+            )
+        ]
+        let builder = ImportPlanBuilder(
+            sessions: [
+                session(date: "2026-05-02", photoCount: 1, videoCount: 0),
+                session(date: "2026-05-04", photoCount: 0, videoCount: 1)
+            ],
+            organizationPreset: .shootSessionsByDate,
+            folderGrouping: .oneShootFolder,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "Launch Weekend",
+            volumeName: "CARD"
+        )
+
+        let plans = builder.plans(files: files)
+
+        #expect(plans.map(\.destinationPath) == [
+            "/Library/2026-05-02 to 2026-05-04 Launch Weekend/IMG_0001.JPG",
+            "/Library/2026-05-02 to 2026-05-04 Launch Weekend/C0001.MP4"
+        ])
+    }
+
+    @Test("one shoot folder renames duplicate filenames within the same import")
+    func oneShootFolderRenamesDuplicateFilenamesInBatch() throws {
+        let files = [
+            jobFile(
+                id: 1,
+                filename: "C0001.MP4",
+                relativePath: "DAY1/C0001.MP4",
+                mediaKind: .video,
+                captureDate: "2026-05-02"
+            ),
+            jobFile(
+                id: 2,
+                filename: "C0001.MP4",
+                relativePath: "DAY2/C0001.MP4",
+                mediaKind: .video,
+                captureDate: "2026-05-03"
+            )
+        ]
+        let builder = ImportPlanBuilder(
+            sessions: [
+                session(date: "2026-05-02", photoCount: 0, videoCount: 1),
+                session(date: "2026-05-03", photoCount: 0, videoCount: 1)
+            ],
+            organizationPreset: .footageBackup,
+            folderGrouping: .oneShootFolder,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "Race Weekend",
+            volumeName: "CARD"
+        )
+
+        let plans = builder.plans(files: files)
+
+        #expect(plans.map(\.destinationPath) == [
+            "/Footage/2026-05-02 to 2026-05-03 Race Weekend/C0001.MP4",
+            "/Footage/2026-05-02 to 2026-05-03 Race Weekend/C0001-copy-1.MP4"
+        ])
+        #expect(plans[1].status == "Rename")
+        #expect(plans[1].update?.error == "destination file name repeats in this import")
+    }
+
+    private func session(
+        date: String,
+        photoCount: Int,
+        videoCount: Int
+    ) -> ImportPlanSession {
+        ImportPlanSession(
+            date: date,
+            label: "Ignored Per-Day Label",
+            photoCount: photoCount,
+            videoCount: videoCount,
+            unsupportedCount: 0,
+            includePhotos: true,
+            includeVideos: true,
+            includeSidecars: false
+        )
+    }
+
+    private func jobFile(
+        id: Int64,
+        filename: String,
+        relativePath: String,
+        mediaKind: MediaKind,
+        captureDate: String
+    ) -> JobFileRecord {
+        JobFileRecord(
+            id: id,
+            jobID: "job-1",
+            sourcePath: "/Volumes/CARD/\(relativePath)",
+            relativePath: relativePath,
+            filename: filename,
+            ext: ".\(URL(fileURLWithPath: filename).pathExtension.lowercased())",
+            size: 1024,
+            modificationDateString: "\(captureDate)T10:00:00",
+            mediaKind: mediaKind,
+            fingerprint: "v2:\(id)",
+            captureDate: captureDate,
+            decision: .new,
+            destinationDirectory: nil,
+            plannedDestinationPath: nil,
+            copyStatus: .pending
+        )
+    }
 }

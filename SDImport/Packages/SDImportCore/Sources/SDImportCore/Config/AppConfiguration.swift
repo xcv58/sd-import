@@ -11,6 +11,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
     public var autoPromptEnabled: Bool
     public var hasCompletedOnboarding: Bool
     public var lastWorkflowProfile: ImportWorkflowProfile
+    public var lastFolderGrouping: ImportFolderGrouping
     public var workflowProfilesByVolume: [String: ImportWorkflowProfile]
 
     public init(
@@ -22,6 +23,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         autoPromptEnabled: Bool = false,
         hasCompletedOnboarding: Bool = false,
         lastWorkflowProfile: ImportWorkflowProfile = .mixedShootSession,
+        lastFolderGrouping: ImportFolderGrouping = .byDay,
         workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
     ) {
         self.sourcePath = sourcePath
@@ -32,6 +34,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         self.autoPromptEnabled = autoPromptEnabled
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.lastWorkflowProfile = lastWorkflowProfile
+        self.lastFolderGrouping = lastFolderGrouping
         self.workflowProfilesByVolume = workflowProfilesByVolume
     }
 
@@ -53,6 +56,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         case autoPromptEnabled
         case hasCompletedOnboarding
         case lastWorkflowProfile
+        case lastFolderGrouping
         case workflowProfilesByVolume
     }
 
@@ -69,6 +73,10 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
             ImportWorkflowProfile.self,
             forKey: .lastWorkflowProfile
         ) ?? .mixedShootSession
+        lastFolderGrouping = try container.decodeIfPresent(
+            ImportFolderGrouping.self,
+            forKey: .lastFolderGrouping
+        ) ?? .byDay
         workflowProfilesByVolume = try container.decodeIfPresent(
             [String: ImportWorkflowProfile].self,
             forKey: .workflowProfilesByVolume

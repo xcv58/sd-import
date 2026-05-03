@@ -18,6 +18,7 @@ struct SettingsRepositoryTests {
             autoPromptEnabled: true,
             hasCompletedOnboarding: true,
             lastWorkflowProfile: .footageBackup,
+            lastFolderGrouping: .oneShootFolder,
             workflowProfilesByVolume: [
                 "uuid:card": .photoImport
             ]
@@ -44,6 +45,7 @@ struct SettingsRepositoryTests {
         let configuration = try JSONDecoder().decode(AppConfiguration.self, from: Data(json.utf8))
 
         #expect(configuration.lastWorkflowProfile == .mixedShootSession)
+        #expect(configuration.lastFolderGrouping == .byDay)
         #expect(configuration.workflowProfilesByVolume.isEmpty)
     }
 

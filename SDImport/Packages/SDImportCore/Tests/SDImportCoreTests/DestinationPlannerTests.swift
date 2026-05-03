@@ -80,6 +80,39 @@ struct DestinationPlannerTests {
         #expect(videoURL?.path == "/tmp/library/2026-04-29 Gardens by the Bay/Video/C0001.MP4")
     }
 
+    @Test("plans one shoot folders as flat destinations")
+    func plansOneShootFolders() {
+        let roots = DestinationRoots(
+            photosURL: URL(fileURLWithPath: "/tmp/library", isDirectory: true),
+            videosURL: URL(fileURLWithPath: "/tmp/footage", isDirectory: true)
+        )
+        let planner = DestinationPlanner()
+
+        let photoURL = planner.destinationURL(
+            filename: "IMG_0001.JPG",
+            mediaKind: .photo,
+            captureDate: "2026-04-29 to 2026-04-30",
+            sessionLabel: "Gardens by the Bay",
+            roots: roots,
+            organizationPreset: .shootSessionsByDate,
+            folderGrouping: .oneShootFolder
+        )
+        let videoURL = planner.destinationURL(
+            filename: "C0001.MP4",
+            mediaKind: .video,
+            captureDate: "2026-04-29 to 2026-04-30",
+            sessionLabel: "Singapore Trip",
+            roots: roots,
+            organizationPreset: .footageBackup,
+            folderGrouping: .oneShootFolder,
+            relativePath: "PRIVATE/M4ROOT/CLIP/C0001.MP4",
+            volumeName: "Untitled"
+        )
+
+        #expect(photoURL?.path == "/tmp/library/2026-04-29 to 2026-04-30 Gardens by the Bay/IMG_0001.JPG")
+        #expect(videoURL?.path == "/tmp/footage/2026-04-29 to 2026-04-30 Singapore Trip/C0001.MP4")
+    }
+
     @Test("plans flat footage backup by card")
     func plansFootageBackup() {
         let roots = DestinationRoots(

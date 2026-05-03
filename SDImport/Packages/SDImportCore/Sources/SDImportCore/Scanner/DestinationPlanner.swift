@@ -42,11 +42,24 @@ public struct DestinationPlanner: Sendable {
         sessionLabel: String,
         roots: DestinationRoots,
         organizationPreset: ImportOrganizationPreset,
+        folderGrouping: ImportFolderGrouping = .byDay,
         relativePath: String? = nil,
         volumeName: String? = nil
     ) -> URL? {
+        let folderName = "\(captureDate) \(safeComponent(sessionLabel, fallback: "Untitled"))"
+
         switch organizationPreset {
         case .classicDatedFolders:
+            if folderGrouping == .oneShootFolder {
+                guard mediaKind != .unsupported else {
+                    return nil
+                }
+                let root = mediaKind == .photo ? roots.photosURL : roots.videosURL
+                return root
+                    .appendingPathComponent(folderName, isDirectory: true)
+                    .appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
+            }
+
             return destinationURL(
                 filename: filename,
                 mediaKind: mediaKind,
@@ -60,7 +73,11 @@ public struct DestinationPlanner: Sendable {
                 return nil
             }
             let sessionDirectory = roots.photosURL
-                .appendingPathComponent("\(captureDate) \(safeComponent(sessionLabel, fallback: "Untitled"))", isDirectory: true)
+                .appendingPathComponent(folderName, isDirectory: true)
+            if folderGrouping == .oneShootFolder {
+                return sessionDirectory.appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
+            }
+
             let mediaDirectory = mediaKind == .photo ? "Photos" : "Video"
             return sessionDirectory
                 .appendingPathComponent(mediaDirectory, isDirectory: true)
@@ -72,8 +89,13 @@ public struct DestinationPlanner: Sendable {
             }
             let sessionDirectory = roots.videosURL
                 .appendingPathComponent("\(captureDate) \(safeComponent(sessionLabel, fallback: "Footage"))", isDirectory: true)
+            if folderGrouping == .oneShootFolder {
+                return sessionDirectory.appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
+            }
+
+            let cardDirectory = sessionDirectory
                 .appendingPathComponent("Card \(safeComponent(volumeName, fallback: "Unknown"))", isDirectory: true)
-            return sessionDirectory.appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
+            return cardDirectory.appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
         }
     }
 

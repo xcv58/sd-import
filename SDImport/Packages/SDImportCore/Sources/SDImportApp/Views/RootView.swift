@@ -9,14 +9,19 @@ struct RootView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            List(selection: $model.selection) {
-                ForEach(SidebarItem.allCases) { item in
-                    SidebarRow(item: item)
-                        .tag(item)
-                        .listRowInsets(EdgeInsets(top: 2, leading: 18, bottom: 2, trailing: 10))
+            VStack(spacing: 0) {
+                List(selection: $model.selection) {
+                    ForEach(SidebarItem.allCases) { item in
+                        SidebarRow(item: item)
+                            .tag(item)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 18, bottom: 2, trailing: 10))
+                            .help("\(item.title), \(item.shortcutHint)")
+                    }
                 }
+                .listStyle(.sidebar)
+
+                SidebarShortcutFooter()
             }
-            .listStyle(.sidebar)
             .safeAreaPadding(.leading, 8)
             .frame(minWidth: 220, idealWidth: 220, maxWidth: 240)
             .navigationSplitViewColumnWidth(min: 220, ideal: 220, max: 240)
@@ -69,8 +74,49 @@ private struct SidebarRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 0)
+            Text(item.shortcutHint)
+                .font(.caption2.monospaced())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .accessibilityHidden(true)
         }
         .frame(minHeight: 24)
         .contentShape(Rectangle())
+    }
+}
+
+private struct SidebarShortcutFooter: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            ShortcutHint(text: "Ctrl Tab")
+            Text("Next")
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            ShortcutHint(text: "Cmd Opt S")
+            Text("Sidebar")
+                .lineLimit(1)
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Control Tab next panel. Command Option S toggles the sidebar.")
+    }
+}
+
+private struct ShortcutHint: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.monospaced())
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+            .accessibilityHidden(true)
     }
 }

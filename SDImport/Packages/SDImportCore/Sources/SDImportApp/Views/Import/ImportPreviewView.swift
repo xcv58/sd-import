@@ -42,6 +42,21 @@ struct ImportPreviewView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+
+                GridRow {
+                    Text("Folder")
+                        .foregroundStyle(.secondary)
+                    Picker("Folder", selection: $model.folderGrouping) {
+                        ForEach(ImportFolderGrouping.allCases) { grouping in
+                            Text(grouping.displayTitle).tag(grouping)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 260)
+                    .onChange(of: model.folderGrouping) {
+                        model.folderGroupingDidChange()
+                    }
+                }
             }
 
             if let mediaContent = model.mediaContentProfile {
@@ -101,55 +116,138 @@ struct ImportPreviewView: View {
 
     private var sessionList: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach($model.previewSessions) { $session in
-                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 6) {
-                    GridRow {
-                        Text(session.date)
-                            .font(.system(.body, design: .monospaced))
-                            .frame(width: 96, alignment: .leading)
+            if model.folderGrouping == .oneShootFolder {
+                shootFolderSessionRow
+            } else {
+                ForEach($model.previewSessions) { $session in
+                    Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 6) {
+                        GridRow {
+                            Text(session.date)
+                                .font(.system(.body, design: .monospaced))
+                                .frame(width: 96, alignment: .leading)
 
-                        TextField("Label", text: $session.label)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(minWidth: 180, maxWidth: 300)
+                            TextField("Label", text: $session.label)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(minWidth: 180, maxWidth: 300)
 
-                        if model.workflowProfile == .mixedShootSession, session.photoCount > 0 {
-                            Toggle("Photos \(session.photoCount)", isOn: $session.includePhotos)
-                                .frame(width: 110, alignment: .leading)
-                        } else if session.photoCount > 0 {
-                            Label(
-                                model.workflowProfile == .photoImport
-                                    ? "Photos \(session.photoCount)"
-                                    : "Photos \(session.photoCount) excluded",
-                                systemImage: model.workflowProfile == .photoImport ? "photo" : "minus.circle"
+                            sessionMediaControls(session: session, includePhotos: $session.includePhotos, includeVideos: $session.includeVideos)
+
+                            sessionSidecarControl(
+                                unsupportedCount: session.unsupportedCount,
+                                includeSidecars: $session.includeSidecars
                             )
-                            .foregroundStyle(model.workflowProfile == .photoImport ? .primary : .secondary)
-                            .frame(width: 160, alignment: .leading)
-                        }
-
-                        if model.workflowProfile == .mixedShootSession, session.videoCount > 0 {
-                            Toggle("Videos \(session.videoCount)", isOn: $session.includeVideos)
-                                .frame(width: 110, alignment: .leading)
-                        } else if session.videoCount > 0 {
-                            Label(
-                                model.workflowProfile == .footageBackup
-                                    ? "Videos \(session.videoCount)"
-                                    : "Videos \(session.videoCount) excluded",
-                                systemImage: model.workflowProfile == .footageBackup ? "video" : "minus.circle"
-                            )
-                            .foregroundStyle(model.workflowProfile == .footageBackup ? .primary : .secondary)
-                            .frame(width: 160, alignment: .leading)
-                        }
-
-                        if model.organizationPreset == .footageBackup, session.unsupportedCount > 0 {
-                            Toggle("Keep sidecars \(session.unsupportedCount)", isOn: $session.includeSidecars)
-                                .frame(width: 180, alignment: .leading)
-                                .help("Includes non-photo/video files from the card, such as metadata, thumbnails, proxies, or camera support files.")
-                        } else if session.unsupportedCount > 0 {
-                            Text("\(session.unsupportedCount) non-media files skipped")
-                                .foregroundStyle(.secondary)
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private var shootFolderSessionRow: some View {
+        let photoCount = model.previewSessions.reduce(0) { $0 + $1.photoCount }
+        let videoCount = model.previewSessions.reduce(0) { $0 + $1.videoCount }
+        let unsupportedCount = model.previewSessions.reduce(0) { $0 + $1.unsupportedCount }
+        let dates = model.previewSessions.map(\.date)
+
+        return Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 6) {
+            GridRow {
+                Text(ImportPlanBuilder.dateRangeTitle(for: dates))
+                    .font(.system(.body, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(ImportPlanBuilder.dateRangeTitle(for: dates))
+                    .frame(width: 184, alignment: .leading)
+
+                TextField("Shoot name", text: $model.location)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(minWidth: 180, maxWidth: 300)
+
+                sessionMediaControls(
+                    photoCount: photoCount,
+                    videoCount: videoCount,
+                    includePhotos: allSessionsBinding(\.includePhotos),
+                    includeVideos: allSessionsBinding(\.includeVideos)
+                )
+
+                sessionSidecarControl(
+                    unsupportedCount: unsupportedCount,
+                    includeSidecars: allSessionsBinding(\.includeSidecars)
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sessionMediaControls(
+        session: ImportPreviewSession,
+        includePhotos: Binding<Bool>,
+        includeVideos: Binding<Bool>
+    ) -> some View {
+        sessionMediaControls(
+            photoCount: session.photoCount,
+            videoCount: session.videoCount,
+            includePhotos: includePhotos,
+            includeVideos: includeVideos
+        )
+    }
+
+    @ViewBuilder
+    private func sessionMediaControls(
+        photoCount: Int,
+        videoCount: Int,
+        includePhotos: Binding<Bool>,
+        includeVideos: Binding<Bool>
+    ) -> some View {
+        if model.workflowProfile == .mixedShootSession, photoCount > 0 {
+            Toggle("Photos \(photoCount)", isOn: includePhotos)
+                .frame(width: 110, alignment: .leading)
+        } else if photoCount > 0 {
+            Label(
+                model.workflowProfile == .photoImport
+                    ? "Photos \(photoCount)"
+                    : "Photos \(photoCount) excluded",
+                systemImage: model.workflowProfile == .photoImport ? "photo" : "minus.circle"
+            )
+            .foregroundStyle(model.workflowProfile == .photoImport ? .primary : .secondary)
+            .frame(width: 160, alignment: .leading)
+        }
+
+        if model.workflowProfile == .mixedShootSession, videoCount > 0 {
+            Toggle("Videos \(videoCount)", isOn: includeVideos)
+                .frame(width: 110, alignment: .leading)
+        } else if videoCount > 0 {
+            Label(
+                model.workflowProfile == .footageBackup
+                    ? "Videos \(videoCount)"
+                    : "Videos \(videoCount) excluded",
+                systemImage: model.workflowProfile == .footageBackup ? "video" : "minus.circle"
+            )
+            .foregroundStyle(model.workflowProfile == .footageBackup ? .primary : .secondary)
+            .frame(width: 160, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func sessionSidecarControl(
+        unsupportedCount: Int,
+        includeSidecars: Binding<Bool>
+    ) -> some View {
+        if model.organizationPreset == .footageBackup, unsupportedCount > 0 {
+            Toggle("Keep sidecars \(unsupportedCount)", isOn: includeSidecars)
+                .frame(width: 180, alignment: .leading)
+                .help("Includes non-photo/video files from the card, such as metadata, thumbnails, proxies, or camera support files.")
+        } else if unsupportedCount > 0 {
+            Text("\(unsupportedCount) non-media files skipped")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func allSessionsBinding(_ keyPath: WritableKeyPath<ImportPreviewSession, Bool>) -> Binding<Bool> {
+        Binding {
+            model.previewSessions.contains { $0[keyPath: keyPath] }
+        } set: { isIncluded in
+            for index in model.previewSessions.indices {
+                model.previewSessions[index][keyPath: keyPath] = isIncluded
             }
         }
     }
@@ -323,6 +421,17 @@ private extension ImportOrganizationPreset {
             return "Shoot Sessions"
         case .footageBackup:
             return "Footage Backup"
+        }
+    }
+}
+
+private extension ImportFolderGrouping {
+    var displayTitle: String {
+        switch self {
+        case .byDay:
+            return "By Day"
+        case .oneShootFolder:
+            return "One Shoot Folder"
         }
     }
 }

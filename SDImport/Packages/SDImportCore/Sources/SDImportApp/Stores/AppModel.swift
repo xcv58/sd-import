@@ -60,6 +60,7 @@ final class AppModel: ObservableObject {
     @Published var workflowProfile: ImportWorkflowProfile
     @Published var importMediaSelection: ImportMediaSelection
     @Published var organizationPreset: ImportOrganizationPreset
+    @Published var folderGrouping: ImportFolderGrouping
     @Published var mediaContentProfile: MediaContentProfile?
     @Published var photoPairSummary: PhotoPairSummary?
     @Published var previewSessions: [ImportPreviewSession] = []
@@ -115,6 +116,9 @@ final class AppModel: ObservableObject {
         self.organizationPreset = ImportOrganizationPreset(
             rawValue: defaults.string(forKey: DefaultsKeys.organizationPreset) ?? ""
         ) ?? storedWorkflowProfile.organizationPreset
+        self.folderGrouping = ImportFolderGrouping(
+            rawValue: defaults.string(forKey: DefaultsKeys.folderGrouping) ?? ""
+        ) ?? .byDay
         bootstrap()
     }
 
@@ -180,6 +184,7 @@ final class AppModel: ObservableObject {
         defaults.set(workflowProfile.rawValue, forKey: DefaultsKeys.workflowProfile)
         defaults.set(importMediaSelection.rawValue, forKey: DefaultsKeys.importMediaSelection)
         defaults.set(organizationPreset.rawValue, forKey: DefaultsKeys.organizationPreset)
+        defaults.set(folderGrouping.rawValue, forKey: DefaultsKeys.folderGrouping)
 
         do {
             try settingsRepository?.saveConfiguration(currentConfiguration())
@@ -223,6 +228,18 @@ final class AppModel: ObservableObject {
         cardPath = volume.mountURL.path
         sourcePathDidChange()
         savePreferences()
+    }
+
+    func selectPanel(_ item: SidebarItem) {
+        selection = item
+    }
+
+    func selectNextPanel() {
+        selection = selection.panel(offsetBy: 1)
+    }
+
+    func selectPreviousPanel() {
+        selection = selection.panel(offsetBy: -1)
     }
 
     var selectedSourceVolume: MountedVolume? {
@@ -402,6 +419,10 @@ final class AppModel: ObservableObject {
         savePreferences()
     }
 
+    func folderGroupingDidChange() {
+        savePreferences()
+    }
+
     func applyWorkflowProfile(_ profile: ImportWorkflowProfile, userInitiated: Bool = true) {
         workflowProfile = profile
         importMediaSelection = profile.mediaSelection
@@ -426,6 +447,7 @@ final class AppModel: ObservableObject {
         let builder = ImportPlanBuilder(
             sessions: previewSessions,
             organizationPreset: organizationPreset,
+            folderGrouping: folderGrouping,
             roots: DestinationRoots(
                 photosURL: URL(fileURLWithPath: expanded(photosPath), isDirectory: true),
                 videosURL: URL(fileURLWithPath: expanded(videosPath), isDirectory: true)
@@ -433,12 +455,12 @@ final class AppModel: ObservableObject {
             fallbackLocation: Self.defaultSessionLabel(for: location),
             volumeName: currentSummary.volumeName
         )
+        let plans = builder.plans(files: selectedJobFiles)
 
-        return selectedJobFiles.compactMap { file in
+        return zip(selectedJobFiles, plans).compactMap { file, plan in
             guard let id = file.id else {
                 return nil
             }
-            let plan = builder.plan(file: file)
             return ImportPreviewRow(
                 id: id,
                 filename: file.filename,
@@ -592,6 +614,7 @@ final class AppModel: ObservableObject {
 
         let sessions = previewSessions
         let organizationPreset = organizationPreset
+        let folderGrouping = folderGrouping
         let roots = DestinationRoots(
             photosURL: URL(fileURLWithPath: expanded(photosPath), isDirectory: true),
             videosURL: URL(fileURLWithPath: expanded(videosPath), isDirectory: true)
@@ -609,6 +632,7 @@ final class AppModel: ObservableObject {
                 ImportPlanBuilder(
                     sessions: sessions,
                     organizationPreset: organizationPreset,
+                    folderGrouping: folderGrouping,
                     roots: roots,
                     fallbackLocation: fallbackLocation,
                     volumeName: volumeName
@@ -1144,6 +1168,7 @@ final class AppModel: ObservableObject {
         autoPromptEnabled = configuration.autoPromptEnabled
         hasCompletedOnboarding = configuration.hasCompletedOnboarding
         workflowProfile = configuration.lastWorkflowProfile
+        folderGrouping = configuration.lastFolderGrouping
         workflowProfilesByVolume = configuration.workflowProfilesByVolume
         importMediaSelection = workflowProfile.mediaSelection
         organizationPreset = workflowProfile.organizationPreset
@@ -1163,6 +1188,7 @@ final class AppModel: ObservableObject {
             autoPromptEnabled: autoPromptEnabled,
             hasCompletedOnboarding: hasCompletedOnboarding,
             lastWorkflowProfile: workflowProfile,
+            lastFolderGrouping: folderGrouping,
             workflowProfilesByVolume: workflowProfilesByVolume
         )
     }
@@ -1262,6 +1288,7 @@ private enum DefaultsKeys {
     static let workflowProfile = "SDImport.workflowProfile"
     static let importMediaSelection = "SDImport.importMediaSelection"
     static let organizationPreset = "SDImport.organizationPreset"
+    static let folderGrouping = "SDImport.folderGrouping"
 }
 
 private extension String {

@@ -15,6 +15,8 @@ struct SDImportApp: App {
                 .frame(minWidth: 760, minHeight: 560)
         }
         .commands {
+            SidebarCommands()
+
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: appUpdater.updater)
             }
@@ -33,10 +35,44 @@ struct SDImportApp: App {
 
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
-                    model.selection = .settings
+                    model.selectPanel(.settings)
                     NSApplication.shared.activate(ignoringOtherApps: true)
                 }
                 .keyboardShortcut(",", modifiers: [.command])
+            }
+
+            CommandMenu("Navigate") {
+                Button("Import") {
+                    model.selectPanel(.import)
+                }
+                .keyboardShortcut("1", modifiers: [.command])
+
+                Button("History") {
+                    model.selectPanel(.history)
+                }
+                .keyboardShortcut("2", modifiers: [.command])
+
+                Button("Settings") {
+                    model.selectPanel(.settings)
+                }
+                .keyboardShortcut("3", modifiers: [.command])
+
+                Button("Diagnostics") {
+                    model.selectPanel(.diagnostics)
+                }
+                .keyboardShortcut("4", modifiers: [.command])
+
+                Divider()
+
+                Button("Next Panel") {
+                    model.selectNextPanel()
+                }
+                .keyboardShortcut(.tab, modifiers: [.control])
+
+                Button("Previous Panel") {
+                    model.selectPreviousPanel()
+                }
+                .keyboardShortcut(.tab, modifiers: [.control, .shift])
             }
         }
     }

@@ -45,6 +45,19 @@ Default folder pattern:
 
 You can also open the app and choose `Import From Card...` from the menu.
 
+## Keyboard Shortcuts
+
+- `Command-I`: open Import.
+- `Command-1`: Import.
+- `Command-2`: History.
+- `Command-3`: Settings.
+- `Command-4`: Diagnostics.
+- `Control-Tab`: next panel.
+- `Control-Shift-Tab`: previous panel.
+- `Command-Option-S`: show or hide the sidebar.
+- `Command-R`: refresh History.
+- `Command-,`: Settings.
+
 ## Updates
 
 SD Import checks for updates automatically.

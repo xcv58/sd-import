@@ -29,6 +29,13 @@ public enum ImportOrganizationPreset: String, Codable, CaseIterable, Identifiabl
     public var id: String { rawValue }
 }
 
+public enum ImportFolderGrouping: String, Codable, CaseIterable, Identifiable, Sendable {
+    case byDay
+    case oneShootFolder
+
+    public var id: String { rawValue }
+}
+
 public enum ImportWorkflowProfile: String, Codable, CaseIterable, Identifiable, Sendable {
     case photoImport
     case footageBackup

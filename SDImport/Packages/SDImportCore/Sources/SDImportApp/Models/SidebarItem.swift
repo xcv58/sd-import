@@ -33,4 +33,26 @@ enum SidebarItem: String, CaseIterable, Identifiable {
             return "stethoscope"
         }
     }
+
+    var shortcutHint: String {
+        switch self {
+        case .import:
+            return "Cmd 1"
+        case .history:
+            return "Cmd 2"
+        case .settings:
+            return "Cmd 3"
+        case .diagnostics:
+            return "Cmd 4"
+        }
+    }
+
+    func panel(offsetBy offset: Int) -> SidebarItem {
+        let items = Self.allCases
+        guard let currentIndex = items.firstIndex(of: self) else {
+            return self
+        }
+        let nextIndex = (currentIndex + offset + items.count) % items.count
+        return items[nextIndex]
+    }
 }
