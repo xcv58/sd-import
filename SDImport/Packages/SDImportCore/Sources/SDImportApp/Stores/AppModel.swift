@@ -236,6 +236,10 @@ final class AppModel: ObservableObject {
     }
 
     func scan() {
+        guard !isWorking else {
+            statusMessage = "Finish the current scan or import first"
+            return
+        }
         guard let databaseURL else {
             statusMessage = "Database is not ready"
             return
@@ -426,6 +430,10 @@ final class AppModel: ObservableObject {
     }
 
     func importCurrentJob() {
+        guard !isWorking else {
+            statusMessage = "Finish the current scan or import first"
+            return
+        }
         guard let currentSummary else {
             statusMessage = "No scanned job selected"
             return
@@ -568,6 +576,11 @@ final class AppModel: ObservableObject {
     }
 
     func acceptMountedVolumePrompt() {
+        guard !isWorking else {
+            pendingMountedVolume = nil
+            statusMessage = "Finish the current import before scanning another card"
+            return
+        }
         guard let volume = pendingMountedVolume else {
             return
         }
@@ -937,6 +950,7 @@ final class AppModel: ObservableObject {
                 let self,
                 self.autoPromptEnabled,
                 self.hasCompletedOnboarding,
+                !self.isWorking,
                 self.pendingMountedVolume == nil
             else {
                 return

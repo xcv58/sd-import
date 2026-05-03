@@ -3,7 +3,7 @@ import Foundation
 public struct VolumeDetector: Sendable {
     private let ignoredNameFragments: [String]
 
-    public init(ignoredNameFragments: [String] = ["time machine", "backup"]) {
+    public init(ignoredNameFragments: [String] = ["time machine", "backup", "recovery", "preboot", "macintosh hd"]) {
         self.ignoredNameFragments = ignoredNameFragments.map { $0.lowercased() }
     }
 
@@ -13,6 +13,7 @@ public struct VolumeDetector: Sendable {
             .volumeUUIDStringKey,
             .volumeIsRemovableKey,
             .volumeIsEjectableKey,
+            .volumeIsInternalKey,
             .volumeTotalCapacityKey,
             .volumeAvailableCapacityKey,
             .volumeAvailableCapacityForImportantUsageKey
@@ -20,7 +21,6 @@ public struct VolumeDetector: Sendable {
         let name = values?.volumeName ?? mountURL.lastPathComponent
         let isRemovable = (values?.volumeIsRemovable ?? false)
             || (values?.volumeIsEjectable ?? false)
-            || mountURL.path.hasPrefix("/Volumes/")
         let totalCapacity = values?.volumeTotalCapacity.map(Int64.init)
         let availableCapacity = values?.volumeAvailableCapacityForImportantUsage
             ?? values?.volumeAvailableCapacity.map(Int64.init)
@@ -31,6 +31,7 @@ public struct VolumeDetector: Sendable {
             mountURL: mountURL,
             volumeUUID: values?.volumeUUIDString,
             isRemovable: isRemovable,
+            isInternal: values?.volumeIsInternal ?? false,
             totalCapacityBytes: totalCapacity,
             availableCapacityBytes: availableCapacity
         )
@@ -45,6 +46,7 @@ public struct VolumeDetector: Sendable {
             .volumeUUIDStringKey,
             .volumeIsRemovableKey,
             .volumeIsEjectableKey,
+            .volumeIsInternalKey,
             .volumeTotalCapacityKey,
             .volumeAvailableCapacityKey,
             .volumeAvailableCapacityForImportantUsageKey
@@ -78,7 +80,7 @@ public struct VolumeDetector: Sendable {
         guard !isDiskImage(volume) else {
             return false
         }
-        return volume.isRemovable || volume.mountURL.path.hasPrefix("/Volumes/")
+        return volume.isRemovable && volume.mountURL.path.hasPrefix("/Volumes/")
     }
 
     private func isDiskImage(_ volume: MountedVolume) -> Bool {
