@@ -952,7 +952,7 @@ final class AppModel: ObservableObject {
         selectedJobID: String?
     ) throws -> (jobs: [ImportJob], selectedJobID: String?, files: [JobFileRecord]) {
         let repositories = try makeRepositories(databaseURL: databaseURL)
-        let jobs = try repositories.jobRepository.listJobs(limit: 100)
+        let jobs = try repositories.jobRepository.listJobs(limit: 100).filter(\.isImportHistoryEntry)
         let selectedJobID = selectedJobID.flatMap { id in
             jobs.contains { $0.id == id } ? id : nil
         } ?? jobs.first?.id

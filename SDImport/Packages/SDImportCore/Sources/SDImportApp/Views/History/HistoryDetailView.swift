@@ -29,9 +29,12 @@ struct HistoryDetailView: View {
 
     private func header(_ job: ImportJob) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(job.volumeName ?? "Import Job")
+            Text(HistoryJobPresentation.title(for: job))
                 .font(.title2)
                 .fontWeight(.semibold)
+            Text(HistoryJobPresentation.subtitle(for: job))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             Text(job.id)
                 .font(.caption)
                 .foregroundStyle(.secondary)

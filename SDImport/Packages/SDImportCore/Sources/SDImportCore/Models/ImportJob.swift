@@ -24,6 +24,10 @@ public struct ImportJob: Identifiable, Hashable, Codable, Sendable {
     public var summaryMarkdownPath: String?
     public var appVersion: String?
 
+    public var isImportHistoryEntry: Bool {
+        status != .scanned
+    }
+
     public init(
         id: String,
         createdAt: Date,
