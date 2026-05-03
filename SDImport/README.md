@@ -108,11 +108,18 @@ Create or update a GitHub Release in one local command:
 ```bash
 APP_VERSION="1.0" \
 APP_BUILD="1" \
+RELEASE_NOTES_FILE="docs/releases/sd-import-1.0.md" \
 DEVELOPER_ID_APPLICATION="Developer ID Application: Example (TEAMID)" \
 SPARKLE_PUBLIC_ED_KEY="base64-public-key" \
 NOTARYTOOL_PROFILE="SDImportNotary" \
 ./script/release_github.sh
 ```
+
+Every public release should include a short, user-facing changelog in the
+release notes. Prefer writing a `RELEASE_NOTES_FILE` with 3-8 high-level bullets
+that explain what changed for users. If no notes file is provided, the release
+script generates a basic changelog from commit subjects instead of publishing a
+generic placeholder.
 
 Sparkle's private key must stay outside git and outside the public hosting
 bucket. Public builds should move to a native Xcode app archive/export target
