@@ -49,13 +49,29 @@ public struct ReportWriter {
             "- known: `\(summary.knownFiles)`",
             "- unsupported: `\(summary.unsupportedFiles)`",
             "- conflicts: `\(summary.conflictFiles)`",
+            "- copied: `\(files.filter { $0.copyStatus == .copied }.count)`",
+            "- skipped: `\(files.filter { $0.copyStatus == .skipped }.count)`",
+            "- failed: `\(files.filter { $0.copyStatus == .failed }.count)`",
             "",
             "## New Files",
             ""
         ]
 
         for file in files where file.decision == .new {
-            lines.append("- `\(file.sourcePath)` -> `\(file.plannedDestinationPath ?? file.destinationDirectory ?? "")`")
+            lines.append("- `\(file.sourcePath)` -> `\(file.finalDestinationPath ?? file.plannedDestinationPath ?? file.destinationDirectory ?? "")` (\(file.copyStatus.databaseValue))")
+        }
+
+        lines.append("")
+        lines.append("## Copied Files")
+        lines.append("")
+
+        let copiedFiles = files.filter { $0.copyStatus == .copied }
+        if copiedFiles.isEmpty {
+            lines.append("- none")
+        } else {
+            for file in copiedFiles {
+                lines.append("- `\(file.filename)` -> `\(file.finalDestinationPath ?? file.plannedDestinationPath ?? "")` (Verified, \(Self.bytes(file.size)))")
+            }
         }
 
         lines.append("")
@@ -72,6 +88,10 @@ public struct ReportWriter {
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    private static func bytes(_ value: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
     }
 }
 

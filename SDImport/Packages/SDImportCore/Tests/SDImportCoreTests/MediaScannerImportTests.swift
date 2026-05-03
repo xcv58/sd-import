@@ -147,13 +147,69 @@ struct MediaScannerImportTests {
         #expect(result.importedFiles == 1)
         #expect(progressEvents.count >= 3)
         #expect(progressEvents.contains { $0.currentFilename == "IMG_0002.JPG" })
+        #expect(progressEvents.contains { $0.currentDestinationPath?.hasSuffix("IMG_0002.JPG") == true })
         #expect(finalProgress.status == "completed")
         #expect(finalProgress.percent == 100)
         #expect(finalProgress.processedBytes == finalProgress.totalBytes)
         #expect(finalProgress.throughputBytesPerSecond > 0)
+        #expect(
+            finalProgress.recentFiles.contains {
+                $0.filename == "IMG_0002.JPG" && $0.status == .copied && $0.detail == "Verified"
+            }
+        )
+
+        let report = try String(contentsOf: fixture.reportsURL.appendingPathComponent("job-progress.md"))
+        #expect(report.contains("## Copied Files"))
+        #expect(report.contains("Verified"))
     }
 
-    @Test("planned footage backup sidecars import with their card structure")
+    @Test("import checks destination space before copying")
+    func importChecksDestinationSpaceBeforeCopying() throws {
+        let fixture = try Fixture()
+        let source = fixture.mountURL.appendingPathComponent("IMG_FULL.JPG")
+        try fixture.writeFile(source, bytes: Data(repeating: 7, count: 1_024))
+
+        _ = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-no-space")
+        )
+
+        let photosPath = fixture.photosURL.path
+        let constrainedEngine = ImportEngine(
+            jobRepository: fixture.jobRepository,
+            dedupeRepository: fixture.dedupeRepository,
+            destinationSpaceChecker: DestinationSpaceChecker { _ in
+                VolumeCapacity(
+                    volumeID: "photos-volume",
+                    displayPath: photosPath,
+                    availableBytes: 512,
+                    totalBytes: 1_024
+                )
+            }
+        )
+
+        do {
+            _ = try constrainedEngine.importFiles(jobID: "job-no-space")
+            Issue.record("import should have failed before copying")
+        } catch SDImportError.insufficientDestinationSpace(let path, let requiredBytes, let availableBytes) {
+            #expect(path == fixture.photosURL.path)
+            #expect(requiredBytes == 1_024)
+            #expect(availableBytes == 512)
+        }
+
+        let maybeJob = try fixture.jobRepository.fetchJob(id: "job-no-space")
+        let job = try #require(maybeJob)
+        #expect(job.status == .scanned)
+        #expect(
+            FileManager.default.fileExists(
+                atPath: fixture.photosURL
+                    .appendingPathComponent("2024-07-15 TEST", isDirectory: true)
+                    .appendingPathComponent("IMG_FULL.JPG")
+                    .path
+            ) == false
+        )
+    }
+
+    @Test("planned footage backup sidecars import as flat files")
     func plannedFootageBackupSidecarsImport() throws {
         let fixture = try Fixture()
         let source = fixture.mountURL.appendingPathComponent("PRIVATE/M4ROOT/CLIP/C0001.XML")
@@ -166,10 +222,9 @@ struct MediaScannerImportTests {
         let sidecar = try #require(scannedFiles.first)
         let fileID = try #require(sidecar.id)
         let destinationURL = fixture.videosURL
-            .appendingPathComponent("2024", isDirectory: true)
             .appendingPathComponent("2024-07-15 TEST", isDirectory: true)
             .appendingPathComponent("Card CARD", isDirectory: true)
-            .appendingPathComponent("PRIVATE/M4ROOT/CLIP/C0001.XML", isDirectory: false)
+            .appendingPathComponent("C0001.XML", isDirectory: false)
 
         try fixture.jobRepository.updateJobFileImportPlan(
             jobID: "job-sidecar",
@@ -351,6 +406,7 @@ private struct Fixture {
     let videosURL: URL
     let reportsURL: URL
     let jobRepository: JobRepository
+    let dedupeRepository: DedupeRepository
     let scanner: MediaScanner
     let importEngine: ImportEngine
 
@@ -367,7 +423,7 @@ private struct Fixture {
 
         let pool = try migratedPool()
         jobRepository = JobRepository(pool: pool)
-        let dedupeRepository = DedupeRepository(pool: pool)
+        dedupeRepository = DedupeRepository(pool: pool)
         scanner = MediaScanner(
             captureDateReader: FixedCaptureDateReader(fixedDate: "2024-07-15"),
             jobRepository: jobRepository,

@@ -8,6 +8,7 @@ public enum SDImportError: Error, Equatable, Sendable {
     case missingFileAttributes(URL)
     case sourceFileMissing(URL)
     case missingDestinationDirectory(Int64?)
+    case insufficientDestinationSpace(path: String, requiredBytes: Int64, availableBytes: Int64)
     case copySizeMismatch(expected: Int64, actual: Int64)
     case jobNotFound(String)
     case invalidArgument(String)

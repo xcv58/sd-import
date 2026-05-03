@@ -198,7 +198,7 @@ private struct SourceField: View {
                             Button {
                                 model.selectSourceVolume(volume)
                             } label: {
-                                Text(volume.name)
+                                Text(volume.menuTitle)
                             }
                         }
                     }
@@ -223,9 +223,47 @@ private struct SourceField: View {
                 .help("Choose source folder")
             }
 
+            if let selectedVolume = model.selectedSourceVolume {
+                Label(selectedVolume.detailText, systemImage: "externaldrive")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
             ValidationStatusView(result: model.sourceValidation)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private extension MountedVolume {
+    var menuTitle: String {
+        if let capacityText {
+            return "\(name) · \(capacityText)"
+        }
+        return name
+    }
+
+    var detailText: String {
+        if let capacityText {
+            return "\(name): \(capacityText) · \(mountURL.path)"
+        }
+        return "\(name): \(mountURL.path)"
+    }
+
+    private var capacityText: String? {
+        guard let availableCapacityBytes else {
+            return nil
+        }
+
+        let available = ByteCountFormatter.string(fromByteCount: availableCapacityBytes, countStyle: .file)
+        if let usedCapacityBytes, let totalCapacityBytes {
+            let used = ByteCountFormatter.string(fromByteCount: usedCapacityBytes, countStyle: .file)
+            let total = ByteCountFormatter.string(fromByteCount: totalCapacityBytes, countStyle: .file)
+            return "\(available) free, \(used) used of \(total)"
+        }
+
+        return "\(available) free"
     }
 }
 

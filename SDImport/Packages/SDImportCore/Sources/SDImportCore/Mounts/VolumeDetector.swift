@@ -12,19 +12,27 @@ public struct VolumeDetector: Sendable {
             .volumeNameKey,
             .volumeUUIDStringKey,
             .volumeIsRemovableKey,
-            .volumeIsEjectableKey
+            .volumeIsEjectableKey,
+            .volumeTotalCapacityKey,
+            .volumeAvailableCapacityKey,
+            .volumeAvailableCapacityForImportantUsageKey
         ])
         let name = values?.volumeName ?? mountURL.lastPathComponent
         let isRemovable = (values?.volumeIsRemovable ?? false)
             || (values?.volumeIsEjectable ?? false)
             || mountURL.path.hasPrefix("/Volumes/")
+        let totalCapacity = values?.volumeTotalCapacity.map(Int64.init)
+        let availableCapacity = values?.volumeAvailableCapacityForImportantUsage
+            ?? values?.volumeAvailableCapacity.map(Int64.init)
 
         return MountedVolume(
             id: values?.volumeUUIDString ?? mountURL.standardizedFileURL.path,
             name: name,
             mountURL: mountURL,
             volumeUUID: values?.volumeUUIDString,
-            isRemovable: isRemovable
+            isRemovable: isRemovable,
+            totalCapacityBytes: totalCapacity,
+            availableCapacityBytes: availableCapacity
         )
     }
 
@@ -36,7 +44,10 @@ public struct VolumeDetector: Sendable {
             .volumeNameKey,
             .volumeUUIDStringKey,
             .volumeIsRemovableKey,
-            .volumeIsEjectableKey
+            .volumeIsEjectableKey,
+            .volumeTotalCapacityKey,
+            .volumeAvailableCapacityKey,
+            .volumeAvailableCapacityForImportantUsageKey
         ]
         guard
             let urls = try? fileManager.contentsOfDirectory(

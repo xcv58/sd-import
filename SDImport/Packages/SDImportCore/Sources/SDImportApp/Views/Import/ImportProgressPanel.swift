@@ -15,7 +15,7 @@ struct ImportProgressPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Import Progress")
+                Text("Copy Monitor")
                     .font(.headline)
                 Spacer()
                 Text(percentText)
@@ -27,18 +27,43 @@ struct ImportProgressPanel: View {
                 .progressViewStyle(.linear)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], alignment: .leading, spacing: 12) {
-                ProgressMetric(title: "Processed", value: copiedText)
+                ProgressMetric(title: "Data", value: copiedText)
                 ProgressMetric(title: "Speed", value: speedText)
                 ProgressMetric(title: "Remaining", value: remainingText)
                 ProgressMetric(title: "Files", value: fileCountText)
+                ProgressMetric(title: "Copied", value: "\(progress.importedFiles)")
+                ProgressMetric(title: "Skipped", value: "\(progress.skippedFiles)")
+                ProgressMetric(title: "Failed", value: "\(progress.failedFiles)")
             }
 
             if let currentFilename = progress.currentFilename, !currentFilename.isEmpty {
-                Label(currentFilename, systemImage: "doc")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(currentFilename, systemImage: "doc")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    if let destinationPath = progress.currentDestinationPath {
+                        Label(destinationPath, systemImage: "folder")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
+
+            if !progress.recentFiles.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Recent Files")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(progress.recentFiles) { event in
+                        ProgressFileEventRow(event: event)
+                    }
+                }
             }
         }
         .padding()
@@ -46,7 +71,7 @@ struct ImportProgressPanel: View {
     }
 
     private var copiedText: String {
-        "\(Self.bytes(progress.processedBytes)) of \(Self.bytes(progress.totalBytes))"
+        "\(Self.bytes(progress.copiedBytes)) of \(Self.bytes(progress.totalBytes))"
     }
 
     private var speedText: String {
@@ -112,5 +137,79 @@ private struct ProgressMetric: View {
                 .minimumScaleFactor(0.85)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ProgressFileEventRow: View {
+    let event: ImportProgressFileEvent
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: statusImage)
+                .foregroundStyle(statusColor)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.filename)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                HStack(spacing: 6) {
+                    Text(statusText)
+                    Text(Self.bytes(event.size))
+                    if let detail = event.detail, !detail.isEmpty {
+                        Text(detail)
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var statusImage: String {
+        switch event.status {
+        case .pending:
+            return "clock"
+        case .copied:
+            return "checkmark.seal"
+        case .skipped:
+            return "forward"
+        case .failed:
+            return "exclamationmark.triangle"
+        }
+    }
+
+    private var statusColor: Color {
+        switch event.status {
+        case .pending, .skipped:
+            return .secondary
+        case .copied:
+            return .green
+        case .failed:
+            return .orange
+        }
+    }
+
+    private var statusText: String {
+        switch event.status {
+        case .pending:
+            return "Pending"
+        case .copied:
+            return "Copied"
+        case .skipped:
+            return "Skipped"
+        case .failed:
+            return "Failed"
+        }
+    }
+
+    private static func bytes(_ value: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
     }
 }

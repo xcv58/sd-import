@@ -138,10 +138,11 @@ struct ImportPreviewView: View {
                         }
 
                         if model.organizationPreset == .footageBackup, session.unsupportedCount > 0 {
-                            Toggle("Sidecars \(session.unsupportedCount)", isOn: $session.includeSidecars)
-                                .frame(width: 130, alignment: .leading)
+                            Toggle("Keep sidecars \(session.unsupportedCount)", isOn: $session.includeSidecars)
+                                .frame(width: 180, alignment: .leading)
+                                .help("Includes non-photo/video files from the card, such as metadata, thumbnails, proxies, or camera support files.")
                         } else if session.unsupportedCount > 0 {
-                            Text("\(session.unsupportedCount) unsupported")
+                            Text("\(session.unsupportedCount) non-media files skipped")
                                 .foregroundStyle(.secondary)
                         }
                     }

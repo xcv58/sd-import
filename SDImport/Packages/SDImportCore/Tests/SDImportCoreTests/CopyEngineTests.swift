@@ -52,6 +52,30 @@ struct CopyEngineTests {
         #expect(FileManager.default.fileExists(atPath: destination.path + ".part") == false)
     }
 
+    @Test("fails when copied size does not match expected size")
+    func failsWhenCopiedSizeDoesNotMatchExpectedSize() throws {
+        let directory = try temporaryDirectory()
+        let source = directory.appendingPathComponent("source.bin")
+        let destination = directory.appendingPathComponent("destination.bin")
+        try Data("short".utf8).write(to: source)
+
+        do {
+            try CopyEngine().copyFile(
+                from: source,
+                to: destination,
+                expectedSize: 1024,
+                modificationDate: nil
+            )
+            Issue.record("copy should fail when destination size does not match expected size")
+        } catch SDImportError.copySizeMismatch(let expected, let actual) {
+            #expect(expected == 1024)
+            #expect(actual == 5)
+        }
+
+        #expect(FileManager.default.fileExists(atPath: destination.path) == false)
+        #expect(FileManager.default.fileExists(atPath: destination.path + ".part") == false)
+    }
+
     private func createPatternFile(at url: URL, byteCount: Int) throws {
         FileManager.default.createFile(atPath: url.path, contents: nil)
         let handle = try FileHandle(forWritingTo: url)

@@ -35,7 +35,9 @@ struct ReportWriterTests {
             decision: .new,
             destinationDirectory: "/tmp/photos/2024-07-15 TEST",
             plannedDestinationPath: "/tmp/photos/2024-07-15 TEST/IMG_0001.JPG",
-            copyStatus: .pending
+            finalDestinationPath: "/tmp/photos/2024-07-15 TEST/IMG_0001.JPG",
+            copyStatus: .copied,
+            completedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
 
         let paths = try ReportWriter().writeReport(
@@ -50,5 +52,8 @@ struct ReportWriterTests {
         let markdown = try String(contentsOf: paths.markdownURL)
         #expect(markdown.contains("# SD Import Report job-1"))
         #expect(markdown.contains("IMG_0001.JPG"))
+        #expect(markdown.contains("- copied: `1`"))
+        #expect(markdown.contains("## Copied Files"))
+        #expect(markdown.contains("(Verified,"))
     }
 }

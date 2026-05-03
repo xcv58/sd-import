@@ -60,7 +60,6 @@ public struct DestinationPlanner: Sendable {
                 return nil
             }
             let sessionDirectory = roots.photosURL
-                .appendingPathComponent(year(from: captureDate), isDirectory: true)
                 .appendingPathComponent("\(captureDate) \(safeComponent(sessionLabel, fallback: "TODO"))", isDirectory: true)
             let mediaDirectory = mediaKind == .photo ? "Photos" : "Video"
             return sessionDirectory
@@ -72,18 +71,10 @@ public struct DestinationPlanner: Sendable {
                 return nil
             }
             let sessionDirectory = roots.videosURL
-                .appendingPathComponent(year(from: captureDate), isDirectory: true)
                 .appendingPathComponent("\(captureDate) \(safeComponent(sessionLabel, fallback: "Footage"))", isDirectory: true)
                 .appendingPathComponent("Card \(safeComponent(volumeName, fallback: "Unknown"))", isDirectory: true)
-            return appendRelativePath(relativePath ?? filename, to: sessionDirectory)
+            return sessionDirectory.appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
         }
-    }
-
-    private func year(from captureDate: String) -> String {
-        guard captureDate.count >= 4 else {
-            return "Unknown Year"
-        }
-        return String(captureDate.prefix(4))
     }
 
     private func safeComponent(_ value: String?, fallback: String) -> String {
@@ -95,20 +86,4 @@ public struct DestinationPlanner: Sendable {
             .joined(separator: "-")
     }
 
-    private func appendRelativePath(_ relativePath: String, to root: URL) -> URL {
-        let components = relativePath
-            .replacingOccurrences(of: "\\", with: "/")
-            .split(separator: "/")
-            .map(String.init)
-            .filter { !$0.isEmpty && $0 != "." && $0 != ".." }
-
-        guard !components.isEmpty else {
-            return root.appendingPathComponent("Unknown", isDirectory: false)
-        }
-
-        return components.dropLast().reduce(root) { partial, component in
-            partial.appendingPathComponent(safeComponent(component, fallback: "Folder"), isDirectory: true)
-        }
-        .appendingPathComponent(safeComponent(components.last, fallback: "File"), isDirectory: false)
-    }
 }

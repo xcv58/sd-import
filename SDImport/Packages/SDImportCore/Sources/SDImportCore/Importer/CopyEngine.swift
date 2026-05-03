@@ -56,6 +56,8 @@ public struct CopyEngine {
                     ofItemAtPath: destinationURL.path
                 )
             }
+
+            try verifyFinalCopy(at: destinationURL, expectedSize: expectedSize)
         } catch {
             if fileManager.fileExists(atPath: temporaryURL.path) {
                 try? fileManager.removeItem(at: temporaryURL)
@@ -70,6 +72,17 @@ public struct CopyEngine {
             throw SDImportError.missingFileAttributes(url)
         }
         return size.int64Value
+    }
+
+    private func verifyFinalCopy(at destinationURL: URL, expectedSize: Int64) throws {
+        guard fileManager.fileExists(atPath: destinationURL.path) else {
+            throw SDImportError.fileSystemError(operation: "verify destination", path: destinationURL.path, code: ENOENT)
+        }
+
+        let finalSize = try fileSize(at: destinationURL)
+        guard finalSize == expectedSize else {
+            throw SDImportError.copySizeMismatch(expected: expectedSize, actual: finalSize)
+        }
     }
 
     private func copyWithBoundedBuffer(
