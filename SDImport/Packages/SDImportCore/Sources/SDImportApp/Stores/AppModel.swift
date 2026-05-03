@@ -48,6 +48,8 @@ final class AppModel: ObservableObject {
     @Published var jobs: [ImportJob] = []
     @Published var selectedJobID: String?
     @Published var selectedJobFiles: [JobFileRecord] = []
+    @Published var isHistoryLoading = false
+    @Published var isHistoryDetailLoading = false
     @Published var availableSourceVolumes: [MountedVolume] = []
     @Published var sourceValidation: PathValidationResult = .empty(purpose: .source)
     @Published var photosValidation: PathValidationResult = .empty(purpose: .destination)
@@ -66,6 +68,8 @@ final class AppModel: ObservableObject {
     private var settingsRepository: SettingsRepository?
     private var bookmarkStore: BookmarkStore?
     private var importTask: Task<Void, Never>?
+    private var historyRefreshTask: Task<Void, Never>?
+    private var historyDetailTask: Task<Void, Never>?
     private var mountObserver: MountEventObserver?
     private var workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
     private var workflowProfileWasManuallyChosenForCurrentJob = false
@@ -607,34 +611,91 @@ final class AppModel: ObservableObject {
     }
 
     func refreshHistory() {
-        guard let jobRepository else {
+        guard let databaseURL else {
+            statusMessage = "Database is not ready"
             return
         }
 
-        do {
-            jobs = try jobRepository.listJobs(limit: 100)
-            if selectedJobID == nil {
-                selectedJobID = jobs.first?.id
+        historyRefreshTask?.cancel()
+        historyDetailTask?.cancel()
+        let selectedJobID = selectedJobID
+        isHistoryLoading = true
+        isHistoryDetailLoading = false
+
+        historyRefreshTask = Task.detached(priority: .userInitiated) {
+            do {
+                let snapshot = try Self.historySnapshot(
+                    databaseURL: databaseURL,
+                    selectedJobID: selectedJobID
+                )
+                guard !Task.isCancelled else {
+                    return
+                }
+                await MainActor.run {
+                    self.jobs = snapshot.jobs
+                    self.selectedJobID = snapshot.selectedJobID
+                    self.selectedJobFiles = snapshot.files
+                    self.isHistoryLoading = false
+                    self.isHistoryDetailLoading = false
+                    self.historyRefreshTask = nil
+                }
+            } catch {
+                guard !Task.isCancelled else {
+                    return
+                }
+                await MainActor.run {
+                    self.isHistoryLoading = false
+                    self.isHistoryDetailLoading = false
+                    self.historyRefreshTask = nil
+                    self.statusMessage = "Could not load history: \(error)"
+                }
             }
-            if let selectedJobID {
-                loadJobDetail(jobID: selectedJobID)
-            }
-        } catch {
-            statusMessage = "Could not load history: \(error)"
         }
     }
 
     func loadJobDetail(jobID: String) {
+        guard selectedJobID != jobID || selectedJobFiles.isEmpty else {
+            return
+        }
         selectedJobID = jobID
-        guard let jobRepository else {
+        selectedJobFiles = []
+        guard let databaseURL else {
+            statusMessage = "Database is not ready"
             return
         }
 
-        do {
-            selectedJobFiles = try jobRepository.fetchJobFiles(jobID: jobID)
-        } catch {
-            selectedJobFiles = []
-            statusMessage = "Could not load job: \(error)"
+        historyDetailTask?.cancel()
+        isHistoryDetailLoading = true
+
+        historyDetailTask = Task.detached(priority: .userInitiated) {
+            do {
+                let repositories = try Self.makeRepositories(databaseURL: databaseURL)
+                let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                guard !Task.isCancelled else {
+                    return
+                }
+                await MainActor.run {
+                    guard self.selectedJobID == jobID else {
+                        return
+                    }
+                    self.selectedJobFiles = files
+                    self.isHistoryDetailLoading = false
+                    self.historyDetailTask = nil
+                }
+            } catch {
+                guard !Task.isCancelled else {
+                    return
+                }
+                await MainActor.run {
+                    guard self.selectedJobID == jobID else {
+                        return
+                    }
+                    self.selectedJobFiles = []
+                    self.isHistoryDetailLoading = false
+                    self.historyDetailTask = nil
+                    self.statusMessage = "Could not load job: \(error)"
+                }
+            }
         }
     }
 
@@ -884,6 +945,19 @@ final class AppModel: ObservableObject {
             try repositories.jobRepository.listJobs(limit: 100),
             try repositories.jobRepository.fetchJobFiles(jobID: jobID)
         )
+    }
+
+    nonisolated private static func historySnapshot(
+        databaseURL: URL,
+        selectedJobID: String?
+    ) throws -> (jobs: [ImportJob], selectedJobID: String?, files: [JobFileRecord]) {
+        let repositories = try makeRepositories(databaseURL: databaseURL)
+        let jobs = try repositories.jobRepository.listJobs(limit: 100)
+        let selectedJobID = selectedJobID.flatMap { id in
+            jobs.contains { $0.id == id } ? id : nil
+        } ?? jobs.first?.id
+        let files = try selectedJobID.map { try repositories.jobRepository.fetchJobFiles(jobID: $0) } ?? []
+        return (jobs, selectedJobID, files)
     }
 
     private func loadStoredConfiguration() throws {

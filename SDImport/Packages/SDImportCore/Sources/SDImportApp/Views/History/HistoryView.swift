@@ -20,8 +20,16 @@ struct HistoryView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 280)
 
+                if model.isHistoryLoading {
+                    ProgressView("Loading history...")
+                        .controlSize(.small)
+                }
+
                 if filteredJobs.isEmpty {
-                    ContentUnavailableView("No Import History", systemImage: "clock.arrow.circlepath")
+                    ContentUnavailableView(
+                        model.isHistoryLoading ? "Loading History" : "No Import History",
+                        systemImage: "clock.arrow.circlepath"
+                    )
                         .frame(maxWidth: .infinity, minHeight: 240)
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
@@ -39,8 +47,14 @@ struct HistoryView: View {
 
                     Divider()
 
-                    HistoryDetailView(job: model.selectedJob(), files: model.selectedJobFiles)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if model.isHistoryDetailLoading {
+                        ProgressView("Loading job...")
+                            .controlSize(.small)
+                            .frame(maxWidth: .infinity, minHeight: 180)
+                    } else {
+                        HistoryDetailView(job: model.selectedJob(), files: model.selectedJobFiles)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
             .padding(24)
@@ -56,6 +70,7 @@ struct HistoryView: View {
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
+                .disabled(model.isHistoryLoading)
 
                 Button {
                     model.retrySelectedJob()

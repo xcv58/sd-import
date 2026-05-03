@@ -111,7 +111,8 @@ struct HistoryDetailView: View {
     }
 
     private var fileList: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let files = filteredFiles
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Files")
                     .font(.headline)
@@ -125,9 +126,11 @@ struct HistoryDetailView: View {
                 .frame(width: 320)
             }
 
-            ForEach(filteredFiles) { file in
-                HistoryFileRow(file: file)
-                Divider()
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(files) { file in
+                    HistoryFileRow(file: file)
+                    Divider()
+                }
             }
         }
     }
