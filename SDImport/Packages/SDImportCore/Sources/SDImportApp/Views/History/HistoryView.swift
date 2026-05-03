@@ -10,62 +10,22 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Picker("Filter", selection: $filter) {
-                    ForEach(HistoryFilter.allCases) { filter in
-                        Text(filter.title).tag(filter)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 280)
+        AppPage(title: "History", status: model.statusMessage) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 16) {
+                    recentJobsSection
+                        .frame(width: 340)
 
-                if model.isHistoryLoading {
-                    ProgressView("Loading history...")
-                        .controlSize(.small)
+                    detailSection
+                        .frame(minWidth: 0, maxWidth: .infinity)
                 }
 
-                if filteredJobs.isEmpty {
-                    ContentUnavailableView(
-                        model.isHistoryLoading ? "Loading History" : "No Import History",
-                        systemImage: "clock.arrow.circlepath"
-                    )
-                        .frame(maxWidth: .infinity, minHeight: 240)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Recent Jobs")
-                            .font(.headline)
-                        LazyVStack(alignment: .leading, spacing: 8) {
-                            ForEach(filteredJobs) { job in
-                                Button {
-                                    model.loadJobDetail(jobID: job.id)
-                                } label: {
-                                    HistoryRow(job: job, isSelected: model.selectedJobID == job.id)
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("\(HistoryJobPresentation.title(for: job)), \(HistoryJobPresentation.subtitle(for: job))")
-                                .accessibilityValue(model.selectedJobID == job.id ? "Selected" : "")
-                            }
-                        }
-                    }
-
-                    Divider()
-
-                    if model.isHistoryDetailLoading {
-                        ProgressView("Loading job...")
-                            .controlSize(.small)
-                            .frame(maxWidth: .infinity, minHeight: 180)
-                    } else {
-                        HistoryDetailView(job: model.selectedJob(), files: model.selectedJobFiles)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                VStack(alignment: .leading, spacing: 16) {
+                    recentJobsSection
+                    detailSection
                 }
             }
-            .padding(24)
-            .frame(maxWidth: 820, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("History")
         .toolbar {
             ToolbarItemGroup {
@@ -93,6 +53,62 @@ struct HistoryView: View {
                 model.refreshHistory()
             }
         }
+    }
+
+    private var recentJobsSection: some View {
+        AppSection("Recent Imports", systemImage: "clock.arrow.circlepath") {
+            VStack(alignment: .leading, spacing: 12) {
+                Picker("Filter", selection: $filter) {
+                    ForEach(HistoryFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if model.isHistoryLoading {
+                    ProgressView("Loading history...")
+                        .controlSize(.small)
+                }
+
+                if filteredJobs.isEmpty {
+                    ContentUnavailableView(
+                        model.isHistoryLoading ? "Loading History" : "No Import History",
+                        systemImage: "clock.arrow.circlepath"
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 220)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(filteredJobs) { job in
+                            Button {
+                                model.loadJobDetail(jobID: job.id)
+                            } label: {
+                                HistoryRow(job: job, isSelected: model.selectedJobID == job.id)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(HistoryJobPresentation.title(for: job)), \(HistoryJobPresentation.subtitle(for: job))")
+                            .accessibilityValue(model.selectedJobID == job.id ? "Selected" : "")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var detailSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("Job Details", systemImage: "doc.text.magnifyingglass")
+                .font(.headline)
+
+            if model.isHistoryDetailLoading {
+                ProgressView("Loading job...")
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity, minHeight: 220)
+            } else {
+                HistoryDetailView(job: model.selectedJob(), files: model.selectedJobFiles)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(.top, 2)
     }
 }
 

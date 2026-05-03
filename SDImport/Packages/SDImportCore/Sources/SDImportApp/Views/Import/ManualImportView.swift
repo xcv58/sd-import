@@ -5,9 +5,8 @@ struct ManualImportView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        ScrollView {
+        AppPage(title: "Import", status: model.statusMessage) {
             VStack(alignment: .leading, spacing: 18) {
-                header
                 pathSection
                 actionSection
 
@@ -24,11 +23,7 @@ struct ManualImportView: View {
                     ImportResultView(result: result)
                 }
             }
-            .padding(24)
-            .frame(maxWidth: 980, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Import")
         .toolbar {
             ToolbarItemGroup {
@@ -62,93 +57,93 @@ struct ManualImportView: View {
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Manual Import")
-                .font(.title)
-                .fontWeight(.semibold)
-            Text(model.statusMessage)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     private var pathSection: some View {
-        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
-            GridRow {
-                Text("Card or source")
-                    .foregroundStyle(.secondary)
-                SourceField()
-            }
+        AppSection("Source and Destination", systemImage: "externaldrive") {
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
+                GridRow {
+                    Text("Source")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 92, alignment: .leading)
+                    SourceField()
+                }
 
-            switch model.organizationPreset {
-            case .classicDatedFolders:
-                GridRow {
-                    Text("Photos")
-                        .foregroundStyle(.secondary)
-                    FolderField(
-                        title: "Photos",
-                        path: $model.photosPath,
-                        validation: model.photosValidation,
-                        action: model.choosePhotosFolder
-                    )
-                }
-                GridRow {
-                    Text("Videos")
-                        .foregroundStyle(.secondary)
-                    FolderField(
-                        title: "Videos",
-                        path: $model.videosPath,
-                        validation: model.videosValidation,
-                        action: model.chooseVideosFolder
-                    )
-                }
-            case .shootSessionsByDate:
-                GridRow {
-                    Text("Library")
-                        .foregroundStyle(.secondary)
-                    FolderField(
-                        title: "Library",
-                        path: $model.photosPath,
-                        validation: model.photosValidation,
-                        action: model.choosePhotosFolder
-                    )
-                }
-            case .footageBackup:
-                GridRow {
-                    Text("Footage")
-                        .foregroundStyle(.secondary)
-                    FolderField(
-                        title: "Footage",
-                        path: $model.videosPath,
-                        validation: model.videosValidation,
-                        action: model.chooseVideosFolder
-                    )
-                }
-            }
-
-            GridRow {
-                Text("Shoot name")
-                    .foregroundStyle(.secondary)
-                TextField("Shoot name", text: $model.location)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 220)
-                    .onSubmit {
-                        model.savePreferences()
+                switch model.organizationPreset {
+                case .classicDatedFolders:
+                    GridRow {
+                        Text("Photos")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 92, alignment: .leading)
+                        FolderField(
+                            title: "Photos",
+                            path: $model.photosPath,
+                            validation: model.photosValidation,
+                            action: model.choosePhotosFolder
+                        )
                     }
+                    GridRow {
+                        Text("Videos")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 92, alignment: .leading)
+                        FolderField(
+                            title: "Videos",
+                            path: $model.videosPath,
+                            validation: model.videosValidation,
+                            action: model.chooseVideosFolder
+                        )
+                    }
+                case .shootSessionsByDate:
+                    GridRow {
+                        Text("Library")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 92, alignment: .leading)
+                        FolderField(
+                            title: "Library",
+                            path: $model.photosPath,
+                            validation: model.photosValidation,
+                            action: model.choosePhotosFolder
+                        )
+                    }
+                case .footageBackup:
+                    GridRow {
+                        Text("Footage")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 92, alignment: .leading)
+                        FolderField(
+                            title: "Footage",
+                            path: $model.videosPath,
+                            validation: model.videosValidation,
+                            action: model.chooseVideosFolder
+                        )
+                    }
+                }
+
+                GridRow {
+                    Text("Shoot")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 92, alignment: .leading)
+                    TextField("Shoot name", text: $model.location)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 260)
+                        .onSubmit {
+                            model.savePreferences()
+                        }
+                }
             }
+            .gridColumnAlignment(.leading)
         }
-        .gridColumnAlignment(.leading)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var actionSection: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                actionButtons
-            }
+        AppSection("Actions", systemImage: "bolt") {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    actionButtons
+                }
 
-            VStack(alignment: .leading, spacing: 10) {
-                actionButtons
+                VStack(alignment: .leading, spacing: 10) {
+                    actionButtons
+                }
             }
         }
     }
@@ -160,6 +155,7 @@ struct ManualImportView: View {
             } label: {
                 Label("Scan Card", systemImage: "magnifyingglass")
             }
+            .buttonStyle(.bordered)
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!model.canScan)
 
@@ -168,6 +164,7 @@ struct ManualImportView: View {
             } label: {
                 Label(importButtonTitle, systemImage: "square.and.arrow.down")
             }
+            .buttonStyle(.borderedProminent)
             .disabled(!model.canImportPlannedFiles)
 
             if model.isWorking {
@@ -176,6 +173,8 @@ struct ManualImportView: View {
                 } label: {
                     Label("Cancel", systemImage: "xmark.circle")
                 }
+                .buttonStyle(.bordered)
+                .tint(.red)
             }
 
             if model.isWorking {

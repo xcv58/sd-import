@@ -8,24 +8,33 @@ struct ImportPreviewView: View {
         let rows = model.previewRows()
         let totals = model.previewTotals(rows: rows)
 
-        VStack(alignment: .leading, spacing: 14) {
+        AppSection("Preview", systemImage: "list.bullet.rectangle") {
             header(totals: totals)
             controls
             sessionList
             destinationSummary(rows: rows)
             fileList(rows: rows, totals: totals)
         }
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func header(totals: ImportPreviewTotals) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("Import Preview")
-                .font(.headline)
+        HStack(spacing: 8) {
+            InfoPill(
+                title: totals.copyFiles == 1 ? "1 file" : "\(totals.copyFiles) files",
+                systemImage: "doc"
+            )
+            InfoPill(
+                title: byteString(totals.copyBytes),
+                systemImage: "externaldrive"
+            )
+            if totals.skippedFiles > 0 {
+                InfoPill(
+                    title: "\(totals.skippedFiles) skipped",
+                    systemImage: "forward",
+                    role: .neutral
+                )
+            }
             Spacer()
-            Text("\(totals.copyFiles) files • \(byteString(totals.copyBytes))")
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -263,30 +272,12 @@ struct ImportPreviewView: View {
                 Divider()
 
                 if !destinations.isEmpty {
-                    Text("Will Copy To")
+                    Text("Destinations")
                         .font(.subheadline)
                         .fontWeight(.semibold)
 
                     ForEach(destinations.prefix(3)) { destination in
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "folder")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 16)
-                                Text(destination.title)
-                                    .lineLimit(1)
-                                Text("\(destination.fileCount) files, \(byteString(destination.byteCount))")
-                                    .foregroundStyle(.secondary)
-                                Spacer(minLength: 0)
-                            }
-                            Text(destination.path)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .textSelection(.enabled)
-                        }
-                        .font(.caption)
+                        DestinationSummaryRow(destination: destination)
                     }
 
                     if destinations.count > 3 {
@@ -358,6 +349,39 @@ struct ImportPreviewView: View {
             return "\(required) needed, \(available) available at \(requirement.displayPath)"
         }
         return "Not enough space: \(required) needed, \(available) available at \(requirement.displayPath)"
+    }
+}
+
+private struct DestinationSummaryRow: View {
+    let destination: ImportPreviewDestination
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "folder")
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text(destination.title)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                    Text("\(destination.fileCount) files, \(ByteCountFormatter.string(fromByteCount: destination.byteCount, countStyle: .file))")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+
+                Text(destination.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+        }
+        .font(.caption)
+        .padding(.vertical, 2)
     }
 }
 

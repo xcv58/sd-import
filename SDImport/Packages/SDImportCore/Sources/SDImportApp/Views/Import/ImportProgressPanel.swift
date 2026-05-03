@@ -13,14 +13,15 @@ struct ImportProgressPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        AppSection("Copy Monitor", systemImage: "speedometer") {
             HStack(alignment: .firstTextBaseline) {
-                Text("Copy Monitor")
-                    .font(.headline)
-                Spacer()
                 Text(percentText)
                     .font(.headline)
                     .monospacedDigit()
+                Spacer()
+                Text(fileCountText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             ProgressView(value: fractionComplete)
@@ -66,8 +67,6 @@ struct ImportProgressPanel: View {
                 }
             }
         }
-        .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var copiedText: String {

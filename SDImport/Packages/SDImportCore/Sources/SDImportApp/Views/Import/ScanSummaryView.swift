@@ -5,10 +5,7 @@ struct ScanSummaryView: View {
     let summary: ScanSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Scan Preview")
-                .font(.headline)
-
+        AppSection("Scan Summary", systemImage: "checklist") {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], alignment: .leading, spacing: 12) {
                 MetricView(title: "Scanned", value: summary.scannedFiles)
                 MetricView(title: "New", value: summary.newFiles)
@@ -22,8 +19,6 @@ struct ScanSummaryView: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         }
-        .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

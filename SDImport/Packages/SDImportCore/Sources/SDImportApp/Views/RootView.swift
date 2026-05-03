@@ -89,11 +89,11 @@ private struct SidebarRow: View {
 private struct SidebarShortcutFooter: View {
     var body: some View {
         HStack(spacing: 8) {
-            ShortcutHint(text: "Ctrl Tab")
+            ShortcutHint(text: "⌃⇥")
             Text("Next")
                 .lineLimit(1)
             Spacer(minLength: 0)
-            ShortcutHint(text: "Cmd Opt S")
+            ShortcutHint(text: "⌘⌥S")
             Text("Sidebar")
                 .lineLimit(1)
         }

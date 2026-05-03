@@ -52,14 +52,12 @@ struct ImportResultView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        AppSection("Copy Receipt", systemImage: "checkmark.seal") {
             HStack(alignment: .firstTextBaseline) {
-                Text("Copy Receipt")
-                    .font(.headline)
-                Spacer()
                 Label(copyStatusTitle, systemImage: result.importedFiles == 0 ? "minus.circle" : "checkmark.seal")
                     .font(.caption)
                     .foregroundStyle(copyStatusColor)
+                Spacer()
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], alignment: .leading, spacing: 12) {
@@ -102,8 +100,6 @@ struct ImportResultView: View {
                 }
             }
         }
-        .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var receiptButtons: some View {

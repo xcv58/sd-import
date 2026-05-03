@@ -7,18 +7,13 @@ struct SettingsView: View {
     let updater: SPUUpdater?
 
     var body: some View {
-        ScrollView {
+        AppPage(title: "Settings", status: model.statusMessage) {
             VStack(alignment: .leading, spacing: 18) {
-                header
                 destinations
                 general
                 updates
             }
-            .padding(24)
-            .frame(maxWidth: 760, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Settings")
         .onAppear {
             model.validatePaths()
@@ -37,18 +32,8 @@ struct SettingsView: View {
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Settings")
-                .font(.title)
-                .fontWeight(.semibold)
-            Text(model.statusMessage)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     private var destinations: some View {
-        SettingsSection(title: "Destinations", systemImage: "folder") {
+        AppSection("Destinations", systemImage: "folder") {
             FolderSettingRow(
                 title: "Card or source",
                 path: $model.cardPath,
@@ -79,7 +64,7 @@ struct SettingsView: View {
     }
 
     private var general: some View {
-        SettingsSection(title: "General", systemImage: "gearshape") {
+        AppSection("General", systemImage: "gearshape") {
             Picker("History", selection: $model.historyRetention) {
                 ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
                     Text(policy.settingsTitle).tag(policy)
@@ -98,34 +83,9 @@ struct SettingsView: View {
     }
 
     private var updates: some View {
-        SettingsSection(title: "Updates", systemImage: "arrow.clockwise") {
+        AppSection("Updates", systemImage: "arrow.clockwise") {
             UpdaterSettingsView(updater: updater)
         }
-    }
-}
-
-private struct SettingsSection<Content: View>: View {
-    let title: String
-    let systemImage: String
-    let content: Content
-
-    init(title: String, systemImage: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.systemImage = systemImage
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
-
-            VStack(alignment: .leading, spacing: 10) {
-                content
-            }
-        }
-        .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

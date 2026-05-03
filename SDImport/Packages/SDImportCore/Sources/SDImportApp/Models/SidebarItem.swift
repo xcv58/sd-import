@@ -37,13 +37,13 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     var shortcutHint: String {
         switch self {
         case .import:
-            return "Cmd 1"
+            return "⌘1"
         case .history:
-            return "Cmd 2"
+            return "⌘2"
         case .settings:
-            return "Cmd 3"
+            return "⌘3"
         case .diagnostics:
-            return "Cmd 4"
+            return "⌘4"
         }
     }
 
