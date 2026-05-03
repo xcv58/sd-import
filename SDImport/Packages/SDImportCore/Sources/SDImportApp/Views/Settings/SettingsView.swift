@@ -7,27 +7,36 @@ struct SettingsView: View {
     let updater: SPUUpdater?
 
     var body: some View {
-        TabView {
-            destinations
-                .tabItem {
-                    Label("Destinations", systemImage: "folder")
-                }
-
-            general
-                .tabItem {
-                    Label("General", systemImage: "gearshape")
-                }
-
-            updates
-                .tabItem {
-                    Label("Updates", systemImage: "arrow.clockwise")
-                }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                destinations
+                general
+                updates
+            }
+            .padding(24)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 560, height: 340)
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle("Settings")
+        .onDisappear {
+            model.savePreferences()
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Settings")
+                .font(.title)
+                .fontWeight(.semibold)
+            Text(model.statusMessage)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var destinations: some View {
-        Form {
+        SettingsSection(title: "Destinations", systemImage: "folder") {
             FolderSettingRow(
                 title: "Card or source",
                 path: $model.cardPath,
@@ -43,19 +52,19 @@ struct SettingsView: View {
                 path: $model.videosPath,
                 action: model.chooseVideosFolder
             )
-            TextField("Location", text: $model.location)
-                .onSubmit {
-                    model.savePreferences()
-                }
-        }
-        .padding(20)
-        .onDisappear {
-            model.savePreferences()
+            LabeledContent("Location") {
+                TextField("Location", text: $model.location)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 280)
+                    .onSubmit {
+                        model.savePreferences()
+                    }
+            }
         }
     }
 
     private var general: some View {
-        Form {
+        SettingsSection(title: "General", systemImage: "gearshape") {
             Picker("History", selection: $model.historyRetention) {
                 ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
                     Text(policy.settingsTitle).tag(policy)
@@ -71,14 +80,37 @@ struct SettingsView: View {
                     model.updateLoginItemRegistration()
                 }
         }
-        .padding(20)
     }
 
     private var updates: some View {
-        Form {
+        SettingsSection(title: "Updates", systemImage: "arrow.clockwise") {
             UpdaterSettingsView(updater: updater)
         }
-        .padding(20)
+    }
+}
+
+private struct SettingsSection<Content: View>: View {
+    let title: String
+    let systemImage: String
+    let content: Content
+
+    init(title: String, systemImage: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.systemImage = systemImage
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(title, systemImage: systemImage)
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 10) {
+                content
+            }
+        }
+        .padding()
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -88,16 +120,19 @@ private struct FolderSettingRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            TextField(title, text: $path)
-                .textFieldStyle(.roundedBorder)
+        LabeledContent(title) {
+            HStack(spacing: 8) {
+                TextField(title, text: $path)
+                    .textFieldStyle(.roundedBorder)
 
-            Button {
-                action()
-            } label: {
-                Image(systemName: "folder")
+                Button {
+                    action()
+                } label: {
+                    Image(systemName: "folder")
+                }
+                .help("Choose \(title.lowercased())")
             }
-            .help("Choose \(title.lowercased())")
+            .frame(maxWidth: 520)
         }
     }
 }

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -9,7 +10,7 @@ struct SDImportApp: App {
 
     var body: some Scene {
         WindowGroup("SD Import") {
-            RootView()
+            RootView(updater: appUpdater.updater)
                 .environmentObject(model)
                 .frame(minWidth: 760, minHeight: 560)
         }
@@ -29,11 +30,14 @@ struct SDImportApp: App {
                 }
                 .keyboardShortcut("r", modifiers: [.command])
             }
-        }
 
-        Settings {
-            SettingsView(updater: appUpdater.updater)
-                .environmentObject(model)
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings...") {
+                    model.selection = .settings
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                }
+                .keyboardShortcut(",", modifiers: [.command])
+            }
         }
     }
 }
