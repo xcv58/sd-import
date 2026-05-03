@@ -28,7 +28,8 @@ When the app opens:
 
 1. Open `SD Import > Settings`.
 2. In `Destinations`, choose where imported photos and videos should go.
-3. In `General`, leave `Prompt on card mount` on if you want SD Import to appear when you insert a card.
+3. In `General`, keep Theme set to `System` unless you want to force Light or Dark.
+4. Leave `Prompt on card mount` on if you want SD Import to appear when you insert a card.
 
 Default folder pattern:
 

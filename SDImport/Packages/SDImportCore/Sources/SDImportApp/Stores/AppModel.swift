@@ -61,6 +61,7 @@ final class AppModel: ObservableObject {
     @Published var importMediaSelection: ImportMediaSelection
     @Published var organizationPreset: ImportOrganizationPreset
     @Published var folderGrouping: ImportFolderGrouping
+    @Published var themePreference: AppThemePreference
     @Published var mediaContentProfile: MediaContentProfile?
     @Published var photoPairSummary: PhotoPairSummary?
     @Published var previewSessions: [ImportPreviewSession] = []
@@ -119,6 +120,9 @@ final class AppModel: ObservableObject {
         self.folderGrouping = ImportFolderGrouping(
             rawValue: defaults.string(forKey: DefaultsKeys.folderGrouping) ?? ""
         ) ?? .byDay
+        self.themePreference = AppThemePreference(
+            rawValue: defaults.string(forKey: DefaultsKeys.themePreference) ?? ""
+        ) ?? .system
         bootstrap()
     }
 
@@ -185,6 +189,7 @@ final class AppModel: ObservableObject {
         defaults.set(importMediaSelection.rawValue, forKey: DefaultsKeys.importMediaSelection)
         defaults.set(organizationPreset.rawValue, forKey: DefaultsKeys.organizationPreset)
         defaults.set(folderGrouping.rawValue, forKey: DefaultsKeys.folderGrouping)
+        defaults.set(themePreference.rawValue, forKey: DefaultsKeys.themePreference)
 
         do {
             try settingsRepository?.saveConfiguration(currentConfiguration())
@@ -420,6 +425,10 @@ final class AppModel: ObservableObject {
     }
 
     func folderGroupingDidChange() {
+        savePreferences()
+    }
+
+    func themePreferenceDidChange() {
         savePreferences()
     }
 
@@ -1169,6 +1178,7 @@ final class AppModel: ObservableObject {
         hasCompletedOnboarding = configuration.hasCompletedOnboarding
         workflowProfile = configuration.lastWorkflowProfile
         folderGrouping = configuration.lastFolderGrouping
+        themePreference = configuration.themePreference
         workflowProfilesByVolume = configuration.workflowProfilesByVolume
         importMediaSelection = workflowProfile.mediaSelection
         organizationPreset = workflowProfile.organizationPreset
@@ -1189,6 +1199,7 @@ final class AppModel: ObservableObject {
             hasCompletedOnboarding: hasCompletedOnboarding,
             lastWorkflowProfile: workflowProfile,
             lastFolderGrouping: folderGrouping,
+            themePreference: themePreference,
             workflowProfilesByVolume: workflowProfilesByVolume
         )
     }
@@ -1289,6 +1300,7 @@ private enum DefaultsKeys {
     static let importMediaSelection = "SDImport.importMediaSelection"
     static let organizationPreset = "SDImport.organizationPreset"
     static let folderGrouping = "SDImport.folderGrouping"
+    static let themePreference = "SDImport.themePreference"
 }
 
 private extension String {

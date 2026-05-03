@@ -12,6 +12,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
     public var hasCompletedOnboarding: Bool
     public var lastWorkflowProfile: ImportWorkflowProfile
     public var lastFolderGrouping: ImportFolderGrouping
+    public var themePreference: AppThemePreference
     public var workflowProfilesByVolume: [String: ImportWorkflowProfile]
 
     public init(
@@ -24,6 +25,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         hasCompletedOnboarding: Bool = false,
         lastWorkflowProfile: ImportWorkflowProfile = .mixedShootSession,
         lastFolderGrouping: ImportFolderGrouping = .byDay,
+        themePreference: AppThemePreference = .system,
         workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
     ) {
         self.sourcePath = sourcePath
@@ -35,6 +37,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.lastWorkflowProfile = lastWorkflowProfile
         self.lastFolderGrouping = lastFolderGrouping
+        self.themePreference = themePreference
         self.workflowProfilesByVolume = workflowProfilesByVolume
     }
 
@@ -57,6 +60,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         case hasCompletedOnboarding
         case lastWorkflowProfile
         case lastFolderGrouping
+        case themePreference
         case workflowProfilesByVolume
     }
 
@@ -77,6 +81,10 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
             ImportFolderGrouping.self,
             forKey: .lastFolderGrouping
         ) ?? .byDay
+        themePreference = try container.decodeIfPresent(
+            AppThemePreference.self,
+            forKey: .themePreference
+        ) ?? .system
         workflowProfilesByVolume = try container.decodeIfPresent(
             [String: ImportWorkflowProfile].self,
             forKey: .workflowProfilesByVolume

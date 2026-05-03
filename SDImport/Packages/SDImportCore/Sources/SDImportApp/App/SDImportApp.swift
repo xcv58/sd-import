@@ -1,4 +1,5 @@
 import AppKit
+import SDImportCore
 import SwiftUI
 
 @main
@@ -12,6 +13,7 @@ struct SDImportApp: App {
         WindowGroup("SD Import") {
             RootView(updater: appUpdater.updater)
                 .environmentObject(model)
+                .preferredColorScheme(model.themePreference.colorScheme)
                 .frame(minWidth: 760, minHeight: 560)
         }
         .commands {
@@ -74,6 +76,19 @@ struct SDImportApp: App {
                 }
                 .keyboardShortcut(.tab, modifiers: [.control, .shift])
             }
+        }
+    }
+}
+
+private extension AppThemePreference {
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system:
+            return nil
+        case .light:
+            return .light
+        case .dark:
+            return .dark
         }
     }
 }

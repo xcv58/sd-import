@@ -65,6 +65,17 @@ struct SettingsView: View {
 
     private var general: some View {
         AppSection("General", systemImage: "gearshape") {
+            Picker("Theme", selection: $model.themePreference) {
+                ForEach(AppThemePreference.allCases) { theme in
+                    Text(theme.settingsTitle).tag(theme)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 320)
+            .onChange(of: model.themePreference) {
+                model.themePreferenceDidChange()
+            }
+
             Picker("History", selection: $model.historyRetention) {
                 ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
                     Text(policy.settingsTitle).tag(policy)
@@ -145,6 +156,19 @@ private struct PathStatusLine: View {
             .font(.caption)
             .foregroundStyle(result.isUsable ? Color.secondary : Color.orange)
             .lineLimit(1)
+    }
+}
+
+private extension AppThemePreference {
+    var settingsTitle: String {
+        switch self {
+        case .system:
+            return "System"
+        case .light:
+            return "Light"
+        case .dark:
+            return "Dark"
+        }
     }
 }
 

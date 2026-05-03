@@ -19,6 +19,7 @@ struct SettingsRepositoryTests {
             hasCompletedOnboarding: true,
             lastWorkflowProfile: .footageBackup,
             lastFolderGrouping: .oneShootFolder,
+            themePreference: .dark,
             workflowProfilesByVolume: [
                 "uuid:card": .photoImport
             ]
@@ -46,6 +47,7 @@ struct SettingsRepositoryTests {
 
         #expect(configuration.lastWorkflowProfile == .mixedShootSession)
         #expect(configuration.lastFolderGrouping == .byDay)
+        #expect(configuration.themePreference == .system)
         #expect(configuration.workflowProfilesByVolume.isEmpty)
     }
 
