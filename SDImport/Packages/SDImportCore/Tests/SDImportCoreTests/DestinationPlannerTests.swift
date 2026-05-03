@@ -32,8 +32,8 @@ struct DestinationPlannerTests {
         #expect(videoURL?.path == "/tmp/videos/tmp-2024-07-15-videos/VID_0001.MP4")
     }
 
-    @Test("uses TODO for blank photo locations")
-    func usesTodoForBlankPhotoLocations() {
+    @Test("uses Untitled for blank photo locations")
+    func usesUntitledForBlankPhotoLocations() {
         let roots = DestinationRoots(
             photosURL: URL(fileURLWithPath: "/tmp/photos", isDirectory: true),
             videosURL: URL(fileURLWithPath: "/tmp/videos", isDirectory: true)
@@ -48,7 +48,7 @@ struct DestinationPlannerTests {
             roots: roots
         )
 
-        #expect(photoURL?.path == "/tmp/photos/2024-07-15 TODO/IMG_0001.JPG")
+        #expect(photoURL?.path == "/tmp/photos/2024-07-15 Untitled/IMG_0001.JPG")
     }
 
     @Test("plans shoot session folders under one library root")

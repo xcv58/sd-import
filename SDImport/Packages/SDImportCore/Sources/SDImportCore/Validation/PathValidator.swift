@@ -11,6 +11,7 @@ public enum PathValidationStatus: Equatable, Sendable {
     case notDirectory
     case unreadable
     case unwritable
+    case placeholder
     case ready
 
     public var isUsable: Bool {
@@ -29,6 +30,8 @@ public enum PathValidationStatus: Equatable, Sendable {
             return "Permission needed"
         case .unwritable:
             return "Permission needed"
+        case .placeholder:
+            return "Choose a specific card or source folder"
         case .ready:
             return "Ready"
         }
@@ -76,6 +79,15 @@ public struct PathValidator {
                 expandedPath: expandedPath,
                 purpose: purpose,
                 status: .empty
+            )
+        }
+
+        if purpose == .source, URL(fileURLWithPath: expandedPath).standardizedFileURL.path == "/Volumes" {
+            return PathValidationResult(
+                originalPath: path,
+                expandedPath: expandedPath,
+                purpose: purpose,
+                status: .placeholder
             )
         }
 

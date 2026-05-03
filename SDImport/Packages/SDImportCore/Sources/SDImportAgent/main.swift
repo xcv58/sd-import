@@ -40,15 +40,37 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
 
     private func handleMountURL(_ mountURL: URL) {
         let volume = detector.mountedVolume(from: mountURL)
-        guard detector.isLikelyImportVolume(volume), debouncer.shouldAccept(volume) else {
+        guard detector.isLikelyImportVolume(volume) else {
+            return
+        }
+        Task.detached(priority: .utility) { [weak self] in
+            guard VolumeDetector().containsImportableMedia(at: mountURL) else {
+                return
+            }
+            await MainActor.run {
+                self?.handleImportableVolume(volume)
+            }
+        }
+    }
+
+    private func handleImportableVolume(_ volume: MountedVolume) {
+        guard debouncer.shouldAccept(volume) else {
+            return
+        }
+        guard isMainAppRunning else {
+            launchMainApp()
+            post(volume)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [volume] in
+                self.post(volume)
+            }
             return
         }
 
-        launchMainApp()
         post(volume)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [volume] in
-            self.post(volume)
-        }
+    }
+
+    private var isMainAppRunning: Bool {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: "com.xcv58.SDImport").isEmpty
     }
 
     private func launchMainApp() {

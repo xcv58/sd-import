@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DiagnosticsView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var isShowingPruneConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -33,10 +34,18 @@ struct DiagnosticsView: View {
                     Label("Dry Run Prune", systemImage: "doc.text.magnifyingglass")
                 }
 
-                Button {
-                    model.pruneHistory(dryRun: false)
+                Button(role: .destructive) {
+                    isShowingPruneConfirmation = true
                 } label: {
                     Label("Prune History", systemImage: "trash")
+                }
+                .alert("Prune old history?", isPresented: $isShowingPruneConfirmation) {
+                    Button("Prune History", role: .destructive) {
+                        model.pruneHistory(dryRun: false)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This deletes old SD Import job records using the current retention setting. Copied media files are not deleted.")
                 }
             }
 

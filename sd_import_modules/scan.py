@@ -191,11 +191,11 @@ def choose_location(config: Dict[str, Any], requested_location: Optional[str], v
     mapping = config.get("location_by_volume")
     if isinstance(mapping, dict) and volume_name and volume_name in mapping:
         return str(mapping[volume_name])
-    return str(config.get("default_location", "TODO"))
+    return str(config.get("default_location", "Untitled"))
 
 
 def make_photo_dest_dir(photos_base: Path, capture_date: str, location: str) -> Path:
-    safe_location = location.strip() or "TODO"
+    safe_location = location.strip() or "Untitled"
     return photos_base / f"{capture_date} {safe_location}"
 
 

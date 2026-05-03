@@ -36,7 +36,7 @@ struct SDImportCLI {
             let inputURL = try requiredURL("--input", in: arguments)
             let photosURL = try requiredURL("--photos-root", in: arguments)
             let videosURL = try requiredURL("--videos-root", in: arguments)
-            let location = option("--location", in: arguments) ?? "TODO"
+            let location = option("--location", in: arguments) ?? "Untitled"
             let reportsURL = try optionURL("--reports-dir", in: arguments)
             let jobID = option("--job-id", in: arguments) ?? JobID.make()
             let scanner = MediaScanner(

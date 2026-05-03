@@ -59,7 +59,7 @@ public enum ImportWorkflowProfile: String, Codable, CaseIterable, Identifiable, 
     }
 
     public var includesSidecarsByDefault: Bool {
-        false
+        self == .footageBackup
     }
 
     public static func matching(

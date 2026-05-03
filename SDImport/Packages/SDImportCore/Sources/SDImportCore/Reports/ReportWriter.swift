@@ -70,7 +70,7 @@ public struct ReportWriter {
             lines.append("- none")
         } else {
             for file in copiedFiles {
-                lines.append("- `\(file.filename)` -> `\(file.finalDestinationPath ?? file.plannedDestinationPath ?? "")` (Verified, \(Self.bytes(file.size)))")
+                lines.append("- `\(file.filename)` -> `\(file.finalDestinationPath ?? file.plannedDestinationPath ?? "")` (Copied, \(Self.bytes(file.size)))")
             }
         }
 

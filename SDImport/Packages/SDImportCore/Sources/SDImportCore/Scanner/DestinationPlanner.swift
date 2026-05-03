@@ -11,7 +11,7 @@ public struct DestinationPlanner: Sendable {
     ) -> URL? {
         switch mediaKind {
         case .photo:
-            let safeLocation = location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "TODO" : location
+            let safeLocation = location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Untitled" : location
             return roots.photosURL.appendingPathComponent("\(captureDate) \(safeLocation)", isDirectory: true)
         case .video:
             return roots.videosURL.appendingPathComponent("tmp-\(captureDate)-videos", isDirectory: true)
@@ -60,7 +60,7 @@ public struct DestinationPlanner: Sendable {
                 return nil
             }
             let sessionDirectory = roots.photosURL
-                .appendingPathComponent("\(captureDate) \(safeComponent(sessionLabel, fallback: "TODO"))", isDirectory: true)
+                .appendingPathComponent("\(captureDate) \(safeComponent(sessionLabel, fallback: "Untitled"))", isDirectory: true)
             let mediaDirectory = mediaKind == .photo ? "Photos" : "Video"
             return sessionDirectory
                 .appendingPathComponent(mediaDirectory, isDirectory: true)

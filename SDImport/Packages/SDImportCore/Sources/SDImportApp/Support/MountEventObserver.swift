@@ -60,10 +60,10 @@ final class MountEventObserver {
 
     private func handleMountURL(_ mountURL: URL) {
         let volume = detector.mountedVolume(from: mountURL)
-        guard detector.isLikelyImportVolume(volume), debouncer.shouldAccept(volume) else {
+        guard detector.isLikelyImportVolume(volume) else {
             return
         }
-        handler(volume)
+        probeForMediaThenHandle(volume)
     }
 
     private func handleHandoff(path: String, name: String?) {
@@ -81,7 +81,26 @@ final class MountEventObserver {
                 availableCapacityBytes: volume.availableCapacityBytes
             )
         }
-        guard detector.isLikelyImportVolume(volume), debouncer.shouldAccept(volume) else {
+        guard detector.isLikelyImportVolume(volume) else {
+            return
+        }
+        probeForMediaThenHandle(volume)
+    }
+
+    private func probeForMediaThenHandle(_ volume: MountedVolume) {
+        let mountURL = volume.mountURL
+        Task.detached(priority: .utility) { [weak self] in
+            guard VolumeDetector().containsImportableMedia(at: mountURL) else {
+                return
+            }
+            await MainActor.run {
+                self?.handleImportableVolume(volume)
+            }
+        }
+    }
+
+    private func handleImportableVolume(_ volume: MountedVolume) {
+        guard debouncer.shouldAccept(volume) else {
             return
         }
         handler(volume)

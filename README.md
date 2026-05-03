@@ -92,11 +92,11 @@ Create `~/.sd-import/config.json`:
 
 ```json
 {
-  "default_location": "TODO",
+  "default_location": "Untitled",
   "location_by_volume": {
     "EOS_DIGITAL": "SF"
   },
-  "ignore_volume_regex": "Time Machine|Backup"
+  "ignore_volume_regex": "Time Machine|Backup|Recovery|Preboot|Macintosh HD"
 }
 ```
 
@@ -113,7 +113,7 @@ $HOME/work/macos-automation/sd-import run \
 
 On mount (or manual `run`), the flow is:
 
-1. `Skip` / `Continue` prompt.
+1. `Skip` / `Scan This Card` prompt.
 2. Scan + preview summary (`new/known/conflicts/unsupported`).
 3. Optional import with live copy progress, then `Dismiss`.
 

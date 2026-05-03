@@ -54,6 +54,6 @@ struct ReportWriterTests {
         #expect(markdown.contains("IMG_0001.JPG"))
         #expect(markdown.contains("- copied: `1`"))
         #expect(markdown.contains("## Copied Files"))
-        #expect(markdown.contains("(Verified,"))
+        #expect(markdown.contains("(Copied,"))
     }
 }

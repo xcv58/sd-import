@@ -6,7 +6,7 @@ struct HistoryView: View {
     @State private var filter: HistoryFilter = .all
 
     private var filteredJobs: [ImportJob] {
-        model.jobs.filter(filter.includes)
+        model.jobs.filter(\.isImportHistoryEntry).filter(filter.includes)
     }
 
     var body: some View {
@@ -37,10 +37,14 @@ struct HistoryView: View {
                             .font(.headline)
                         LazyVStack(alignment: .leading, spacing: 8) {
                             ForEach(filteredJobs) { job in
-                                HistoryRow(job: job, isSelected: model.selectedJobID == job.id)
-                                    .onTapGesture {
-                                        model.loadJobDetail(jobID: job.id)
-                                    }
+                                Button {
+                                    model.loadJobDetail(jobID: job.id)
+                                } label: {
+                                    HistoryRow(job: job, isSelected: model.selectedJobID == job.id)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("\(HistoryJobPresentation.title(for: job)), \(HistoryJobPresentation.subtitle(for: job))")
+                                .accessibilityValue(model.selectedJobID == job.id ? "Selected" : "")
                             }
                         }
                     }
@@ -77,11 +81,17 @@ struct HistoryView: View {
                 } label: {
                     Label("Retry", systemImage: "arrow.counterclockwise")
                 }
-                .disabled(model.selectedJobID == nil)
+                .disabled(model.isWorking || model.selectedJob()?.canRetryImport != true)
             }
         }
         .onAppear {
-            model.refreshHistory()
+            let importJobs = model.jobs.filter(\.isImportHistoryEntry)
+            let selectedJobIsVisible = model.selectedJobID.map { selectedJobID in
+                importJobs.contains { $0.id == selectedJobID }
+            } ?? false
+            if importJobs.isEmpty || !selectedJobIsVisible {
+                model.refreshHistory()
+            }
         }
     }
 }

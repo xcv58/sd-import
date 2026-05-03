@@ -194,9 +194,9 @@ write_default_config_if_missing() {
   fi
   cat > "$CONFIG_PATH" <<'JSON'
 {
-  "default_location": "TODO",
+  "default_location": "Untitled",
   "location_by_volume": {},
-  "ignore_volume_regex": "Time Machine|Backup"
+  "ignore_volume_regex": "Time Machine|Backup|Recovery|Preboot|Macintosh HD"
 }
 JSON
   log "created default config at $CONFIG_PATH"

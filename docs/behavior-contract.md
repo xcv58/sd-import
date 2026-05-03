@@ -110,22 +110,22 @@ Videos:
 Shoot Sessions:
 
 ```text
-<photosRoot>/<YYYY>/<YYYY-MM-DD> <session label>/Photos/<filename>
-<photosRoot>/<YYYY>/<YYYY-MM-DD> <session label>/Video/<filename>
+<photosRoot>/<YYYY-MM-DD> <session label>/Photos/<filename>
+<photosRoot>/<YYYY-MM-DD> <session label>/Video/<filename>
 ```
 
 Footage Backup:
 
 ```text
-<videosRoot>/<YYYY>/<YYYY-MM-DD> <session label>/Card <volume name>/<source relative path>
+<videosRoot>/<YYYY-MM-DD> <session label>/Card <volume name>/<filename>
 ```
 
 Rules:
 
-- Empty location labels are treated as `TODO`.
+- Empty location labels are treated as `Untitled`.
 - Destination roots are user-selected folders.
 - The job stores the destination roots used at scan/import time.
-- Footage Backup preserves relative source paths for videos and selected sidecar files.
+- Footage Backup uses flat files under the generated card folder for videos and selected sidecar files.
 
 ## Decisions
 
@@ -379,5 +379,5 @@ Rules:
 11. Insert a real SD card with background prompt enabled. One prompt appears.
 12. Insert the same card with repeated mount events. No duplicate jobs are created.
 13. Disable background prompt. The login item no longer prompts on mount.
-14. Use Footage Backup on a card with video sidecar files. Videos and selected sidecars preserve their card-relative paths.
+14. Use Footage Backup on a card with video sidecar files. Videos and selected sidecars copy as flat files under the generated card folder.
 15. Run the notarized app on a clean Mac without Python, Homebrew, Raycast, `swiftDialog`, or `exiftool`.

@@ -28,6 +28,13 @@ public struct ImportJob: Identifiable, Hashable, Codable, Sendable {
         status != .scanned
     }
 
+    public var canRetryImport: Bool {
+        status == .failed
+            || status == .cancelled
+            || status == .importedWithErrors
+            || failedFiles > 0
+    }
+
     public init(
         id: String,
         createdAt: Date,

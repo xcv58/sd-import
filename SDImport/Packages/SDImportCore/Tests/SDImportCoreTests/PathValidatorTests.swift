@@ -27,6 +27,15 @@ struct PathValidatorTests {
         #expect(result.message == "Card is not mounted")
     }
 
+    @Test("reports volumes root as a placeholder source")
+    func reportsVolumesRootAsPlaceholderSource() {
+        let result = PathValidator().validate(path: "/Volumes", purpose: .source)
+
+        #expect(result.status == .placeholder)
+        #expect(result.isUsable == false)
+        #expect(result.message == "Choose a specific card or source folder")
+    }
+
     @Test("reports missing destination folders")
     func reportsMissingDestinationFolder() {
         let missingPath = "/tmp/SDImportCoreTests-missing-\(UUID().uuidString)"

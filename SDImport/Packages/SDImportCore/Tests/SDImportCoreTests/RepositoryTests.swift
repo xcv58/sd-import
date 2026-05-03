@@ -81,6 +81,74 @@ struct RepositoryTests {
         #expect(files.first?.copyStatus == .pending)
     }
 
+    @Test("lists import history jobs before applying the limit")
+    func listsImportHistoryJobsBeforeApplyingLimit() throws {
+        let pool = try migratedPool()
+        let repository = JobRepository(pool: pool)
+
+        try repository.insertJob(
+            ImportJob(
+                id: "imported",
+                createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+                mountPath: "/Volumes/CARD",
+                location: "TEST",
+                photosRoot: "/tmp/photos",
+                videosRoot: "/tmp/videos",
+                status: .imported
+            )
+        )
+        try repository.insertJob(
+            ImportJob(
+                id: "scan-only",
+                createdAt: Date(timeIntervalSince1970: 1_700_000_100),
+                mountPath: "/Volumes/CARD",
+                location: "TEST",
+                photosRoot: "/tmp/photos",
+                videosRoot: "/tmp/videos",
+                status: .scanned
+            )
+        )
+
+        let jobs = try repository.listImportHistoryJobs(limit: 1)
+
+        #expect(jobs.map(\.id) == ["imported"])
+    }
+
+    @Test("lists import history jobs by displayed timestamp")
+    func listsImportHistoryJobsByDisplayedTimestamp() throws {
+        let pool = try migratedPool()
+        let repository = JobRepository(pool: pool)
+
+        try repository.insertJob(
+            ImportJob(
+                id: "old-created-new-completed",
+                createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+                completedAt: Date(timeIntervalSince1970: 1_700_000_300),
+                mountPath: "/Volumes/CARD",
+                location: "TEST",
+                photosRoot: "/tmp/photos",
+                videosRoot: "/tmp/videos",
+                status: .imported
+            )
+        )
+        try repository.insertJob(
+            ImportJob(
+                id: "new-created-old-display",
+                createdAt: Date(timeIntervalSince1970: 1_700_000_100),
+                startedAt: Date(timeIntervalSince1970: 1_700_000_200),
+                mountPath: "/Volumes/CARD",
+                location: "TEST",
+                photosRoot: "/tmp/photos",
+                videosRoot: "/tmp/videos",
+                status: .failed
+            )
+        )
+
+        let jobs = try repository.listImportHistoryJobs(limit: 2)
+
+        #expect(jobs.map(\.id) == ["old-created-new-completed", "new-created-old-display"])
+    }
+
     @Test("records and checks dedupe items")
     func recordsAndChecksDedupeItems() throws {
         let pool = try migratedPool()
@@ -152,6 +220,37 @@ struct RepositoryTests {
         #expect(try dedupeRepository.contains(fingerprint))
         #expect(try dedupeRepository.forgetImportedFiles(jobID: "job-1") == 1)
         #expect(try dedupeRepository.contains(fingerprint) == false)
+    }
+
+    @Test("forgetting a job keeps fingerprints first imported by other jobs")
+    func forgettingJobKeepsOtherJobFingerprints() throws {
+        let pool = try migratedPool()
+        let repository = DedupeRepository(pool: pool)
+        let firstFingerprint = FileFingerprint.compute(
+            size: 17,
+            modificationDateString: "2023-11-14T22:13:20",
+            identityHint: "DCIM/IMG_0001.JPG"
+        )
+        let secondFingerprint = FileFingerprint.compute(
+            size: 19,
+            modificationDateString: "2023-11-14T22:13:21",
+            identityHint: "DCIM/IMG_0002.JPG"
+        )
+
+        try repository.recordImported(
+            firstFingerprint,
+            jobID: "job-1",
+            sourcePath: "/Volumes/CARD/DCIM/IMG_0001.JPG"
+        )
+        try repository.recordImported(
+            secondFingerprint,
+            jobID: "job-2",
+            sourcePath: "/Volumes/CARD/DCIM/IMG_0002.JPG"
+        )
+
+        #expect(try repository.forgetImportedFiles(jobID: "job-1") == 1)
+        #expect(try repository.contains(firstFingerprint) == false)
+        #expect(try repository.contains(secondFingerprint))
     }
 }
 

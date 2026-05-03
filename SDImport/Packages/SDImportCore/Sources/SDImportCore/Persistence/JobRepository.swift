@@ -52,6 +52,23 @@ public struct JobRepository {
         }
     }
 
+    public func listImportHistoryJobs(limit: Int = 50) throws -> [ImportJob] {
+        try pool.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT *
+                FROM jobs
+                WHERE status != ?
+                ORDER BY COALESCE(completed_at, started_at, created_at) DESC
+                LIMIT ?
+                """,
+                arguments: [ImportJobStatus.scanned.databaseValue, limit]
+            )
+            return try rows.map(decodeJob)
+        }
+    }
+
     public func interruptedImportJobs() throws -> [ImportJob] {
         try pool.read { db in
             let rows = try Row.fetchAll(

@@ -360,16 +360,31 @@ def import_new_files(
         active_file_bytes = 0
         emit_progress(force=True)
 
+    totals = conn.execute(
+        """
+        SELECT
+          SUM(CASE WHEN copy_status='COPIED' THEN 1 ELSE 0 END) AS imported_files,
+          SUM(CASE WHEN copy_status='SKIPPED' THEN 1 ELSE 0 END) AS skipped_files,
+          SUM(CASE WHEN copy_status='FAILED' THEN 1 ELSE 0 END) AS failed_files
+        FROM job_files
+        WHERE job_id=?
+        """,
+        (job_id,),
+    ).fetchone()
+    job_imported_files = int(totals["imported_files"] or 0) if totals else 0
+    job_skipped_files = int(totals["skipped_files"] or 0) if totals else 0
+    job_failed_files = int(totals["failed_files"] or 0) if totals else 0
+
     conn.execute(
         """
         UPDATE jobs
-        SET imported_files = imported_files + ?,
-            skipped_files = skipped_files + ?,
-            failed_files = failed_files + ?,
+        SET imported_files = ?,
+            skipped_files = ?,
+            failed_files = ?,
             status = CASE WHEN ? > 0 THEN 'IMPORTED_WITH_ERRORS' ELSE 'IMPORTED' END
         WHERE job_id=?
         """,
-        (imported_files, skipped_files, failed_files, failed_files, job_id),
+        (job_imported_files, job_skipped_files, job_failed_files, job_failed_files, job_id),
     )
     conn.commit()
 
