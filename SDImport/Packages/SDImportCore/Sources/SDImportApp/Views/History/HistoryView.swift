@@ -109,7 +109,7 @@ private enum HistoryFilter: String, CaseIterable, Identifiable {
         case .all:
             return true
         case .success:
-            return job.failedFiles == 0 && (job.status == .imported || job.status == .scanned)
+            return job.failedFiles == 0 && job.status == .imported
         case .failed:
             return job.failedFiles > 0
                 || job.status == .failed
@@ -129,9 +129,9 @@ private struct HistoryRow: View {
                 .foregroundStyle(job.failedFiles > 0 ? .orange : .secondary)
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 3) {
-                Text(job.volumeName ?? job.id)
+                Text(HistoryJobPresentation.title(for: job))
                     .lineLimit(1)
-                Text("\(job.status.databaseValue) · \(job.newFiles) new · \(job.failedFiles) failed")
+                Text(HistoryJobPresentation.subtitle(for: job))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

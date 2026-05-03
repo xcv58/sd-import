@@ -6,6 +6,31 @@ import Testing
 
 @Suite("Repositories")
 struct RepositoryTests {
+    @Test("scan-only jobs are not import history entries")
+    func scanOnlyJobsAreNotImportHistoryEntries() {
+        let scannedJob = ImportJob(
+            id: "scan-only",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            mountPath: "/Volumes/CARD",
+            location: "TEST",
+            photosRoot: "/tmp/photos",
+            videosRoot: "/tmp/videos",
+            status: .scanned
+        )
+        let importedJob = ImportJob(
+            id: "imported",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            mountPath: "/Volumes/CARD",
+            location: "TEST",
+            photosRoot: "/tmp/photos",
+            videosRoot: "/tmp/videos",
+            status: .imported
+        )
+
+        #expect(scannedJob.isImportHistoryEntry == false)
+        #expect(importedJob.isImportHistoryEntry)
+    }
+
     @Test("stores and fetches jobs and job files")
     func storesAndFetchesJobsAndFiles() throws {
         let pool = try migratedPool()
