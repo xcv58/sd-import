@@ -121,6 +121,12 @@ that explain what changed for users. If no notes file is provided, the release
 script generates a basic changelog from commit subjects instead of publishing a
 generic placeholder.
 
+The release script should publish Sparkle release notes with a version-specific
+GitHub asset URL, such as
+`https://github.com/xcv58/macos-automation/releases/download/v1.0/SD-Import.md`.
+Avoid `releases/latest/download/SD-Import.md` for release notes because GitHub's
+latest-release redirect can be stale while a new update is being published.
+
 Sparkle's private key must stay outside git and outside the public hosting
 bucket. Public builds should move to a native Xcode app archive/export target
 before automatic updates are enabled for users; the current SwiftPM bundle path
