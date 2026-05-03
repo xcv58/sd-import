@@ -1,4 +1,21 @@
-# SD Auto Import (macOS)
+# SD Import for macOS
+
+## For Users
+
+Install the native macOS app from the latest release:
+
+https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg
+
+Quick install:
+
+1. Download `SD-Import.dmg`.
+2. Open it.
+3. Drag `SD Import.app` to `Applications`.
+4. Open `SD Import` and choose your photo/video destination folders in Settings.
+
+Full user instructions are in [docs/user-guide.md](docs/user-guide.md).
+
+## Legacy Python Automation
 
 This repo provides a deterministic SD-card importer with:
 

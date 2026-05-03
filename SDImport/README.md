@@ -1,8 +1,16 @@
 # SD Import Native
 
-This directory contains the native macOS migration for SD Import.
+This directory contains the native macOS app for SD Import.
 
-The first native app target is `SDImportApp`, backed by `Packages/SDImportCore` for shared scanning, import planning, persistence, and history logic. The existing Python/Raycast implementation at the repository root remains the reference implementation until the native app reaches parity.
+For normal installation and daily use, start with the user guide:
+
+```text
+docs/user-guide.md
+```
+
+The app target is `SDImportApp`, backed by `Packages/SDImportCore` for shared scanning, import planning, persistence, and history logic. The existing Python/Raycast implementation at the repository root remains available for legacy automation users.
+
+## Developer Notes
 
 Build and launch the app bundle from the repository root:
 
