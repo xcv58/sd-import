@@ -111,10 +111,22 @@ cp "$DMG_PATH" "$UPDATES_DIR/SD-Import.dmg"
 if [[ -n "$RELEASE_NOTES_FILE" ]]; then
   cp "$RELEASE_NOTES_FILE" "$UPDATE_NOTES_PATH"
 else
+  previous_tag="$(git -C "$ROOT_DIR" describe --tags --abbrev=0 "$RELEASE_TARGET^" 2>/dev/null || true)"
+  changelog_range="$RELEASE_TARGET"
+  if [[ -n "$previous_tag" ]]; then
+    changelog_range="$previous_tag..$RELEASE_TARGET"
+  fi
+  changelog="$(git -C "$ROOT_DIR" log --max-count=20 --pretty=format:'- %s' "$changelog_range" 2>/dev/null || true)"
+  if [[ -z "$changelog" ]]; then
+    changelog="- Update SD Import."
+  fi
+
   cat >"$UPDATE_NOTES_PATH" <<EOF
 # SD Import $APP_VERSION
 
-See the GitHub release for details.
+## Changes
+
+$changelog
 EOF
 fi
 
