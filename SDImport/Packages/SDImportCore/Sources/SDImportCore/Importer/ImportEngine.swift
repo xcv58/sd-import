@@ -7,6 +7,7 @@ public struct ImportEngine {
     private let conflictResolver: ConflictResolver
     private let copyEngine: CopyEngine
     private let destinationSpaceChecker: DestinationSpaceChecker
+    private let reportWriter: ReportWriter
 
     public init(
         fileManager: FileManager = .default,
@@ -14,7 +15,8 @@ public struct ImportEngine {
         dedupeRepository: DedupeRepository,
         conflictResolver: ConflictResolver = ConflictResolver(),
         copyEngine: CopyEngine = CopyEngine(),
-        destinationSpaceChecker: DestinationSpaceChecker = DestinationSpaceChecker()
+        destinationSpaceChecker: DestinationSpaceChecker = DestinationSpaceChecker(),
+        reportWriter: ReportWriter = ReportWriter()
     ) {
         self.fileManager = fileManager
         self.jobRepository = jobRepository
@@ -22,6 +24,7 @@ public struct ImportEngine {
         self.conflictResolver = conflictResolver
         self.copyEngine = copyEngine
         self.destinationSpaceChecker = destinationSpaceChecker
+        self.reportWriter = reportWriter
     }
 
     @discardableResult
@@ -46,6 +49,9 @@ public struct ImportEngine {
         var copiedBytes: Int64 = 0
         var activeFileBytes: Int64 = 0
         var currentFile: JobFileRecord?
+        var currentDestinationPath: String?
+        var recentFiles: [ImportProgressFileEvent] = []
+        var progressEventSequence = 0
 
         let spaceCheck = try destinationSpaceChecker.check(files: files)
         if let failure = spaceCheck.failures.first {
@@ -93,9 +99,34 @@ public struct ImportEngine {
                     percent: percent,
                     currentFilename: currentFile?.filename,
                     currentSourcePath: currentFile?.sourcePath,
+                    currentDestinationPath: currentDestinationPath,
+                    recentFiles: recentFiles,
                     reportPath: job.summaryMarkdownPath
                 )
             )
+        }
+
+        func recordFileEvent(
+            file: JobFileRecord,
+            status: CopyStatus,
+            detail: String?,
+            destinationPath: String?
+        ) {
+            progressEventSequence += 1
+            recentFiles.insert(
+                ImportProgressFileEvent(
+                    id: "\(file.id ?? -1)-\(progressEventSequence)",
+                    filename: file.filename,
+                    status: status,
+                    detail: detail,
+                    destinationPath: destinationPath,
+                    size: file.size
+                ),
+                at: 0
+            )
+            if recentFiles.count > 6 {
+                recentFiles.removeLast(recentFiles.count - 6)
+            }
         }
 
         emit(status: totalFiles == 0 ? "idle" : "copying")
@@ -127,6 +158,7 @@ public struct ImportEngine {
             }
 
             currentFile = file
+            currentDestinationPath = file.plannedDestinationPath
             activeFileBytes = 0
             emit(status: "copying")
 
@@ -141,7 +173,9 @@ public struct ImportEngine {
                     error: "source file missing"
                 )
                 currentFile = nil
+                currentDestinationPath = nil
                 activeFileBytes = 0
+                recordFileEvent(file: file, status: .failed, detail: "source file missing", destinationPath: nil)
                 emit(status: "copying")
                 continue
             }
@@ -168,7 +202,14 @@ public struct ImportEngine {
                     error: "already_imported_fingerprint"
                 )
                 currentFile = nil
+                currentDestinationPath = nil
                 activeFileBytes = 0
+                recordFileEvent(
+                    file: file,
+                    status: .skipped,
+                    detail: "Already imported",
+                    destinationPath: file.plannedDestinationPath
+                )
                 emit(status: "copying")
                 continue
             }
@@ -197,8 +238,16 @@ public struct ImportEngine {
                     jobID: jobID,
                     sourcePath: file.sourcePath
                 )
+                recordFileEvent(
+                    file: file,
+                    status: .skipped,
+                    detail: reason,
+                    destinationPath: candidate.path
+                )
             case .copy(let destinationURL):
                 do {
+                    currentDestinationPath = destinationURL.path
+                    emit(status: "copying")
                     try copyEngine.copyFile(
                         from: sourceURL,
                         to: destinationURL,
@@ -225,6 +274,12 @@ public struct ImportEngine {
                         jobID: jobID,
                         sourcePath: file.sourcePath
                     )
+                    recordFileEvent(
+                        file: file,
+                        status: .copied,
+                        detail: "Verified",
+                        destinationPath: destinationURL.path
+                    )
                 } catch SDImportError.cancelled {
                     try cancelImport(currentFileID: fileID)
                 } catch {
@@ -236,10 +291,17 @@ public struct ImportEngine {
                         status: .failed,
                         error: String(describing: error)
                     )
+                    recordFileEvent(
+                        file: file,
+                        status: .failed,
+                        detail: String(describing: error),
+                        destinationPath: destinationURL.path
+                    )
                 }
             }
 
             currentFile = nil
+            currentDestinationPath = nil
             activeFileBytes = 0
             emit(status: "copying")
         }
@@ -251,6 +313,7 @@ public struct ImportEngine {
             finalStatus: finalJobStatus,
             completedAt: Date()
         )
+        rewriteReportIfPossible(jobID: jobID)
         emit(status: terminalStatus, forceProcessedBytes: totalBytes)
 
         return ImportResult(
@@ -269,5 +332,30 @@ public struct ImportEngine {
         formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         return formatter.date(from: string)
+    }
+
+    private func rewriteReportIfPossible(jobID: String) {
+        guard
+            let job = try? jobRepository.fetchJob(id: jobID),
+            let reportPath = job.summaryMarkdownPath ?? job.summaryJSONPath
+        else {
+            return
+        }
+
+        let files = (try? jobRepository.fetchJobFiles(jobID: jobID)) ?? []
+        let summary = ScanSummary(
+            jobID: job.id,
+            mountPath: job.mountPath,
+            volumeName: job.volumeName,
+            volumeUUID: job.volumeUUID,
+            location: job.location,
+            scannedFiles: job.scannedFiles,
+            newFiles: job.newFiles,
+            knownFiles: job.knownFiles,
+            unsupportedFiles: job.unsupportedFiles,
+            conflictFiles: job.conflictFiles
+        )
+        let baseURL = URL(fileURLWithPath: reportPath, isDirectory: false).deletingPathExtension()
+        _ = try? reportWriter.writeReport(summary: summary, files: files, baseURL: baseURL)
     }
 }

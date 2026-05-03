@@ -147,10 +147,20 @@ struct MediaScannerImportTests {
         #expect(result.importedFiles == 1)
         #expect(progressEvents.count >= 3)
         #expect(progressEvents.contains { $0.currentFilename == "IMG_0002.JPG" })
+        #expect(progressEvents.contains { $0.currentDestinationPath?.hasSuffix("IMG_0002.JPG") == true })
         #expect(finalProgress.status == "completed")
         #expect(finalProgress.percent == 100)
         #expect(finalProgress.processedBytes == finalProgress.totalBytes)
         #expect(finalProgress.throughputBytesPerSecond > 0)
+        #expect(
+            finalProgress.recentFiles.contains {
+                $0.filename == "IMG_0002.JPG" && $0.status == .copied && $0.detail == "Verified"
+            }
+        )
+
+        let report = try String(contentsOf: fixture.reportsURL.appendingPathComponent("job-progress.md"))
+        #expect(report.contains("## Copied Files"))
+        #expect(report.contains("Verified"))
     }
 
     @Test("import checks destination space before copying")

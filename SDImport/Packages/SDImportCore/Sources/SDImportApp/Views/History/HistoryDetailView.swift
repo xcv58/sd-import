@@ -4,9 +4,14 @@ import SwiftUI
 struct HistoryDetailView: View {
     @EnvironmentObject private var model: AppModel
     @State private var isShowingForgetConfirmation = false
+    @State private var fileFilter: HistoryFileFilter = .all
 
     let job: ImportJob?
     let files: [JobFileRecord]
+
+    private var filteredFiles: [JobFileRecord] {
+        files.filter(fileFilter.includes)
+    }
 
     var body: some View {
         if let job {
@@ -107,26 +112,174 @@ struct HistoryDetailView: View {
 
     private var fileList: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Files")
-                .font(.headline)
-            ForEach(files) { file in
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(file.filename)
-                        .lineLimit(1)
-                    Text("\(file.decision.databaseValue) · \(file.copyStatus.databaseValue) · \(file.relativePath ?? file.sourcePath)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    if let error = file.error, !error.isEmpty {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .lineLimit(2)
+            HStack {
+                Text("Files")
+                    .font(.headline)
+                Spacer()
+                Picker("File Filter", selection: $fileFilter) {
+                    ForEach(HistoryFileFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
                     }
                 }
-                .padding(.vertical, 5)
+                .pickerStyle(.segmented)
+                .frame(width: 320)
+            }
+
+            ForEach(filteredFiles) { file in
+                HistoryFileRow(file: file)
                 Divider()
             }
         }
+    }
+}
+
+private enum HistoryFileFilter: String, CaseIterable, Identifiable {
+    case all
+    case copied
+    case skipped
+    case failed
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "All"
+        case .copied:
+            return "Copied"
+        case .skipped:
+            return "Skipped"
+        case .failed:
+            return "Failed"
+        }
+    }
+
+    func includes(_ file: JobFileRecord) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .copied:
+            return file.copyStatus == .copied
+        case .skipped:
+            return file.copyStatus == .skipped
+        case .failed:
+            return file.copyStatus == .failed
+        }
+    }
+}
+
+private struct HistoryFileRow: View {
+    @EnvironmentObject private var model: AppModel
+
+    let file: JobFileRecord
+
+    private var destinationPath: String? {
+        file.finalDestinationPath ?? file.plannedDestinationPath
+    }
+
+    private var revealPath: String? {
+        file.copyStatus == .copied ? file.finalDestinationPath : nil
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: statusImage)
+                .foregroundStyle(statusColor)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(file.filename)
+                        .lineLimit(1)
+
+                    Text(statusTitle)
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(statusColor.opacity(0.12), in: Capsule())
+                }
+
+                if let destinationPath {
+                    Text(destinationPath)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+
+                HStack(spacing: 8) {
+                    Text(Self.bytes(file.size))
+                    if let completedAt = file.completedAt {
+                        Text(completedAt.formatted(date: .abbreviated, time: .shortened))
+                    }
+                    Text(file.relativePath ?? file.sourcePath)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+                if let error = file.error, !error.isEmpty {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                if let revealPath {
+                    model.reveal(path: revealPath)
+                }
+            } label: {
+                Label("Reveal", systemImage: "arrow.up.right.square")
+            }
+            .disabled(revealPath == nil)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var statusImage: String {
+        switch file.copyStatus {
+        case .pending:
+            return "clock"
+        case .copied:
+            return "checkmark.seal"
+        case .skipped:
+            return "forward"
+        case .failed:
+            return "exclamationmark.triangle"
+        }
+    }
+
+    private var statusColor: Color {
+        switch file.copyStatus {
+        case .pending, .skipped:
+            return .secondary
+        case .copied:
+            return .green
+        case .failed:
+            return .orange
+        }
+    }
+
+    private var statusTitle: String {
+        switch file.copyStatus {
+        case .pending:
+            return "Pending"
+        case .copied:
+            return "Verified"
+        case .skipped:
+            return "Skipped"
+        case .failed:
+            return "Failed"
+        }
+    }
+
+    private static func bytes(_ value: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
     }
 }

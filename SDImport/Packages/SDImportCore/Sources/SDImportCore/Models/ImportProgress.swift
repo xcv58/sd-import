@@ -1,5 +1,30 @@
 import Foundation
 
+public struct ImportProgressFileEvent: Hashable, Codable, Identifiable, Sendable {
+    public let id: String
+    public let filename: String
+    public let status: CopyStatus
+    public let detail: String?
+    public let destinationPath: String?
+    public let size: Int64
+
+    public init(
+        id: String,
+        filename: String,
+        status: CopyStatus,
+        detail: String?,
+        destinationPath: String?,
+        size: Int64
+    ) {
+        self.id = id
+        self.filename = filename
+        self.status = status
+        self.detail = detail
+        self.destinationPath = destinationPath
+        self.size = size
+    }
+}
+
 public struct ImportProgress: Hashable, Codable, Sendable {
     public let jobID: String
     public let volumeName: String?
@@ -19,6 +44,8 @@ public struct ImportProgress: Hashable, Codable, Sendable {
     public let percent: Double
     public let currentFilename: String?
     public let currentSourcePath: String?
+    public let currentDestinationPath: String?
+    public let recentFiles: [ImportProgressFileEvent]
     public let reportPath: String?
 
     public init(
@@ -40,6 +67,8 @@ public struct ImportProgress: Hashable, Codable, Sendable {
         percent: Double,
         currentFilename: String?,
         currentSourcePath: String?,
+        currentDestinationPath: String? = nil,
+        recentFiles: [ImportProgressFileEvent] = [],
         reportPath: String?
     ) {
         self.jobID = jobID
@@ -60,6 +89,8 @@ public struct ImportProgress: Hashable, Codable, Sendable {
         self.percent = percent
         self.currentFilename = currentFilename
         self.currentSourcePath = currentSourcePath
+        self.currentDestinationPath = currentDestinationPath
+        self.recentFiles = recentFiles
         self.reportPath = reportPath
     }
 }
