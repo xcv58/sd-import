@@ -75,7 +75,10 @@ final class MountEventObserver {
                 name: name,
                 mountURL: volume.mountURL,
                 volumeUUID: volume.volumeUUID,
-                isRemovable: volume.isRemovable
+                isRemovable: volume.isRemovable,
+                isInternal: volume.isInternal,
+                totalCapacityBytes: volume.totalCapacityBytes,
+                availableCapacityBytes: volume.availableCapacityBytes
             )
         }
         guard detector.isLikelyImportVolume(volume), debouncer.shouldAccept(volume) else {

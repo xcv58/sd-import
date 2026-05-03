@@ -19,8 +19,23 @@ struct MountDetectionTests {
         #expect(detector.isLikelyImportVolume(volume))
     }
 
-    @Test("volume detector ignores disk images and backup names")
-    func detectorIgnoresDiskImagesAndBackupNames() {
+    @Test("volume detector accepts cards from internal readers")
+    func detectorAcceptsCardsFromInternalReaders() {
+        let detector = VolumeDetector()
+        let volume = MountedVolume(
+            id: "card",
+            name: "Untitled",
+            mountURL: URL(fileURLWithPath: "/Volumes/Untitled", isDirectory: true),
+            volumeUUID: nil,
+            isRemovable: true,
+            isInternal: true
+        )
+
+        #expect(detector.isLikelyImportVolume(volume))
+    }
+
+    @Test("volume detector ignores disk images backup names and system volumes")
+    func detectorIgnoresDiskImagesBackupNamesAndSystemVolumes() {
         let detector = VolumeDetector()
         let diskImage = MountedVolume(
             id: "image",
@@ -36,9 +51,25 @@ struct MountDetectionTests {
             volumeUUID: nil,
             isRemovable: true
         )
+        let recovery = MountedVolume(
+            id: "recovery",
+            name: "Recovery",
+            mountURL: URL(fileURLWithPath: "/Volumes/Recovery", isDirectory: true),
+            volumeUUID: nil,
+            isRemovable: true
+        )
+        let nonRemovableVolumePath = MountedVolume(
+            id: "non-removable",
+            name: "Mounted System Volume",
+            mountURL: URL(fileURLWithPath: "/Volumes/Mounted System Volume", isDirectory: true),
+            volumeUUID: nil,
+            isRemovable: false
+        )
 
         #expect(detector.isLikelyImportVolume(diskImage) == false)
         #expect(detector.isLikelyImportVolume(backup) == false)
+        #expect(detector.isLikelyImportVolume(recovery) == false)
+        #expect(detector.isLikelyImportVolume(nonRemovableVolumePath) == false)
     }
 
     @Test("volume detector sorts likely import volumes and removes ignored volumes")

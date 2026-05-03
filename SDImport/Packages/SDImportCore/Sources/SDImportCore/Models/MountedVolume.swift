@@ -6,6 +6,7 @@ public struct MountedVolume: Identifiable, Hashable, Codable, Sendable {
     public let mountURL: URL
     public let volumeUUID: String?
     public let isRemovable: Bool
+    public let isInternal: Bool
     public let totalCapacityBytes: Int64?
     public let availableCapacityBytes: Int64?
 
@@ -15,6 +16,7 @@ public struct MountedVolume: Identifiable, Hashable, Codable, Sendable {
         mountURL: URL,
         volumeUUID: String?,
         isRemovable: Bool,
+        isInternal: Bool = false,
         totalCapacityBytes: Int64? = nil,
         availableCapacityBytes: Int64? = nil
     ) {
@@ -23,6 +25,7 @@ public struct MountedVolume: Identifiable, Hashable, Codable, Sendable {
         self.mountURL = mountURL
         self.volumeUUID = volumeUUID
         self.isRemovable = isRemovable
+        self.isInternal = isInternal
         self.totalCapacityBytes = totalCapacityBytes
         self.availableCapacityBytes = availableCapacityBytes
     }
