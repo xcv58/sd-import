@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 
 @testable import SDImportCore
@@ -64,5 +65,30 @@ struct SettingsRepositoryTests {
         #expect(resolved.purpose == .photos)
         #expect(resolved.url.standardizedFileURL.path == folderURL.standardizedFileURL.path)
         #expect(try store.storedPath(purpose: .photos) == folderURL.path)
+    }
+
+    @Test("falls back when a folder bookmark cannot resolve")
+    func fallsBackWhenFolderBookmarkCannotResolve() throws {
+        let pool = try migratedPool()
+        let store = BookmarkStore(pool: pool)
+        let fallback = "/Volumes/Untitled"
+
+        try pool.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO bookmarks (id, purpose, bookmark_data, url, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    BookmarkPurpose.source.rawValue,
+                    BookmarkPurpose.source.rawValue,
+                    Data([0x00]),
+                    "/Volumes/Missing",
+                    DateCoding.string(from: Date())
+                ]
+            )
+        }
+
+        #expect(store.resolvedPath(purpose: .source, fallback: fallback) == fallback)
     }
 }

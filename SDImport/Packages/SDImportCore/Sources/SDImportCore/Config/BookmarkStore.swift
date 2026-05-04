@@ -80,6 +80,14 @@ public struct BookmarkStore {
         }
     }
 
+    public func resolvedPath(purpose: BookmarkPurpose, fallback: String) -> String {
+        do {
+            return try resolveBookmark(purpose: purpose)?.url.path ?? fallback
+        } catch {
+            return fallback
+        }
+    }
+
     public func storedPath(purpose: BookmarkPurpose) throws -> String? {
         try pool.read { db in
             try String.fetchOne(

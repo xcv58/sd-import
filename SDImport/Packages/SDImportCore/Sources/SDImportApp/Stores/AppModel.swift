@@ -1205,10 +1205,7 @@ final class AppModel: ObservableObject {
     }
 
     private func resolvedPath(for purpose: BookmarkPurpose, fallback: String) throws -> String {
-        guard let resolved = try bookmarkStore?.resolveBookmark(purpose: purpose) else {
-            return fallback
-        }
-        return resolved.url.path
+        bookmarkStore?.resolvedPath(purpose: purpose, fallback: fallback) ?? fallback
     }
 
     private func saveFolderBookmark(_ purpose: BookmarkPurpose, path: String) throws {
