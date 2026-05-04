@@ -1,6 +1,8 @@
 import Foundation
 
 enum DateCoding {
+    private static let formatterKey = "SDImport.DateCoding.iso8601Formatter"
+
     static func optionalString(from date: Date?) -> String? {
         guard let date else {
             return nil
@@ -9,8 +11,6 @@ enum DateCoding {
     }
 
     static func string(from date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
         return formatter.string(from: date)
     }
 
@@ -18,8 +18,16 @@ enum DateCoding {
         guard let string else {
             return nil
         }
+        return formatter.date(from: string)
+    }
+
+    private static var formatter: ISO8601DateFormatter {
+        if let formatter = Thread.current.threadDictionary[formatterKey] as? ISO8601DateFormatter {
+            return formatter
+        }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: string)
+        Thread.current.threadDictionary[formatterKey] = formatter
+        return formatter
     }
 }

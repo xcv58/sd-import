@@ -3,17 +3,25 @@ import SwiftUI
 
 struct ImportPreviewView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var showsExcludedFiles = false
 
     var body: some View {
-        let rows = model.previewRows()
-        let totals = model.previewTotals(rows: rows)
+        let rows = model.previewRows
+        let totals = model.previewTotals
 
         AppSection("Preview", systemImage: "list.bullet.rectangle") {
             header(totals: totals)
             controls
             sessionList
-            destinationSummary(rows: rows)
-            fileList(rows: rows, totals: totals)
+            destinationSummary(rows: rows, totals: totals)
+            if totals.copyFiles == 0 {
+                zeroMatchSection(rows: rows)
+                if showsExcludedFiles {
+                    fileList(rows: rows, totals: totals)
+                }
+            } else {
+                fileList(rows: rows, totals: totals)
+            }
         }
     }
 
@@ -40,36 +48,8 @@ struct ImportPreviewView: View {
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
-                GridRow {
-                    Text("Workflow")
-                        .foregroundStyle(.secondary)
-                    Picker("Workflow", selection: workflowBinding) {
-                        ForEach(ImportWorkflowProfile.allCases) { profile in
-                            Text(profile.displayTitle).tag(profile)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                GridRow {
-                    Text("Folder")
-                        .foregroundStyle(.secondary)
-                    Picker("Folder", selection: $model.folderGrouping) {
-                        ForEach(ImportFolderGrouping.allCases) { grouping in
-                            Text(grouping.displayTitle).tag(grouping)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 260)
-                    .onChange(of: model.folderGrouping) {
-                        model.folderGroupingDidChange()
-                    }
-                }
-            }
-
             if let mediaContent = model.mediaContentProfile {
-                Label(mediaContent.summaryText, systemImage: "sparkle.magnifyingglass")
+                Label(mediaContent.cardContentsText, systemImage: "externaldrive.badge.checkmark")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -81,36 +61,107 @@ struct ImportPreviewView: View {
                     .foregroundStyle(.secondary)
             }
 
-            DisclosureGroup("Advanced") {
-                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
-                    GridRow {
-                        Text("Import")
-                            .foregroundStyle(.secondary)
-                        Picker("Import", selection: $model.importMediaSelection) {
-                            ForEach(ImportMediaSelection.allCases) { selection in
-                                Text(selection.displayTitle).tag(selection)
+            if model.isCustomImportMode {
+                customControls
+            } else {
+                recommendedControls
+            }
+        }
+    }
+
+    private var recommendedControls: some View {
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+            GridRow {
+                Text("Preset")
+                    .foregroundStyle(.secondary)
+                Picker("Preset", selection: workflowBinding) {
+                    ForEach(ImportWorkflowProfile.allCases) { profile in
+                        Text(profile.displayTitle).tag(profile)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            GridRow {
+                Text("Folder grouping")
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    Picker("Folder grouping", selection: folderGroupingBinding) {
+                        ForEach(ImportFolderGrouping.allCases) { grouping in
+                            Text(grouping.displayTitle).tag(grouping)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 260)
+
+                    Button {
+                        model.beginCustomImportMode()
+                    } label: {
+                        Label("Customize", systemImage: "slider.horizontal.3")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+
+    private var customControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(customModeSummary, systemImage: "slider.horizontal.3")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                GridRow {
+                    Text("Media to import")
+                        .foregroundStyle(.secondary)
+                    Picker("Media to import", selection: customMediaSelectionBinding) {
+                        ForEach(ImportMediaSelection.allCases) { selection in
+                            Text(mediaSelectionTitle(selection))
+                                .tag(selection)
+                                .disabled(!isMediaSelectionAvailable(selection))
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                GridRow {
+                    Text("Organization")
+                        .foregroundStyle(.secondary)
+                    Picker("Organization", selection: customOrganizationBinding) {
+                        ForEach(ImportOrganizationPreset.allCases) { preset in
+                            Text(preset.displayTitle).tag(preset)
+                        }
+                    }
+                    .frame(width: 260)
+                }
+
+                GridRow {
+                    Text("Folder grouping")
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 10) {
+                        Picker("Folder grouping", selection: folderGroupingBinding) {
+                            ForEach(ImportFolderGrouping.allCases) { grouping in
+                                Text(grouping.displayTitle).tag(grouping)
                             }
                         }
                         .pickerStyle(.segmented)
-                        .onChange(of: model.importMediaSelection) {
-                            model.applyMediaSelectionToPreviewSessions()
-                        }
-                    }
-
-                    GridRow {
-                        Text("Organize")
-                            .foregroundStyle(.secondary)
-                        Picker("Organize", selection: $model.organizationPreset) {
-                            ForEach(ImportOrganizationPreset.allCases) { preset in
-                                Text(preset.displayTitle).tag(preset)
-                            }
-                        }
                         .frame(width: 260)
-                        .onChange(of: model.organizationPreset) {
-                            model.organizationPresetDidChange()
+
+                        Button {
+                            model.resetToRecommendedImportMode()
+                        } label: {
+                            Label("Reset to Preset", systemImage: "arrow.uturn.backward")
                         }
+                        .buttonStyle(.bordered)
                     }
                 }
+            }
+
+            if let warning = selectedMediaAvailabilityMessage {
+                Label(warning, systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
         }
     }
@@ -120,6 +171,30 @@ struct ImportPreviewView: View {
             model.workflowProfile
         } set: { profile in
             model.applyWorkflowProfile(profile)
+        }
+    }
+
+    private var customMediaSelectionBinding: Binding<ImportMediaSelection> {
+        Binding {
+            model.importMediaSelection
+        } set: { selection in
+            model.useCustomMediaSelection(selection)
+        }
+    }
+
+    private var customOrganizationBinding: Binding<ImportOrganizationPreset> {
+        Binding {
+            model.organizationPreset
+        } set: { preset in
+            model.useCustomOrganizationPreset(preset)
+        }
+    }
+
+    private var folderGroupingBinding: Binding<ImportFolderGrouping> {
+        Binding {
+            model.folderGrouping
+        } set: { grouping in
+            model.useFolderGrouping(grouping)
         }
     }
 
@@ -207,31 +282,31 @@ struct ImportPreviewView: View {
         includePhotos: Binding<Bool>,
         includeVideos: Binding<Bool>
     ) -> some View {
-        if model.workflowProfile == .mixedShootSession, photoCount > 0 {
+        if model.importMediaSelection == .photosAndVideos, photoCount > 0 {
             Toggle("Photos \(photoCount)", isOn: includePhotos)
                 .frame(width: 110, alignment: .leading)
         } else if photoCount > 0 {
             Label(
-                model.workflowProfile == .photoImport
+                model.importMediaSelection.includes(.photo)
                     ? "Photos \(photoCount)"
                     : "Photos \(photoCount) excluded",
-                systemImage: model.workflowProfile == .photoImport ? "photo" : "minus.circle"
+                systemImage: model.importMediaSelection.includes(.photo) ? "photo" : "minus.circle"
             )
-            .foregroundStyle(model.workflowProfile == .photoImport ? .primary : .secondary)
+            .foregroundStyle(model.importMediaSelection.includes(.photo) ? .primary : .secondary)
             .frame(width: 160, alignment: .leading)
         }
 
-        if model.workflowProfile == .mixedShootSession, videoCount > 0 {
+        if model.importMediaSelection == .photosAndVideos, videoCount > 0 {
             Toggle("Videos \(videoCount)", isOn: includeVideos)
                 .frame(width: 110, alignment: .leading)
         } else if videoCount > 0 {
             Label(
-                model.workflowProfile == .footageBackup
+                model.importMediaSelection.includes(.video)
                     ? "Videos \(videoCount)"
                     : "Videos \(videoCount) excluded",
-                systemImage: model.workflowProfile == .footageBackup ? "video" : "minus.circle"
+                systemImage: model.importMediaSelection.includes(.video) ? "video" : "minus.circle"
             )
-            .foregroundStyle(model.workflowProfile == .footageBackup ? .primary : .secondary)
+            .foregroundStyle(model.importMediaSelection.includes(.video) ? .primary : .secondary)
             .frame(width: 160, alignment: .leading)
         }
     }
@@ -255,19 +330,17 @@ struct ImportPreviewView: View {
         Binding {
             model.previewSessions.contains { $0[keyPath: keyPath] }
         } set: { isIncluded in
-            for index in model.previewSessions.indices {
-                model.previewSessions[index][keyPath: keyPath] = isIncluded
-            }
+            model.setPreviewSessionInclusion(keyPath, to: isIncluded)
         }
     }
 
     @ViewBuilder
-    private func destinationSummary(rows: [ImportPreviewRow]) -> some View {
-        let destinations = model.previewDestinationDirectories(rows: rows)
-        let requirements = model.previewSpaceRequirements(rows: rows)
+    private func destinationSummary(rows: [ImportPreviewRow], totals: ImportPreviewTotals) -> some View {
+        let destinations = model.previewDestinations
+        let requirements = model.previewSpaceRequirements
         let excludedCount = rows.filter { $0.status == "Excluded" }.count
 
-        if !destinations.isEmpty || !requirements.isEmpty || excludedCount > 0 {
+        if !destinations.isEmpty || !requirements.isEmpty || (excludedCount > 0 && totals.copyFiles > 0) {
             VStack(alignment: .leading, spacing: 8) {
                 Divider()
 
@@ -295,10 +368,53 @@ struct ImportPreviewView: View {
                     }
                 }
 
-                if excludedCount > 0 {
-                    Label("\(excludedCount) supported files are excluded by the current import selection", systemImage: "minus.circle")
+                if excludedCount > 0, let summary = exclusionSummary(rows: rows) {
+                    Label(summary, systemImage: "minus.circle")
                         .font(.caption)
                         .foregroundStyle(.orange)
+                }
+            }
+        }
+    }
+
+    private func zeroMatchSection(rows: [ImportPreviewRow]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
+
+            Label(zeroMatchTitle(rows: rows), systemImage: "info.circle")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+
+            Text(zeroMatchDetail(rows: rows))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                if canRecoverPhotos {
+                    Button {
+                        model.applyWorkflowProfile(.photoImport)
+                    } label: {
+                        Label("Import Photos", systemImage: "photo")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if canRecoverVideos {
+                    Button {
+                        model.applyWorkflowProfile(.footageBackup)
+                    } label: {
+                        Label("Import Videos", systemImage: "video")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if !rows.isEmpty {
+                    Button {
+                        showsExcludedFiles.toggle()
+                    } label: {
+                        Label(showsExcludedFiles ? "Hide Skipped Files" : "Show Skipped Files", systemImage: "list.bullet")
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
         }
@@ -338,8 +454,133 @@ struct ImportPreviewView: View {
         }
     }
 
+    private var customModeSummary: String {
+        let profile = model.customImportBaseWorkflowProfile ?? model.workflowProfile
+        return "Custom settings started from \(profile.displayTitle)"
+    }
+
+    private var selectedMediaAvailabilityMessage: String? {
+        guard !isMediaSelectionAvailable(model.importMediaSelection) else {
+            return nil
+        }
+        switch model.importMediaSelection {
+        case .photosAndVideos:
+            return "No supported photos or videos were found on this card."
+        case .photosOnly:
+            return "No photos were found on this card."
+        case .videosOnly:
+            return "No videos were found on this card."
+        }
+    }
+
+    private var canRecoverPhotos: Bool {
+        guard let mediaContent = model.mediaContentProfile else {
+            return false
+        }
+        return mediaContent.photoCount > 0 && model.importMediaSelection != .photosOnly
+    }
+
+    private var canRecoverVideos: Bool {
+        guard let mediaContent = model.mediaContentProfile else {
+            return false
+        }
+        return mediaContent.videoCount > 0 && model.importMediaSelection != .videosOnly
+    }
+
+    private func mediaSelectionTitle(_ selection: ImportMediaSelection) -> String {
+        guard let mediaContent = model.mediaContentProfile else {
+            return selection.displayTitle
+        }
+
+        switch selection {
+        case .photosAndVideos:
+            return "Photos + Videos"
+        case .photosOnly:
+            return "Photos (\(mediaContent.photoCount))"
+        case .videosOnly:
+            return "Videos (\(mediaContent.videoCount))"
+        }
+    }
+
+    private func isMediaSelectionAvailable(_ selection: ImportMediaSelection) -> Bool {
+        guard let mediaContent = model.mediaContentProfile else {
+            return true
+        }
+
+        switch selection {
+        case .photosAndVideos:
+            return mediaContent.supportedCount > 0
+        case .photosOnly:
+            return mediaContent.photoCount > 0
+        case .videosOnly:
+            return mediaContent.videoCount > 0
+        }
+    }
+
+    private func zeroMatchTitle(rows: [ImportPreviewRow]) -> String {
+        if let warning = selectedMediaAvailabilityMessage {
+            return warning.replacingOccurrences(of: " on this card.", with: "")
+        }
+        if rows.contains(where: { $0.status == "Excluded" }) {
+            return "Current selection excludes every matching file"
+        }
+        if rows.contains(where: { $0.status == "Known" || $0.status == "Already exists" || $0.status == "Copied" }) {
+            return "No new files to copy"
+        }
+        return "No files will be copied"
+    }
+
+    private func zeroMatchDetail(rows: [ImportPreviewRow]) -> String {
+        if let mediaContent = model.mediaContentProfile {
+            let contents = mediaContent.contentsSentence
+            switch model.importMediaSelection {
+            case .photosOnly where mediaContent.photoCount == 0:
+                return "This card contains \(contents). Choose another media type to import."
+            case .videosOnly where mediaContent.videoCount == 0:
+                return "This card contains \(contents). Choose another media type to import."
+            case .photosAndVideos where mediaContent.supportedCount == 0:
+                return "This card contains \(contents). There are no supported photo or video files to import."
+            default:
+                break
+            }
+        }
+
+        if let summary = exclusionSummary(rows: rows) {
+            return summary
+        }
+        if rows.contains(where: { $0.status == "Known" || $0.status == "Already exists" || $0.status == "Copied" }) {
+            return "The files in this preview are already imported, already copied, or already exist at the destination."
+        }
+        return "Review the selected media type and destination settings before importing."
+    }
+
+    private func exclusionSummary(rows: [ImportPreviewRow]) -> String? {
+        let excludedRows = rows.filter { $0.status == "Excluded" }
+        guard !excludedRows.isEmpty else {
+            return nil
+        }
+
+        let photoCount = excludedRows.filter { $0.mediaKind == .photo }.count
+        let videoCount = excludedRows.filter { $0.mediaKind == .video }.count
+        let sidecarCount = excludedRows.filter { $0.mediaKind == .unsupported }.count
+        let parts = [
+            photoCount > 0 ? countText(photoCount, singular: "photo", plural: "photos") : nil,
+            videoCount > 0 ? countText(videoCount, singular: "video", plural: "videos") : nil,
+            sidecarCount > 0 ? countText(sidecarCount, singular: "sidecar", plural: "sidecars") : nil
+        ].compactMap(\.self)
+
+        guard !parts.isEmpty else {
+            return nil
+        }
+        return "\(parts.joined(separator: " and ")) excluded because \(model.importMediaSelection.displayTitle) is selected."
+    }
+
     private func byteString(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    private func countText(_ count: Int, singular: String, plural: String) -> String {
+        count == 1 ? "1 \(singular)" : "\(count) \(plural)"
     }
 
     private func spaceText(for requirement: ImportPreviewSpaceRequirement) -> String {
@@ -474,22 +715,16 @@ private extension ImportWorkflowProfile {
 }
 
 private extension MediaContentProfile {
-    var summaryText: String {
-        let recommendation: String
-        switch confidence {
-        case .exact:
-            recommendation = "Recommended"
-        case .dominant:
-            recommendation = "Recommended by card contents"
-        case .mixed:
-            recommendation = "Mixed card"
-        case .remembered:
-            recommendation = "Remembered for this card"
-        case .empty:
-            recommendation = "No supported media"
-        }
+    var cardContentsText: String {
+        "Card contains: \(contentsSentence)"
+    }
 
-        return "\(recommendation): \(recommendedWorkflow.displayTitle) • \(photoCount) photos • \(videoCount) videos • \(sidecarCount) sidecars"
+    var contentsSentence: String {
+        "\(countText(photoCount, singular: "photo", plural: "photos")) · \(countText(videoCount, singular: "video", plural: "videos")) · \(countText(sidecarCount, singular: "sidecar", plural: "sidecars"))"
+    }
+
+    private func countText(_ count: Int, singular: String, plural: String) -> String {
+        count == 1 ? "1 \(singular)" : "\(count) \(plural)"
     }
 }
 

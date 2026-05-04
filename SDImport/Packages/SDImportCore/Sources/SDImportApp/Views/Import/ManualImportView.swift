@@ -14,7 +14,7 @@ struct ManualImportView: View {
                     ImportProgressPanel(progress: progress)
                 }
 
-                if let summary = model.currentSummary {
+                if let summary = model.currentSummary, model.importProgress == nil {
                     ScanSummaryView(summary: summary)
                     ImportPreviewView()
                 }
@@ -50,10 +50,10 @@ struct ManualImportView: View {
             model.sourcePathDidChange()
         }
         .onChange(of: model.photosPath) {
-            model.validatePaths()
+            model.destinationPathDidChange()
         }
         .onChange(of: model.videosPath) {
-            model.validatePaths()
+            model.destinationPathDidChange()
         }
     }
 
@@ -185,7 +185,7 @@ struct ManualImportView: View {
     }
 
     private var importButtonTitle: String {
-        let total = model.previewTotals().copyFiles
+        let total = model.previewTotals.copyFiles
         guard total > 0 else {
             return "Copy Files"
         }

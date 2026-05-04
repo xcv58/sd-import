@@ -1,6 +1,8 @@
 import Foundation
 
 public struct ImportEngine {
+    private static let modificationDateFormatterKey = "SDImport.ImportEngine.modificationDateFormatter"
+
     private let fileManager: FileManager
     private let jobRepository: JobRepository
     private let dedupeRepository: DedupeRepository
@@ -333,11 +335,16 @@ public struct ImportEngine {
     }
 
     private func modificationDate(from string: String) -> Date? {
+        if let formatter = Thread.current.threadDictionary[Self.modificationDateFormatterKey] as? DateFormatter {
+            return formatter.date(from: string)
+        }
+
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        Thread.current.threadDictionary[Self.modificationDateFormatterKey] = formatter
         return formatter.date(from: string)
     }
 

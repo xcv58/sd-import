@@ -20,6 +20,8 @@ struct ImportPreviewTotals: Hashable {
     let copyFiles: Int
     let skippedFiles: Int
     let copyBytes: Int64
+
+    static let empty = ImportPreviewTotals(copyFiles: 0, skippedFiles: 0, copyBytes: 0)
 }
 
 struct ImportPreviewDestination: Identifiable, Hashable {
@@ -43,6 +45,11 @@ struct ImportPreviewSpaceRequirement: Identifiable, Hashable {
     }
 }
 
+enum ImportPreviewMode: Hashable {
+    case recommended
+    case custom
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var selection: SidebarItem = .import
@@ -61,10 +68,20 @@ final class AppModel: ObservableObject {
     @Published var importMediaSelection: ImportMediaSelection
     @Published var organizationPreset: ImportOrganizationPreset
     @Published var folderGrouping: ImportFolderGrouping
+    @Published var importPreviewMode: ImportPreviewMode = .recommended
+    @Published private(set) var customImportBaseWorkflowProfile: ImportWorkflowProfile?
     @Published var themePreference: AppThemePreference
     @Published var mediaContentProfile: MediaContentProfile?
     @Published var photoPairSummary: PhotoPairSummary?
-    @Published var previewSessions: [ImportPreviewSession] = []
+    @Published var previewSessions: [ImportPreviewSession] = [] {
+        didSet {
+            rebuildPreviewPlanCache()
+        }
+    }
+    @Published private(set) var previewRows: [ImportPreviewRow] = []
+    @Published private(set) var previewTotals: ImportPreviewTotals = .empty
+    @Published private(set) var previewDestinations: [ImportPreviewDestination] = []
+    @Published private(set) var previewSpaceRequirements: [ImportPreviewSpaceRequirement] = []
     @Published var currentSummary: ScanSummary?
     @Published var currentResult: ImportResult?
     @Published var importProgress: ImportProgress?
@@ -97,6 +114,11 @@ final class AppModel: ObservableObject {
     private var workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
     private var workflowProfileWasManuallyChosenForCurrentJob = false
     private var knownImportedPreviewFileIDs: Set<Int64> = []
+    private var currentPreviewFiles: [JobFileRecord] = [] {
+        didSet {
+            rebuildPreviewPlanCache()
+        }
+    }
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -212,7 +234,7 @@ final class AppModel: ObservableObject {
     func choosePhotosFolder() {
         if let path = FilePanelPresenter.chooseDirectory(title: "Choose Photo Destination", initialPath: photosPath) {
             photosPath = path
-            validatePaths()
+            destinationPathDidChange()
             savePreferences()
         }
     }
@@ -220,7 +242,7 @@ final class AppModel: ObservableObject {
     func chooseVideosFolder() {
         if let path = FilePanelPresenter.chooseDirectory(title: "Choose Video Destination", initialPath: videosPath) {
             videosPath = path
-            validatePaths()
+            destinationPathDidChange()
             savePreferences()
         }
     }
@@ -257,12 +279,21 @@ final class AppModel: ObservableObject {
         currentResult = nil
         importProgress = nil
         previewSessions = []
+        clearPreviewPlanCache()
         selectedJobFiles = []
+        currentPreviewFiles = []
         knownImportedPreviewFileIDs = []
         mediaContentProfile = nil
         photoPairSummary = nil
+        importPreviewMode = .recommended
+        customImportBaseWorkflowProfile = nil
         workflowProfileWasManuallyChosenForCurrentJob = false
         validatePaths()
+    }
+
+    func destinationPathDidChange() {
+        validatePaths()
+        rebuildPreviewPlanCache()
     }
 
     func validatePaths() {
@@ -277,10 +308,9 @@ final class AppModel: ObservableObject {
     }
 
     var canImportPlannedFiles: Bool {
-        let rows = previewRows()
         return !isWorking
             && currentSummary != nil
-            && previewTotals(rows: rows).copyFiles > 0
+            && previewTotals.copyFiles > 0
             && sourceValidation.isUsable
             && requiredDestinationPathsAreUsable()
     }
@@ -308,6 +338,8 @@ final class AppModel: ObservableObject {
         currentResult = nil
         importProgress = nil
         previewSessions = []
+        currentPreviewFiles = []
+        clearPreviewPlanCache()
         isWorking = true
         statusMessage = "Scanning..."
 
@@ -348,12 +380,14 @@ final class AppModel: ObservableObject {
                     self.selectedJobID = summary.jobID
                     self.jobs = jobs
                     self.selectedJobFiles = files
+                    self.currentPreviewFiles = files
                     self.knownImportedPreviewFileIDs = Self.knownImportedFileIDs(
                         files: files,
                         dedupeRepository: repositories.dedupeRepository
                     )
                     self.applyRecommendationAfterScan(files: files, summary: summary)
                     self.rebuildPreviewSessions(files: files, defaultLabel: location)
+                    self.rebuildPreviewPlanCache()
                     self.statusMessage = "Scan complete"
                     self.isWorking = false
                     self.importTask = nil
@@ -362,7 +396,9 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     self.currentSummary = nil
                     self.previewSessions = []
+                    self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
+                    self.clearPreviewPlanCache()
                     self.statusMessage = "Scan cancelled"
                     self.isWorking = false
                     self.importTask = nil
@@ -371,7 +407,9 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     self.currentSummary = nil
                     self.previewSessions = []
+                    self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
+                    self.clearPreviewPlanCache()
                     self.statusMessage = "Scan cancelled"
                     self.isWorking = false
                     self.importTask = nil
@@ -380,7 +418,9 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     self.currentSummary = nil
                     self.previewSessions = []
+                    self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
+                    self.clearPreviewPlanCache()
                     self.statusMessage = "Scan failed: \(error)"
                     self.isWorking = false
                     self.importTask = nil
@@ -389,7 +429,59 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func applyMediaSelectionToPreviewSessions() {
+    var isCustomImportMode: Bool {
+        importPreviewMode == .custom
+    }
+
+    func beginCustomImportMode() {
+        guard importPreviewMode != .custom else {
+            return
+        }
+        customImportBaseWorkflowProfile = workflowProfile
+        importPreviewMode = .custom
+    }
+
+    func resetToRecommendedImportMode() {
+        importPreviewMode = .recommended
+        customImportBaseWorkflowProfile = nil
+        let recommendedProfile = mediaContentProfile?.recommendedWorkflow ?? workflowProfile
+        applyWorkflowProfile(recommendedProfile, userInitiated: false)
+        workflowProfileWasManuallyChosenForCurrentJob = false
+    }
+
+    func useCustomMediaSelection(_ selection: ImportMediaSelection) {
+        beginCustomImportMode()
+        importMediaSelection = selection
+        applyMediaSelectionToPreviewSessions(userInitiated: true)
+    }
+
+    func useCustomOrganizationPreset(_ preset: ImportOrganizationPreset) {
+        beginCustomImportMode()
+        organizationPreset = preset
+        organizationPresetDidChange(userInitiated: true)
+    }
+
+    func useFolderGrouping(_ grouping: ImportFolderGrouping) {
+        folderGrouping = grouping
+        folderGroupingDidChange()
+    }
+
+    func setPreviewSessionInclusion(
+        _ keyPath: WritableKeyPath<ImportPreviewSession, Bool>,
+        to isIncluded: Bool
+    ) {
+        previewSessions = previewSessions.map { session in
+            var session = session
+            session[keyPath: keyPath] = isIncluded
+            return session
+        }
+    }
+
+    func applyMediaSelectionToPreviewSessions(userInitiated: Bool = true) {
+        if userInitiated {
+            beginCustomImportMode()
+        }
+
         if organizationPreset == .footageBackup {
             importMediaSelection = .videosOnly
         }
@@ -401,45 +493,12 @@ final class AppModel: ObservableObject {
             workflowProfile = matchedProfile
         }
 
-        for index in previewSessions.indices {
-            previewSessions[index].includePhotos = importMediaSelection.includes(.photo)
-            previewSessions[index].includeVideos = importMediaSelection.includes(.video)
-            previewSessions[index].includeSidecars = workflowProfile.includesSidecarsByDefault
-        }
-        workflowProfileWasManuallyChosenForCurrentJob = true
-        savePreferences()
-    }
-
-    func organizationPresetDidChange() {
-        if organizationPreset == .footageBackup {
-            importMediaSelection = .videosOnly
-            applyMediaSelectionToPreviewSessions()
-        } else if let matchedProfile = ImportWorkflowProfile.matching(
-            mediaSelection: importMediaSelection,
-            organizationPreset: organizationPreset
-        ) {
-            workflowProfile = matchedProfile
-        }
-        validatePaths()
-        savePreferences()
-    }
-
-    func folderGroupingDidChange() {
-        savePreferences()
-    }
-
-    func themePreferenceDidChange() {
-        savePreferences()
-    }
-
-    func applyWorkflowProfile(_ profile: ImportWorkflowProfile, userInitiated: Bool = true) {
-        workflowProfile = profile
-        importMediaSelection = profile.mediaSelection
-        organizationPreset = profile.organizationPreset
-        for index in previewSessions.indices {
-            previewSessions[index].includePhotos = profile.mediaSelection.includes(.photo)
-            previewSessions[index].includeVideos = profile.mediaSelection.includes(.video)
-            previewSessions[index].includeSidecars = profile.includesSidecarsByDefault
+        previewSessions = previewSessions.map { session in
+            var session = session
+            session.includePhotos = importMediaSelection.includes(.photo)
+            session.includeVideos = importMediaSelection.includes(.video)
+            session.includeSidecars = workflowProfile.includesSidecarsByDefault
+            return session
         }
         if userInitiated {
             workflowProfileWasManuallyChosenForCurrentJob = true
@@ -448,7 +507,81 @@ final class AppModel: ObservableObject {
         savePreferences()
     }
 
-    func previewRows() -> [ImportPreviewRow] {
+    func organizationPresetDidChange(userInitiated: Bool = true) {
+        if userInitiated {
+            beginCustomImportMode()
+        }
+
+        if organizationPreset == .footageBackup {
+            importMediaSelection = .videosOnly
+        } else if let matchedProfile = ImportWorkflowProfile.matching(
+            mediaSelection: importMediaSelection,
+            organizationPreset: organizationPreset
+        ) {
+            workflowProfile = matchedProfile
+        }
+        previewSessions = previewSessions.map { session in
+            var session = session
+            session.includePhotos = importMediaSelection.includes(.photo)
+            session.includeVideos = importMediaSelection.includes(.video)
+            session.includeSidecars = workflowProfile.includesSidecarsByDefault
+            return session
+        }
+        if userInitiated {
+            workflowProfileWasManuallyChosenForCurrentJob = true
+        }
+        validatePaths()
+        savePreferences()
+    }
+
+    func folderGroupingDidChange() {
+        rebuildPreviewPlanCache()
+        savePreferences()
+    }
+
+    func themePreferenceDidChange() {
+        savePreferences()
+    }
+
+    func applyWorkflowProfile(_ profile: ImportWorkflowProfile, userInitiated: Bool = true) {
+        if userInitiated {
+            importPreviewMode = .recommended
+            customImportBaseWorkflowProfile = nil
+        }
+
+        workflowProfile = profile
+        importMediaSelection = profile.mediaSelection
+        organizationPreset = profile.organizationPreset
+        previewSessions = previewSessions.map { session in
+            var session = session
+            session.includePhotos = profile.mediaSelection.includes(.photo)
+            session.includeVideos = profile.mediaSelection.includes(.video)
+            session.includeSidecars = profile.includesSidecarsByDefault
+            return session
+        }
+        if userInitiated {
+            workflowProfileWasManuallyChosenForCurrentJob = true
+        }
+        validatePaths()
+        savePreferences()
+    }
+
+    private func rebuildPreviewPlanCache() {
+        let rows = buildPreviewRows()
+        previewRows = rows
+        previewTotals = buildPreviewTotals(rows: rows)
+        previewDestinations = buildPreviewDestinationDirectories(rows: rows)
+        previewSpaceRequirements = buildPreviewSpaceRequirements(rows: rows)
+    }
+
+    private func clearPreviewPlanCache() {
+        previewRows = []
+        previewTotals = .empty
+        previewDestinations = []
+        previewSpaceRequirements = []
+    }
+
+    private func buildPreviewRows() -> [ImportPreviewRow] {
         guard let currentSummary else {
             return []
         }
@@ -464,9 +597,9 @@ final class AppModel: ObservableObject {
             fallbackLocation: Self.defaultSessionLabel(for: location),
             volumeName: currentSummary.volumeName
         )
-        let plans = builder.plans(files: selectedJobFiles)
+        let plans = builder.plans(files: currentPreviewFiles)
 
-        return zip(selectedJobFiles, plans).compactMap { file, plan in
+        return zip(currentPreviewFiles, plans).compactMap { file, plan in
             guard let id = file.id else {
                 return nil
             }
@@ -507,11 +640,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func previewTotals() -> ImportPreviewTotals {
-        previewTotals(rows: previewRows())
-    }
-
-    func previewTotals(rows: [ImportPreviewRow]) -> ImportPreviewTotals {
+    private func buildPreviewTotals(rows: [ImportPreviewRow]) -> ImportPreviewTotals {
         return ImportPreviewTotals(
             copyFiles: rows.filter(\.willCopy).count,
             skippedFiles: rows.filter { !$0.willCopy }.count,
@@ -521,7 +650,7 @@ final class AppModel: ObservableObject {
         )
     }
 
-    func previewDestinationDirectories(rows: [ImportPreviewRow]) -> [ImportPreviewDestination] {
+    private func buildPreviewDestinationDirectories(rows: [ImportPreviewRow]) -> [ImportPreviewDestination] {
         let grouped = Dictionary(grouping: rows.filter(\.willCopy)) { row in
             row.destinationPath.map {
                 URL(fileURLWithPath: $0, isDirectory: false).deletingLastPathComponent().path
@@ -540,7 +669,7 @@ final class AppModel: ObservableObject {
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
 
-    func previewSpaceRequirements(rows: [ImportPreviewRow]) -> [ImportPreviewSpaceRequirement] {
+    private func buildPreviewSpaceRequirements(rows: [ImportPreviewRow]) -> [ImportPreviewSpaceRequirement] {
         var grouped: [String: (capacity: VolumeCapacity, requiredBytes: Int64)] = [:]
         let rowsNeedingSpace = rows.filter { row in
             row.willCopy
@@ -611,12 +740,12 @@ final class AppModel: ObservableObject {
         }
         if let dedupeRepository {
             knownImportedPreviewFileIDs = Self.knownImportedFileIDs(
-                files: selectedJobFiles,
+                files: currentPreviewFiles,
                 dedupeRepository: dedupeRepository
             )
+            rebuildPreviewPlanCache()
         }
-        let rows = previewRows()
-        if let failure = previewSpaceRequirements(rows: rows).first(where: { !$0.isSatisfied }) {
+        if let failure = previewSpaceRequirements.first(where: { !$0.isSatisfied }) {
             statusMessage = "Not enough space in \(failure.displayPath)"
             return
         }
@@ -675,7 +804,7 @@ final class AppModel: ObservableObject {
                 )
                 var latestProgress: ImportProgress?
                 var lastPublishedAt = Date(timeIntervalSince1970: 0)
-                let minimumUpdateInterval: TimeInterval = 0.25
+                let minimumUpdateInterval: TimeInterval = 0.75
 
                 let result = try engine.importFiles(
                     jobID: jobID,
@@ -714,6 +843,11 @@ final class AppModel: ObservableObject {
                     self.jobs = jobs
                     self.selectedJobID = jobID
                     self.selectedJobFiles = files
+                    if self.currentSummary?.jobID == jobID {
+                        self.currentPreviewFiles = files
+                    } else {
+                        self.rebuildPreviewPlanCache()
+                    }
                     self.statusMessage = "Import finished"
                     self.isWorking = false
                     self.importTask = nil
@@ -725,6 +859,11 @@ final class AppModel: ObservableObject {
                         self.jobs = snapshot.jobs
                         self.selectedJobID = jobID
                         self.selectedJobFiles = snapshot.files
+                        if self.currentSummary?.jobID == jobID {
+                            self.currentPreviewFiles = snapshot.files
+                        } else {
+                            self.rebuildPreviewPlanCache()
+                        }
                     }
                     self.currentResult = nil
                     self.importProgress = nil
@@ -1047,6 +1186,8 @@ final class AppModel: ObservableObject {
         )
         mediaContentProfile = contentProfile
         photoPairSummary = PhotoPairDetector().summarize(files: files)
+        importPreviewMode = .recommended
+        customImportBaseWorkflowProfile = nil
 
         guard !workflowProfileWasManuallyChosenForCurrentJob else {
             return
