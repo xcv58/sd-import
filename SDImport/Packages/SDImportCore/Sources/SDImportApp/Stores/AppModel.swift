@@ -343,9 +343,9 @@ final class AppModel: ObservableObject {
         isWorking = true
         statusMessage = "Scanning..."
 
-        let cardPath = expanded(cardPath)
-        let photosPath = expanded(photosPath)
-        let videosPath = expanded(videosPath)
+        let cardPath = resolvedPath(cardPath, validation: sourceValidation)
+        let photosPath = resolvedPath(photosPath, validation: photosValidation)
+        let videosPath = resolvedPath(videosPath, validation: videosValidation)
         let location = Self.defaultSessionLabel(for: location)
         let reportsURL = reportsURL
 
@@ -591,8 +591,14 @@ final class AppModel: ObservableObject {
             organizationPreset: organizationPreset,
             folderGrouping: folderGrouping,
             roots: DestinationRoots(
-                photosURL: URL(fileURLWithPath: expanded(photosPath), isDirectory: true),
-                videosURL: URL(fileURLWithPath: expanded(videosPath), isDirectory: true)
+                photosURL: URL(
+                    fileURLWithPath: resolvedPath(photosPath, validation: photosValidation),
+                    isDirectory: true
+                ),
+                videosURL: URL(
+                    fileURLWithPath: resolvedPath(videosPath, validation: videosValidation),
+                    isDirectory: true
+                )
             ),
             fallbackLocation: Self.defaultSessionLabel(for: location),
             volumeName: currentSummary.volumeName
@@ -754,8 +760,14 @@ final class AppModel: ObservableObject {
         let organizationPreset = organizationPreset
         let folderGrouping = folderGrouping
         let roots = DestinationRoots(
-            photosURL: URL(fileURLWithPath: expanded(photosPath), isDirectory: true),
-            videosURL: URL(fileURLWithPath: expanded(videosPath), isDirectory: true)
+            photosURL: URL(
+                fileURLWithPath: resolvedPath(photosPath, validation: photosValidation),
+                isDirectory: true
+            ),
+            videosURL: URL(
+                fileURLWithPath: resolvedPath(videosPath, validation: videosValidation),
+                isDirectory: true
+            )
         )
         let fallbackLocation = Self.defaultSessionLabel(for: location)
         let volumeName = currentSummary.volumeName
@@ -1141,6 +1153,10 @@ final class AppModel: ObservableObject {
         (path as NSString).expandingTildeInPath
     }
 
+    private func resolvedPath(_ path: String, validation: PathValidationResult) -> String {
+        validation.isUsable ? validation.expandedPath : expanded(path)
+    }
+
     private func summaryText(for job: ImportJob) -> String {
         """
         Job: \(job.id)
@@ -1331,9 +1347,9 @@ final class AppModel: ObservableObject {
 
     private func currentConfiguration() -> AppConfiguration {
         AppConfiguration(
-            sourcePath: expanded(cardPath),
-            photosPath: expanded(photosPath),
-            videosPath: expanded(videosPath),
+            sourcePath: resolvedPath(cardPath, validation: sourceValidation),
+            photosPath: resolvedPath(photosPath, validation: photosValidation),
+            videosPath: resolvedPath(videosPath, validation: videosValidation),
             defaultLocation: Self.defaultSessionLabel(for: location),
             historyRetention: historyRetention,
             autoPromptEnabled: autoPromptEnabled,
@@ -1350,11 +1366,12 @@ final class AppModel: ObservableObject {
     }
 
     private func saveFolderBookmark(_ purpose: BookmarkPurpose, path: String) throws {
-        let url = URL(fileURLWithPath: expanded(path), isDirectory: true)
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+        let validationPurpose: PathValidationPurpose = purpose == .source ? .source : .destination
+        let validation = PathValidator().validate(path: path, purpose: validationPurpose)
+        guard validation.isUsable else {
             return
         }
+        let url = URL(fileURLWithPath: validation.expandedPath, isDirectory: true)
         try bookmarkStore?.saveBookmark(purpose: purpose, url: url)
     }
 

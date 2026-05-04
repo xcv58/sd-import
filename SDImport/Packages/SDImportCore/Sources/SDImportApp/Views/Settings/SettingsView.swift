@@ -136,7 +136,7 @@ private struct FolderSettingRow: View {
     }
 
     private var capacityText: String? {
-        guard let capacity = try? DestinationSpaceChecker.fileSystemCapacity(for: path) else {
+        guard let capacity = try? DestinationSpaceChecker.fileSystemCapacity(for: validation.expandedPath) else {
             return nil
         }
         let available = ByteCountFormatter.string(fromByteCount: capacity.availableBytes, countStyle: .file)

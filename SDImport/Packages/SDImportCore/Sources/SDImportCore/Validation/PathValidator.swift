@@ -71,20 +71,87 @@ public struct PathValidator {
 
     public func validate(path: String, purpose: PathValidationPurpose) -> PathValidationResult {
         let trimmedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        let expandedPath = (trimmedPath as NSString).expandingTildeInPath
 
-        guard !expandedPath.isEmpty else {
+        guard !trimmedPath.isEmpty else {
             return PathValidationResult(
                 originalPath: path,
-                expandedPath: expandedPath,
+                expandedPath: "",
                 purpose: purpose,
                 status: .empty
             )
         }
 
+        let expandedPath = (path as NSString).expandingTildeInPath
+        let exactResult = validateExpandedPath(expandedPath, originalPath: path, purpose: purpose)
+        if exactResult.status != .missing {
+            return exactResult
+        }
+
+        let trimmedExpandedPath = (trimmedPath as NSString).expandingTildeInPath
+        if trimmedExpandedPath != expandedPath {
+            let trimmedResult = validateExpandedPath(trimmedExpandedPath, originalPath: path, purpose: purpose)
+            if trimmedResult.status != .missing {
+                return trimmedResult
+            }
+        }
+
+        if let whitespaceVariantPath = resolveWhitespaceVariantPath(expandedPath) {
+            let whitespaceVariantResult = validateExpandedPath(
+                whitespaceVariantPath,
+                originalPath: path,
+                purpose: purpose
+            )
+            if whitespaceVariantResult.status != .missing {
+                return whitespaceVariantResult
+            }
+        }
+
+        return exactResult
+    }
+
+    private func resolveWhitespaceVariantPath(_ expandedPath: String) -> String? {
+        let components = URL(fileURLWithPath: expandedPath).pathComponents
+        guard let firstComponent = components.first, firstComponent == "/" else {
+            return nil
+        }
+
+        var currentURL = URL(fileURLWithPath: firstComponent, isDirectory: true)
+        for component in components.dropFirst() {
+            let exactURL = currentURL.appendingPathComponent(component)
+            if fileManager.fileExists(atPath: exactURL.path) {
+                currentURL = exactURL
+                continue
+            }
+
+            let trimmedComponent = component.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard
+                !trimmedComponent.isEmpty,
+                let siblingNames = try? fileManager.contentsOfDirectory(atPath: currentURL.path)
+            else {
+                return nil
+            }
+
+            let matchingNames = siblingNames.filter {
+                $0 != component && $0.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedComponent
+            }
+            guard matchingNames.count == 1, let matchingName = matchingNames.first else {
+                return nil
+            }
+
+            currentURL = currentURL.appendingPathComponent(matchingName)
+        }
+
+        return currentURL.path
+    }
+
+    private func validateExpandedPath(
+        _ expandedPath: String,
+        originalPath: String,
+        purpose: PathValidationPurpose
+    ) -> PathValidationResult {
         if purpose == .source, URL(fileURLWithPath: expandedPath).standardizedFileURL.path == "/Volumes" {
             return PathValidationResult(
-                originalPath: path,
+                originalPath: originalPath,
                 expandedPath: expandedPath,
                 purpose: purpose,
                 status: .placeholder
@@ -94,7 +161,7 @@ public struct PathValidator {
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: expandedPath, isDirectory: &isDirectory) else {
             return PathValidationResult(
-                originalPath: path,
+                originalPath: originalPath,
                 expandedPath: expandedPath,
                 purpose: purpose,
                 status: .missing
@@ -103,7 +170,7 @@ public struct PathValidator {
 
         guard isDirectory.boolValue else {
             return PathValidationResult(
-                originalPath: path,
+                originalPath: originalPath,
                 expandedPath: expandedPath,
                 purpose: purpose,
                 status: .notDirectory
@@ -112,7 +179,7 @@ public struct PathValidator {
 
         if purpose == .source, !fileManager.isReadableFile(atPath: expandedPath) {
             return PathValidationResult(
-                originalPath: path,
+                originalPath: originalPath,
                 expandedPath: expandedPath,
                 purpose: purpose,
                 status: .unreadable
@@ -121,7 +188,7 @@ public struct PathValidator {
 
         if purpose == .destination, !fileManager.isWritableFile(atPath: expandedPath) {
             return PathValidationResult(
-                originalPath: path,
+                originalPath: originalPath,
                 expandedPath: expandedPath,
                 purpose: purpose,
                 status: .unwritable
@@ -129,7 +196,7 @@ public struct PathValidator {
         }
 
         return PathValidationResult(
-            originalPath: path,
+            originalPath: originalPath,
             expandedPath: expandedPath,
             purpose: purpose,
             status: .ready

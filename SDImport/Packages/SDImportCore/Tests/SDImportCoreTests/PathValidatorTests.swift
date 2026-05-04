@@ -47,6 +47,62 @@ struct PathValidatorTests {
         #expect(result.message == "Folder does not exist")
     }
 
+    @Test("validates directories with trailing spaces in the folder name")
+    func validatesDirectoryWithTrailingSpaceInName() throws {
+        let directory = try temporaryDirectory()
+        let destination = directory.appendingPathComponent("maylasia ", isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+
+        let result = PathValidator().validate(path: destination.path, purpose: .destination)
+
+        #expect(result.status == .ready)
+        #expect(result.expandedPath == destination.path)
+    }
+
+    @Test("resolves missing paths to unambiguous trailing-space folder names")
+    func resolvesMissingPathToTrailingSpaceFolderName() throws {
+        let directory = try temporaryDirectory()
+        let destination = directory.appendingPathComponent("maylasia ", isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        let visiblePath = directory.appendingPathComponent("maylasia", isDirectory: true).path
+
+        let result = PathValidator().validate(path: visiblePath, purpose: .destination)
+
+        #expect(result.status == .ready)
+        #expect(result.expandedPath == destination.path)
+    }
+
+    @Test("does not resolve ambiguous whitespace-only folder name matches")
+    func doesNotResolveAmbiguousWhitespaceFolderNameMatches() throws {
+        let directory = try temporaryDirectory()
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent("trip ", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent(" trip", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+
+        let result = PathValidator().validate(
+            path: directory.appendingPathComponent("trip", isDirectory: true).path,
+            purpose: .destination
+        )
+
+        #expect(result.status == .missing)
+    }
+
+    @Test("falls back to trimmed paths when the exact path is missing")
+    func fallsBackToTrimmedPathWhenExactPathIsMissing() throws {
+        let directory = try temporaryDirectory()
+        let paddedPath = " \(directory.path) "
+
+        let result = PathValidator().validate(path: paddedPath, purpose: .destination)
+
+        #expect(result.status == .ready)
+        #expect(result.expandedPath == directory.path)
+    }
+
     @Test("reports plain files as invalid folders")
     func reportsPlainFilesAsInvalidFolders() throws {
         let directory = try temporaryDirectory()
