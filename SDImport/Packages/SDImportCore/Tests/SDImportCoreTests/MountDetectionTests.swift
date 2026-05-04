@@ -111,6 +111,26 @@ struct MountDetectionTests {
         #expect(likelyVolumes.map(\.name) == ["A CARD", "B CARD"])
     }
 
+    @Test("volume detector ignores zero important usage capacity when normal capacity is available")
+    func detectorIgnoresZeroImportantUsageCapacity() {
+        let available = VolumeDetector.sourceAvailableCapacity(
+            available: 128_000_000_000,
+            importantUsage: 0
+        )
+
+        #expect(available == 128_000_000_000)
+    }
+
+    @Test("volume detector falls back to important usage capacity")
+    func detectorFallsBackToImportantUsageCapacity() {
+        let available = VolumeDetector.sourceAvailableCapacity(
+            available: nil,
+            importantUsage: 64_000_000_000
+        )
+
+        #expect(available == 64_000_000_000)
+    }
+
     @Test("volume detector finds importable media before prompting")
     func detectorFindsImportableMedia() throws {
         let directory = try temporaryDirectory()

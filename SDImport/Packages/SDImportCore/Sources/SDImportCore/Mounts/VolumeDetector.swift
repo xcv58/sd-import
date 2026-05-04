@@ -23,8 +23,10 @@ public struct VolumeDetector: Sendable {
         let isRemovable = (values?.volumeIsRemovable ?? false)
             || (values?.volumeIsEjectable ?? false)
         let totalCapacity = values?.volumeTotalCapacity.map(Int64.init)
-        let availableCapacity = values?.volumeAvailableCapacityForImportantUsage
-            ?? values?.volumeAvailableCapacity.map(Int64.init)
+        let availableCapacity = Self.sourceAvailableCapacity(
+            available: values?.volumeAvailableCapacity.map(Int64.init),
+            importantUsage: values?.volumeAvailableCapacityForImportantUsage
+        )
 
         return MountedVolume(
             id: values?.volumeUUIDString ?? mountURL.standardizedFileURL.path,
@@ -138,5 +140,15 @@ public struct VolumeDetector: Sendable {
     private func isDirectory(_ url: URL, fileManager: FileManager) -> Bool {
         var isDirectory: ObjCBool = false
         return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
+
+    static func sourceAvailableCapacity(available: Int64?, importantUsage: Int64?) -> Int64? {
+        if let available, available > 0 {
+            return available
+        }
+        if let importantUsage, importantUsage > 0 {
+            return importantUsage
+        }
+        return available ?? importantUsage
     }
 }
