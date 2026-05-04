@@ -10,21 +10,8 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        AppPage(title: "History", status: model.statusMessage) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 16) {
-                    recentJobsSection
-                        .frame(width: 340)
-
-                    detailSection
-                        .frame(minWidth: 0, maxWidth: .infinity)
-                }
-
-                VStack(alignment: .leading, spacing: 16) {
-                    recentJobsSection
-                    detailSection
-                }
-            }
+        AppPage(title: "History", status: model.statusMessage, scrolls: false, maxContentWidth: .infinity) {
+            historyLayout
         }
         .navigationTitle("History")
         .toolbar {
@@ -53,6 +40,33 @@ struct HistoryView: View {
                 model.refreshHistory()
             }
         }
+    }
+
+    private var historyLayout: some View {
+        GeometryReader { proxy in
+            if proxy.size.width >= 760 {
+                HStack(alignment: .top, spacing: 16) {
+                    ScrollView {
+                        recentJobsSection
+                    }
+                    .frame(width: 360)
+
+                    ScrollView {
+                        detailSection
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                }
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        detailSection
+                        recentJobsSection
+                    }
+                }
+            }
+        }
+        .frame(minHeight: 320, maxHeight: .infinity)
     }
 
     private var recentJobsSection: some View {
@@ -92,6 +106,7 @@ struct HistoryView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var detailSection: some View {
@@ -109,6 +124,7 @@ struct HistoryView: View {
             }
         }
         .padding(.top, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

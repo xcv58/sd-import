@@ -4,6 +4,8 @@ struct AppPage<Content: View>: View {
     let title: String
     let status: String?
     var statusRole: StatusRole = .neutral
+    var scrolls = true
+    var maxContentWidth: CGFloat = 980
     let content: Content
 
     enum StatusRole {
@@ -15,25 +17,46 @@ struct AppPage<Content: View>: View {
         title: String,
         status: String? = nil,
         statusRole: StatusRole = .neutral,
+        scrolls: Bool = true,
+        maxContentWidth: CGFloat = 980,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.status = status
         self.statusRole = statusRole
+        self.scrolls = scrolls
+        self.maxContentWidth = maxContentWidth
         self.content = content()
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                header
-                content
+        Group {
+            if scrolls {
+                ScrollView {
+                    pageContent
+                }
+            } else {
+                pageContent
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
-            .padding(24)
-            .frame(maxWidth: 980, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var pageContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            header
+
+            if scrolls {
+                content
+            } else {
+                content
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: maxContentWidth, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
