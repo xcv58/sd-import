@@ -93,7 +93,7 @@ DEVELOPER_ID_APPLICATION="Developer ID Application: Example (TEAMID)" \
 ./script/package_dmg.sh
 ```
 
-For CI or public release jobs, set `REQUIRE_SPARKLE_CONFIGURATION=1` so the
+For public release artifacts, set `REQUIRE_SPARKLE_CONFIGURATION=1` so the
 packaging script fails if the feed URL or public key is missing.
 
 Generate the appcast from the directory that contains signed/notarized update
@@ -129,9 +129,9 @@ Avoid `releases/latest/download/SD-Import.md` for release notes because GitHub's
 latest-release redirect can be stale while a new update is being published.
 
 Sparkle's private key must stay outside git and outside the public hosting
-bucket. Public builds should move to a native Xcode app archive/export target
-before automatic updates are enabled for users; the current SwiftPM bundle path
-is kept for local development and validation.
+bucket. The supported public release path is the local
+`script/release_github.sh` flow using the Developer ID certificate, notary
+profile, and Sparkle key available on the release Mac.
 
 See `docs/sdimport-release-runbook.md` for the full GitHub Releases, Apple
 Developer ID, Sparkle key, and old-to-new update test workflow.

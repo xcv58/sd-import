@@ -107,29 +107,9 @@ NOTARYTOOL_PROFILE="SDImportNotary" \
 This builds, signs, notarizes, generates `appcast.xml`, and creates or updates
 the GitHub Release.
 
-## GitHub Actions Release
-
-The `SD Import Release` workflow can create releases from the GitHub UI once
-these repository secrets exist:
-
-- `DEVELOPER_ID_APPLICATION`
-- `DEVELOPER_ID_CERTIFICATE_P12_BASE64`
-- `DEVELOPER_ID_CERTIFICATE_PASSWORD`
-- `APPLE_ID`
-- `APPLE_TEAM_ID`
-- `APPLE_APP_PASSWORD`
-- `SPARKLE_PUBLIC_ED_KEY`
-- `SPARKLE_PRIVATE_KEY`
-
-To create `DEVELOPER_ID_CERTIFICATE_P12_BASE64`, export the Developer ID
-Application certificate plus private key from Keychain Access as a `.p12`, then:
-
-```bash
-base64 -i DeveloperIDApplication.p12 | pbcopy
-```
-
-Use a strong export password and store it as
-`DEVELOPER_ID_CERTIFICATE_PASSWORD`.
+GitHub Actions is not part of the supported release path. Keep signing,
+notarization, and Sparkle private-key material on the release Mac rather than
+duplicating those secrets into the repository.
 
 ## Old-To-New Update Test
 
