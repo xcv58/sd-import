@@ -21,6 +21,11 @@ ZIP_PATH="$DIST_DIR/SD-Import.zip"
 APPCAST_PATH="$UPDATES_DIR/appcast.xml"
 UPDATE_NOTES_PATH="$UPDATES_DIR/SD-Import.md"
 
+fail() {
+  echo "$1" >&2
+  exit 2
+}
+
 usage() {
   cat >&2 <<EOF
 usage: ./script/release_github.sh
@@ -46,7 +51,60 @@ Common optional environment:
   SPARKLE_PRIVATE_KEY
   GITHUB_REPOSITORY           default: xcv58/macos-automation
   GITHUB_TOKEN / GH_TOKEN     needed by gh in CI
+  ALLOW_NON_INCREMENTING_APP_BUILD=1
+                              emergency override for replacing an existing
+                              release asset without a newer Sparkle build
 EOF
+}
+
+latest_published_sparkle_build() {
+  local latest_appcast_url
+  latest_appcast_url="https://github.com/$REPO_FULL_NAME/releases/latest/download/appcast.xml"
+
+  curl -fsSL "$latest_appcast_url" | /usr/bin/python3 -c '
+import sys
+import xml.etree.ElementTree as ET
+
+try:
+    root = ET.fromstring(sys.stdin.buffer.read())
+except ET.ParseError:
+    sys.exit(0)
+
+ns = {"sparkle": "http://www.andymatuschak.org/xml-namespaces/sparkle"}
+node = root.find(".//sparkle:version", ns)
+if node is not None and node.text:
+    print(node.text.strip())
+'
+}
+
+validate_app_build() {
+  if [[ ! "$APP_BUILD" =~ ^[0-9]+$ ]]; then
+    fail "APP_BUILD must be a monotonically increasing integer; got '$APP_BUILD'."
+  fi
+
+  if [[ "${ALLOW_NON_INCREMENTING_APP_BUILD:-0}" == "1" ]]; then
+    echo "Skipping latest-build guard because ALLOW_NON_INCREMENTING_APP_BUILD=1 is set." >&2
+    return
+  fi
+
+  local latest_build
+  if ! latest_build="$(latest_published_sparkle_build)"; then
+    echo "Could not read the latest appcast; skipping latest-build guard." >&2
+    return
+  fi
+
+  if [[ -z "$latest_build" ]]; then
+    echo "Latest appcast did not contain a Sparkle build; skipping latest-build guard." >&2
+    return
+  fi
+
+  if [[ ! "$latest_build" =~ ^[0-9]+$ ]]; then
+    fail "Latest appcast has non-integer sparkle:version '$latest_build'; inspect the feed before releasing."
+  fi
+
+  if (( APP_BUILD <= latest_build )); then
+    fail "APP_BUILD=$APP_BUILD is not newer than latest published Sparkle build $latest_build. Use APP_BUILD=$((latest_build + 1)) or higher."
+  fi
 }
 
 case "${1:-}" in
@@ -57,13 +115,11 @@ case "${1:-}" in
 esac
 
 if [[ -z "${DEVELOPER_ID_APPLICATION:-}" ]]; then
-  echo "DEVELOPER_ID_APPLICATION is required for a public release." >&2
-  exit 2
+  fail "DEVELOPER_ID_APPLICATION is required for a public release."
 fi
 
 if [[ -z "${SPARKLE_PUBLIC_ED_KEY:-}" ]]; then
-  echo "SPARKLE_PUBLIC_ED_KEY is required for a public release." >&2
-  exit 2
+  fail "SPARKLE_PUBLIC_ED_KEY is required for a public release."
 fi
 
 if [[ -z "${NOTARYTOOL_PROFILE:-}" ]]; then
@@ -75,25 +131,23 @@ if [[ -z "${NOTARYTOOL_PROFILE:-}" ]]; then
   done
 
   if (( ${#missing[@]} > 0 )); then
-    echo "Set NOTARYTOOL_PROFILE or APPLE_ID, APPLE_TEAM_ID, and APPLE_APP_PASSWORD." >&2
-    exit 2
+    fail "Set NOTARYTOOL_PROFILE or APPLE_ID, APPLE_TEAM_ID, and APPLE_APP_PASSWORD."
   fi
 fi
 
 if ! command -v gh >/dev/null 2>&1; then
-  echo "GitHub CLI 'gh' is required." >&2
-  exit 2
+  fail "GitHub CLI 'gh' is required."
 fi
 
 if ! gh auth status >/dev/null 2>&1; then
-  echo "GitHub CLI is not authenticated. Run: gh auth login" >&2
-  exit 2
+  fail "GitHub CLI is not authenticated. Run: gh auth login"
 fi
 
 if [[ -n "${SPARKLE_PRIVATE_KEY_FILE:-}" && -n "${SPARKLE_PRIVATE_KEY:-}" ]]; then
-  echo "Set only one of SPARKLE_PRIVATE_KEY_FILE or SPARKLE_PRIVATE_KEY." >&2
-  exit 2
+  fail "Set only one of SPARKLE_PRIVATE_KEY_FILE or SPARKLE_PRIVATE_KEY."
 fi
+
+validate_app_build
 
 if [[ -z "$RELEASE_NOTES_FILE" && -f "$DEFAULT_RELEASE_NOTES_FILE" ]]; then
   RELEASE_NOTES_FILE="$DEFAULT_RELEASE_NOTES_FILE"
