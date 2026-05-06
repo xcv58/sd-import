@@ -21,7 +21,16 @@ public struct MediaClassifier: Sendable {
         ".mkv"
     ]
 
+    public static let ignoredCameraIndexFilenames: Set<String> = [
+        "database.bin",
+        "mediapro.xml"
+    ]
+
     public init() {}
+
+    public func shouldIgnore(filename: String) -> Bool {
+        Self.ignoredCameraIndexFilenames.contains(filename.lowercased(with: Locale(identifier: "en_US_POSIX")))
+    }
 
     public func classify(extension ext: String) -> MediaKind {
         let normalized = ext.lowercased()

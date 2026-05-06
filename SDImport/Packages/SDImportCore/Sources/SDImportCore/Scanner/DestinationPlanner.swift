@@ -89,13 +89,7 @@ public struct DestinationPlanner: Sendable {
             }
             let sessionDirectory = roots.videosURL
                 .appendingPathComponent("\(captureDate) \(safeComponent(sessionLabel, fallback: "Footage"))", isDirectory: true)
-            if folderGrouping == .oneShootFolder {
-                return sessionDirectory.appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
-            }
-
-            let cardDirectory = sessionDirectory
-                .appendingPathComponent("Card \(safeComponent(volumeName, fallback: "Unknown"))", isDirectory: true)
-            return cardDirectory.appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
+            return sessionDirectory.appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
         }
     }
 

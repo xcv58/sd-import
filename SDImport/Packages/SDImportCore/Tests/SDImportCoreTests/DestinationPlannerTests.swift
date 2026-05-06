@@ -113,7 +113,7 @@ struct DestinationPlannerTests {
         #expect(videoURL?.path == "/tmp/footage/2026-04-29 to 2026-04-30 Singapore Trip/C0001.MP4")
     }
 
-    @Test("plans flat footage backup by card")
+    @Test("plans footage backup as flat files")
     func plansFootageBackup() {
         let roots = DestinationRoots(
             photosURL: URL(fileURLWithPath: "/tmp/library", isDirectory: true),
@@ -132,10 +132,10 @@ struct DestinationPlannerTests {
             volumeName: "Untitled"
         )
 
-        #expect(videoURL?.path == "/tmp/footage/2026-04-30 Singapore Trip/Card Untitled/C0001.MP4")
+        #expect(videoURL?.path == "/tmp/footage/2026-04-30 Singapore Trip/C0001.MP4")
     }
 
-    @Test("plans flat footage backup sidecars by card")
+    @Test("plans footage backup sidecars as flat files")
     func plansFootageBackupSidecars() {
         let roots = DestinationRoots(
             photosURL: URL(fileURLWithPath: "/tmp/library", isDirectory: true),
@@ -154,6 +154,6 @@ struct DestinationPlannerTests {
             volumeName: "Untitled"
         )
 
-        #expect(sidecarURL?.path == "/tmp/footage/2026-04-30 Singapore Trip/Card Untitled/C0001.XML")
+        #expect(sidecarURL?.path == "/tmp/footage/2026-04-30 Singapore Trip/C0001.XML")
     }
 }

@@ -142,14 +142,56 @@ struct ImportPlanBuilderTests {
         #expect(plans[1].update?.error == "destination file name repeats in this import")
     }
 
+    @Test("footage backup renames duplicate filenames in flat day folder")
+    func footageBackupRenamesDuplicateFilenamesInFlatDayFolder() throws {
+        let files = [
+            jobFile(
+                id: 1,
+                filename: "C0001.MP4",
+                relativePath: "PRIVATE/M4ROOT/CLIP/C0001.MP4",
+                mediaKind: .video,
+                captureDate: "2026-05-06"
+            ),
+            jobFile(
+                id: 2,
+                filename: "C0001.MP4",
+                relativePath: "PRIVATE/M4ROOT/CLIP2/C0001.MP4",
+                mediaKind: .video,
+                captureDate: "2026-05-06"
+            )
+        ]
+        let builder = ImportPlanBuilder(
+            sessions: [
+                session(date: "2026-05-06", label: "XXX", photoCount: 0, videoCount: 2)
+            ],
+            organizationPreset: .footageBackup,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "XXX",
+            volumeName: "CARD"
+        )
+
+        let plans = builder.plans(files: files)
+
+        #expect(plans.map(\.destinationPath) == [
+            "/Footage/2026-05-06 XXX/C0001.MP4",
+            "/Footage/2026-05-06 XXX/C0001-copy-1.MP4"
+        ])
+        #expect(plans[1].status == "Rename")
+        #expect(plans[1].update?.error == "destination file name repeats in this import")
+    }
+
     private func session(
         date: String,
+        label: String = "Ignored Per-Day Label",
         photoCount: Int,
         videoCount: Int
     ) -> ImportPlanSession {
         ImportPlanSession(
             date: date,
-            label: "Ignored Per-Day Label",
+            label: label,
             photoCount: photoCount,
             videoCount: videoCount,
             unsupportedCount: 0,

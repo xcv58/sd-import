@@ -117,7 +117,7 @@ Shoot Sessions:
 Footage Backup:
 
 ```text
-<videosRoot>/<YYYY-MM-DD> <session label>/Card <volume name>/<filename>
+<videosRoot>/<YYYY-MM-DD> <session label>/<filename>
 ```
 
 One Shoot Folder grouping uses one date-range folder for the selected import
@@ -135,8 +135,9 @@ Rules:
 - Empty location labels are treated as `Untitled`.
 - Destination roots are user-selected folders.
 - The job stores the destination roots used at scan/import time.
-- Footage Backup uses flat files under the generated card folder for videos and selected sidecar files.
+- Footage Backup uses flat files under the generated session folder for videos and selected sidecar files.
 - One Shoot Folder grouping flattens selected files directly under the generated shoot folder.
+- Camera-generated index files such as `DATABASE.BIN` and `MEDIAPRO.XML` are ignored during scanning.
 
 ## Decisions
 
@@ -390,5 +391,5 @@ Rules:
 11. Insert a real SD card with background prompt enabled. One prompt appears.
 12. Insert the same card with repeated mount events. No duplicate jobs are created.
 13. Disable background prompt. The login item no longer prompts on mount.
-14. Use Footage Backup on a card with video sidecar files. Videos and selected sidecars copy as flat files under the generated card folder.
+14. Use Footage Backup on a card with video sidecar files. Videos and selected sidecars copy as flat files under the generated session folder.
 15. Run the notarized app on a clean Mac without Python, Homebrew, Raycast, `swiftDialog`, or `exiftool`.

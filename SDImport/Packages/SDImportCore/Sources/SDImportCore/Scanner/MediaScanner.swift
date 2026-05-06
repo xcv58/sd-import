@@ -77,6 +77,9 @@ public struct MediaScanner {
             if shouldCancel() {
                 throw SDImportError.cancelled
             }
+            if classifier.shouldIgnore(filename: fileURL.lastPathComponent) {
+                continue
+            }
             scannedFiles += 1
             let attributes = try attributes(for: fileURL)
             let ext = fileURL.pathExtension.isEmpty ? "" : ".\(fileURL.pathExtension.lowercased())"

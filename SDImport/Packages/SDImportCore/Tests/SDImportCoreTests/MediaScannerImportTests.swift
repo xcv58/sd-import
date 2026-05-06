@@ -82,6 +82,27 @@ struct MediaScannerImportTests {
         #expect(summary2.knownFiles == 2)
     }
 
+    @Test("scanner ignores camera index files")
+    func scannerIgnoresCameraIndexFiles() throws {
+        let fixture = try Fixture()
+        let video = fixture.mountURL.appendingPathComponent("PRIVATE/M4ROOT/CLIP/C0001.MP4")
+        let mediaPro = fixture.mountURL.appendingPathComponent("PRIVATE/M4ROOT/MEDIAPRO.XML")
+        let database = fixture.mountURL.appendingPathComponent("PRIVATE/DATABASE/DATABASE.BIN")
+        try fixture.writeFile(video, bytes: Data("sample-video-bytes".utf8))
+        try fixture.writeFile(mediaPro, bytes: Data("<mediapro />".utf8))
+        try fixture.writeFile(database, bytes: Data([0, 1, 2, 3]))
+
+        let summary = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-ignore-index")
+        )
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: "job-ignore-index")
+
+        #expect(summary.scannedFiles == 1)
+        #expect(summary.newFiles == 1)
+        #expect(summary.unsupportedFiles == 0)
+        #expect(files.map(\.filename) == ["C0001.MP4"])
+    }
+
     @Test("scanner classifies existing different destination as conflict and import copies with suffix")
     func conflictDestinationCopiesWithSuffix() throws {
         let fixture = try Fixture()
@@ -257,7 +278,6 @@ struct MediaScannerImportTests {
         let fileID = try #require(sidecar.id)
         let destinationURL = fixture.videosURL
             .appendingPathComponent("2024-07-15 TEST", isDirectory: true)
-            .appendingPathComponent("Card CARD", isDirectory: true)
             .appendingPathComponent("C0001.XML", isDirectory: false)
 
         try fixture.jobRepository.updateJobFileImportPlan(
