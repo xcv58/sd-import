@@ -15,20 +15,15 @@ struct HistoryView: View {
         }
         .navigationTitle("History")
         .toolbar {
-            ToolbarItemGroup {
+            ToolbarItem {
                 Button {
                     model.refreshHistory()
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .disabled(model.isHistoryLoading)
-
-                Button {
-                    model.retrySelectedJob()
-                } label: {
-                    Label("Retry", systemImage: "arrow.counterclockwise")
-                }
-                .disabled(model.isWorking || model.selectedJob()?.canRetryImport != true)
+                .help("Refresh history")
+                .accessibilityLabel("Refresh history")
             }
         }
         .onAppear {

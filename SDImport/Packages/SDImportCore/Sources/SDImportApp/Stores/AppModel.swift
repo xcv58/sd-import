@@ -304,7 +304,7 @@ final class AppModel: ObservableObject {
     }
 
     var canScan: Bool {
-        !isWorking && sourceValidation.isUsable && requiredDestinationPathsAreUsable()
+        !isWorking && sourceValidation.isUsable
     }
 
     var canImportPlannedFiles: Bool {
@@ -329,10 +329,6 @@ final class AppModel: ObservableObject {
             statusMessage = sourceValidation.message
             return
         }
-        guard requiredDestinationPathsAreUsable() else {
-            statusMessage = "Check destination folders"
-            return
-        }
 
         savePreferences()
         currentResult = nil
@@ -344,8 +340,17 @@ final class AppModel: ObservableObject {
         statusMessage = "Scanning..."
 
         let cardPath = resolvedPath(cardPath, validation: sourceValidation)
-        let photosPath = resolvedPath(photosPath, validation: photosValidation)
-        let videosPath = resolvedPath(videosPath, validation: videosValidation)
+        let homeURL = FileManager.default.homeDirectoryForCurrentUser
+        let photosPath = planningPath(
+            photosPath,
+            validation: photosValidation,
+            fallback: homeURL.appendingPathComponent("Pictures/Photos", isDirectory: true).path
+        )
+        let videosPath = planningPath(
+            videosPath,
+            validation: videosValidation,
+            fallback: homeURL.appendingPathComponent("Downloads", isDirectory: true).path
+        )
         let location = Self.defaultSessionLabel(for: location)
         let reportsURL = reportsURL
 
@@ -1155,6 +1160,17 @@ final class AppModel: ObservableObject {
 
     private func resolvedPath(_ path: String, validation: PathValidationResult) -> String {
         validation.isUsable ? validation.expandedPath : expanded(path)
+    }
+
+    private func planningPath(
+        _ path: String,
+        validation: PathValidationResult,
+        fallback: String
+    ) -> String {
+        let resolvedPath = resolvedPath(path, validation: validation)
+        return resolvedPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? fallback
+            : resolvedPath
     }
 
     private func summaryText(for job: ImportJob) -> String {

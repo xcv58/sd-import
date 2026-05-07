@@ -25,23 +25,6 @@ struct ManualImportView: View {
             }
         }
         .navigationTitle("Import")
-        .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    model.scan()
-                } label: {
-                    Label("Scan", systemImage: "magnifyingglass")
-                }
-                .disabled(!model.canScan)
-
-                Button {
-                    model.importCurrentJob()
-                } label: {
-                    Label("Import", systemImage: "square.and.arrow.down")
-                }
-                .disabled(!model.canImportPlannedFiles)
-            }
-        }
         .onAppear {
             model.refreshAvailableSourceVolumes()
             model.validatePaths()
@@ -69,27 +52,31 @@ struct ManualImportView: View {
 
                 switch model.organizationPreset {
                 case .classicDatedFolders:
-                    GridRow {
-                        Text("Photos")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 92, alignment: .leading)
-                        FolderField(
-                            title: "Photos",
-                            path: $model.photosPath,
-                            validation: model.photosValidation,
-                            action: model.choosePhotosFolder
-                        )
+                    if model.importMediaSelection.includes(.photo) {
+                        GridRow {
+                            Text("Photos")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 92, alignment: .leading)
+                            FolderField(
+                                title: "Photos",
+                                path: $model.photosPath,
+                                validation: model.photosValidation,
+                                action: model.choosePhotosFolder
+                            )
+                        }
                     }
-                    GridRow {
-                        Text("Videos")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 92, alignment: .leading)
-                        FolderField(
-                            title: "Videos",
-                            path: $model.videosPath,
-                            validation: model.videosValidation,
-                            action: model.chooseVideosFolder
-                        )
+                    if model.importMediaSelection.includes(.video) {
+                        GridRow {
+                            Text("Videos")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 92, alignment: .leading)
+                            FolderField(
+                                title: "Videos",
+                                path: $model.videosPath,
+                                validation: model.videosValidation,
+                                action: model.chooseVideosFolder
+                            )
+                        }
                     }
                 case .shootSessionsByDate:
                     GridRow {

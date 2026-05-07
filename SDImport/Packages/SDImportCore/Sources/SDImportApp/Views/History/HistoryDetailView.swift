@@ -116,10 +116,14 @@ struct HistoryDetailView: View {
 
     private var fileList: some View {
         let files = filteredFiles
+        let totalCount = self.files.count
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Files")
                     .font(.headline)
+                Text(fileCountText(displayedCount: files.count, totalCount: totalCount))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Picker("File Filter", selection: $fileFilter) {
                     ForEach(HistoryFileFilter.allCases) { filter in
@@ -130,13 +134,35 @@ struct HistoryDetailView: View {
                 .frame(width: 320)
             }
 
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(files) { file in
-                    HistoryFileRow(file: file)
-                    Divider()
+            if files.isEmpty {
+                ContentUnavailableView("No Files", systemImage: "doc")
+                    .frame(maxWidth: .infinity, minHeight: 140)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(files) { file in
+                            HistoryFileRow(file: file)
+                            Divider()
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                }
+                .frame(maxHeight: 360)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(.quaternary, lineWidth: 1)
                 }
             }
         }
+    }
+
+    private func fileCountText(displayedCount: Int, totalCount: Int) -> String {
+        if displayedCount == totalCount {
+            return totalCount == 1 ? "1 file" : "\(totalCount) files"
+        }
+        return "\(displayedCount) of \(totalCount)"
     }
 }
 

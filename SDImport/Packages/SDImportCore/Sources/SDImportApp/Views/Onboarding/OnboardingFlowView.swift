@@ -6,8 +6,6 @@ struct OnboardingFlowView: View {
 
     private var canComplete: Bool {
         sourceIsReadyForSetup
-            && model.photosValidation.isUsable
-            && model.videosValidation.isUsable
     }
 
     private var sourceIsReadyForSetup: Bool {
@@ -31,12 +29,14 @@ struct OnboardingFlowView: View {
                     title: "Photos",
                     path: $model.photosPath,
                     validation: model.photosValidation,
+                    isRequired: false,
                     action: model.choosePhotosFolder
                 )
                 OnboardingFolderRow(
                     title: "Videos",
                     path: $model.videosPath,
                     validation: model.videosValidation,
+                    isRequired: false,
                     action: model.chooseVideosFolder
                 )
                 TextField("Shoot name", text: $model.location)
@@ -79,6 +79,7 @@ private struct OnboardingFolderRow: View {
     let title: String
     @Binding var path: String
     let validation: PathValidationResult
+    var isRequired = true
     let action: () -> Void
 
     var body: some View {
@@ -100,10 +101,40 @@ private struct OnboardingFolderRow: View {
                 .accessibilityLabel("Choose \(title.lowercased())")
             }
 
-            Label(validation.message, systemImage: validation.isUsable ? "checkmark.circle" : "exclamationmark.triangle")
+            Label(statusMessage, systemImage: statusImage)
                 .font(.caption)
-                .foregroundStyle(validation.isUsable ? Color.secondary : Color.orange)
+                .foregroundStyle(statusColor)
                 .padding(.leading, 108)
         }
+    }
+
+    private var statusMessage: String {
+        guard !isRequired, !validation.isUsable else {
+            return validation.message
+        }
+
+        switch validation.status {
+        case .empty:
+            return "Optional: choose before copying \(title.lowercased())"
+        case .missing:
+            return "Optional: set this folder later"
+        default:
+            return validation.message
+        }
+    }
+
+    private var statusImage: String {
+        validation.isUsable ? "checkmark.circle" : (isSoftOptionalWarning ? "info.circle" : "exclamationmark.triangle")
+    }
+
+    private var statusColor: Color {
+        validation.isUsable || isSoftOptionalWarning ? Color.secondary : Color.orange
+    }
+
+    private var isSoftOptionalWarning: Bool {
+        guard !isRequired else {
+            return false
+        }
+        return validation.status == .empty || validation.status == .missing
     }
 }
