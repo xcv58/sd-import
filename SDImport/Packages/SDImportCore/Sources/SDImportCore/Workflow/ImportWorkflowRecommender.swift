@@ -102,11 +102,17 @@ public struct ImportWorkflowRecommender: Sendable {
         rememberedProfile: ImportWorkflowProfile? = nil,
         fallbackProfile: ImportWorkflowProfile = .mixedShootSession
     ) -> MediaContentProfile {
-        recommend(
-            photoCount: files.filter { $0.mediaKind == .photo }.count,
-            videoCount: files.filter { $0.mediaKind == .video }.count,
-            sidecarCount: files.filter { $0.mediaKind == .unsupported }.count,
-            unsupportedCount: files.filter { $0.mediaKind == .unsupported }.count,
+        let videoCount = files.filter { $0.mediaKind == .video }.count
+        let likelyVideoPreviewJPEGCount = videoCount > 0
+            ? files.filter(MediaFileHeuristics.isLikelyVideoPreviewJPEG).count
+            : 0
+        let photoCount = files.filter { $0.mediaKind == .photo }.count - likelyVideoPreviewJPEGCount
+        let unsupportedCount = files.filter { $0.mediaKind == .unsupported }.count
+        return recommend(
+            photoCount: photoCount,
+            videoCount: videoCount,
+            sidecarCount: unsupportedCount + likelyVideoPreviewJPEGCount,
+            unsupportedCount: unsupportedCount + likelyVideoPreviewJPEGCount,
             rememberedProfile: rememberedProfile,
             fallbackProfile: fallbackProfile
         )

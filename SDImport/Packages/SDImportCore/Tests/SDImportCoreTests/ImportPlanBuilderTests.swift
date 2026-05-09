@@ -183,21 +183,142 @@ struct ImportPlanBuilderTests {
         #expect(plans[1].update?.error == "destination file name repeats in this import")
     }
 
+    @Test("footage backup sidecars are opt-in")
+    func footageBackupSidecarsAreOptIn() throws {
+        let file = jobFile(
+            id: 1,
+            filename: "C0001.XML",
+            relativePath: "PRIVATE/M4ROOT/CLIP/C0001.XML",
+            mediaKind: .unsupported,
+            captureDate: "2026-05-06"
+        )
+
+        let defaultBuilder = ImportPlanBuilder(
+            sessions: [
+                session(
+                    date: "2026-05-06",
+                    label: "Singapore Trip",
+                    photoCount: 0,
+                    videoCount: 0,
+                    unsupportedCount: 1,
+                    includeSidecars: false
+                )
+            ],
+            organizationPreset: .footageBackup,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        )
+
+        let optInBuilder = ImportPlanBuilder(
+            sessions: [
+                session(
+                    date: "2026-05-06",
+                    label: "Singapore Trip",
+                    photoCount: 0,
+                    videoCount: 0,
+                    unsupportedCount: 1,
+                    includeSidecars: true
+                )
+            ],
+            organizationPreset: .footageBackup,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        )
+
+        let defaultPlan = defaultBuilder.plan(file: file)
+        let optInPlan = optInBuilder.plan(file: file)
+
+        #expect(defaultPlan.willCopy == false)
+        #expect(defaultPlan.status == "Unsupported")
+        #expect(optInPlan.willCopy)
+        #expect(optInPlan.destinationPath == "/Footage/2026-05-06 Singapore Trip/C0001.XML")
+    }
+
+    @Test("tiny JPEG previews in footage backup are opt-in sidecars")
+    func tinyJPEGPreviewsInFootageBackupAreOptInSidecars() throws {
+        let file = jobFile(
+            id: 1,
+            filename: "C0001.JPG",
+            relativePath: "PRIVATE/M4ROOT/THMBNL/C0001.JPG",
+            mediaKind: .photo,
+            captureDate: "2026-05-06"
+        )
+
+        let defaultBuilder = ImportPlanBuilder(
+            sessions: [
+                session(
+                    date: "2026-05-06",
+                    label: "Singapore Trip",
+                    photoCount: 0,
+                    videoCount: 1,
+                    unsupportedCount: 1,
+                    includeSidecars: false
+                )
+            ],
+            organizationPreset: .footageBackup,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        )
+
+        let optInBuilder = ImportPlanBuilder(
+            sessions: [
+                session(
+                    date: "2026-05-06",
+                    label: "Singapore Trip",
+                    photoCount: 0,
+                    videoCount: 1,
+                    unsupportedCount: 1,
+                    includeSidecars: true
+                )
+            ],
+            organizationPreset: .footageBackup,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        )
+
+        let defaultPlan = defaultBuilder.plan(file: file)
+        let optInPlan = optInBuilder.plan(file: file)
+
+        #expect(defaultPlan.willCopy == false)
+        #expect(defaultPlan.status == "Unsupported")
+        #expect(optInPlan.willCopy)
+        #expect(optInPlan.status == "Sidecar")
+        #expect(optInPlan.destinationPath == "/Footage/2026-05-06 Singapore Trip/C0001.JPG")
+    }
+
     private func session(
         date: String,
         label: String = "Ignored Per-Day Label",
         photoCount: Int,
-        videoCount: Int
+        videoCount: Int,
+        unsupportedCount: Int = 0,
+        includeSidecars: Bool = false
     ) -> ImportPlanSession {
         ImportPlanSession(
             date: date,
             label: label,
             photoCount: photoCount,
             videoCount: videoCount,
-            unsupportedCount: 0,
+            unsupportedCount: unsupportedCount,
             includePhotos: true,
             includeVideos: true,
-            includeSidecars: false
+            includeSidecars: includeSidecars
         )
     }
 

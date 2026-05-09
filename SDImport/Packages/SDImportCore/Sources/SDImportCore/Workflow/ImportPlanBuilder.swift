@@ -119,10 +119,13 @@ public struct ImportPlanBuilder: Sendable {
         let folderDate = folderDate(for: date)
 
         let isFootageSidecar = organizationPreset == .footageBackup
-            && file.mediaKind == .unsupported
-            && (session?.includeSidecars ?? true)
+            && (file.mediaKind == .unsupported || MediaFileHeuristics.isLikelyVideoPreviewJPEG(file))
+            && (session?.includeSidecars ?? false)
+        let shouldTreatAsUnsupported = file.mediaKind == .unsupported
+            || file.decision == .unsupported
+            || (organizationPreset == .footageBackup && MediaFileHeuristics.isLikelyVideoPreviewJPEG(file))
 
-        if (file.mediaKind == .unsupported || file.decision == .unsupported) && !isFootageSidecar {
+        if shouldTreatAsUnsupported && !isFootageSidecar {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
                     id: id,
@@ -139,13 +142,17 @@ public struct ImportPlanBuilder: Sendable {
         }
 
         let included: Bool
-        switch file.mediaKind {
-        case .photo:
-            included = session?.includePhotos ?? true
-        case .video:
-            included = session?.includeVideos ?? true
-        case .unsupported:
-            included = isFootageSidecar
+        if isFootageSidecar {
+            included = true
+        } else {
+            switch file.mediaKind {
+            case .photo:
+                included = session?.includePhotos ?? true
+            case .video:
+                included = session?.includeVideos ?? true
+            case .unsupported:
+                included = false
+            }
         }
 
         guard included else {
@@ -181,9 +188,10 @@ public struct ImportPlanBuilder: Sendable {
         }
 
         let planner = DestinationPlanner()
+        let destinationMediaKind: MediaKind = isFootageSidecar ? .unsupported : file.mediaKind
         guard let destinationURL = planner.destinationURL(
             filename: file.filename,
-            mediaKind: file.mediaKind,
+            mediaKind: destinationMediaKind,
             captureDate: folderDate,
             sessionLabel: label,
             roots: roots,
@@ -235,7 +243,7 @@ public struct ImportPlanBuilder: Sendable {
             )
             let resolvedURL = batchResolution.url
             let isConflict = resolvedURL != destinationURL
-            let copyStatus = file.mediaKind == .unsupported ? "Sidecar" : "Will copy"
+            let copyStatus = isFootageSidecar ? "Sidecar" : "Will copy"
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
                     id: id,

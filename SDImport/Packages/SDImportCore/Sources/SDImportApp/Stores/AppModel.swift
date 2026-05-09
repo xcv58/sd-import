@@ -1261,16 +1261,20 @@ final class AppModel: ObservableObject {
         let includeVideos = importMediaSelection.includes(.video)
         let includeSidecars = workflowProfile.includesSidecarsByDefault
         let normalizedDefaultLabel = Self.defaultSessionLabel(for: defaultLabel)
+        let cardHasVideos = files.contains { $0.mediaKind == .video }
 
         previewSessions = grouped.keys.sorted().map { date in
             let files = grouped[date] ?? []
             let prior = existing[date]
+            let likelyVideoPreviewJPEGCount = cardHasVideos
+                ? files.filter(MediaFileHeuristics.isLikelyVideoPreviewJPEG).count
+                : 0
             return ImportPreviewSession(
                 date: date,
                 label: prior?.label ?? normalizedDefaultLabel,
-                photoCount: files.filter { $0.mediaKind == .photo }.count,
+                photoCount: files.filter { $0.mediaKind == .photo }.count - likelyVideoPreviewJPEGCount,
                 videoCount: files.filter { $0.mediaKind == .video }.count,
-                unsupportedCount: files.filter { $0.mediaKind == .unsupported }.count,
+                unsupportedCount: files.filter { $0.mediaKind == .unsupported }.count + likelyVideoPreviewJPEGCount,
                 includePhotos: prior?.includePhotos ?? includePhotos,
                 includeVideos: prior?.includeVideos ?? includeVideos,
                 includeSidecars: prior?.includeSidecars ?? includeSidecars
