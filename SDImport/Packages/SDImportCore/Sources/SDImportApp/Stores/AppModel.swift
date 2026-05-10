@@ -587,12 +587,27 @@ final class AppModel: ObservableObject {
     }
 
     private func buildPreviewRows() -> [ImportPreviewRow] {
+        buildPreviewRows(files: currentPreviewFiles, sessions: previewSessions)
+    }
+
+    private func buildPreviewRows(
+        files: [JobFileRecord],
+        sessions: [ImportPreviewSession]
+    ) -> [ImportPreviewRow] {
+        let plans = buildImportPlans(files: files, sessions: sessions)
+        return makePreviewRows(files: files, plans: plans)
+    }
+
+    private func buildImportPlans(
+        files: [JobFileRecord],
+        sessions: [ImportPreviewSession]
+    ) -> [ImportFilePlan] {
         guard let currentSummary else {
             return []
         }
 
         let builder = ImportPlanBuilder(
-            sessions: previewSessions,
+            sessions: sessions,
             organizationPreset: organizationPreset,
             folderGrouping: folderGrouping,
             roots: DestinationRoots(
@@ -608,9 +623,14 @@ final class AppModel: ObservableObject {
             fallbackLocation: Self.defaultSessionLabel(for: location),
             volumeName: currentSummary.volumeName
         )
-        let plans = builder.plans(files: currentPreviewFiles)
+        return builder.plans(files: files)
+    }
 
-        return zip(currentPreviewFiles, plans).compactMap { file, plan in
+    private func makePreviewRows(
+        files: [JobFileRecord],
+        plans: [ImportFilePlan]
+    ) -> [ImportPreviewRow] {
+        zip(files, plans).compactMap { file, plan in
             guard let id = file.id else {
                 return nil
             }
@@ -1256,6 +1276,22 @@ final class AppModel: ObservableObject {
 
     private func rebuildPreviewSessions(files: [JobFileRecord], defaultLabel: String) {
         let existing = Dictionary(uniqueKeysWithValues: previewSessions.map { ($0.date, $0) })
+        let sessions = makePreviewSessions(files: files, defaultLabel: defaultLabel, existing: existing)
+        let plans = buildImportPlans(files: files, sessions: sessions)
+        previewSessions = ImportPreviewSessionFilter().visibleSessions(
+            files: files,
+            plans: plans,
+            sessions: sessions,
+            importMediaSelection: importMediaSelection,
+            organizationPreset: organizationPreset
+        )
+    }
+
+    private func makePreviewSessions(
+        files: [JobFileRecord],
+        defaultLabel: String,
+        existing: [String: ImportPreviewSession]
+    ) -> [ImportPreviewSession] {
         let grouped = Dictionary(grouping: files) { ImportPlanBuilder.sessionDate(for: $0) }
         let includePhotos = organizationPreset == .footageBackup ? false : importMediaSelection.includes(.photo)
         let includeVideos = importMediaSelection.includes(.video)
@@ -1263,7 +1299,7 @@ final class AppModel: ObservableObject {
         let normalizedDefaultLabel = Self.defaultSessionLabel(for: defaultLabel)
         let cardHasVideos = files.contains { $0.mediaKind == .video }
 
-        previewSessions = grouped.keys.sorted().map { date in
+        return grouped.keys.sorted().map { date in
             let files = grouped[date] ?? []
             let prior = existing[date]
             let likelyVideoPreviewJPEGCount = cardHasVideos
