@@ -3,9 +3,19 @@
 Use this checklist before major public releases and whenever scanner/import
 behavior changes.
 
-No real SD cards are currently mounted in this development environment, so this
-file is the required hardware pass list rather than evidence that the hardware
-pass has already been executed.
+No real SD cards are available for the current release-prep pass. The release
+therefore ships with fixture/synthetic scanner coverage and this hardware matrix
+as an accepted compatibility risk. Do not treat this file as evidence that the
+physical-card pass has been executed.
+
+Release decision for this pass:
+
+- Physical Sony/Canon/Fujifilm/Nikon card QA is unavailable.
+- Fixture coverage exists for common RAW extensions, RAW/JPEG pairing, sidecar
+  handling, duplicate filename planning, and card-removal failure paths.
+- Broad camera-compatibility claims should wait until the hardware matrix below
+  is actually run.
+- The capture script is ready for future physical-card evidence.
 
 Use the capture script for each mounted card before filling in the manual app
 results:
@@ -24,16 +34,16 @@ committing any excerpt.
 
 | Scenario | Card Contents | Expected Result | Status |
 | --- | --- | --- | --- |
-| Sony video card | `PRIVATE/M4ROOT`, MP4/MOV clips, `MEDIAPRO.XML`, `DATABASE.BIN`, sidecars | Index files ignored; footage backup recommended; sidecars visible and opt-in | Not run |
-| Canon photo card | JPEG plus CR2 and CR3 files | Photo import recommended; CR2/CR3 classified as photos; RAW/JPEG pairs summarized when basenames match | Fixture coverage added; hardware not run |
-| Fujifilm photo card | RAF plus JPEG files | Photo import recommended; RAF classified as photo; known files skipped on rescan | Fixture coverage added; hardware not run |
-| Nikon photo card | NEF plus JPEG files | Photo import recommended; NEF classified as photo; known files skipped on rescan | Fixture coverage added; hardware not run |
-| Mixed RAW/JPEG | Matching RAW and JPEG basenames in the same folder | RAW+JPEG pair count appears; both files remain importable | Fixture coverage exists; hardware not run |
-| Video sidecars | Video clips with XML/metadata/proxy files | Footage Backup shows sidecar count; sidecars stay skipped unless kept | Fixture coverage exists; hardware not run |
-| Duplicate filenames | Two camera folders containing the same clip filename | Destination plan suffixes later copies and avoids overwrites | Fixture coverage exists; hardware not run |
-| Card removal during scan | Remove card after scan starts | User-facing failure; no duplicate job loop | Not run |
-| Card removal during import | Remove card during copy | Failed file recorded; retry remains available | Not run |
-| Clean Mac user | Fresh user account, no prior settings | Onboarding appears; folders can be selected; Sparkle menu appears in release build | Not run |
+| Sony video card | `PRIVATE/M4ROOT`, MP4/MOV clips, `MEDIAPRO.XML`, `DATABASE.BIN`, sidecars | Index files ignored; footage backup recommended; sidecars visible and opt-in | Accepted risk: hardware unavailable; fixture coverage exists for index-file ignore and sidecar behavior |
+| Canon photo card | JPEG plus CR2 and CR3 files | Photo import recommended; CR2/CR3 classified as photos; RAW/JPEG pairs summarized when basenames match | Accepted risk: hardware unavailable; fixture coverage exists |
+| Fujifilm photo card | RAF plus JPEG files | Photo import recommended; RAF classified as photo; known files skipped on rescan | Accepted risk: hardware unavailable; fixture coverage exists |
+| Nikon photo card | NEF plus JPEG files | Photo import recommended; NEF classified as photo; known files skipped on rescan | Accepted risk: hardware unavailable; fixture coverage exists |
+| Mixed RAW/JPEG | Matching RAW and JPEG basenames in the same folder | RAW+JPEG pair count appears; both files remain importable | Fixture coverage exists; hardware unavailable |
+| Video sidecars | Video clips with XML/metadata/proxy files | Footage Backup shows sidecar count; sidecars stay skipped unless kept | Fixture coverage exists; hardware unavailable |
+| Duplicate filenames | Two camera folders containing the same clip filename | Destination plan suffixes later copies and avoids overwrites | Fixture coverage exists; hardware unavailable |
+| Card removal during scan | Remove card after scan starts | User-facing failure; no duplicate job loop | Fixture coverage exists; hardware unavailable |
+| Card removal during import | Remove card during copy | Failed file recorded; retry remains available | Fixture coverage exists; hardware unavailable |
+| Clean Mac user | Fresh user account, no prior settings | Onboarding appears; folders can be selected; Sparkle menu appears in release build | Accepted risk: clean-user manual pass unavailable |
 
 ## Evidence To Record
 

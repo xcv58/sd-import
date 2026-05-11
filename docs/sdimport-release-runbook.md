@@ -124,9 +124,11 @@ Before running the release script:
   `RELEASE_NOTES_FILE` to a user-facing release-notes file.
 - Confirm `DEVELOPER_ID_APPLICATION`, `SPARKLE_PUBLIC_ED_KEY`, and notary
   credentials are available on the release Mac.
-- Run the required real-card QA matrix in `docs/manual-qa-matrix.md` when the
-  release changes scanner/import behavior. Use
-  `script/capture_manual_card_qa.sh` to record redacted card evidence.
+- Run the real-card QA matrix in `docs/manual-qa-matrix.md` when physical cards
+  are available and the release changes scanner/import behavior. If hardware is
+  unavailable, record that as an accepted compatibility risk and avoid broad
+  camera-card compatibility claims. Use `script/capture_manual_card_qa.sh` to
+  record redacted card evidence when cards are available.
 - Confirm the release remains free and open source, with no Homebrew, App Store,
   paid licensing, or payment infrastructure changes.
 

@@ -79,15 +79,18 @@ permission prompts, destination repair behavior, and card-removal behavior.
 
 ### Camera And Card Compatibility
 
-Status: fixture-backed for key behaviors, but not broad hardware validation.
+Status: fixture-backed for key behaviors. Broad hardware validation is accepted
+as a release risk because physical cards are unavailable for this pass.
 
 Current supported extensions include common JPEG/HEIF/raw photo formats,
 including Canon CR2/CR3, Sony ARW, Nikon NEF, and Fujifilm RAF, plus common
 video containers. Real-world cameras can use different sidecar layouts, preview
 JPEG patterns, card filesystems, and reader behavior.
 
-Next action: execute the hardware compatibility matrix in
-`docs/manual-qa-matrix.md` before broad public announcement.
+Release decision: do not claim broad camera-card compatibility from this pass.
+The hardware compatibility matrix in `docs/manual-qa-matrix.md` remains the
+future evidence path when physical cards are available. For this release-prep
+pass, fixture and synthetic coverage are the available validation.
 
 - Canon photo card with JPEG/CR2 workflow coverage, and a separate CR3 sample
   if CR3 support is added.
