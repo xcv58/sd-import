@@ -766,6 +766,8 @@ pre code {
 
     .hero {
         padding: 42px 20px 48px;
+        max-width: 100%;
+        overflow-x: clip;
     }
 
     .hero h1 {
@@ -776,12 +778,17 @@ pre code {
     }
 
     .hero-copy {
+        max-width: 34rem;
+        margin-right: auto;
+        margin-left: auto;
         font-size: 1.05rem;
+        overflow-wrap: break-word;
     }
 
     .cta-group {
         flex-direction: column;
         align-items: stretch;
+        width: min(100%, 320px);
         max-width: 320px;
         margin-right: auto;
         margin-left: auto;
@@ -868,13 +875,30 @@ pre code {
 }
 
 @media (max-width: 460px) {
+    .hero {
+        padding-right: 16px;
+        padding-left: 16px;
+    }
+
     .hero h1 {
-        max-width: 320px;
-        font-size: 2.15rem;
+        max-width: 288px;
+        font-size: 2rem;
+    }
+
+    .hero-copy {
+        max-width: 308px;
+    }
+
+    .cta-group {
+        max-width: 300px;
     }
 
     .mock-main {
         padding: 18px;
+    }
+
+    .mock-main p {
+        font-size: 0.95rem;
     }
 
     .mock-pill {
@@ -885,10 +909,26 @@ pre code {
     .hero-use-case {
         display: grid;
         gap: 4px;
+        max-width: 308px;
+        margin-right: auto;
+        margin-left: auto;
     }
 
     .hero-use-case span + span::before {
         display: none;
+    }
+}
+
+@media (max-width: 360px) {
+    .hero h1 {
+        max-width: 260px;
+        font-size: 1.85rem;
+    }
+
+    .cta-group,
+    .hero-copy,
+    .hero-use-case {
+        max-width: 100%;
     }
 }
 
