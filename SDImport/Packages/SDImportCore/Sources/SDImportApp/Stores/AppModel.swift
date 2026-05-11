@@ -1167,6 +1167,43 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func revealCrashReportsFolder() {
+        let directory = CrashReportLocator.defaultDirectory()
+        guard FileManager.default.fileExists(atPath: directory.path) else {
+            statusMessage = "No crash report folder found"
+            return
+        }
+
+        NSWorkspace.shared.open(directory)
+        diagnosticsLogger.notice("Crash reports folder revealed")
+        statusMessage = "Crash reports folder opened"
+    }
+
+    func exportLatestCrashReport() {
+        guard let report = CrashReportLocator.findReports(limit: 1).first else {
+            statusMessage = "No SD Import crash reports found"
+            return
+        }
+
+        let suggestedName = "sd-import-crash-report.\(report.url.pathExtension.lowercased())"
+        guard let url = FilePanelPresenter.chooseSaveURL(
+            title: "Export Latest Crash Report",
+            suggestedName: suggestedName
+        ) else {
+            return
+        }
+
+        do {
+            let data = try Data(contentsOf: report.url)
+            try data.write(to: url, options: .atomic)
+            diagnosticsLogger.notice("Crash report exported")
+            statusMessage = "Crash report exported"
+        } catch {
+            diagnosticsLogger.error("Crash report export failed errorType=\(String(describing: type(of: error)), privacy: .public)")
+            statusMessage = "Could not export crash report: \(error)"
+        }
+    }
+
     func pruneHistory(dryRun: Bool) {
         guard let databaseURL else {
             statusMessage = "Database is not ready"
@@ -1231,6 +1268,8 @@ final class AppModel: ObservableObject {
         let appBuild = info["CFBundleVersion"] as? String ?? "dev"
         let updateFeedConfigured = (info["SUFeedURL"] as? String)?.isEmpty == false
             && (info["SUPublicEDKey"] as? String)?.isEmpty == false
+        let crashReportDirectory = CrashReportLocator.defaultDirectory()
+        let recentCrashReports = CrashReportLocator.findReports(in: crashReportDirectory, limit: 5)
 
         return DiagnosticsReportSnapshot(
             generatedAt: Date(),
@@ -1249,6 +1288,8 @@ final class AppModel: ObservableObject {
             historyRetention: historyRetention.diagnosticsTitle,
             statusMessage: statusMessage,
             setupError: setupError,
+            crashReportDirectory: crashReportDirectory.path,
+            recentCrashReports: recentCrashReports.map(DiagnosticsCrashReportSummary.init(candidate:)),
             recentJobs: jobs.prefix(10).map(DiagnosticsJobSummary.init(job:)),
             selectedFiles: selectedJobFiles.prefix(75).map(DiagnosticsFileSummary.init(file:))
         )

@@ -46,23 +46,24 @@ duplicate-import reports if volume grows.
 Status: acceptable for a free local utility if the privacy policy remains true.
 
 The app has no automatic telemetry or crash upload. Sparkle update checks are
-the expected network use. Diagnostics export is opt-in and redacted.
+the expected network use. Diagnostics export is opt-in and redacted. The
+Diagnostics screen can reveal the local crash-report folder or export the latest
+local SD Import crash report for opt-in support sharing.
 Credentials and Sparkle private keys must remain outside git and outside GitHub
 Actions.
 
-Next action: revisit the privacy policy before adding any diagnostics export,
-crash reporting, or telemetry. Any collection must be opt-in and documented.
+Next action: revisit the privacy policy before adding any automatic collection,
+crash upload, or telemetry. Any collection must be opt-in and documented.
 
 ### Crash And Diagnostics Strategy
 
 Status: basic but usable for a first public release.
 
-Users can report issues through GitHub or email and may choose what logs or
-screenshots to share. The app has a Diagnostics view with a redacted diagnostics
-export. Automatic crash upload remains intentionally unimplemented.
-
-Next action: after real support volume exists, decide whether an opt-in crash
-report attachment flow is worth the privacy and maintenance cost.
+Users can report issues through GitHub or email and may choose what logs,
+screenshots, diagnostics, or crash reports to share. The app has a Diagnostics
+view with a redacted diagnostics export, local crash-report folder reveal, and
+latest local crash-report export. Automatic crash upload remains intentionally
+unimplemented.
 
 ### Onboarding Gaps
 

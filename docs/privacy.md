@@ -42,7 +42,9 @@ is opt-in and redacted.
 
 SD Import does not include automatic crash-report upload. macOS may keep local
 diagnostic or crash logs according to your system settings. If you report a bug,
-you may choose what diagnostic details to share.
+you may choose what diagnostic details to share. The Diagnostics screen can
+reveal the local crash-report folder or export the latest local SD Import crash
+report, but the app does not upload it for you.
 
 When sharing diagnostics, redact private folder names, filenames, camera serial
 numbers, account names, and any media metadata you do not want public.

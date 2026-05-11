@@ -40,6 +40,10 @@ If the app crashes, macOS may store a local crash report under:
 ~/Library/Logs/DiagnosticReports/
 ```
 
+Use `Diagnostics > Reveal Crash Reports` to open the folder, or
+`Diagnostics > Export Latest Crash Report` to save the newest local SD Import
+report for support.
+
 Only share crash reports you have reviewed. Redact private folder names,
 filenames, card names, serial numbers, and any media metadata you do not want to
 share.

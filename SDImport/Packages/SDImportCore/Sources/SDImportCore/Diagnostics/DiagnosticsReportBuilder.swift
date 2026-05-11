@@ -17,6 +17,8 @@ public struct DiagnosticsReportSnapshot: Sendable {
     public let historyRetention: String
     public let statusMessage: String
     public let setupError: String?
+    public let crashReportDirectory: String
+    public let recentCrashReports: [DiagnosticsCrashReportSummary]
     public let recentJobs: [DiagnosticsJobSummary]
     public let selectedFiles: [DiagnosticsFileSummary]
 
@@ -37,6 +39,8 @@ public struct DiagnosticsReportSnapshot: Sendable {
         historyRetention: String,
         statusMessage: String,
         setupError: String?,
+        crashReportDirectory: String,
+        recentCrashReports: [DiagnosticsCrashReportSummary],
         recentJobs: [DiagnosticsJobSummary],
         selectedFiles: [DiagnosticsFileSummary]
     ) {
@@ -56,8 +60,30 @@ public struct DiagnosticsReportSnapshot: Sendable {
         self.historyRetention = historyRetention
         self.statusMessage = statusMessage
         self.setupError = setupError
+        self.crashReportDirectory = crashReportDirectory
+        self.recentCrashReports = recentCrashReports
         self.recentJobs = recentJobs
         self.selectedFiles = selectedFiles
+    }
+}
+
+public struct DiagnosticsCrashReportSummary: Sendable {
+    public let fileExtension: String
+    public let modifiedAt: Date
+    public let byteCount: Int64
+
+    public init(fileExtension: String, modifiedAt: Date, byteCount: Int64) {
+        self.fileExtension = fileExtension
+        self.modifiedAt = modifiedAt
+        self.byteCount = byteCount
+    }
+
+    public init(candidate: CrashReportCandidate) {
+        self.init(
+            fileExtension: candidate.url.pathExtension.lowercased(),
+            modifiedAt: candidate.modifiedAt,
+            byteCount: candidate.byteCount
+        )
     }
 }
 
@@ -136,6 +162,28 @@ public enum DiagnosticsReportBuilder {
             "- source: `\(redactedPath(snapshot.sourcePath, homeDirectory: homeDirectory))` (\(snapshot.sourceStatus))",
             "- photos: `\(redactedPath(snapshot.photosPath, homeDirectory: homeDirectory))` (\(snapshot.photosStatus))",
             "- videos: `\(redactedPath(snapshot.videosPath, homeDirectory: homeDirectory))` (\(snapshot.videosStatus))",
+            "",
+            "## Crash Reports",
+            "",
+            "Automatic crash upload is disabled. Local macOS crash reports are listed by type and date only.",
+            "",
+            "- crash report folder: `\(redactedPath(snapshot.crashReportDirectory, homeDirectory: homeDirectory))`"
+        ])
+
+        if snapshot.recentCrashReports.isEmpty {
+            lines.append("No recent SD Import crash reports found.")
+        } else {
+            lines.append("")
+            lines.append("| Modified | Type | Size |")
+            lines.append("| --- | --- | ---: |")
+            for crashReport in snapshot.recentCrashReports {
+                lines.append(
+                    "| \(isoString(from: crashReport.modifiedAt)) | \(crashReport.fileExtension.uppercased()) | \(crashReport.byteCount) |"
+                )
+            }
+        }
+
+        lines.append(contentsOf: [
             "",
             "## Recent Jobs",
             ""

@@ -6,6 +6,9 @@ SD Import uses two local diagnostics mechanisms:
 - Opt-in redacted diagnostics export from the Diagnostics screen.
 
 SD Import does not upload telemetry or crash reports automatically.
+The Diagnostics screen can reveal the local macOS crash-report folder or export
+the latest local SD Import crash report. Crash reports are not redacted by the
+app; review them before sharing.
 
 ## Local Logs
 
@@ -30,6 +33,7 @@ The export includes:
 - macOS version and architecture.
 - Sparkle feed configuration status.
 - Redacted source and destination paths.
+- Recent local crash-report metadata, without crash-report filenames.
 - Recent job counts and statuses.
 - Selected job file extensions, media kinds, decisions, copy statuses, sizes,
   and errors.
@@ -53,3 +57,7 @@ local crash reports under:
 ```
 
 Users choose whether to share those reports.
+
+Use `Diagnostics > Reveal Crash Reports` to open the folder, or
+`Diagnostics > Export Latest Crash Report` to save the newest local SD Import
+report for support.

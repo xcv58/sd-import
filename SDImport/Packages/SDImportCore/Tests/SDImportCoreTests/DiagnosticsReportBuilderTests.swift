@@ -42,6 +42,14 @@ struct DiagnosticsReportBuilderTests {
             historyRetention: "90 days",
             statusMessage: "Import failed",
             setupError: nil,
+            crashReportDirectory: "/Users/tester/Library/Logs/DiagnosticReports",
+            recentCrashReports: [
+                DiagnosticsCrashReportSummary(
+                    fileExtension: "ips",
+                    modifiedAt: Date(timeIntervalSince1970: 1_700_000_100),
+                    byteCount: 4096
+                )
+            ],
             recentJobs: [],
             selectedFiles: [
                 DiagnosticsFileSummary(
@@ -74,6 +82,9 @@ struct DiagnosticsReportBuilderTests {
 
         #expect(report.contains(".CR3"))
         #expect(report.contains("source file missing"))
+        #expect(report.contains("## Crash Reports"))
+        #expect(report.contains("~/Library/Logs/DiagnosticReports"))
+        #expect(report.contains("IPS"))
         #expect(!report.contains("PRIVATE_NAME"))
         #expect(!report.contains("/Users/tester"))
         #expect(!report.contains("/Volumes/CARD/DCIM"))

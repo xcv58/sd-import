@@ -53,6 +53,33 @@ struct DiagnosticsView: View {
                     }
                 }
 
+                AppSection(
+                    "Crash Reports",
+                    systemImage: "exclamationmark.triangle",
+                    subtitle: "Manual and local"
+                ) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("SD Import does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack {
+                            Button {
+                                model.revealCrashReportsFolder()
+                            } label: {
+                                Label("Reveal Crash Reports", systemImage: "folder")
+                            }
+
+                            Button {
+                                model.exportLatestCrashReport()
+                            } label: {
+                                Label("Export Latest Crash Report", systemImage: "square.and.arrow.up")
+                            }
+                        }
+                    }
+                }
+
                 AppSection("Maintenance", systemImage: "wrench.and.screwdriver") {
                     HStack {
                         Button {
