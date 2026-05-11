@@ -323,6 +323,15 @@ pre code {
     max-width: 1060px;
 }
 
+.hero-screenshot {
+    width: 100%;
+    aspect-ratio: 1600 / 1236;
+    object-fit: cover;
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: 0 26px 54px var(--shadow);
+}
+
 .app-window {
     width: 100%;
     overflow: hidden;
@@ -529,7 +538,7 @@ pre code {
 .media-frame video,
 .media-frame img {
     width: 100%;
-    aspect-ratio: 20 / 13;
+    aspect-ratio: 1600 / 1236;
     object-fit: cover;
     background: var(--surface);
     border: 1px solid var(--border);
