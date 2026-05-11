@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://xcv58.github.io/macos-automation/sitemap.xml
+Sitemap: https://macos-automation.vercel.app/sitemap.xml

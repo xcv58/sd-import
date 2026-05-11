@@ -14,7 +14,9 @@
     <meta property="og:title" content="SD Import">
     <meta property="og:description" content="Confident photo and video card imports for macOS.">
     <meta property="og:type" content="website">
-    <meta property="og:image" content="assets/images/app-icon.png">
+    <meta property="og:url" content="https://macos-automation.vercel.app/">
+    <meta property="og:image" content="https://macos-automation.vercel.app/assets/images/sd-import-screenshot.png">
+    <link rel="canonical" href="https://macos-automation.vercel.app/">
     <link rel="stylesheet" href="assets/site.css">
 </head>
 <body class="preload">
@@ -27,8 +29,9 @@
             </a>
             <div class="nav-wrapper">
                 <nav class="nav-links" aria-label="Primary">
+                    <a href="#how-to-use">How to use</a>
+                    <a href="#workflow">Screencast</a>
                     <a href="install.html">Install</a>
-                    <a href="updates.html">Updates</a>
                     <a href="support.html">Support</a>
                     <a href="https://github.com/xcv58/macos-automation">GitHub</a>
                 </nav>
@@ -44,10 +47,16 @@
     <main id="main">
         <section class="hero container">
             <h1>Import the card. Keep the originals straight.</h1>
-            <p class="hero-copy">A quiet macOS utility for photographers and video creators who need predictable SD-card copies, dated destinations, skipped-file clarity, and signed Sparkle updates.</p>
+            <p class="hero-copy">A quiet macOS utility for the after-shoot handoff: plug in a card, inspect what will copy, catch known files and sidecars, then copy into dated photo and footage folders.</p>
             <div class="cta-group">
                 <a class="cta-button cta-primary" href="https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg">Download DMG</a>
-                <a class="cta-button cta-secondary" href="install.html">Install Guide</a>
+                <a class="cta-button cta-secondary" href="#workflow">Watch Workflow</a>
+            </div>
+
+            <div class="hero-use-case" aria-label="Primary use cases">
+                <span>After-shoot card copy</span>
+                <span>RAW, JPEG, video, and sidecars</span>
+                <span>Repeat imports without duplicates</span>
             </div>
 
             <div class="hero-visual" aria-label="SD Import preview illustration">
@@ -97,6 +106,67 @@
             </div>
         </section>
 
+        <section class="section section-divider" id="workflow">
+            <div class="container media-layout">
+                <div class="section-header">
+                    <h2>See the decision before files move.</h2>
+                    <p>The screencast shows the core loop: choose a card, confirm photo and footage destinations, review the skipped and known files, then copy with a clear receipt.</p>
+                </div>
+                <div class="media-grid" aria-label="SD Import screenshot and screencast">
+                    <figure class="media-frame">
+                        <video controls playsinline muted preload="metadata" poster="assets/images/sd-import-screenshot.png">
+                            <source src="assets/media/sd-import-screencast.mp4" type="video/mp4">
+                            Your browser does not support the SD Import screencast.
+                        </video>
+                        <figcaption>Screencast: preview, skipped files, destination check, and copy progress.</figcaption>
+                    </figure>
+                    <figure class="media-frame">
+                        <img src="assets/images/sd-import-screenshot.png" alt="SD Import preview showing files to copy, known files, skipped sidecars, and destination folders.">
+                        <figcaption>Screenshot: the preview state before copying a mixed photo and video card.</figcaption>
+                    </figure>
+                </div>
+            </div>
+        </section>
+
+        <section class="section section-divider" id="how-to-use">
+            <div class="container two-column">
+                <div class="section-header">
+                    <h2>How to use SD Import.</h2>
+                    <p>Designed for repeated card work, not one-off file browsing. The app keeps source, destination, skipped files, and import history visible before and after the copy.</p>
+                </div>
+                <ol class="workflow-steps">
+                    <li>
+                        <span class="step-number">1</span>
+                        <div>
+                            <h3>Connect a card or choose a source.</h3>
+                            <p>Use the automatic card prompt or manually select a mounted card, folder, or test source.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="step-number">2</span>
+                        <div>
+                            <h3>Confirm destinations.</h3>
+                            <p>Set separate photo and footage libraries, then review the dated destination folders before copying.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="step-number">3</span>
+                        <div>
+                            <h3>Review the preview.</h3>
+                            <p>Check new files, known files, skipped sidecars, conflicts, and required space in one screen.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="step-number">4</span>
+                        <div>
+                            <h3>Copy, then reinsert safely.</h3>
+                            <p>After import, repeat scans show already-known originals so the same card does not duplicate work.</p>
+                        </div>
+                    </li>
+                </ol>
+            </div>
+        </section>
+
         <section class="section section-divider">
             <div class="container">
                 <div class="section-header">
@@ -116,6 +186,33 @@
                         <h3>Sidecars stay visible</h3>
                         <p>Photo imports skip camera support files. Footage backups can keep sidecars when the project needs them.</p>
                     </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="section section-divider" id="use-cases">
+            <div class="container two-column">
+                <div class="section-header">
+                    <h2>Built around real card messiness.</h2>
+                    <p>SD Import is most useful when a card is not a neat folder of new JPEGs: mixed media, support files, repeated card names, and imported originals are handled explicitly.</p>
+                </div>
+                <div class="use-case-list">
+                    <div class="use-case-row">
+                        <strong>Photo import</strong>
+                        <span>RAW and JPEG files are treated as photos and grouped into dated shoot folders.</span>
+                    </div>
+                    <div class="use-case-row">
+                        <strong>Footage backup</strong>
+                        <span>Video cards can keep camera sidecars when a project needs XML, metadata, or proxy files.</span>
+                    </div>
+                    <div class="use-case-row">
+                        <strong>Repeat cards</strong>
+                        <span>Known files stay visible and skipped, so reinserting a card does not create duplicates.</span>
+                    </div>
+                    <div class="use-case-row">
+                        <strong>Nothing to copy</strong>
+                        <span>The preview explains whether files are known, excluded by media type, sidecars, or unsupported.</span>
+                    </div>
                 </div>
             </div>
         </section>
