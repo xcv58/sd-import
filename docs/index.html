@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/images/favicon-16.png">
+    <link rel="apple-touch-icon" href="assets/images/app-icon.png">
+    <script>
+        document.documentElement.setAttribute("data-theme", localStorage.getItem("theme") || "system");
+    </script>
+    <title>SD Import - Confident photo and video card imports for macOS.</title>
+    <meta name="description" content="SD Import is a free, open-source macOS app for copying SD-card photos and videos into dated folders with preview, dedupe, Sparkle updates, and signed GitHub Releases.">
+    <meta property="og:title" content="SD Import">
+    <meta property="og:description" content="Confident photo and video card imports for macOS.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="assets/images/app-icon.png">
+    <link rel="stylesheet" href="assets/site.css">
+</head>
+<body class="preload">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="container">
+        <header class="site-header">
+            <a class="logo" href="index.html" aria-label="SD Import home">
+                <img src="assets/images/app-icon.png" alt="">
+                <span>SD Import</span>
+            </a>
+            <div class="nav-wrapper">
+                <nav class="nav-links" aria-label="Primary">
+                    <a href="install.html">Install</a>
+                    <a href="updates.html">Updates</a>
+                    <a href="support.html">Support</a>
+                    <a href="https://github.com/xcv58/macos-automation">GitHub</a>
+                </nav>
+                <div class="theme-switch" aria-label="Theme">
+                    <button class="theme-btn" type="button" data-theme-value="light" aria-label="Light theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></button>
+                    <button class="theme-btn" type="button" data-theme-value="system" aria-label="System theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M12 4a8 8 0 0 1 0 16Z"></path></svg></button>
+                    <button class="theme-btn" type="button" data-theme-value="dark" aria-label="Dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.5A8 8 0 0 1 8.5 4a7 7 0 1 0 11.5 11.5Z"></path></svg></button>
+                </div>
+            </div>
+        </header>
+    </div>
+
+    <main id="main">
+        <section class="hero container">
+            <h1>Import the card. Keep the originals straight.</h1>
+            <p class="hero-copy">A quiet macOS utility for photographers and video creators who need predictable SD-card copies, dated destinations, skipped-file clarity, and signed Sparkle updates.</p>
+            <div class="cta-group">
+                <a class="cta-button cta-primary" href="https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg">Download DMG</a>
+                <a class="cta-button cta-secondary" href="install.html">Install Guide</a>
+            </div>
+
+            <div class="hero-visual" aria-label="SD Import preview illustration">
+                <div class="app-window">
+                    <div class="window-bar">
+                        <span class="traffic-light"></span>
+                        <span class="traffic-light"></span>
+                        <span class="traffic-light"></span>
+                        <span class="window-title">SD Import</span>
+                    </div>
+                    <div class="window-body">
+                        <aside class="mock-sidebar">
+                            <strong>Import</strong>
+                            <span>History</span>
+                            <span>Settings</span>
+                            <span>Diagnostics</span>
+                        </aside>
+                        <div class="mock-main">
+                            <h2>Preview</h2>
+                            <p>Card contains: 128 photos &middot; 14 videos &middot; 9 sidecars</p>
+                            <div class="mock-pills">
+                                <span class="mock-pill good">142 files to copy</span>
+                                <span class="mock-pill">18 known</span>
+                                <span class="mock-pill warn">9 sidecars skipped</span>
+                            </div>
+                            <div class="mock-table">
+                                <div class="mock-row header">
+                                    <span>Status</span><span>File</span><span>Kind</span><span>Destination</span>
+                                </div>
+                                <div class="mock-row">
+                                    <span>Copy</span><span>IMG_1042.CR3</span><span>Photo</span><span>Pictures/Photos/2026-05-10 Shoot</span>
+                                </div>
+                                <div class="mock-row">
+                                    <span>Known</span><span>DSC03912.ARW</span><span>Photo</span><span>Already imported</span>
+                                </div>
+                                <div class="mock-row">
+                                    <span>Copy</span><span>C0001.MP4</span><span>Video</span><span>Footage/2026-05-10 Shoot</span>
+                                </div>
+                            </div>
+                            <div class="mock-actions">
+                                <span class="mock-action">Copy 142 Files</span>
+                                <span class="mock-action secondary">Show Skipped Files</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section section-divider">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Built for repeated card work.</h2>
+                    <p>SD Import focuses on the checks that matter before files move: source, destinations, counts, space, known originals, and sidecars.</p>
+                </div>
+                <div class="grid">
+                    <article class="card">
+                        <h3>Preview before copying</h3>
+                        <p>Scan the card, review what will copy, and inspect destination folders before starting the import.</p>
+                    </article>
+                    <article class="card">
+                        <h3>Known files stay skipped</h3>
+                        <p>Reinsert the same card without duplicating originals that SD Import already knows.</p>
+                    </article>
+                    <article class="card">
+                        <h3>Sidecars stay visible</h3>
+                        <p>Photo imports skip camera support files. Footage backups can keep sidecars when the project needs them.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="section section-divider">
+            <div class="container two-column">
+                <div class="section-header">
+                    <h2>Free, signed, and updateable.</h2>
+                    <p>The public build is distributed through GitHub Releases as a signed and notarized DMG. Sparkle handles in-app updates from the GitHub Release feed.</p>
+                </div>
+                <div class="link-list">
+                    <a href="install.html">Install the latest release <span>DMG</span></a>
+                    <a href="updates.html">Verify updates <span>Sparkle</span></a>
+                    <a href="support.html">Get support <span>Diagnostics</span></a>
+                    <a href="privacy.html">Read privacy terms <span>Local first</span></a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div>SD Import is free and open source under the MIT License.</div>
+            <div class="footer-links">
+                <a href="privacy.html">Privacy</a>
+                <a href="eula.html">EULA</a>
+                <a href="refund-policy.html">Refund Policy</a>
+                <a href="support.html">Support</a>
+                <a href="https://github.com/xcv58/macos-automation">GitHub</a>
+            </div>
+        </div>
+    </footer>
+    <script src="assets/site.js"></script>
+</body>
+</html>

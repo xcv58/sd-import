@@ -26,6 +26,33 @@ struct DiagnosticsView: View {
                     }
                 }
 
+                AppSection(
+                    "Diagnostics Export",
+                    systemImage: "waveform.path.ecg",
+                    subtitle: "Opt-in and redacted"
+                ) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Exports app version, macOS version, settings, recent job counts, and selected-job file statuses. Media files, file names, and full paths are omitted.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack {
+                            Button {
+                                model.copyDiagnostics()
+                            } label: {
+                                Label("Copy Diagnostics", systemImage: "doc.on.doc")
+                            }
+
+                            Button {
+                                model.exportDiagnostics()
+                            } label: {
+                                Label("Export Diagnostics", systemImage: "square.and.arrow.up")
+                            }
+                        }
+                    }
+                }
+
                 AppSection("Maintenance", systemImage: "wrench.and.screwdriver") {
                     HStack {
                         Button {

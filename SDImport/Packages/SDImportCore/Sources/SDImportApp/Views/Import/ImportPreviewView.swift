@@ -10,7 +10,7 @@ struct ImportPreviewView: View {
         let totals = model.previewTotals
 
         AppSection("Preview", systemImage: "list.bullet.rectangle") {
-            header(totals: totals)
+            header(rows: rows, totals: totals)
             controls
             sessionList
             destinationSummary(rows: rows, totals: totals)
@@ -25,20 +25,39 @@ struct ImportPreviewView: View {
         }
     }
 
-    private func header(totals: ImportPreviewTotals) -> some View {
-        HStack(spacing: 8) {
+    private func header(rows: [ImportPreviewRow], totals: ImportPreviewTotals) -> some View {
+        let skipped = skipBreakdown(rows: rows)
+
+        return HStack(spacing: 8) {
             InfoPill(
-                title: totals.copyFiles == 1 ? "1 file" : "\(totals.copyFiles) files",
-                systemImage: "doc"
+                title: totals.copyFiles == 0
+                    ? "Nothing to copy"
+                    : (totals.copyFiles == 1 ? "1 file to copy" : "\(totals.copyFiles) files to copy"),
+                systemImage: totals.copyFiles == 0 ? "checkmark.circle" : "arrow.down.circle",
+                role: totals.copyFiles == 0 ? .neutral : .success
             )
             InfoPill(
                 title: byteString(totals.copyBytes),
                 systemImage: "externaldrive"
             )
-            if totals.skippedFiles > 0 {
+            if skipped.knownFiles > 0 {
                 InfoPill(
-                    title: "\(totals.skippedFiles) skipped",
-                    systemImage: "forward",
+                    title: "\(skipped.knownFiles) known",
+                    systemImage: "checkmark.seal",
+                    role: .neutral
+                )
+            }
+            if skipped.excludedFiles > 0 {
+                InfoPill(
+                    title: "\(skipped.excludedFiles) excluded",
+                    systemImage: "minus.circle",
+                    role: .warning
+                )
+            }
+            if skipped.sidecarFiles > 0 {
+                InfoPill(
+                    title: "\(skipped.sidecarFiles) sidecars skipped",
+                    systemImage: "paperclip",
                     role: .neutral
                 )
             }
@@ -389,6 +408,15 @@ struct ImportPreviewView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(zeroMatchReasons(rows: rows), id: \.self) { reason in
+                    Label(reason, systemImage: "checkmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.top, 2)
+
             HStack(spacing: 8) {
                 if canRecoverPhotos {
                     Button {
@@ -554,6 +582,26 @@ struct ImportPreviewView: View {
         return "Review the selected media type and destination settings before importing."
     }
 
+    private func zeroMatchReasons(rows: [ImportPreviewRow]) -> [String] {
+        var reasons: [String] = []
+        let skipped = skipBreakdown(rows: rows)
+
+        if skipped.knownFiles > 0 {
+            reasons.append("\(countText(skipped.knownFiles, singular: "file is", plural: "files are")) already known, already copied, or already present at the destination.")
+        }
+        if skipped.excludedFiles > 0, let summary = exclusionSummary(rows: rows) {
+            reasons.append(summary)
+        }
+        if skipped.sidecarFiles > 0 {
+            reasons.append("\(countText(skipped.sidecarFiles, singular: "sidecar is", plural: "sidecars are")) skipped unless Footage Backup keeps sidecars.")
+        }
+        if let mediaContent = model.mediaContentProfile, mediaContent.supportedCount == 0 {
+            reasons.append("No supported photo or video files were found in the current source.")
+        }
+
+        return reasons.isEmpty ? ["No importable files match the current preview settings."] : reasons
+    }
+
     private func exclusionSummary(rows: [ImportPreviewRow]) -> String? {
         let excludedRows = rows.filter { $0.status == "Excluded" }
         guard !excludedRows.isEmpty else {
@@ -583,6 +631,18 @@ struct ImportPreviewView: View {
         count == 1 ? "1 \(singular)" : "\(count) \(plural)"
     }
 
+    private func skipBreakdown(rows: [ImportPreviewRow]) -> ImportPreviewSkipBreakdown {
+        ImportPreviewSkipBreakdown(
+            knownFiles: rows.filter {
+                !$0.willCopy && ($0.status == "Known" || $0.status == "Already exists" || $0.status == "Copied")
+            }.count,
+            excludedFiles: rows.filter { !$0.willCopy && $0.status == "Excluded" }.count,
+            sidecarFiles: rows.filter {
+                !$0.willCopy && $0.mediaKind == .unsupported && $0.status != "Excluded"
+            }.count
+        )
+    }
+
     private func spaceText(for requirement: ImportPreviewSpaceRequirement) -> String {
         let required = byteString(requirement.requiredBytes)
         let available = byteString(requirement.availableBytes)
@@ -591,6 +651,12 @@ struct ImportPreviewView: View {
         }
         return "Not enough space: \(required) needed, \(available) available at \(requirement.displayPath)"
     }
+}
+
+private struct ImportPreviewSkipBreakdown: Hashable {
+    let knownFiles: Int
+    let excludedFiles: Int
+    let sidecarFiles: Int
 }
 
 private struct DestinationSummaryRow: View {

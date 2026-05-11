@@ -1,0 +1,79 @@
+name: Bug report
+description: Report an SD Import problem
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach private photos, videos, full card dumps, credentials, or unredacted logs.
+  - type: input
+    id: version
+    attributes:
+      label: SD Import version
+      description: Include both version and build if available.
+      placeholder: "1.16 (16)"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "macOS 14.6"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model and architecture
+      placeholder: "MacBook Pro M3, Apple Silicon"
+    validations:
+      required: true
+  - type: input
+    id: card
+    attributes:
+      label: Camera/card details
+      description: Include camera brand/model, card filesystem, and reader type when relevant.
+      placeholder: "Sony A7, exFAT SDXC, USB-C reader"
+  - type: dropdown
+    id: import_mode
+    attributes:
+      label: How was the import started?
+      options:
+        - Automatic prompt on card mount
+        - Import From Card menu
+        - Manual source folder selection
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect SD Import to do?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the shortest sequence that reproduces the problem.
+      placeholder: |
+        1. Insert card
+        2. Review preview
+        3. Start import
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Additional diagnostics
+      description: Redact private paths, filenames, serial numbers, and media metadata.

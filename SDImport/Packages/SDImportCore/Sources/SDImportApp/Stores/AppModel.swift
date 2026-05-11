@@ -1,6 +1,10 @@
 import AppKit
 import Foundation
+import OSLog
 import SDImportCore
+
+private let importLogger = Logger(subsystem: "com.xcv58.SDImport", category: "Import")
+private let diagnosticsLogger = Logger(subsystem: "com.xcv58.SDImport", category: "Diagnostics")
 
 typealias ImportPreviewSession = ImportPlanSession
 
@@ -338,6 +342,7 @@ final class AppModel: ObservableObject {
         clearPreviewPlanCache()
         isWorking = true
         statusMessage = "Scanning..."
+        importLogger.info("Scan started")
 
         let cardPath = resolvedPath(cardPath, validation: sourceValidation)
         let homeURL = FileManager.default.homeDirectoryForCurrentUser
@@ -397,6 +402,9 @@ final class AppModel: ObservableObject {
                     self.isWorking = false
                     self.importTask = nil
                 }
+                importLogger.info(
+                    "Scan complete scanned=\(summary.scannedFiles, privacy: .public) new=\(summary.newFiles, privacy: .public) known=\(summary.knownFiles, privacy: .public) sidecars=\(summary.unsupportedFiles, privacy: .public) conflicts=\(summary.conflictFiles, privacy: .public)"
+                )
             } catch is CancellationError {
                 await MainActor.run {
                     self.currentSummary = nil
@@ -408,6 +416,7 @@ final class AppModel: ObservableObject {
                     self.isWorking = false
                     self.importTask = nil
                 }
+                importLogger.notice("Scan cancelled")
             } catch SDImportError.cancelled {
                 await MainActor.run {
                     self.currentSummary = nil
@@ -419,6 +428,7 @@ final class AppModel: ObservableObject {
                     self.isWorking = false
                     self.importTask = nil
                 }
+                importLogger.notice("Scan cancelled")
             } catch {
                 await MainActor.run {
                     self.currentSummary = nil
@@ -430,6 +440,7 @@ final class AppModel: ObservableObject {
                     self.isWorking = false
                     self.importTask = nil
                 }
+                importLogger.error("Scan failed errorType=\(String(describing: type(of: error)), privacy: .public)")
             }
         }
     }
@@ -825,6 +836,7 @@ final class AppModel: ObservableObject {
         currentResult = nil
         importProgress = nil
         statusMessage = "Preparing import..."
+        importLogger.info("Import started jobID=\(jobID, privacy: .private)")
 
         importTask = Task.detached(priority: .userInitiated) {
             do {
@@ -889,6 +901,9 @@ final class AppModel: ObservableObject {
                     self.isWorking = false
                     self.importTask = nil
                 }
+                importLogger.info(
+                    "Import finished imported=\(result.importedFiles, privacy: .public) skipped=\(result.skippedFiles, privacy: .public) failed=\(result.failedFiles, privacy: .public)"
+                )
             } catch SDImportError.cancelled {
                 let snapshot = try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID)
                 await MainActor.run {
@@ -908,6 +923,7 @@ final class AppModel: ObservableObject {
                     self.isWorking = false
                     self.importTask = nil
                 }
+                importLogger.notice("Import cancelled jobID=\(jobID, privacy: .private)")
             } catch {
                 await MainActor.run {
                     self.currentResult = nil
@@ -916,6 +932,7 @@ final class AppModel: ObservableObject {
                     self.isWorking = false
                     self.importTask = nil
                 }
+                importLogger.error("Import failed errorType=\(String(describing: type(of: error)), privacy: .public)")
             }
         }
     }
@@ -1124,6 +1141,32 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func copyDiagnostics() {
+        let text = diagnosticsText()
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        diagnosticsLogger.notice("Diagnostics copied")
+        statusMessage = "Diagnostics copied"
+    }
+
+    func exportDiagnostics() {
+        guard let url = FilePanelPresenter.chooseSaveURL(
+            title: "Export Diagnostics",
+            suggestedName: "sd-import-diagnostics.md"
+        ) else {
+            return
+        }
+
+        do {
+            try diagnosticsText().write(to: url, atomically: true, encoding: .utf8)
+            diagnosticsLogger.notice("Diagnostics exported")
+            statusMessage = "Diagnostics exported"
+        } catch {
+            diagnosticsLogger.error("Diagnostics export failed errorType=\(String(describing: type(of: error)), privacy: .public)")
+            statusMessage = "Could not export diagnostics: \(error)"
+        }
+    }
+
     func pruneHistory(dryRun: Bool) {
         guard let databaseURL else {
             statusMessage = "Database is not ready"
@@ -1176,6 +1219,49 @@ final class AppModel: ObservableObject {
 
     private func expanded(_ path: String) -> String {
         (path as NSString).expandingTildeInPath
+    }
+
+    private func diagnosticsText() -> String {
+        DiagnosticsReportBuilder.markdown(snapshot: diagnosticsSnapshot())
+    }
+
+    private func diagnosticsSnapshot() -> DiagnosticsReportSnapshot {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let appVersion = info["CFBundleShortVersionString"] as? String ?? "dev"
+        let appBuild = info["CFBundleVersion"] as? String ?? "dev"
+        let updateFeedConfigured = (info["SUFeedURL"] as? String)?.isEmpty == false
+            && (info["SUPublicEDKey"] as? String)?.isEmpty == false
+
+        return DiagnosticsReportSnapshot(
+            generatedAt: Date(),
+            appVersion: appVersion,
+            appBuild: appBuild,
+            osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+            architecture: Self.currentArchitecture,
+            updateFeedConfigured: updateFeedConfigured,
+            sourcePath: cardPath,
+            photosPath: photosPath,
+            videosPath: videosPath,
+            sourceStatus: sourceValidation.message,
+            photosStatus: photosValidation.message,
+            videosStatus: videosValidation.message,
+            autoPromptEnabled: autoPromptEnabled,
+            historyRetention: historyRetention.diagnosticsTitle,
+            statusMessage: statusMessage,
+            setupError: setupError,
+            recentJobs: jobs.prefix(10).map(DiagnosticsJobSummary.init(job:)),
+            selectedFiles: selectedJobFiles.prefix(75).map(DiagnosticsFileSummary.init(file:))
+        )
+    }
+
+    private static var currentArchitecture: String {
+        #if arch(arm64)
+        return "arm64"
+        #elseif arch(x86_64)
+        return "x86_64"
+        #else
+        return "unknown"
+        #endif
     }
 
     private func resolvedPath(_ path: String, validation: PathValidationResult) -> String {
@@ -1517,5 +1603,16 @@ private enum DefaultsKeys {
 private extension String {
     var nilIfEmpty: String? {
         isEmpty ? nil : self
+    }
+}
+
+private extension RetentionPolicy {
+    var diagnosticsTitle: String {
+        switch self {
+        case .days(let days):
+            return "\(days) days"
+        case .forever:
+            return "Forever"
+        }
     }
 }

@@ -10,6 +10,11 @@ docs/user-guide.md
 
 The app target is `SDImportApp`, backed by `Packages/SDImportCore` for shared scanning, import planning, persistence, and history logic. The existing Python/Raycast implementation at the repository root remains available for legacy automation users.
 
+Public native releases are Apple Silicon (`arm64`) builds for macOS 14 or newer.
+GitHub Releases plus Sparkle are the supported distribution and update path.
+Homebrew, App Store, paid licensing, and payment infrastructure are intentionally
+out of scope for the current release track.
+
 ## Developer Notes
 
 Build and launch the app bundle from the repository root:
@@ -127,6 +132,9 @@ GitHub asset URL, such as
 `https://github.com/xcv58/macos-automation/releases/download/v1.0/SD-Import.md`.
 Avoid `releases/latest/download/SD-Import.md` for release notes because GitHub's
 latest-release redirect can be stale while a new update is being published.
+
+The release script validates the generated appcast before publishing and checks
+that the required GitHub Release assets are present after publishing.
 
 Sparkle's private key must stay outside git and outside the public hosting
 bucket. The supported public release path is the local

@@ -9,6 +9,7 @@ public struct MediaClassifier: Sendable {
         ".dng",
         ".raw",
         ".cr2",
+        ".cr3",
         ".nef",
         ".arw",
         ".raf"

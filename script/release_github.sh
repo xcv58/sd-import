@@ -107,6 +107,113 @@ validate_app_build() {
   fi
 }
 
+validate_notarized_dmg() {
+  /usr/bin/xcrun stapler validate "$DMG_PATH"
+  /usr/sbin/spctl --assess --type open --context context:primary-signature --verbose "$DMG_PATH"
+}
+
+validate_local_release_artifacts() {
+  local path
+  for path in "$DMG_PATH" "$ZIP_PATH" "$APPCAST_PATH" "$UPDATE_NOTES_PATH"; do
+    if [[ ! -s "$path" ]]; then
+      fail "Release artifact is missing or empty: $path"
+    fi
+  done
+}
+
+validate_appcast() {
+  if [[ ! -s "$APPCAST_PATH" ]]; then
+    fail "Generated appcast is missing or empty: $APPCAST_PATH"
+  fi
+
+  /usr/bin/python3 - "$APPCAST_PATH" "$APP_VERSION" "$APP_BUILD" "$SPARKLE_DOWNLOAD_URL_PREFIX" "$SPARKLE_RELEASE_NOTES_URL_PREFIX" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+path, expected_version, expected_build, download_prefix, release_notes_prefix = sys.argv[1:]
+sparkle_ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+ns = {"sparkle": sparkle_ns}
+
+errors = []
+
+try:
+    root = ET.parse(path).getroot()
+except ET.ParseError as error:
+    print(f"Invalid Sparkle appcast XML: {error}", file=sys.stderr)
+    sys.exit(2)
+
+item = root.find("./channel/item")
+if item is None:
+    print("Sparkle appcast has no channel item.", file=sys.stderr)
+    sys.exit(2)
+
+def node_text(name):
+    node = item.find(name, ns)
+    return "" if node is None or node.text is None else node.text.strip()
+
+build = node_text("sparkle:version")
+short_version = node_text("sparkle:shortVersionString")
+minimum_system = node_text("sparkle:minimumSystemVersion")
+hardware = node_text("sparkle:hardwareRequirements")
+release_notes = node_text("sparkle:releaseNotesLink")
+enclosure = item.find("enclosure")
+
+if build != expected_build:
+    errors.append(f"sparkle:version is {build!r}, expected {expected_build!r}.")
+if short_version != expected_version:
+    errors.append(f"sparkle:shortVersionString is {short_version!r}, expected {expected_version!r}.")
+if minimum_system != "14.0":
+    errors.append(f"sparkle:minimumSystemVersion is {minimum_system!r}, expected '14.0'.")
+if hardware != "arm64":
+    errors.append(f"sparkle:hardwareRequirements is {hardware!r}, expected 'arm64'.")
+
+if enclosure is None:
+    errors.append("Appcast item is missing an enclosure.")
+else:
+    expected_url = download_prefix + "SD-Import.dmg"
+    url = enclosure.get("url", "")
+    length = enclosure.get("length", "")
+    signature = enclosure.get(f"{{{sparkle_ns}}}edSignature", "").strip()
+
+    if url != expected_url:
+        errors.append(f"enclosure url is {url!r}, expected {expected_url!r}.")
+    if "/releases/latest/download/" in url:
+        errors.append("enclosure url must be versioned, not the latest-release redirect.")
+    if not length.isdigit() or int(length) <= 0:
+        errors.append(f"enclosure length is not a positive integer: {length!r}.")
+    if not signature:
+        errors.append("enclosure is missing sparkle:edSignature.")
+
+expected_notes = release_notes_prefix + "SD-Import.md"
+if release_notes != expected_notes:
+    errors.append(f"release notes link is {release_notes!r}, expected {expected_notes!r}.")
+if "/releases/latest/download/" in release_notes:
+    errors.append("release notes link must be versioned, not the latest-release redirect.")
+
+if errors:
+    for error in errors:
+        print(error, file=sys.stderr)
+    sys.exit(2)
+
+print(f"Validated Sparkle appcast: version {short_version} build {build}")
+PY
+}
+
+validate_release_assets() {
+  local asset_names
+  local required
+
+  asset_names="$(gh release view "$RELEASE_TAG" --repo "$REPO_FULL_NAME" --json assets --jq '.assets[].name')"
+
+  for required in SD-Import.dmg SD-Import.zip appcast.xml SD-Import.md; do
+    if ! printf '%s\n' "$asset_names" | grep -Fxq "$required"; then
+      fail "GitHub Release $RELEASE_TAG is missing required asset: $required"
+    fi
+  done
+
+  echo "Validated GitHub Release assets for $RELEASE_TAG"
+}
+
 case "${1:-}" in
   -h|--help|help)
     usage
@@ -147,6 +254,8 @@ if [[ -n "${SPARKLE_PRIVATE_KEY_FILE:-}" && -n "${SPARKLE_PRIVATE_KEY:-}" ]]; th
   fail "Set only one of SPARKLE_PRIVATE_KEY_FILE or SPARKLE_PRIVATE_KEY."
 fi
 
+"$ROOT_DIR/script/release_preflight.sh"
+
 validate_app_build
 
 if [[ -z "$RELEASE_NOTES_FILE" && -f "$DEFAULT_RELEASE_NOTES_FILE" ]]; then
@@ -163,6 +272,7 @@ REQUIRE_SPARKLE_CONFIGURATION=1 \
 "$ROOT_DIR/script/package_dmg.sh"
 
 "$ROOT_DIR/script/notarize.sh" "$DMG_PATH"
+validate_notarized_dmg
 
 rm -rf "$UPDATES_DIR"
 mkdir -p "$UPDATES_DIR"
@@ -195,10 +305,8 @@ SPARKLE_DOWNLOAD_URL_PREFIX="$SPARKLE_DOWNLOAD_URL_PREFIX" \
 SPARKLE_RELEASE_NOTES_URL_PREFIX="$SPARKLE_RELEASE_NOTES_URL_PREFIX" \
 "$ROOT_DIR/script/generate_appcast.sh" "$UPDATES_DIR"
 
-if ! grep -q 'sparkle:edSignature=' "$APPCAST_PATH"; then
-  echo "Generated appcast is missing Sparkle EdDSA signatures; refusing to publish." >&2
-  exit 2
-fi
+validate_appcast
+validate_local_release_artifacts
 
 release_notes_for_github="$UPDATE_NOTES_PATH"
 if [[ -n "$RELEASE_NOTES_FILE" ]]; then
@@ -223,6 +331,8 @@ else
     --notes-file "$release_notes_for_github" \
     --latest
 fi
+
+validate_release_assets
 
 echo "Release ready:"
 echo "  https://github.com/$REPO_FULL_NAME/releases/tag/$RELEASE_TAG"

@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an SD Import improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What should SD Import do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This does not require Homebrew distribution.
+        - label: This does not require App Store distribution.
+        - label: This does not require paid licensing or payment infrastructure.
+        - label: Any diagnostics or telemetry would be strictly opt-in and documented.

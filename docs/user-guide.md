@@ -4,7 +4,8 @@ SD Import is a macOS app for copying photos and videos from SD cards into dated 
 
 ## Download
 
-Use this link to install the latest version:
+GitHub Releases are the canonical public download location. Use this link to
+install the latest signed and notarized DMG:
 
 https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg
 
@@ -61,7 +62,8 @@ You can also open the app and choose `Import From Card...` from the menu.
 
 ## Updates
 
-SD Import checks for updates automatically.
+SD Import uses Sparkle for in-app updates and checks the GitHub Release-hosted
+appcast.
 
 To check manually:
 
@@ -70,6 +72,16 @@ To check manually:
 3. Follow the update prompt.
 
 Update settings are available in `SD Import > Settings > Updates`.
+
+To verify you are on the latest release:
+
+1. Choose `SD Import > Check for Updates...`.
+2. If Sparkle reports that no update is available, the installed app is current
+   for the public update feed.
+3. You can also compare the installed version from the macOS app information
+   panel with the latest GitHub Release:
+
+https://github.com/xcv58/macos-automation/releases/latest
 
 ## Safety Notes
 
@@ -86,6 +98,11 @@ If an import does not start automatically:
 2. Open SD Import manually.
 3. Choose `Import From Card...`.
 
-For release details, see:
+For release details and public support, see:
 
 https://github.com/xcv58/macos-automation/releases
+
+Support email: [i@xcv58.com](mailto:i@xcv58.com)
+
+For privacy details, see [privacy.md](privacy.md). For security reporting, see
+[../SECURITY.md](../SECURITY.md).

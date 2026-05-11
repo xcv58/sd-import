@@ -7,6 +7,8 @@ Use GitHub Releases for the stable update channel.
 - Human download page: `https://github.com/xcv58/macos-automation/releases`
 - Sparkle feed URL: `https://github.com/xcv58/macos-automation/releases/latest/download/appcast.xml`
 - Latest DMG URL: `https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg`
+- Supported public artifact: signed and notarized `SD-Import.dmg`
+- Supported app target: Apple Silicon (`arm64`) on macOS 14 or newer
 
 The release script generates an appcast whose update enclosure points at the
 versioned GitHub release asset, while the app itself reads the feed from the
@@ -110,6 +112,129 @@ the GitHub Release.
 GitHub Actions is not part of the supported release path. Keep signing,
 notarization, and Sparkle private-key material on the release Mac rather than
 duplicating those secrets into the repository.
+
+## Public Release Checklist
+
+Before running the release script:
+
+- Confirm the worktree is clean or contains only intentional release changes.
+- Confirm `APP_VERSION` is the user-visible version and `APP_BUILD` is greater
+  than the latest published Sparkle build.
+- Confirm `docs/releases/sd-import-$APP_VERSION.md` exists or set
+  `RELEASE_NOTES_FILE` to a user-facing release-notes file.
+- Confirm `DEVELOPER_ID_APPLICATION`, `SPARKLE_PUBLIC_ED_KEY`, and notary
+  credentials are available on the release Mac.
+- Confirm the release remains free and open source, with no Homebrew, App Store,
+  paid licensing, or payment infrastructure changes.
+
+Run the release preflight before building:
+
+```bash
+DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (TEAMID)" \
+SPARKLE_PUBLIC_ED_KEY="base64-public-key" \
+NOTARYTOOL_PROFILE="SDImportNotary" \
+./script/release_preflight.sh
+```
+
+The preflight checks GitHub CLI auth, Developer ID identity availability,
+Sparkle public/private key configuration, notary credential configuration, and
+signed-commit prompt risk.
+
+The release script enforces these release gates:
+
+- Fails public releases without `DEVELOPER_ID_APPLICATION`.
+- Fails public releases without `SPARKLE_PUBLIC_ED_KEY`.
+- Fails if notary credentials are missing.
+- Fails if local release preflight fails.
+- Fails if `APP_BUILD` is not a monotonically increasing integer.
+- Fails if the generated appcast does not contain the expected version, build,
+  macOS minimum version, `arm64` hardware requirement, versioned DMG URL,
+  versioned release-notes URL, positive enclosure length, and Sparkle EdDSA
+  signature.
+- Fails if required local release artifacts are missing or empty.
+- Fails if the published GitHub Release is missing `SD-Import.dmg`,
+  `SD-Import.zip`, `appcast.xml`, or `SD-Import.md`.
+
+After the script finishes, manually inspect the release page:
+
+```bash
+gh release view "$RELEASE_TAG" \
+  --repo "xcv58/macos-automation" \
+  --json tagName,name,isLatest,assets,url \
+  --jq '{tagName,name,isLatest,url,assets:[.assets[].name]}'
+```
+
+Validate the local signed/notarized artifact:
+
+```bash
+xcrun stapler validate dist/SD-Import.dmg
+spctl --assess --type open --context context:primary-signature --verbose dist/SD-Import.dmg
+codesign --verify --deep --strict --verbose=2 "dist/SD Import.app"
+```
+
+Validate the public latest links:
+
+```bash
+curl -fsI "https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg"
+curl -fsSL "https://github.com/xcv58/macos-automation/releases/latest/download/appcast.xml" -o /tmp/sdimport-appcast.xml
+```
+
+Confirm `/tmp/sdimport-appcast.xml` references the versioned release asset for
+the release you just published, not a stale older release.
+
+## Release Notes Expectations
+
+Release notes should be user-facing and short. Use
+`docs/releases/sd-import-$APP_VERSION.md` unless a different
+`RELEASE_NOTES_FILE` is passed.
+
+Good release notes include:
+
+- What changed for users.
+- Any import correctness, update, compatibility, or recovery impact.
+- Any manual follow-up users need after installing.
+- Known limitations if a fix is partial.
+
+Avoid internal-only implementation details unless they explain a user-visible
+change.
+
+## Rollback Notes
+
+Sparkle clients follow the appcast attached to the GitHub Release marked as
+latest. If a release must be pulled:
+
+1. Mark the previous known-good GitHub Release as latest.
+2. Confirm `https://github.com/xcv58/macos-automation/releases/latest/download/appcast.xml`
+   now serves the previous known-good appcast.
+3. Leave the bad release visible only if users need the notes for context;
+   otherwise mark it as a pre-release or delete the broken assets.
+4. If users may already have installed the bad release, publish a new hotfix
+   release with a higher `APP_BUILD`. Do not reuse or decrement Sparkle build
+   numbers.
+5. Document the rollback or hotfix reason in release notes and in any linked
+   issue.
+
+## Credential Fragility Notes
+
+The release path intentionally keeps Developer ID certificates, notarization
+credentials, and Sparkle private keys on the release Mac. That also means the
+release can fail or hang if Keychain, 1Password, GitHub CLI, or git signing is
+not ready before the build starts.
+
+- Prefer `NOTARYTOOL_PROFILE` stored with `xcrun notarytool store-credentials`
+  over typing Apple credentials during release.
+- Prefer `SPARKLE_PRIVATE_KEY_FILE` or `SPARKLE_PRIVATE_KEY` prepared before the
+  release command when Keychain prompts are unreliable.
+- Run `./script/release_preflight.sh` before packaging.
+- If signed commits hang through 1Password during release prep, use an explicit
+  noninteractive commit command for release docs or version commits:
+
+```bash
+git -c commit.gpgsign=false commit
+```
+
+Do not disable artifact signing. The workaround is only for repository commits;
+the app and DMG must still use Developer ID signing and notarization.
 
 ## Old-To-New Update Test
 

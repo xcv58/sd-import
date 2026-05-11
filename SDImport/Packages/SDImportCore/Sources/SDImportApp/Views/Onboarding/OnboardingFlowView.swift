@@ -14,9 +14,42 @@ struct OnboardingFlowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Set Up SD Import")
-                .font(.title2)
-                .fontWeight(.semibold)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Set Up SD Import")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Text("Choose where cards are scanned and where copied media should land. SD Import previews everything before copying.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                alignment: .leading,
+                spacing: 12
+            ) {
+                OnboardingGuideItem(
+                    title: "Source",
+                    systemImage: "externaldrive",
+                    text: "Start with /Volumes or pick a specific mounted card or source folder."
+                )
+                OnboardingGuideItem(
+                    title: "Destinations",
+                    systemImage: "folder",
+                    text: "Photos and videos can use different folders. The preview shows exact destination folders before copying."
+                )
+                OnboardingGuideItem(
+                    title: "Known files",
+                    systemImage: "checkmark.seal",
+                    text: "Files already imported are shown as known or skipped so reinserting a card does not duplicate originals."
+                )
+                OnboardingGuideItem(
+                    title: "Sidecars",
+                    systemImage: "paperclip",
+                    text: "Camera support files stay skipped for photo imports, and can be kept for footage backups when needed."
+                )
+            }
 
             VStack(alignment: .leading, spacing: 12) {
                 OnboardingFolderRow(
@@ -58,7 +91,7 @@ struct OnboardingFlowView: View {
             }
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(width: 660)
         .interactiveDismissDisabled(true)
         .onAppear {
             model.validatePaths()
@@ -72,6 +105,31 @@ struct OnboardingFlowView: View {
         .onChange(of: model.videosPath) {
             model.validatePaths()
         }
+    }
+}
+
+private struct OnboardingGuideItem: View {
+    let title: String
+    let systemImage: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                Text(text)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(10)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

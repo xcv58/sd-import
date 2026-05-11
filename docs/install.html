@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
+    <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("theme") || "system");</script>
+    <title>Install SD Import</title>
+    <meta name="description" content="Install SD Import from the latest signed and notarized GitHub Release DMG.">
+    <link rel="stylesheet" href="assets/site.css">
+</head>
+<body class="preload">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="container">
+        <header class="site-header">
+            <a class="logo" href="index.html"><img src="assets/images/app-icon.png" alt=""><span>SD Import</span></a>
+            <div class="nav-wrapper">
+                <nav class="nav-links" aria-label="Primary">
+                    <a href="install.html">Install</a>
+                    <a href="updates.html">Updates</a>
+                    <a href="support.html">Support</a>
+                    <a href="https://github.com/xcv58/macos-automation">GitHub</a>
+                </nav>
+                <div class="theme-switch" aria-label="Theme">
+                    <button class="theme-btn" type="button" data-theme-value="light" aria-label="Light theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></button>
+                    <button class="theme-btn" type="button" data-theme-value="system" aria-label="System theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M12 4a8 8 0 0 1 0 16Z"></path></svg></button>
+                    <button class="theme-btn" type="button" data-theme-value="dark" aria-label="Dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.5A8 8 0 0 1 8.5 4a7 7 0 1 0 11.5 11.5Z"></path></svg></button>
+                </div>
+            </div>
+        </header>
+    </div>
+    <main id="main" class="container">
+        <section class="page-title">
+            <h1>Install from GitHub Releases.</h1>
+            <p>SD Import ships as a signed and notarized DMG for Apple Silicon Macs running macOS 14 or newer.</p>
+        </section>
+
+        <section class="section section-divider">
+            <div class="grid">
+                <article class="step">
+                    <span class="step-number">1</span>
+                    <h3>Download</h3>
+                    <p>Get <code>SD-Import.dmg</code> from the latest GitHub Release.</p>
+                </article>
+                <article class="step">
+                    <span class="step-number">2</span>
+                    <h3>Copy to Applications</h3>
+                    <p>Open the DMG and drag <code>SD Import.app</code> into <code>Applications</code>.</p>
+                </article>
+                <article class="step">
+                    <span class="step-number">3</span>
+                    <h3>Choose folders</h3>
+                    <p>Open the app and choose source and destination folders during first-run setup.</p>
+                </article>
+            </div>
+            <div class="cta-group">
+                <a class="cta-button cta-primary" href="https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg">Download DMG</a>
+                <a class="cta-button cta-secondary" href="updates.html">Update Guide</a>
+            </div>
+        </section>
+
+        <section class="section section-divider two-column">
+            <div class="section-header">
+                <h2>Gatekeeper and first launch.</h2>
+                <p>If macOS says the app was downloaded from the internet, choose Open. If macOS blocks first launch, open System Settings, Privacy &amp; Security, then choose Open Anyway for SD Import.</p>
+            </div>
+            <div class="policy-box">
+                <h2>Requirements</h2>
+                <ul>
+                    <li>Apple Silicon Mac.</li>
+                    <li>macOS 14 or newer.</li>
+                    <li>Enough free space at your selected photo or video destination.</li>
+                    <li>SD card, card reader, camera-mounted card, or a selected source folder.</li>
+                </ul>
+            </div>
+        </section>
+    </main>
+    <footer class="site-footer">
+        <div class="container">
+            <div>Need help? Email <a href="mailto:i@xcv58.com">i@xcv58.com</a> or open a GitHub issue.</div>
+            <div class="footer-links">
+                <a href="index.html">Home</a>
+                <a href="support.html">Support</a>
+                <a href="privacy.html">Privacy</a>
+            </div>
+        </div>
+    </footer>
+    <script src="assets/site.js"></script>
+</body>
+</html>

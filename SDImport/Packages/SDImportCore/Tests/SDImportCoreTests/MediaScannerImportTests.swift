@@ -40,6 +40,27 @@ struct MediaScannerImportTests {
         #expect(summary2.knownFiles == 1)
     }
 
+    @Test("scanner recognizes common camera RAW extensions")
+    func scannerRecognizesCommonCameraRawExtensions() throws {
+        let fixture = try Fixture()
+        for filename in ["SONY_0001.ARW", "CANON_0001.CR2", "CANON_0002.CR3", "NIKON_0001.NEF", "FUJI_0001.RAF"] {
+            try fixture.writeFile(
+                fixture.mountURL.appendingPathComponent("DCIM/100MEDIA/\(filename)"),
+                bytes: Data("raw-\(filename)".utf8)
+            )
+        }
+
+        let summary = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-camera-raw")
+        )
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: "job-camera-raw")
+
+        #expect(summary.scannedFiles == 5)
+        #expect(summary.newFiles == 5)
+        #expect(summary.unsupportedFiles == 0)
+        #expect(files.allSatisfy { $0.mediaKind == .photo })
+    }
+
     @Test("same size and mtime camera neighbors both import")
     func sameSizeAndMtimeNeighborsBothImport() throws {
         let fixture = try Fixture()

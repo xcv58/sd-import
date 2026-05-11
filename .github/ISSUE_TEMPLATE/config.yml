@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Latest release
+    url: https://github.com/xcv58/macos-automation/releases/latest
+    about: Download the latest signed and notarized SD Import release.
+  - name: User guide
+    url: https://github.com/xcv58/macos-automation/blob/main/docs/user-guide.md
+    about: Installation, import, update, and troubleshooting instructions.

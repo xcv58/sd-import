@@ -1,19 +1,74 @@
 # SD Import for macOS
 
-## For Users
+SD Import is a free, open-source macOS app for copying photos and videos from
+SD cards into dated folders. It remembers files it has already imported, so
+inserting the same card again only imports new content.
 
-Install the native macOS app from the latest release:
+## Install The Native App
+
+GitHub Releases are the canonical public distribution path. Download the latest
+signed and notarized DMG here:
 
 https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg
 
-Quick install:
+Requirements:
+
+- Apple Silicon Mac.
+- macOS 14 or newer.
+
+Install:
 
 1. Download `SD-Import.dmg`.
 2. Open it.
 3. Drag `SD Import.app` to `Applications`.
 4. Open `SD Import` and choose your photo/video destination folders in Settings.
 
-Full user instructions are in [docs/user-guide.md](docs/user-guide.md).
+SD Import uses Sparkle for in-app updates. To verify you are on the latest
+release, choose `SD Import > Check for Updates...` or compare your installed
+version with the latest GitHub Release:
+
+https://github.com/xcv58/macos-automation/releases/latest
+
+Full user instructions are in [docs/user-guide.md](docs/user-guide.md). Privacy
+details are in [docs/privacy.md](docs/privacy.md).
+
+## Support
+
+- Public support and bug reports: GitHub Issues.
+- Support email: [i@xcv58.com](mailto:i@xcv58.com).
+- Security reports: see [SECURITY.md](SECURITY.md).
+- Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
+- License: MIT, see [LICENSE](LICENSE).
+- Website: [docs/index.html](docs/index.html).
+
+Please do not attach private photos, videos, full card dumps, credentials, or
+unredacted logs to public issues.
+
+## Native App Development
+
+The native app lives under `SDImport/` and shares its core logic through the
+Swift package in `SDImport/Packages/SDImportCore`.
+
+Common local commands:
+
+```bash
+./script/build_and_run.sh build
+./script/build_and_run.sh test
+./script/package_dmg.sh
+```
+
+Public releases use the Developer ID, notarization, GitHub Release, and Sparkle
+flow documented in [docs/sdimport-release-runbook.md](docs/sdimport-release-runbook.md).
+The native public release path does not include Homebrew, the App Store, paid
+licensing, or payment infrastructure.
+
+Production-readiness docs:
+
+- [Support](docs/support.md)
+- [Diagnostics](docs/diagnostics.md)
+- [EULA](docs/eula.md)
+- [Refund policy](docs/refund-policy.md)
+- [Manual QA matrix](docs/manual-qa-matrix.md)
 
 ## Legacy Python Automation
 
@@ -54,7 +109,10 @@ Folder naming:
 
 `YYYY-MM-DD` is taken from capture date metadata when available (EXIF/QuickTime/Spotlight), with mtime as fallback.
 
-## Install
+## Legacy Python Install
+
+This installs the older local automation stack, not the native public macOS app.
+For normal users, install the signed DMG from GitHub Releases instead.
 
 One-line install from this repo:
 
