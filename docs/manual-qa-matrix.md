@@ -7,6 +7,19 @@ No real SD cards are currently mounted in this development environment, so this
 file is the required hardware pass list rather than evidence that the hardware
 pass has already been executed.
 
+Use the capture script for each mounted card before filling in the manual app
+results:
+
+```bash
+./script/capture_manual_card_qa.sh \
+  --volume /Volumes/CARD \
+  --scenario "Canon photo card" \
+  --output /tmp/sdimport-canon-photo-card-qa.md
+```
+
+The capture report omits filenames and full paths. Review it before sharing or
+committing any excerpt.
+
 ## Required Hardware Passes
 
 | Scenario | Card Contents | Expected Result | Status |
@@ -34,6 +47,7 @@ For each hardware pass, record:
 - Preview counts: new, known, sidecars, conflicts.
 - Final result: imported, skipped, failed.
 - Any diagnostics export or crash report path, if relevant.
+- The redacted output from `script/capture_manual_card_qa.sh`, if useful.
 
 Do not commit private media, full card dumps, private filenames, or unredacted
 diagnostics.
