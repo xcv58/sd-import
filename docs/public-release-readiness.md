@@ -25,7 +25,7 @@ open-source public release.
 - Opt-in diagnostics export is available from the Diagnostics screen and omits
   media files, file names, and full paths.
 - A static website under `docs/` covers install, updates, support, privacy,
-  EULA, and refund policy.
+  and EULA.
 
 ## Gaps To Keep Visible
 

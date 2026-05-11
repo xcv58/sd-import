@@ -193,6 +193,7 @@ pre code {
 .theme-switch {
     display: flex;
     align-items: center;
+    gap: 2px;
     padding: 2px;
     background: var(--toggle-bg);
     border: 1px solid var(--border);
@@ -203,20 +204,34 @@ pre code {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 30px;
-    padding: 0;
+    gap: 6px;
+    min-width: 34px;
+    height: 32px;
+    padding: 0 10px;
     border: 0;
     border-radius: 99px;
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1;
 }
 
 .theme-btn svg {
-    width: 16px;
-    height: 16px;
-    fill: currentColor;
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.theme-btn span {
+    line-height: 1;
 }
 
 .theme-btn.active {
@@ -325,7 +340,7 @@ pre code {
 
 .hero-screenshot {
     width: 100%;
-    aspect-ratio: 1600 / 1236;
+    aspect-ratio: 16 / 9;
     object-fit: cover;
     background: var(--surface);
     border-radius: 12px;
@@ -538,7 +553,7 @@ pre code {
 .media-frame video,
 .media-frame img {
     width: 100%;
-    aspect-ratio: 1600 / 1236;
+    aspect-ratio: 16 / 9;
     object-fit: cover;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -771,6 +786,15 @@ pre code {
 
     .theme-switch {
         flex: 0 0 auto;
+    }
+
+    .theme-btn {
+        width: 32px;
+        padding: 0;
+    }
+
+    .theme-btn span {
+        display: none;
     }
 
     .hero {
