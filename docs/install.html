@@ -4,24 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
+    <link rel="apple-touch-icon" href="assets/images/app-icon.png">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
     <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("theme") || "system");</script>
     <title>Install SD Import</title>
     <meta name="description" content="Install SD Import from the latest signed and notarized GitHub Release DMG.">
-    <link rel="stylesheet" href="assets/site.css">
+    <meta property="og:title" content="Install SD Import">
+    <meta property="og:description" content="Install the free, signed, and notarized SD Import DMG for Apple Silicon Macs.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://macos-automation.vercel.app/install.html">
+    <meta property="og:image" content="https://macos-automation.vercel.app/assets/images/sd-import-screenshot.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Install SD Import">
+    <meta name="twitter:description" content="Install the free, signed, and notarized SD Import DMG for Apple Silicon Macs.">
+    <meta name="twitter:image" content="https://macos-automation.vercel.app/assets/images/sd-import-screenshot.png">
+    <link rel="canonical" href="https://macos-automation.vercel.app/install.html">
+    <link rel="stylesheet" href="assets/site-20260512.css">
 </head>
 <body class="preload">
     <a class="skip-link" href="#main">Skip to content</a>
     <div class="container">
         <header class="site-header">
-            <a class="logo" href="index.html"><img src="assets/images/app-icon.png" alt=""><span>SD Import</span></a>
+            <a class="logo" href="index.html"><img src="assets/images/app-icon-72-20260512.webp" width="36" height="36" alt=""><span>SD Import</span></a>
             <div class="nav-wrapper">
                 <nav class="nav-links" aria-label="Primary">
                     <a href="install.html">Install</a>
+                    <a href="user-guide.html">Guide</a>
                     <a href="updates.html">Updates</a>
                     <a href="support.html">Support</a>
                     <a href="https://github.com/xcv58/macos-automation">GitHub</a>
                 </nav>
-                <div class="theme-switch" aria-label="Theme">
+                <div class="theme-switch" role="group" aria-label="Theme">
                     <button class="theme-btn" type="button" data-theme-value="system" aria-label="System theme" title="System theme"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M9 20h6M12 16v4"></path></svg><span>System</span></button>
                     <button class="theme-btn" type="button" data-theme-value="light" aria-label="Light theme" title="Light theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg><span>Light</span></button>
                     <button class="theme-btn" type="button" data-theme-value="dark" aria-label="Dark theme" title="Dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.5A8 8 0 0 1 8.5 4a7 7 0 1 0 11.5 11.5Z"></path></svg><span>Dark</span></button>
@@ -32,10 +46,17 @@
     <main id="main" class="container">
         <section class="page-title">
             <h1>Install from GitHub Releases.</h1>
-            <p>SD Import ships as a signed and notarized DMG for Apple Silicon Macs running macOS 14 or newer.</p>
+            <p>SD Import ships as a free, signed, and notarized DMG for Apple Silicon Macs running macOS 14 or newer.</p>
         </section>
 
         <section class="section section-divider">
+            <div class="section-header">
+                <h2>Quick install.</h2>
+                <p>Download the DMG, move the app into Applications, then choose your import folders on first launch.</p>
+            </div>
+            <div class="callout install-requirements">
+                <p><strong>Requirements:</strong> Apple Silicon Mac, macOS 14 or newer, and enough free space at the selected photo or video destination.</p>
+            </div>
             <div class="grid">
                 <article class="step">
                     <span class="step-number">1</span>
@@ -54,8 +75,8 @@
                 </article>
             </div>
             <div class="cta-group">
-                <a class="cta-button cta-primary" href="https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg">Download DMG</a>
-                <a class="cta-button cta-secondary" href="updates.html">Update Guide</a>
+                <a class="cta-button cta-primary" href="https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg">Download for Apple Silicon Mac</a>
+                <a class="cta-button cta-secondary" href="https://github.com/xcv58/macos-automation/releases/latest">View latest GitHub Release</a>
             </div>
         </section>
 
@@ -69,8 +90,8 @@
                 <ul>
                     <li>Apple Silicon Mac.</li>
                     <li>macOS 14 or newer.</li>
-                    <li>Enough free space at your selected photo or video destination.</li>
                     <li>SD card, card reader, camera-mounted card, or a selected source folder.</li>
+                    <li>Enough free space at your selected photo or video destination.</li>
                 </ul>
             </div>
         </section>
@@ -80,11 +101,12 @@
             <div>Need help? Email <a href="mailto:i@xcv58.com">i@xcv58.com</a> or open a GitHub issue.</div>
             <div class="footer-links">
                 <a href="index.html">Home</a>
+                <a href="user-guide.html">Guide</a>
                 <a href="support.html">Support</a>
                 <a href="privacy.html">Privacy</a>
             </div>
         </div>
     </footer>
-    <script src="assets/site.js"></script>
+    <script src="assets/site-20260512.js"></script>
 </body>
 </html>

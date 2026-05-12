@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://macos-automation.vercel.app/</loc></url>
-  <url><loc>https://macos-automation.vercel.app/install.html</loc></url>
-  <url><loc>https://macos-automation.vercel.app/updates.html</loc></url>
-  <url><loc>https://macos-automation.vercel.app/support.html</loc></url>
-  <url><loc>https://macos-automation.vercel.app/privacy.html</loc></url>
-  <url><loc>https://macos-automation.vercel.app/eula.html</loc></url>
+  <url><loc>https://macos-automation.vercel.app/</loc><lastmod>2026-05-12</lastmod></url>
+  <url><loc>https://macos-automation.vercel.app/install.html</loc><lastmod>2026-05-12</lastmod></url>
+  <url><loc>https://macos-automation.vercel.app/user-guide.html</loc><lastmod>2026-05-12</lastmod></url>
+  <url><loc>https://macos-automation.vercel.app/updates.html</loc><lastmod>2026-05-12</lastmod></url>
+  <url><loc>https://macos-automation.vercel.app/support.html</loc><lastmod>2026-05-12</lastmod></url>
+  <url><loc>https://macos-automation.vercel.app/privacy.html</loc><lastmod>2026-05-12</lastmod></url>
+  <url><loc>https://macos-automation.vercel.app/eula.html</loc><lastmod>2026-05-12</lastmod></url>
 </urlset>

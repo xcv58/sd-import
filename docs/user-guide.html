@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
+    <link rel="apple-touch-icon" href="assets/images/app-icon.png">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
+    <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("theme") || "system");</script>
+    <title>SD Import User Guide</title>
+    <meta name="description" content="First setup, card import, safety notes, keyboard shortcuts, and help for SD Import.">
+    <meta property="og:title" content="SD Import User Guide">
+    <meta property="og:description" content="First setup, card import, safety notes, keyboard shortcuts, and help for SD Import.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://macos-automation.vercel.app/user-guide.html">
+    <meta property="og:image" content="https://macos-automation.vercel.app/assets/images/sd-import-screenshot.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SD Import User Guide">
+    <meta name="twitter:description" content="First setup, card import, safety notes, keyboard shortcuts, and help for SD Import.">
+    <meta name="twitter:image" content="https://macos-automation.vercel.app/assets/images/sd-import-screenshot.png">
+    <link rel="canonical" href="https://macos-automation.vercel.app/user-guide.html">
+    <link rel="stylesheet" href="assets/site-20260512.css">
+</head>
+<body class="preload">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="container">
+        <header class="site-header">
+            <a class="logo" href="index.html"><img src="assets/images/app-icon-72-20260512.webp" width="36" height="36" alt=""><span>SD Import</span></a>
+            <div class="nav-wrapper">
+                <nav class="nav-links" aria-label="Primary">
+                    <a href="install.html">Install</a>
+                    <a href="user-guide.html">Guide</a>
+                    <a href="updates.html">Updates</a>
+                    <a href="support.html">Support</a>
+                    <a href="https://github.com/xcv58/macos-automation">GitHub</a>
+                </nav>
+                <div class="theme-switch" role="group" aria-label="Theme">
+                    <button class="theme-btn" type="button" data-theme-value="system" aria-label="System theme" title="System theme"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M9 20h6M12 16v4"></path></svg><span>System</span></button>
+                    <button class="theme-btn" type="button" data-theme-value="light" aria-label="Light theme" title="Light theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg><span>Light</span></button>
+                    <button class="theme-btn" type="button" data-theme-value="dark" aria-label="Dark theme" title="Dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.5A8 8 0 0 1 8.5 4a7 7 0 1 0 11.5 11.5Z"></path></svg><span>Dark</span></button>
+                </div>
+            </div>
+        </header>
+    </div>
+
+    <main id="main" class="container">
+        <section class="page-title">
+            <h1>User Guide</h1>
+            <p>Set destinations once, preview each card before copying, and keep a clear record of what SD Import already imported.</p>
+        </section>
+
+        <section class="section section-divider">
+            <div class="section-header">
+                <h2>Quick start.</h2>
+                <p>Most users only need to install once, set destinations once, and review the preview each time a card is inserted.</p>
+            </div>
+            <div class="grid">
+                <article class="step">
+                    <span class="step-number">1</span>
+                    <h3>Install</h3>
+                    <p>Download the signed DMG, open it, and drag <code>SD Import.app</code> into <code>Applications</code>.</p>
+                </article>
+                <article class="step">
+                    <span class="step-number">2</span>
+                    <h3>Set folders</h3>
+                    <p>Open Settings, choose photo and video destinations, and keep Theme set to System unless you prefer Light or Dark.</p>
+                </article>
+                <article class="step">
+                    <span class="step-number">3</span>
+                    <h3>Import</h3>
+                    <p>Insert a card, review the preview, then keep the card connected until copy progress finishes.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section section-divider two-column">
+            <div class="section-header">
+                <h2>Import from a card.</h2>
+                <p>SD Import can appear automatically when a card mounts, or you can open the app and choose <code>Import From Card...</code>.</p>
+            </div>
+            <ol class="workflow-steps">
+                <li><span class="step-number">1</span><div><h3>Connect a card.</h3><p>Insert an SD card or connect a camera card reader.</p></div></li>
+                <li><span class="step-number">2</span><div><h3>Review the scan.</h3><p>Check what is new, already imported, unsupported, or conflicting.</p></div></li>
+                <li><span class="step-number">3</span><div><h3>Start the copy.</h3><p>Confirm the destinations and leave the source connected until the import completes.</p></div></li>
+            </ol>
+        </section>
+
+        <section class="section section-divider two-column">
+            <div class="policy-box">
+                <h2>Safety notes</h2>
+                <ul>
+                    <li>SD Import copies files; it does not erase the card.</li>
+                    <li>Files already imported are skipped on future runs.</li>
+                    <li>If a destination file already exists but is different, SD Import keeps both files by adding a suffix.</li>
+                    <li>Leave the app in <code>Applications</code> so updates can install correctly.</li>
+                </ul>
+            </div>
+            <div class="policy-box">
+                <h2>Keyboard shortcuts</h2>
+                <ul>
+                    <li><code>Command-I</code>: open Import.</li>
+                    <li><code>Command-1</code> through <code>Command-4</code>: Import, History, Settings, Diagnostics.</li>
+                    <li><code>Control-Tab</code>: next panel.</li>
+                    <li><code>Command-R</code>: refresh History.</li>
+                    <li><code>Command-,</code>: Settings.</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section section-divider">
+            <div class="section-header">
+                <h2>If import does not start automatically.</h2>
+                <p>Make sure <code>Prompt on card mount</code> is enabled in Settings, open SD Import manually, then choose <code>Import From Card...</code>. For persistent issues, export diagnostics and contact support.</p>
+            </div>
+            <div class="cta-group">
+                <a class="cta-button cta-primary" href="support.html">Get support</a>
+                <a class="cta-button cta-secondary" href="https://github.com/xcv58/macos-automation/releases/latest">Release notes</a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-links">
+                <a href="index.html">Home</a>
+                <a href="install.html">Install</a>
+                <a href="updates.html">Updates</a>
+                <a href="privacy.html">Privacy</a>
+                <a href="support.html">Support</a>
+            </div>
+        </div>
+    </footer>
+    <script src="assets/site-20260512.js"></script>
+</body>
+</html>

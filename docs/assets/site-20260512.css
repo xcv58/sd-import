@@ -4,6 +4,7 @@
     --surface-hover: #e5e5e7;
     --text-primary: #1d1d1f;
     --text-secondary: #6e6e73;
+    --theme-muted: #59595f;
     --border: #d2d2d7;
     --accent: #0056b3;
     --accent-hover: #004494;
@@ -20,6 +21,7 @@
     --surface-hover: #2c2c2e;
     --text-primary: #f5f5f7;
     --text-secondary: #a1a1aa;
+    --theme-muted: #c7c7d1;
     --border: #2c2c2e;
     --accent: #4da6ff;
     --accent-hover: #73bcff;
@@ -37,6 +39,7 @@
         --surface-hover: #2c2c2e;
         --text-primary: #f5f5f7;
         --text-secondary: #a1a1aa;
+        --theme-muted: #c7c7d1;
         --border: #2c2c2e;
         --accent: #4da6ff;
         --accent-hover: #73bcff;
@@ -54,7 +57,6 @@
 
 html {
     scroll-behavior: smooth;
-    overflow-x: hidden;
 }
 
 body {
@@ -63,7 +65,6 @@ body {
     background: var(--bg-color);
     color: var(--text-primary);
     line-height: 1.6;
-    overflow-x: hidden;
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -78,9 +79,27 @@ a {
     text-decoration: none;
 }
 
+p a,
+li a,
+.lead a,
+.policy-box a:not(.cta-button) {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+}
+
+p a:hover,
+li a:hover,
+.lead a:hover,
+.policy-box a:not(.cta-button):hover {
+    color: var(--accent-hover);
+}
+
 img {
     display: block;
     max-width: 100%;
+    height: auto;
 }
 
 code {
@@ -211,7 +230,7 @@ pre code {
     border: 0;
     border-radius: 99px;
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--theme-muted);
     cursor: pointer;
     font: inherit;
     font-size: 0.82rem;
@@ -248,10 +267,11 @@ pre code {
 .hero h1 {
     max-width: 980px;
     margin: 0 auto 18px;
-    font-size: 5.8rem;
-    line-height: 0.95;
+    font-size: 4.9rem;
+    line-height: 0.98;
     letter-spacing: 0;
     text-wrap: balance;
+    overflow-wrap: break-word;
 }
 
 .hero-copy {
@@ -269,6 +289,13 @@ pre code {
     margin-top: 22px;
     color: var(--text-secondary);
     font-size: 0.95rem;
+}
+
+.cta-note {
+    margin: 12px auto 0;
+    max-width: 620px;
+    color: var(--text-secondary);
+    font-size: 0.94rem;
 }
 
 .hero-use-case span + span {
@@ -306,6 +333,7 @@ pre code {
     border-radius: 99px;
     font-size: 1rem;
     font-weight: 650;
+    text-decoration: none;
     transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 
@@ -345,6 +373,10 @@ pre code {
     background: var(--surface);
     border-radius: 12px;
     box-shadow: 0 26px 54px var(--shadow);
+}
+
+picture.hero-visual-picture {
+    display: block;
 }
 
 .app-window {
@@ -551,7 +583,8 @@ pre code {
 }
 
 .media-frame video,
-.media-frame img {
+.media-frame img,
+.media-frame picture {
     width: 100%;
     aspect-ratio: 16 / 9;
     object-fit: cover;
@@ -561,10 +594,41 @@ pre code {
     box-shadow: 0 18px 42px var(--shadow);
 }
 
+.media-frame picture {
+    display: block;
+}
+
+.media-frame picture img {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
 .media-frame figcaption {
     margin-top: 10px;
     color: var(--text-secondary);
     font-size: 0.92rem;
+}
+
+.video-transcript {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.video-transcript summary {
+    color: var(--text-primary);
+    cursor: pointer;
+    font-weight: 650;
+}
+
+.video-transcript ol {
+    margin: 10px 0 0;
+    padding-left: 20px;
 }
 
 .section-header h2,
@@ -722,6 +786,17 @@ pre code {
     color: var(--text-primary);
 }
 
+.install-requirements {
+    margin-bottom: 22px;
+}
+
+.support-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+}
+
 .link-list {
     display: grid;
     gap: 12px;
@@ -762,7 +837,7 @@ pre code {
 
 @media (max-width: 1100px) {
     .hero h1 {
-        font-size: 4.6rem;
+        font-size: 4rem;
     }
 
     .section-header h2,
@@ -777,19 +852,47 @@ pre code {
     }
 
     .site-header {
+        flex-wrap: wrap;
         gap: 14px;
     }
 
+    .logo {
+        order: 1;
+    }
+
+    .nav-wrapper {
+        display: contents;
+    }
+
     .nav-links {
-        display: none;
+        order: 3;
+        display: flex;
+        flex: 0 0 100%;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        justify-content: flex-start;
+    }
+
+    .nav-links a {
+        min-height: 44px;
+        padding: 9px 10px;
+        border: 1px solid var(--border);
+        border-radius: 99px;
+        background: var(--surface);
+        font-size: 0.88rem;
+        line-height: 1.2;
     }
 
     .theme-switch {
+        order: 2;
         flex: 0 0 auto;
+        margin-left: auto;
     }
 
     .theme-btn {
-        width: 32px;
+        width: 44px;
+        height: 40px;
         padding: 0;
     }
 
@@ -798,19 +901,23 @@ pre code {
     }
 
     .hero {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
         padding: 42px 20px 48px;
         max-width: 100%;
-        overflow-x: clip;
     }
 
     .hero h1 {
-        max-width: 340px;
-        font-size: 2.5rem;
+        order: 1;
+        max-width: min(100%, 22rem);
+        font-size: clamp(2.18rem, 9vw, 2.5rem);
         line-height: 1.04;
         letter-spacing: 0;
     }
 
     .hero-copy {
+        order: 2;
         max-width: 34rem;
         margin-right: auto;
         margin-left: auto;
@@ -819,6 +926,7 @@ pre code {
     }
 
     .cta-group {
+        order: 4;
         flex-direction: column;
         align-items: stretch;
         width: min(100%, 320px);
@@ -833,9 +941,23 @@ pre code {
         max-width: none;
     }
 
+    .support-actions {
+        align-items: stretch;
+    }
+
     .hero-visual {
+        order: 3;
+        margin-top: 28px;
         max-width: 100%;
         overflow: hidden;
+    }
+
+    .cta-note {
+        order: 5;
+    }
+
+    .hero-use-case {
+        order: 6;
     }
 
     .window-body,
@@ -914,8 +1036,8 @@ pre code {
     }
 
     .hero h1 {
-        max-width: 288px;
-        font-size: 2rem;
+        max-width: min(100%, 19rem);
+        font-size: clamp(1.95rem, 9.5vw, 2.15rem);
     }
 
     .hero-copy {
@@ -954,14 +1076,21 @@ pre code {
 
 @media (max-width: 360px) {
     .hero h1 {
-        max-width: 260px;
-        font-size: 1.85rem;
+        max-width: 100%;
+        font-size: 1.82rem;
     }
 
     .cta-group,
     .hero-copy,
     .hero-use-case {
         max-width: 100%;
+    }
+}
+
+@media (pointer: coarse) {
+    .theme-btn {
+        min-width: 44px;
+        height: 44px;
     }
 }
 
