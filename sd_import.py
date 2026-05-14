@@ -57,6 +57,7 @@ from sd_import_modules.importer import (
     import_new_files,
     latest_progress_path,
     progress_path_for_job,
+    replan_pending_destinations,
     resolve_destination_path,
 )
 from sd_import_modules.scan import (
@@ -146,13 +147,15 @@ def command_scan(args: argparse.Namespace, conn: sqlite3.Connection, config: Dic
     mount_path = Path(args.input).expanduser().resolve()
     vol_info = get_diskutil_info(str(mount_path))
     location = choose_location(config, args.location, vol_info.get("VolumeName"))
+    photos_base = destination_base(config, args.photos_base, "photos_base", "~/Pictures/Photos")
+    videos_base = destination_base(config, args.videos_base, "videos_base", "~/Downloads")
 
     summary = scan_mount(
         conn=conn,
         mount_path=mount_path,
         location=location,
-        photos_base=Path(args.photos_base).expanduser(),
-        videos_base=Path(args.videos_base).expanduser(),
+        photos_base=photos_base,
+        videos_base=videos_base,
         job_id=args.job_id,
     )
     print(json.dumps(summary, indent=2))
@@ -160,13 +163,31 @@ def command_scan(args: argparse.Namespace, conn: sqlite3.Connection, config: Dic
 
 
 def command_import(args: argparse.Namespace, conn: sqlite3.Connection) -> int:
-    result = import_new_files(conn, args.job_id, show_progress_ui=args.progress_ui)
+    photos_base = Path(args.photos_base).expanduser() if getattr(args, "photos_base", None) else None
+    videos_base = Path(args.videos_base).expanduser() if getattr(args, "videos_base", None) else None
+    result = import_new_files(
+        conn,
+        args.job_id,
+        show_progress_ui=args.progress_ui,
+        photos_base=photos_base,
+        videos_base=videos_base,
+        location=getattr(args, "location", None),
+    )
     print(json.dumps(result, indent=2))
     return 0
 
 
 def command_retry(args: argparse.Namespace, conn: sqlite3.Connection) -> int:
-    result = import_new_files(conn, args.job_id, show_progress_ui=args.progress_ui)
+    photos_base = Path(args.photos_base).expanduser() if getattr(args, "photos_base", None) else None
+    videos_base = Path(args.videos_base).expanduser() if getattr(args, "videos_base", None) else None
+    result = import_new_files(
+        conn,
+        args.job_id,
+        show_progress_ui=args.progress_ui,
+        photos_base=photos_base,
+        videos_base=videos_base,
+        location=getattr(args, "location", None),
+    )
     print(json.dumps(result, indent=2))
     return 0
 
@@ -175,6 +196,8 @@ def command_run(args: argparse.Namespace, conn: sqlite3.Connection, config: Dict
     mount_path = Path(args.input).expanduser().resolve()
     vol_info = get_diskutil_info(str(mount_path))
     location = choose_location(config, args.location, vol_info.get("VolumeName"))
+    photos_base = destination_base(config, args.photos_base, "photos_base", "~/Pictures/Photos")
+    videos_base = destination_base(config, args.videos_base, "videos_base", "~/Downloads")
     state_dir = get_state_dir_from_conn(conn)
     persistent_window = getattr(args, "progress_window", None)
 
@@ -201,8 +224,8 @@ def command_run(args: argparse.Namespace, conn: sqlite3.Connection, config: Dict
         conn=conn,
         mount_path=mount_path,
         location=location,
-        photos_base=Path(args.photos_base).expanduser(),
-        videos_base=Path(args.videos_base).expanduser(),
+        photos_base=photos_base,
+        videos_base=videos_base,
         scan_progress=scan_progress_update if persistent_window else None,
     )
 
@@ -256,6 +279,9 @@ def command_run(args: argparse.Namespace, conn: sqlite3.Connection, config: Dict
             summary["job_id"],
             show_progress_ui=(args.notify and persistent_window is None and pending_copy_files > 0),
             progress_window=persistent_window,
+            photos_base=photos_base,
+            videos_base=videos_base,
+            location=location,
         )
         print(json.dumps({"summary": summary, "import": result}, indent=2))
         return 0
@@ -473,6 +499,11 @@ def command_list_mounts(args: argparse.Namespace, config: Dict[str, Any]) -> int
     return 0
 
 
+def destination_base(config: Dict[str, Any], requested_path: Optional[str], key: str, fallback: str) -> Path:
+    value = requested_path or config.get(key) or fallback
+    return Path(str(value)).expanduser()
+
+
 def command_list_jobs(args: argparse.Namespace, conn: sqlite3.Connection) -> int:
     rows = list_jobs(conn, args.limit)
     if args.json_output:
@@ -534,8 +565,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
 
     def add_common_io(cmd: argparse.ArgumentParser) -> None:
-        cmd.add_argument("--photos-base", default="~/Pictures/Photos")
-        cmd.add_argument("--videos-base", default="~/Downloads")
+        cmd.add_argument("--photos-base", default=None, help="Photos destination base")
+        cmd.add_argument("--videos-base", default=None, help="Videos destination base")
         cmd.add_argument("--location", default=None)
 
     p_scan = sub.add_parser("scan", help="Scan a mounted card and create a preview job")
@@ -546,10 +577,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_import = sub.add_parser("import", help="Import NEW/CONFLICT files from a job")
     p_import.add_argument("--job-id", required=True)
     p_import.add_argument("--progress-ui", action="store_true", default=False, help="Show swiftDialog progress window")
+    p_import.add_argument("--photos-base", default=None, help="Replan pending photos before importing")
+    p_import.add_argument("--videos-base", default=None, help="Replan pending videos before importing")
+    p_import.add_argument("--location", default=None, help="Shoot/location label to use when replanning")
 
     p_retry = sub.add_parser("retry", help="Retry failed/pending copies for a job")
     p_retry.add_argument("--job-id", required=True)
     p_retry.add_argument("--progress-ui", action="store_true", default=False, help="Show swiftDialog progress window")
+    p_retry.add_argument("--photos-base", default=None, help="Replan pending photos before retrying")
+    p_retry.add_argument("--videos-base", default=None, help="Replan pending videos before retrying")
+    p_retry.add_argument("--location", default=None, help="Shoot/location label to use when replanning")
 
     p_run = sub.add_parser("run", help="Scan then optionally notify and import")
     p_run.add_argument("--input", required=True)

@@ -843,7 +843,13 @@ final class AppModel: ObservableObject {
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
                 let filesForPlan = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
                 let updates = planMode.updates(files: filesForPlan)
-                if !updates.isEmpty {
+                if let destinationRoots = planMode.destinationRoots {
+                    try repositories.jobRepository.updateJobImportPlan(
+                        jobID: jobID,
+                        destinationRoots: destinationRoots,
+                        updates: updates
+                    )
+                } else if !updates.isEmpty {
                     try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: updates)
                 }
 
@@ -1616,6 +1622,15 @@ final class AppModel: ObservableObject {
 private enum ImportPlanMode: Sendable {
     case rebuild(ImportPlanBuilder)
     case existing
+
+    var destinationRoots: DestinationRoots? {
+        switch self {
+        case .rebuild(let builder):
+            return builder.roots
+        case .existing:
+            return nil
+        }
+    }
 
     func updates(files: [JobFileRecord]) -> [JobFilePlanUpdate] {
         switch self {

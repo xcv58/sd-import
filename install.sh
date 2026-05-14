@@ -11,6 +11,8 @@ CONFIG_PATH="$STATE_DIR/config.json"
 
 PHOTOS_BASE="$HOME/Pictures/Photos"
 VIDEOS_BASE="$HOME/Downloads"
+PHOTOS_BASE_SET=0
+VIDEOS_BASE_SET=0
 INSTALL_RAYCAST=0
 SKIP_LAUNCHD=0
 
@@ -42,11 +44,13 @@ while [[ $# -gt 0 ]]; do
       shift
       [[ $# -gt 0 ]] || fail "--photos-base requires a value"
       PHOTOS_BASE="$1"
+      PHOTOS_BASE_SET=1
       ;;
     --videos-base)
       shift
       [[ $# -gt 0 ]] || fail "--videos-base requires a value"
       VIDEOS_BASE="$1"
+      VIDEOS_BASE_SET=1
       ;;
     --with-raycast)
       INSTALL_RAYCAST=1
@@ -187,19 +191,40 @@ install_launcher() {
   log "symlinked $LOCAL_BIN/sd-import -> $ROOT_DIR/sd-import"
 }
 
-write_default_config_if_missing() {
-  if [[ -f "$CONFIG_PATH" ]]; then
-    log "keeping existing config at $CONFIG_PATH"
-    return
-  fi
-  cat > "$CONFIG_PATH" <<'JSON'
-{
-  "default_location": "Untitled",
-  "location_by_volume": {},
-  "ignore_volume_regex": "Time Machine|Backup|Recovery|Preboot|Macintosh HD"
-}
-JSON
-  log "created default config at $CONFIG_PATH"
+write_or_update_config() {
+  CONFIG_PATH="$CONFIG_PATH" \
+  PHOTOS_BASE="$PHOTOS_BASE" \
+  VIDEOS_BASE="$VIDEOS_BASE" \
+  PHOTOS_BASE_SET="$PHOTOS_BASE_SET" \
+  VIDEOS_BASE_SET="$VIDEOS_BASE_SET" \
+  /usr/bin/python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+config_path = Path(os.environ["CONFIG_PATH"])
+if config_path.exists():
+    try:
+        config = json.loads(config_path.read_text())
+    except Exception:
+        config = {}
+else:
+    config = {}
+if not isinstance(config, dict):
+    config = {}
+
+config.setdefault("default_location", "Untitled")
+config.setdefault("location_by_volume", {})
+config.setdefault("ignore_volume_regex", "Time Machine|Backup|Recovery|Preboot|Macintosh HD")
+
+if not config_path.exists() or os.environ["PHOTOS_BASE_SET"] == "1" or "photos_base" not in config:
+    config["photos_base"] = os.environ["PHOTOS_BASE"]
+if not config_path.exists() or os.environ["VIDEOS_BASE_SET"] == "1" or "videos_base" not in config:
+    config["videos_base"] = os.environ["VIDEOS_BASE"]
+
+config_path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n")
+PY
+  log "updated config at $CONFIG_PATH"
 }
 
 write_launch_agent_plist() {
@@ -217,10 +242,6 @@ write_launch_agent_plist() {
     <string>$ROOT_DIR/sd_import.py</string>
     <string>auto</string>
     <string>--notify</string>
-    <string>--photos-base</string>
-    <string>$PHOTOS_BASE</string>
-    <string>--videos-base</string>
-    <string>$VIDEOS_BASE</string>
   </array>
 
   <key>EnvironmentVariables</key>
@@ -287,7 +308,7 @@ install_alerter
 install_exiftool
 install_swiftdialog
 install_launcher
-write_default_config_if_missing
+write_or_update_config
 
 if [[ "$SKIP_LAUNCHD" -eq 0 ]]; then
   install_launch_agent

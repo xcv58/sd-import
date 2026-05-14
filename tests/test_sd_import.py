@@ -267,6 +267,50 @@ class MetadataDedupeTests(unittest.TestCase):
         self.assertEqual(job["failed_files"], 0)
         self.assertEqual(job["status"], "IMPORTED")
 
+    def test_import_replans_pending_destinations_after_scan(self) -> None:
+        original_photos = self.root / "photos-a"
+        original_videos = self.root / "videos-a"
+        changed_photos = self.root / "photos-b"
+        changed_videos = self.root / "videos-b"
+        for directory in (original_photos, original_videos, changed_photos, changed_videos):
+            directory.mkdir(parents=True, exist_ok=True)
+
+        file_path = self.mount / "IMG_REPLAN.JPG"
+        file_path.write_bytes(b"replan-image-bytes")
+        fixed_mtime = 1_700_000_000
+        os.utime(file_path, (fixed_mtime, fixed_mtime))
+        capture_map = {str(file_path): "2024-07-15"}
+
+        with mock.patch("sd_import_modules.scan.capture_dates_from_exiftool_batch", return_value=capture_map):
+            summary = sd_import.scan_mount(
+                conn=self.conn,
+                mount_path=self.mount,
+                location="ORIGINAL",
+                photos_base=original_photos,
+                videos_base=original_videos,
+            )
+
+        import_result = sd_import.import_new_files(
+            self.conn,
+            summary["job_id"],
+            photos_base=changed_photos,
+            videos_base=changed_videos,
+            location="CHANGED",
+        )
+        changed_target = changed_photos / "2024-07-15 CHANGED" / "IMG_REPLAN.JPG"
+        original_target = original_photos / "2024-07-15 ORIGINAL" / "IMG_REPLAN.JPG"
+        row = self.conn.execute(
+            "SELECT dest_dir, dest_path, copy_status FROM job_files WHERE job_id=? LIMIT 1",
+            (summary["job_id"],),
+        ).fetchone()
+
+        self.assertEqual(import_result["imported_files"], 1)
+        self.assertTrue(changed_target.exists())
+        self.assertFalse(original_target.exists())
+        self.assertEqual(row["dest_dir"], str(changed_target.parent))
+        self.assertEqual(row["dest_path"], str(changed_target))
+        self.assertEqual(row["copy_status"], "COPIED")
+
 
 class CaptureDateTests(unittest.TestCase):
     def test_parse_date_from_text_supports_common_formats(self) -> None:

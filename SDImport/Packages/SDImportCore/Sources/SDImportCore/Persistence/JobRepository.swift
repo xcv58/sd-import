@@ -256,7 +256,31 @@ public struct JobRepository {
         jobID: String,
         updates: [JobFilePlanUpdate]
     ) throws {
+        try updateJobImportPlan(jobID: jobID, destinationRoots: nil, updates: updates)
+    }
+
+    public func updateJobImportPlan(
+        jobID: String,
+        destinationRoots: DestinationRoots?,
+        updates: [JobFilePlanUpdate]
+    ) throws {
         try pool.write { db in
+            if let destinationRoots {
+                try db.execute(
+                    sql: """
+                    UPDATE jobs
+                    SET photos_root = ?,
+                        videos_root = ?
+                    WHERE job_id = ?
+                    """,
+                    arguments: [
+                        destinationRoots.photosURL.path,
+                        destinationRoots.videosURL.path,
+                        jobID
+                    ]
+                )
+            }
+
             for update in updates {
                 try db.execute(
                     sql: """

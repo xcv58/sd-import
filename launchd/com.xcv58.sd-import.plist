@@ -12,10 +12,6 @@
     <string>/Users/YOUR_USER/work/macos-automation/sd_import.py</string>
     <string>auto</string>
     <string>--notify</string>
-    <string>--photos-base</string>
-    <string>/Users/YOUR_USER/Pictures/Photos</string>
-    <string>--videos-base</string>
-    <string>/Users/YOUR_USER/Downloads</string>
   </array>
 
   <key>StartOnMount</key>

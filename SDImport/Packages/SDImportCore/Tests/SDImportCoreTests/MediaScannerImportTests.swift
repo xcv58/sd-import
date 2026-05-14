@@ -285,6 +285,64 @@ struct MediaScannerImportTests {
         #expect(result.failedFiles == 0)
     }
 
+    @Test("replanned import copies to changed destination roots")
+    func replannedImportCopiesToChangedDestinationRoots() throws {
+        let fixture = try Fixture()
+        let source = fixture.mountURL.appendingPathComponent("IMG_REPLAN.JPG")
+        try fixture.writeFile(source, bytes: Data("replan-image-bytes".utf8))
+
+        _ = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-replan")
+        )
+
+        let changedPhotosURL = fixture.rootURL.appendingPathComponent("changed-photos", isDirectory: true)
+        let changedVideosURL = fixture.rootURL.appendingPathComponent("changed-videos", isDirectory: true)
+        let changedRoots = DestinationRoots(photosURL: changedPhotosURL, videosURL: changedVideosURL)
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: "job-replan")
+        let builder = ImportPlanBuilder(
+            sessions: [
+                ImportPlanSession(
+                    date: "2024-07-15",
+                    label: "CHANGED",
+                    photoCount: 1,
+                    videoCount: 0,
+                    unsupportedCount: 0,
+                    includePhotos: true,
+                    includeVideos: false,
+                    includeSidecars: false
+                )
+            ],
+            organizationPreset: .classicDatedFolders,
+            roots: changedRoots,
+            fallbackLocation: "CHANGED",
+            volumeName: "CARD"
+        )
+
+        try fixture.jobRepository.updateJobImportPlan(
+            jobID: "job-replan",
+            destinationRoots: changedRoots,
+            updates: builder.updates(files: files)
+        )
+        let result = try fixture.importEngine.importFiles(jobID: "job-replan")
+        let changedDestination = changedPhotosURL
+            .appendingPathComponent("2024-07-15 CHANGED", isDirectory: true)
+            .appendingPathComponent("IMG_REPLAN.JPG")
+        let originalDestination = fixture.photosURL
+            .appendingPathComponent("2024-07-15 TEST", isDirectory: true)
+            .appendingPathComponent("IMG_REPLAN.JPG")
+        let maybeJob = try fixture.jobRepository.fetchJob(id: "job-replan")
+        let job = try #require(maybeJob)
+        let importedFiles = try fixture.jobRepository.fetchJobFiles(jobID: "job-replan")
+        let importedFile = try #require(importedFiles.first)
+
+        #expect(result.importedFiles == 1)
+        #expect(FileManager.default.fileExists(atPath: changedDestination.path))
+        #expect(FileManager.default.fileExists(atPath: originalDestination.path) == false)
+        #expect(job.photosRoot == changedPhotosURL.path)
+        #expect(job.videosRoot == changedVideosURL.path)
+        #expect(importedFile.finalDestinationPath == changedDestination.path)
+    }
+
     @Test("planned footage backup sidecars import as flat files")
     func plannedFootageBackupSidecarsImport() throws {
         let fixture = try Fixture()

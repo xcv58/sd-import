@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import re
 import shutil
 import sqlite3
 import time
@@ -20,6 +21,7 @@ from .db import get_state_dir_from_conn
 from .ui import SwiftDialogProgressWindow, detect_swiftdialog_binary
 
 TERMINAL_PROGRESS_STATES = {"completed", "completed_with_errors", "failed", "aborted", "idle"}
+DATE_PATTERN = re.compile(r"(\d{4}-\d{2}-\d{2})")
 
 
 def existing_hash_matches(path: Path, expected_hash: str, expected_size: int) -> bool:
@@ -52,6 +54,77 @@ def resolve_destination_path(candidate: Path, expected_hash: str, expected_size:
         if existing_hash_matches(nxt, expected_hash, expected_size):
             return None, "already_exists_same_hash"
         counter += 1
+
+
+def replan_pending_destinations(
+    conn: sqlite3.Connection,
+    job_id: str,
+    photos_base: Path,
+    videos_base: Path,
+    location: Optional[str] = None,
+) -> int:
+    job_row = conn.execute(
+        "SELECT location FROM jobs WHERE job_id=? LIMIT 1",
+        (job_id,),
+    ).fetchone()
+    if not job_row:
+        raise RuntimeError(f"job not found: {job_id}")
+
+    shoot_location = (location or job_row["location"] or "Untitled").strip() or "Untitled"
+    rows = conn.execute(
+        """
+        SELECT id, filename, media_type, mtime, dest_dir, dest_path
+        FROM job_files
+        WHERE job_id=?
+          AND decision IN ('NEW', 'CONFLICT')
+          AND (copy_status IS NULL OR copy_status IN ('PENDING', 'FAILED'))
+        ORDER BY id
+        """,
+        (job_id,),
+    ).fetchall()
+
+    replanned = 0
+    for row in rows:
+        media_type = row["media_type"]
+        if media_type not in ("photo", "video"):
+            continue
+
+        capture_date = capture_date_for_replan(row)
+        if media_type == "photo":
+            safe_location = shoot_location.strip() or "Untitled"
+            dest_dir = photos_base.expanduser() / f"{capture_date} {safe_location}"
+        else:
+            dest_dir = videos_base.expanduser() / f"tmp-{capture_date}-videos"
+
+        dest_path = dest_dir / row["filename"]
+        conn.execute(
+            """
+            UPDATE job_files
+            SET dest_dir=?,
+                dest_path=?,
+                copy_status='PENDING',
+                error=NULL
+            WHERE id=?
+            """,
+            (str(dest_dir), str(dest_path), row["id"]),
+        )
+        replanned += 1
+
+    conn.commit()
+    return replanned
+
+
+def capture_date_for_replan(row: sqlite3.Row) -> str:
+    for value in (row["dest_dir"], row["dest_path"]):
+        match = DATE_PATTERN.search(str(value or ""))
+        if match:
+            return match.group(1)
+
+    mtime = str(row["mtime"] or "")
+    try:
+        return dt.datetime.fromisoformat(mtime).date().isoformat()
+    except ValueError:
+        return dt.datetime.now().date().isoformat()
 
 
 def copy_file_with_progress(
@@ -111,7 +184,15 @@ def import_new_files(
     job_id: str,
     show_progress_ui: bool = False,
     progress_window: Optional[SwiftDialogProgressWindow] = None,
+    photos_base: Optional[Path] = None,
+    videos_base: Optional[Path] = None,
+    location: Optional[str] = None,
 ) -> Dict[str, Any]:
+    if photos_base is not None or videos_base is not None:
+        if photos_base is None or videos_base is None:
+            raise RuntimeError("both photos_base and videos_base are required to replan destinations")
+        replan_pending_destinations(conn, job_id, photos_base, videos_base, location=location)
+
     job_row = conn.execute(
         "SELECT job_id, volume_name, report_path FROM jobs WHERE job_id=? LIMIT 1",
         (job_id,),
