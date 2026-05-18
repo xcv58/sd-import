@@ -61,6 +61,8 @@ struct ManualImportView: View {
                                 title: "Photos",
                                 path: $model.photosPath,
                                 validation: model.photosValidation,
+                                recentChoices: model.recentPhotosPathSuggestions,
+                                selectRecentPath: model.selectPhotosPath,
                                 action: model.choosePhotosFolder
                             )
                         }
@@ -74,6 +76,8 @@ struct ManualImportView: View {
                                 title: "Videos",
                                 path: $model.videosPath,
                                 validation: model.videosValidation,
+                                recentChoices: model.recentVideosPathSuggestions,
+                                selectRecentPath: model.selectVideosPath,
                                 action: model.chooseVideosFolder
                             )
                         }
@@ -87,6 +91,8 @@ struct ManualImportView: View {
                             title: "Library",
                             path: $model.photosPath,
                             validation: model.photosValidation,
+                            recentChoices: model.recentPhotosPathSuggestions,
+                            selectRecentPath: model.selectPhotosPath,
                             action: model.choosePhotosFolder
                         )
                     }
@@ -99,6 +105,8 @@ struct ManualImportView: View {
                             title: "Footage",
                             path: $model.videosPath,
                             validation: model.videosValidation,
+                            recentChoices: model.recentVideosPathSuggestions,
+                            selectRecentPath: model.selectVideosPath,
                             action: model.chooseVideosFolder
                         )
                     }
@@ -108,12 +116,7 @@ struct ManualImportView: View {
                     Text("Shoot")
                         .foregroundStyle(.secondary)
                         .frame(width: 92, alignment: .leading)
-                    TextField("Shoot name", text: $model.location)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 260)
-                        .onSubmit {
-                            model.savePreferences()
-                        }
+                    ShootNameField(name: $model.location, width: 260)
                 }
             }
             .gridColumnAlignment(.leading)
@@ -192,22 +195,43 @@ private struct SourceField: View {
                     .frame(minWidth: 180, maxWidth: 420)
 
                 Menu {
-                    if model.availableSourceVolumes.isEmpty {
-                        Text("No cards detected")
-                    } else {
-                        ForEach(model.availableSourceVolumes) { volume in
-                            Button {
-                                model.selectSourceVolume(volume)
-                            } label: {
-                                Text(volume.menuTitle)
+                    if model.availableSourceVolumes.isEmpty && model.recentSourcePathSuggestions.isEmpty {
+                        Text("No cards or recent sources")
+                    }
+
+                    if !model.availableSourceVolumes.isEmpty {
+                        Section("Mounted Cards") {
+                            ForEach(model.availableSourceVolumes) { volume in
+                                Button {
+                                    model.selectSourceVolume(volume)
+                                } label: {
+                                    Text(volume.menuTitle)
+                                }
+                            }
+                        }
+                    }
+
+                    if !model.recentSourcePathSuggestions.isEmpty {
+                        Section("Recent Sources") {
+                            ForEach(model.recentSourcePathSuggestions) { suggestion in
+                                Button {
+                                    model.selectSourcePath(suggestion.path)
+                                } label: {
+                                    Label(
+                                        suggestion.menuTitle,
+                                        systemImage: suggestion.isAvailable ? "externaldrive" : "exclamationmark.triangle"
+                                    )
+                                }
+                                .disabled(!suggestion.isAvailable)
+                                .help(suggestion.path)
                             }
                         }
                     }
                 } label: {
                     Image(systemName: "sdcard")
                 }
-                .help("Select mounted card")
-                .accessibilityLabel("Select mounted card")
+                .help("Select source")
+                .accessibilityLabel("Select source")
 
                 Button {
                     model.refreshAvailableSourceVolumes()
@@ -275,6 +299,8 @@ private struct FolderField: View {
     let title: String
     @Binding var path: String
     let validation: PathValidationResult
+    let recentChoices: [RecentPathSuggestion]
+    let selectRecentPath: (String) -> Void
     let action: () -> Void
 
     var body: some View {
@@ -284,6 +310,30 @@ private struct FolderField: View {
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1)
                     .frame(minWidth: 180, maxWidth: 420)
+
+                Menu {
+                    if recentChoices.isEmpty {
+                        Text("No recent folders")
+                    } else {
+                        ForEach(recentChoices) { suggestion in
+                            Button {
+                                selectRecentPath(suggestion.path)
+                            } label: {
+                                Label(
+                                    suggestion.menuTitle,
+                                    systemImage: suggestion.isAvailable ? "folder" : "exclamationmark.triangle"
+                                )
+                            }
+                            .disabled(!suggestion.isAvailable)
+                            .help(suggestion.path)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+                .help("Choose recent \(title.lowercased()) folder")
+                .accessibilityLabel("Choose recent \(title.lowercased()) folder")
+
                 Button {
                     action()
                 } label: {

@@ -91,9 +91,9 @@ struct HistoryDetailView: View {
                 Label("Export Summary", systemImage: "square.and.arrow.up")
             }
             Button {
-                model.revealReport(for: job)
+                model.viewReport(for: job)
             } label: {
-                Label("Reveal Report", systemImage: "doc.text.magnifyingglass")
+                Label("View Report", systemImage: "doc.text.magnifyingglass")
             }
             .disabled(job.summaryMarkdownPath == nil && job.summaryJSONPath == nil)
 

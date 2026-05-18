@@ -1,3 +1,4 @@
+import SDImportCore
 import Sparkle
 import SwiftUI
 
@@ -37,12 +38,16 @@ struct RootView: View {
             OnboardingFlowView()
                 .environmentObject(model)
         }
-        .sheet(item: $model.pendingMountedVolume) { volume in
+        .sheet(item: pendingMountedVolumeBinding) { volume in
             MountPromptView(
                 volume: volume,
                 continueAction: model.acceptMountedVolumePrompt,
                 skipAction: model.skipMountedVolumePrompt
             )
+        }
+        .sheet(item: $model.reportPresentation) { presentation in
+            ImportReportView(presentation: presentation)
+                .environmentObject(model)
         }
     }
 
@@ -53,6 +58,14 @@ struct RootView: View {
             if !isPresented, !model.hasCompletedOnboarding {
                 model.completeOnboarding()
             }
+        }
+    }
+
+    private var pendingMountedVolumeBinding: Binding<MountedVolume?> {
+        Binding {
+            model.reportPresentation == nil ? model.pendingMountedVolume : nil
+        } set: { volume in
+            model.pendingMountedVolume = volume
         }
     }
 }

@@ -115,10 +115,10 @@ struct ImportResultView: View {
 
             Button {
                 if let job {
-                    model.revealReport(for: job)
+                    model.viewReport(for: job)
                 }
             } label: {
-                Label("Open Report", systemImage: "doc.text.magnifyingglass")
+                Label("View Report", systemImage: "doc.text.magnifyingglass")
             }
             .disabled(job?.summaryMarkdownPath == nil && job?.summaryJSONPath == nil)
 

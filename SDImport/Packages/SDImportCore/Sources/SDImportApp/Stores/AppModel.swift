@@ -54,6 +54,61 @@ enum ImportPreviewMode: Hashable {
     case custom
 }
 
+struct RecentPathSuggestion: Identifiable {
+    var id: String { choice.path }
+    let choice: RecentPathChoice
+    let validation: PathValidationResult
+
+    var path: String { choice.path }
+    var displayName: String { choice.displayName }
+    var isAvailable: Bool { validation.isUsable }
+
+    var menuTitle: String {
+        let usage = choice.useCount == 1 ? "used once" : "used \(choice.useCount) times"
+        return "\(displayName) · \(parentDisplayPath) · \(validation.message) · \(usage)"
+    }
+
+    private var parentDisplayPath: String {
+        let parentPath = URL(fileURLWithPath: choice.path, isDirectory: true)
+            .deletingLastPathComponent()
+            .path
+        guard !parentPath.isEmpty, parentPath != "/" else {
+            return choice.path
+        }
+
+        return Self.shortPath(parentPath)
+    }
+
+    private static func shortPath(_ path: String) -> String {
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        if path == homePath {
+            return "~"
+        }
+        if path.hasPrefix(homePath + "/") {
+            let relativePath = String(path.dropFirst(homePath.count + 1))
+            let components = relativePath.split(separator: "/")
+            let suffix = components.suffix(2).joined(separator: "/")
+            return suffix.isEmpty ? "~" : "~/\(suffix)"
+        }
+
+        let components = path.split(separator: "/")
+        guard components.count > 2 else {
+            return path
+        }
+
+        return ".../" + components.suffix(2).joined(separator: "/")
+    }
+}
+
+struct ImportReportPresentation: Identifiable, Hashable {
+    var id: String { job.id }
+    let job: ImportJob
+    let report: ImportReport?
+    let files: [JobFileRecord]
+    let markdownText: String?
+    let loadError: String?
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var selection: SidebarItem = .import
@@ -63,6 +118,7 @@ final class AppModel: ObservableObject {
     @Published var location: String {
         didSet {
             syncPreviewSessionLabels(from: oldValue, to: location)
+            rebuildRecentShootNameSuggestions()
         }
     }
     @Published var historyRetention: RetentionPolicy
@@ -89,16 +145,25 @@ final class AppModel: ObservableObject {
     @Published var currentSummary: ScanSummary?
     @Published var currentResult: ImportResult?
     @Published var importProgress: ImportProgress?
-    @Published var jobs: [ImportJob] = []
+    @Published var jobs: [ImportJob] = [] {
+        didSet {
+            rebuildRecentImportSuggestions()
+        }
+    }
     @Published var selectedJobID: String?
     @Published var selectedJobFiles: [JobFileRecord] = []
     @Published var isHistoryLoading = false
     @Published var isHistoryDetailLoading = false
     @Published var availableSourceVolumes: [MountedVolume] = []
+    @Published private(set) var recentShootNameSuggestions: [RecentShootNameChoice] = []
+    @Published private(set) var recentSourcePathSuggestions: [RecentPathSuggestion] = []
+    @Published private(set) var recentPhotosPathSuggestions: [RecentPathSuggestion] = []
+    @Published private(set) var recentVideosPathSuggestions: [RecentPathSuggestion] = []
     @Published var sourceValidation: PathValidationResult = .empty(purpose: .source)
     @Published var photosValidation: PathValidationResult = .empty(purpose: .destination)
     @Published var videosValidation: PathValidationResult = .empty(purpose: .destination)
     @Published var pendingMountedVolume: MountedVolume?
+    @Published var reportPresentation: ImportReportPresentation?
     @Published var statusMessage = ""
     @Published var isWorking = false
     @Published var setupError: String?
@@ -114,6 +179,7 @@ final class AppModel: ObservableObject {
     private var importTask: Task<Void, Never>?
     private var historyRefreshTask: Task<Void, Never>?
     private var historyDetailTask: Task<Void, Never>?
+    private var reportTask: Task<Void, Never>?
     private var mountObserver: MountEventObserver?
     private var workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
     private var workflowProfileWasManuallyChosenForCurrentJob = false
@@ -253,11 +319,28 @@ final class AppModel: ObservableObject {
 
     func refreshAvailableSourceVolumes() {
         availableSourceVolumes = VolumeDetector().mountedVolumes()
+        rebuildRecentImportSuggestions()
     }
 
     func selectSourceVolume(_ volume: MountedVolume) {
-        cardPath = volume.mountURL.path
+        selectSourcePath(volume.mountURL.path)
+    }
+
+    func selectSourcePath(_ path: String) {
+        cardPath = path
         sourcePathDidChange()
+        savePreferences()
+    }
+
+    func selectPhotosPath(_ path: String) {
+        photosPath = path
+        destinationPathDidChange()
+        savePreferences()
+    }
+
+    func selectVideosPath(_ path: String) {
+        videosPath = path
+        destinationPathDidChange()
         savePreferences()
     }
 
@@ -305,6 +388,7 @@ final class AppModel: ObservableObject {
         sourceValidation = validator.validate(path: cardPath, purpose: .source)
         photosValidation = validator.validate(path: photosPath, purpose: .destination)
         videosValidation = validator.validate(path: videosPath, purpose: .destination)
+        rebuildRecentImportSuggestions()
     }
 
     var canScan: Bool {
@@ -1114,9 +1198,91 @@ final class AppModel: ObservableObject {
     }
 
     func revealReport(for job: ImportJob) {
-        if let path = job.summaryMarkdownPath ?? job.summaryJSONPath {
+        if let path = existingReportPath(for: job) {
             reveal(path: path)
+        } else {
+            statusMessage = "No report file found"
         }
+    }
+
+    func viewReport(for job: ImportJob) {
+        guard let databaseURL else {
+            reportPresentation = ImportReportPresentation(
+                job: job,
+                report: nil,
+                files: selectedJobID == job.id ? selectedJobFiles : [],
+                markdownText: nil,
+                loadError: "Database is not ready"
+            )
+            return
+        }
+
+        reportTask?.cancel()
+        let cachedFiles = selectedJobID == job.id ? selectedJobFiles : []
+        let jsonPath = job.summaryJSONPath
+        let markdownPath = job.summaryMarkdownPath
+        statusMessage = "Loading report..."
+
+        reportTask = Task.detached(priority: .userInitiated) {
+            let reportLoader = ImportReportLoader()
+            var report: ImportReport?
+            var markdownText: String?
+            var files: [JobFileRecord] = []
+            var loadErrors: [String] = []
+
+            if let jsonPath {
+                do {
+                    report = try reportLoader.loadJSON(from: URL(fileURLWithPath: jsonPath))
+                } catch {
+                    loadErrors.append("JSON report: \(error)")
+                }
+            }
+
+            if let markdownPath {
+                do {
+                    markdownText = try reportLoader.loadMarkdown(from: URL(fileURLWithPath: markdownPath))
+                } catch {
+                    loadErrors.append("Markdown report: \(error)")
+                }
+            }
+
+            do {
+                let repositories = try Self.makeRepositories(databaseURL: databaseURL)
+                files = try repositories.jobRepository.fetchJobFiles(jobID: job.id)
+            } catch {
+                loadErrors.append("Job files: \(error)")
+                files = cachedFiles.isEmpty ? (report?.files ?? []) : cachedFiles
+            }
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            await MainActor.run {
+                self.reportPresentation = ImportReportPresentation(
+                    job: job,
+                    report: report,
+                    files: files,
+                    markdownText: markdownText,
+                    loadError: loadErrors.isEmpty ? nil : loadErrors.joined(separator: "\n")
+                )
+                self.statusMessage = loadErrors.isEmpty ? "Report ready" : "Report opened with warnings"
+                self.reportTask = nil
+            }
+        }
+    }
+
+    func openReportFile(for job: ImportJob) {
+        guard let path = existingReportPath(for: job) else {
+            statusMessage = "No report file found"
+            return
+        }
+
+        NSWorkspace.shared.open(URL(fileURLWithPath: expanded(path)))
+    }
+
+    func reportFileExists(for job: ImportJob) -> Bool {
+        existingReportPath(for: job) != nil
     }
 
     func reveal(path: String) {
@@ -1262,6 +1428,62 @@ final class AppModel: ObservableObject {
 
     private func expanded(_ path: String) -> String {
         (path as NSString).expandingTildeInPath
+    }
+
+    private func existingReportPath(for job: ImportJob) -> String? {
+        [job.summaryMarkdownPath, job.summaryJSONPath]
+            .compactMap { $0 }
+            .first { FileManager.default.fileExists(atPath: expanded($0)) }
+    }
+
+    private func recentPathSuggestions(
+        choices: [RecentPathChoice],
+        currentPath: String,
+        purpose: PathValidationPurpose
+    ) -> [RecentPathSuggestion] {
+        let currentExpandedPath = expanded(currentPath)
+        let validator = PathValidator()
+        return choices.compactMap { choice in
+            guard choice.path != currentExpandedPath else {
+                return nil
+            }
+            return RecentPathSuggestion(
+                choice: choice,
+                validation: validator.validate(path: choice.path, purpose: purpose)
+            )
+        }
+    }
+
+    private func rebuildRecentImportSuggestions() {
+        rebuildRecentShootNameSuggestions()
+        rebuildRecentPathSuggestions()
+    }
+
+    private func rebuildRecentShootNameSuggestions() {
+        let currentName = Self.defaultSessionLabel(for: location)
+        recentShootNameSuggestions = RecentImportChoices.shootNames(from: jobs, limit: 8)
+            .filter {
+                $0.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                    != currentName.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            }
+    }
+
+    private func rebuildRecentPathSuggestions() {
+        recentSourcePathSuggestions = recentPathSuggestions(
+            choices: RecentImportChoices.sourcePaths(from: jobs, limit: 8),
+            currentPath: cardPath,
+            purpose: .source
+        )
+        recentPhotosPathSuggestions = recentPathSuggestions(
+            choices: RecentImportChoices.photoRoots(from: jobs, limit: 8),
+            currentPath: photosPath,
+            purpose: .destination
+        )
+        recentVideosPathSuggestions = recentPathSuggestions(
+            choices: RecentImportChoices.videoRoots(from: jobs, limit: 8),
+            currentPath: videosPath,
+            purpose: .destination
+        )
     }
 
     private func diagnosticsText() -> String {

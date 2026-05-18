@@ -29,7 +29,7 @@ public struct ReportWriter {
         let jsonURL = baseURL.appendingPathExtension("json")
         let markdownURL = baseURL.appendingPathExtension("md")
 
-        let payload = ReportPayload(summary: summary, files: files)
+        let payload = ImportReport(summary: summary, files: files)
         let data = try encoder.encode(payload)
         try data.write(to: jsonURL, options: .atomic)
         try markdown(summary: summary, files: files).write(to: markdownURL, atomically: true, encoding: .utf8)
@@ -93,9 +93,4 @@ public struct ReportWriter {
     private static func bytes(_ value: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
     }
-}
-
-private struct ReportPayload: Encodable {
-    let summary: ScanSummary
-    let files: [JobFileRecord]
 }

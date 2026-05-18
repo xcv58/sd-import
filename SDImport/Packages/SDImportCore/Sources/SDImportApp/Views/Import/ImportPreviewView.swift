@@ -261,9 +261,7 @@ struct ImportPreviewView: View {
                     .help(ImportPlanBuilder.dateRangeTitle(for: dates))
                     .frame(width: 184, alignment: .leading)
 
-                TextField("Shoot name", text: $model.location)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(minWidth: 180, maxWidth: 300)
+                ShootNameField(name: $model.location, width: 220, showsQuickPicks: false)
 
                 sessionMediaControls(
                     photoCount: photoCount,

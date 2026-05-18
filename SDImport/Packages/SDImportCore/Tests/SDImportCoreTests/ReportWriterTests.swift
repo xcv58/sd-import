@@ -55,5 +55,12 @@ struct ReportWriterTests {
         #expect(markdown.contains("- copied: `1`"))
         #expect(markdown.contains("## Copied Files"))
         #expect(markdown.contains("(Copied,"))
+
+        let loadedReport = try ImportReportLoader().loadJSON(from: paths.jsonURL)
+        #expect(loadedReport.summary.jobID == "job-1")
+        #expect(loadedReport.files.map(\.filename) == ["IMG_0001.JPG"])
+
+        let loadedMarkdown = try ImportReportLoader().loadMarkdown(from: paths.markdownURL)
+        #expect(loadedMarkdown.contains("# SD Import Report job-1"))
     }
 }
