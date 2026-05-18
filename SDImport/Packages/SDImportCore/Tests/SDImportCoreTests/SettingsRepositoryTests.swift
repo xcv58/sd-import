@@ -23,6 +23,9 @@ struct SettingsRepositoryTests {
             themePreference: .dark,
             workflowProfilesByVolume: [
                 "uuid:card": .photoImport
+            ],
+            hiddenRecentPaths: [
+                "/Volumes/Old Card"
             ]
         )
 
@@ -50,6 +53,7 @@ struct SettingsRepositoryTests {
         #expect(configuration.lastFolderGrouping == .byDay)
         #expect(configuration.themePreference == .system)
         #expect(configuration.workflowProfilesByVolume.isEmpty)
+        #expect(configuration.hiddenRecentPaths.isEmpty)
     }
 
     @Test("stores and resolves folder bookmarks")

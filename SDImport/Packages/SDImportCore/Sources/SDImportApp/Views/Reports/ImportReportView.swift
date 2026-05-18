@@ -18,7 +18,24 @@ struct ImportReportView: View {
     }
 
     private var filteredFiles: [JobFileRecord] {
-        files.filter(filter.includes)
+        displayedFiles.filter(filter.includes)
+    }
+
+    private var displayedFiles: [JobFileRecord] {
+        guard filter == .all else {
+            return files
+        }
+
+        return files.enumerated()
+            .sorted { lhs, rhs in
+                let lhsPriority = fileSortPriority(lhs.element)
+                let rhsPriority = fileSortPriority(rhs.element)
+                if lhsPriority != rhsPriority {
+                    return lhsPriority < rhsPriority
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
     }
 
     private var summary: ReportSummary {
@@ -43,6 +60,20 @@ struct ImportReportView: View {
             }
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .overlay(alignment: .topTrailing) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .imageScale(.medium)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.large)
+            .keyboardShortcut(.cancelAction)
+            .help("Close")
+            .accessibilityLabel("Close report")
+            .padding(18)
         }
         .frame(minWidth: 560, idealWidth: 860, minHeight: 480, idealHeight: 680)
     }
@@ -72,6 +103,7 @@ struct ImportReportView: View {
                     reportActions
                 }
             }
+            .padding(.trailing, 34)
         }
     }
 
@@ -83,25 +115,22 @@ struct ImportReportView: View {
                 Label("Copy Summary", systemImage: "doc.on.doc")
             }
 
-            Button {
-                model.openReportFile(for: job)
+            Menu {
+                Button {
+                    model.openReportFile(for: job)
+                } label: {
+                    Label("Open Markdown", systemImage: "doc.text")
+                }
+
+                Button {
+                    model.revealReport(for: job)
+                } label: {
+                    Label("Reveal in Finder", systemImage: "folder")
+                }
             } label: {
-                Label("Open Original", systemImage: "doc.text")
+                Label("Original Report", systemImage: "doc.text")
             }
             .disabled(!model.reportFileExists(for: job))
-
-            Button {
-                model.revealReport(for: job)
-            } label: {
-                Label("Reveal File", systemImage: "folder")
-            }
-            .disabled(!model.reportFileExists(for: job))
-
-            Button {
-                dismiss()
-            } label: {
-                Label("Close", systemImage: "xmark")
-            }
         }
     }
 
@@ -218,6 +247,19 @@ struct ImportReportView: View {
             return files.count == 1 ? "1 file" : "\(files.count) files"
         }
         return "\(filteredFiles.count) of \(files.count)"
+    }
+
+    private func fileSortPriority(_ file: JobFileRecord) -> Int {
+        if file.copyStatus == .failed {
+            return 0
+        }
+        if file.decision == .conflict {
+            return 1
+        }
+        if file.copyStatus == .copied {
+            return 2
+        }
+        return 3
     }
 
     private func markdownPreview(_ markdownText: String) -> some View {

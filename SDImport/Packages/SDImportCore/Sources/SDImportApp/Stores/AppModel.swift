@@ -182,6 +182,7 @@ final class AppModel: ObservableObject {
     private var reportTask: Task<Void, Never>?
     private var mountObserver: MountEventObserver?
     private var workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
+    private var hiddenRecentPaths: Set<String> = []
     private var workflowProfileWasManuallyChosenForCurrentJob = false
     private var knownImportedPreviewFileIDs: Set<Int64> = []
     private var currentPreviewFiles: [JobFileRecord] = [] {
@@ -295,6 +296,7 @@ final class AppModel: ObservableObject {
 
     func chooseCardFolder() {
         if let path = FilePanelPresenter.chooseDirectory(title: "Choose SD Card or Source Folder", initialPath: cardPath) {
+            unhideRecentPath(path)
             cardPath = path
             sourcePathDidChange()
             savePreferences()
@@ -303,6 +305,7 @@ final class AppModel: ObservableObject {
 
     func choosePhotosFolder() {
         if let path = FilePanelPresenter.chooseDirectory(title: "Choose Photo Destination", initialPath: photosPath) {
+            unhideRecentPath(path)
             photosPath = path
             destinationPathDidChange()
             savePreferences()
@@ -311,6 +314,7 @@ final class AppModel: ObservableObject {
 
     func chooseVideosFolder() {
         if let path = FilePanelPresenter.chooseDirectory(title: "Choose Video Destination", initialPath: videosPath) {
+            unhideRecentPath(path)
             videosPath = path
             destinationPathDidChange()
             savePreferences()
@@ -327,21 +331,51 @@ final class AppModel: ObservableObject {
     }
 
     func selectSourcePath(_ path: String) {
+        unhideRecentPath(path)
         cardPath = path
         sourcePathDidChange()
         savePreferences()
     }
 
     func selectPhotosPath(_ path: String) {
+        unhideRecentPath(path)
         photosPath = path
         destinationPathDidChange()
         savePreferences()
     }
 
     func selectVideosPath(_ path: String) {
+        unhideRecentPath(path)
         videosPath = path
         destinationPathDidChange()
         savePreferences()
+    }
+
+    var hasForgottenRecentPaths: Bool {
+        !hiddenRecentPaths.isEmpty
+    }
+
+    func forgetRecentPath(_ path: String) {
+        let normalizedPath = normalizedRecentPath(path)
+        guard !normalizedPath.isEmpty else {
+            return
+        }
+
+        hiddenRecentPaths.insert(normalizedPath)
+        rebuildRecentPathSuggestions()
+        savePreferences()
+        statusMessage = "Recent folder forgotten"
+    }
+
+    func restoreForgottenRecentPaths() {
+        guard !hiddenRecentPaths.isEmpty else {
+            return
+        }
+
+        hiddenRecentPaths.removeAll()
+        rebuildRecentPathSuggestions()
+        savePreferences()
+        statusMessage = "Recent folders restored"
     }
 
     func selectPanel(_ item: SidebarItem) {
@@ -1439,7 +1473,8 @@ final class AppModel: ObservableObject {
     private func recentPathSuggestions(
         choices: [RecentPathChoice],
         currentPath: String,
-        purpose: PathValidationPurpose
+        purpose: PathValidationPurpose,
+        visibleLimit: Int = 8
     ) -> [RecentPathSuggestion] {
         let currentExpandedPath = expanded(currentPath)
         let validator = PathValidator()
@@ -1447,11 +1482,28 @@ final class AppModel: ObservableObject {
             guard choice.path != currentExpandedPath else {
                 return nil
             }
+            guard !hiddenRecentPaths.contains(normalizedRecentPath(choice.path)) else {
+                return nil
+            }
             return RecentPathSuggestion(
                 choice: choice,
                 validation: validator.validate(path: choice.path, purpose: purpose)
             )
         }
+        .prefix(visibleLimit)
+        .map { $0 }
+    }
+
+    private func normalizedRecentPath(_ path: String) -> String {
+        expanded(path.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func unhideRecentPath(_ path: String) {
+        let normalizedPath = normalizedRecentPath(path)
+        guard hiddenRecentPaths.remove(normalizedPath) != nil else {
+            return
+        }
+        rebuildRecentPathSuggestions()
     }
 
     private func rebuildRecentImportSuggestions() {
@@ -1470,17 +1522,17 @@ final class AppModel: ObservableObject {
 
     private func rebuildRecentPathSuggestions() {
         recentSourcePathSuggestions = recentPathSuggestions(
-            choices: RecentImportChoices.sourcePaths(from: jobs, limit: 8),
+            choices: RecentImportChoices.sourcePaths(from: jobs, limit: 32),
             currentPath: cardPath,
             purpose: .source
         )
         recentPhotosPathSuggestions = recentPathSuggestions(
-            choices: RecentImportChoices.photoRoots(from: jobs, limit: 8),
+            choices: RecentImportChoices.photoRoots(from: jobs, limit: 32),
             currentPath: photosPath,
             purpose: .destination
         )
         recentVideosPathSuggestions = recentPathSuggestions(
-            choices: RecentImportChoices.videoRoots(from: jobs, limit: 8),
+            choices: RecentImportChoices.videoRoots(from: jobs, limit: 32),
             currentPath: videosPath,
             purpose: .destination
         )
@@ -1748,6 +1800,7 @@ final class AppModel: ObservableObject {
         folderGrouping = configuration.lastFolderGrouping
         themePreference = configuration.themePreference
         workflowProfilesByVolume = configuration.workflowProfilesByVolume
+        hiddenRecentPaths = Set(configuration.hiddenRecentPaths.map(normalizedRecentPath).filter { !$0.isEmpty })
         importMediaSelection = workflowProfile.mediaSelection
         organizationPreset = workflowProfile.organizationPreset
 
@@ -1768,7 +1821,8 @@ final class AppModel: ObservableObject {
             lastWorkflowProfile: workflowProfile,
             lastFolderGrouping: folderGrouping,
             themePreference: themePreference,
-            workflowProfilesByVolume: workflowProfilesByVolume
+            workflowProfilesByVolume: workflowProfilesByVolume,
+            hiddenRecentPaths: hiddenRecentPaths.sorted()
         )
     }
 

@@ -185,6 +185,7 @@ struct ManualImportView: View {
 
 private struct SourceField: View {
     @EnvironmentObject private var model: AppModel
+    @State private var isManagingRecentSources = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -227,11 +228,36 @@ private struct SourceField: View {
                             }
                         }
                     }
+
+                    Divider()
+
+                    Button {
+                        isManagingRecentSources = true
+                    } label: {
+                        Label("Manage Recent Sources...", systemImage: "slider.horizontal.3")
+                    }
+                    .disabled(model.recentSourcePathSuggestions.isEmpty)
+
+                    if model.hasForgottenRecentPaths {
+                        Button {
+                            model.restoreForgottenRecentPaths()
+                        } label: {
+                            Label("Show Forgotten Folders Again", systemImage: "arrow.uturn.backward")
+                        }
+                    }
                 } label: {
                     Image(systemName: "sdcard")
                 }
                 .help("Select source")
                 .accessibilityLabel("Select source")
+                .sheet(isPresented: $isManagingRecentSources) {
+                    RecentPathManagementSheet(
+                        title: "Recent Sources",
+                        choices: model.recentSourcePathSuggestions,
+                        selectRecentPath: model.selectSourcePath,
+                        forgetRecentPath: model.forgetRecentPath
+                    )
+                }
 
                 Button {
                     model.refreshAvailableSourceVolumes()
@@ -296,6 +322,9 @@ private extension MountedVolume {
 }
 
 private struct FolderField: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var isManagingRecentFolders = false
+
     let title: String
     @Binding var path: String
     let validation: PathValidationResult
@@ -328,11 +357,36 @@ private struct FolderField: View {
                             .help(suggestion.path)
                         }
                     }
+
+                    Divider()
+
+                    Button {
+                        isManagingRecentFolders = true
+                    } label: {
+                        Label("Manage Recent Folders...", systemImage: "slider.horizontal.3")
+                    }
+                    .disabled(recentChoices.isEmpty)
+
+                    if model.hasForgottenRecentPaths {
+                        Button {
+                            model.restoreForgottenRecentPaths()
+                        } label: {
+                            Label("Show Forgotten Folders Again", systemImage: "arrow.uturn.backward")
+                        }
+                    }
                 } label: {
                     Image(systemName: "clock.arrow.circlepath")
                 }
                 .help("Choose recent \(title.lowercased()) folder")
                 .accessibilityLabel("Choose recent \(title.lowercased()) folder")
+                .sheet(isPresented: $isManagingRecentFolders) {
+                    RecentPathManagementSheet(
+                        title: "Recent \(title) Folders",
+                        choices: recentChoices,
+                        selectRecentPath: selectRecentPath,
+                        forgetRecentPath: model.forgetRecentPath
+                    )
+                }
 
                 Button {
                     action()
@@ -346,6 +400,121 @@ private struct FolderField: View {
             ValidationStatusView(result: validation)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct RecentPathManagementSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let title: String
+    let choices: [RecentPathSuggestion]
+    let selectRecentPath: (String) -> Void
+    let forgetRecentPath: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+
+                Spacer()
+
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+
+            if choices.isEmpty {
+                ContentUnavailableView("No Recent Folders", systemImage: "clock.arrow.circlepath")
+                    .frame(maxWidth: .infinity, minHeight: 180)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(choices) { suggestion in
+                            RecentPathManagementRow(
+                                suggestion: suggestion,
+                                selectRecentPath: {
+                                    selectRecentPath(suggestion.path)
+                                    dismiss()
+                                },
+                                forgetRecentPath: {
+                                    forgetRecentPath(suggestion.path)
+                                }
+                            )
+
+                            if suggestion.id != choices.last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                }
+                .frame(minHeight: 180, idealHeight: 260, maxHeight: 320)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(.quaternary, lineWidth: 1)
+                }
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 560, idealWidth: 640, minHeight: 260)
+    }
+}
+
+private struct RecentPathManagementRow: View {
+    let suggestion: RecentPathSuggestion
+    let selectRecentPath: () -> Void
+    let forgetRecentPath: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: suggestion.isAvailable ? "folder" : "exclamationmark.triangle")
+                .foregroundStyle(suggestion.isAvailable ? Color.secondary : Color.orange)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(suggestion.displayName)
+                    .lineLimit(1)
+
+                Text(suggestion.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+
+                Text(detailText)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 12)
+
+            Button {
+                selectRecentPath()
+            } label: {
+                Label("Use", systemImage: "checkmark")
+            }
+            .disabled(!suggestion.isAvailable)
+            .buttonStyle(.borderless)
+
+            Button(role: .destructive) {
+                forgetRecentPath()
+            } label: {
+                Label("Forget", systemImage: "trash")
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var detailText: String {
+        let usage = suggestion.choice.useCount == 1 ? "used once" : "used \(suggestion.choice.useCount) times"
+        return "\(suggestion.validation.message) · \(usage)"
     }
 }
 

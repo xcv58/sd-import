@@ -14,6 +14,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
     public var lastFolderGrouping: ImportFolderGrouping
     public var themePreference: AppThemePreference
     public var workflowProfilesByVolume: [String: ImportWorkflowProfile]
+    public var hiddenRecentPaths: [String]
 
     public init(
         sourcePath: String,
@@ -26,7 +27,8 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         lastWorkflowProfile: ImportWorkflowProfile = .mixedShootSession,
         lastFolderGrouping: ImportFolderGrouping = .byDay,
         themePreference: AppThemePreference = .system,
-        workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
+        workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:],
+        hiddenRecentPaths: [String] = []
     ) {
         self.sourcePath = sourcePath
         self.photosPath = photosPath
@@ -39,6 +41,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         self.lastFolderGrouping = lastFolderGrouping
         self.themePreference = themePreference
         self.workflowProfilesByVolume = workflowProfilesByVolume
+        self.hiddenRecentPaths = hiddenRecentPaths
     }
 
     public static func defaultConfiguration(homeDirectory: URL) -> AppConfiguration {
@@ -62,6 +65,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         case lastFolderGrouping
         case themePreference
         case workflowProfilesByVolume
+        case hiddenRecentPaths
     }
 
     public init(from decoder: Decoder) throws {
@@ -89,5 +93,6 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
             [String: ImportWorkflowProfile].self,
             forKey: .workflowProfilesByVolume
         ) ?? [:]
+        hiddenRecentPaths = try container.decodeIfPresent([String].self, forKey: .hiddenRecentPaths) ?? []
     }
 }
