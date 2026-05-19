@@ -5,7 +5,6 @@ struct ImportReportView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var filter: ReportFileFilter = .all
-    @State private var isShowingMarkdown = false
 
     let presentation: ImportReportPresentation
 
@@ -49,10 +48,6 @@ struct ImportReportView: View {
                 summaryGrid
                 pathDetails
                 fileSection
-
-                if isShowingMarkdown, let markdownText = presentation.markdownText {
-                    markdownPreview(markdownText)
-                }
 
                 if let loadError = presentation.loadError {
                     loadWarning(loadError)
@@ -224,14 +219,6 @@ struct ImportReportView: View {
 
     private var fileControls: some View {
         HStack(spacing: 8) {
-            if presentation.markdownText != nil {
-                Toggle(isOn: $isShowingMarkdown) {
-                    Label("Markdown", systemImage: "doc.richtext")
-                }
-                .toggleStyle(.button)
-                .controlSize(.small)
-            }
-
             Picker("File Filter", selection: $filter) {
                 ForEach(ReportFileFilter.allCases) { filter in
                     Text(filter.title).tag(filter)
@@ -260,26 +247,6 @@ struct ImportReportView: View {
             return 2
         }
         return 3
-    }
-
-    private func markdownPreview(_ markdownText: String) -> some View {
-        ScrollView {
-            Text(markdownAttributedString(markdownText))
-                .font(.caption)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
-        }
-        .frame(maxHeight: 160)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(.quaternary, lineWidth: 1)
-        }
-    }
-
-    private func markdownAttributedString(_ markdownText: String) -> AttributedString {
-        (try? AttributedString(markdown: markdownText)) ?? AttributedString(markdownText)
     }
 
     private func loadWarning(_ message: String) -> some View {

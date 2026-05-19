@@ -105,7 +105,6 @@ struct ImportReportPresentation: Identifiable, Hashable {
     let job: ImportJob
     let report: ImportReport?
     let files: [JobFileRecord]
-    let markdownText: String?
     let loadError: String?
 }
 
@@ -1245,7 +1244,6 @@ final class AppModel: ObservableObject {
                 job: job,
                 report: nil,
                 files: selectedJobID == job.id ? selectedJobFiles : [],
-                markdownText: nil,
                 loadError: "Database is not ready"
             )
             return
@@ -1254,13 +1252,11 @@ final class AppModel: ObservableObject {
         reportTask?.cancel()
         let cachedFiles = selectedJobID == job.id ? selectedJobFiles : []
         let jsonPath = job.summaryJSONPath
-        let markdownPath = job.summaryMarkdownPath
         statusMessage = "Loading report..."
 
         reportTask = Task.detached(priority: .userInitiated) {
             let reportLoader = ImportReportLoader()
             var report: ImportReport?
-            var markdownText: String?
             var files: [JobFileRecord] = []
             var loadErrors: [String] = []
 
@@ -1269,14 +1265,6 @@ final class AppModel: ObservableObject {
                     report = try reportLoader.loadJSON(from: URL(fileURLWithPath: jsonPath))
                 } catch {
                     loadErrors.append("JSON report: \(error)")
-                }
-            }
-
-            if let markdownPath {
-                do {
-                    markdownText = try reportLoader.loadMarkdown(from: URL(fileURLWithPath: markdownPath))
-                } catch {
-                    loadErrors.append("Markdown report: \(error)")
                 }
             }
 
@@ -1297,7 +1285,6 @@ final class AppModel: ObservableObject {
                     job: job,
                     report: report,
                     files: files,
-                    markdownText: markdownText,
                     loadError: loadErrors.isEmpty ? nil : loadErrors.joined(separator: "\n")
                 )
                 self.statusMessage = loadErrors.isEmpty ? "Report ready" : "Report opened with warnings"
