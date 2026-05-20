@@ -4,6 +4,7 @@ import SwiftUI
 struct ImportPreviewView: View {
     @EnvironmentObject private var model: AppModel
     @State private var showsExcludedFiles = false
+    @State private var fileFilter: ImportPreviewFileFilter = .all
 
     var body: some View {
         let rows = model.previewRows
@@ -447,37 +448,119 @@ struct ImportPreviewView: View {
     }
 
     private func fileList(rows: [ImportPreviewRow], totals: ImportPreviewTotals) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let displayedRows = sortedPreviewRows(rows.filter(fileFilter.includes))
+
+        return VStack(alignment: .leading, spacing: 8) {
             Divider()
-            HStack {
-                Text("Files")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Spacer()
-                if totals.skippedFiles > 0 {
-                    Text("\(totals.skippedFiles) skipped")
-                        .foregroundStyle(.secondary)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    fileListHeading(displayedCount: displayedRows.count, totalCount: rows.count, totals: totals)
+                    Spacer()
+                    fileFilterPicker
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    fileListHeading(displayedCount: displayedRows.count, totalCount: rows.count, totals: totals)
+                    fileFilterPicker
                 }
             }
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
                 GridRow {
-                    Text("Status").font(.caption).foregroundStyle(.secondary).frame(width: 78, alignment: .leading)
-                    Text("File").font(.caption).foregroundStyle(.secondary).frame(width: 150, alignment: .leading)
-                    Text("Kind").font(.caption).foregroundStyle(.secondary).frame(width: 58, alignment: .leading)
+                    Text("Status").font(.caption).foregroundStyle(.secondary).frame(width: 104, alignment: .leading)
+                    Text("File").font(.caption).foregroundStyle(.secondary).frame(width: 170, alignment: .leading)
+                    Text("Kind").font(.caption).foregroundStyle(.secondary).frame(width: 62, alignment: .leading)
                     Text("Destination").font(.caption).foregroundStyle(.secondary)
                 }
             }
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(rows) { row in
-                        ImportPreviewRowView(row: row)
+            if displayedRows.isEmpty {
+                ContentUnavailableView("No Matching Files", systemImage: "line.3.horizontal.decrease.circle")
+                    .frame(maxWidth: .infinity, minHeight: 120)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(displayedRows) { row in
+                            ImportPreviewRowView(row: row)
+                        }
                     }
+                    .padding(.vertical, 2)
                 }
-                .padding(.vertical, 2)
+                .frame(maxHeight: 280)
             }
-            .frame(maxHeight: 280)
         }
+    }
+
+    private func fileListHeading(
+        displayedCount: Int,
+        totalCount: Int,
+        totals: ImportPreviewTotals
+    ) -> some View {
+        HStack(spacing: 8) {
+            Text("Files")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+
+            Text(fileListCountText(displayedCount: displayedCount, totalCount: totalCount, totals: totals))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var fileFilterPicker: some View {
+        Picker("File Filter", selection: $fileFilter) {
+            ForEach(ImportPreviewFileFilter.allCases) { filter in
+                Text(filter.title).tag(filter)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(minWidth: 340, idealWidth: 460, maxWidth: 460)
+    }
+
+    private func fileListCountText(
+        displayedCount: Int,
+        totalCount: Int,
+        totals: ImportPreviewTotals
+    ) -> String {
+        if fileFilter == .all {
+            if totals.skippedFiles > 0 {
+                return "\(totals.copyFiles) to copy · \(totals.skippedFiles) skipped"
+            }
+            return totalCount == 1 ? "1 file" : "\(totalCount) files"
+        }
+
+        return "\(displayedCount) of \(totalCount)"
+    }
+
+    private func sortedPreviewRows(_ rows: [ImportPreviewRow]) -> [ImportPreviewRow] {
+        rows.enumerated()
+            .sorted { lhs, rhs in
+                let lhsPriority = previewSortPriority(lhs.element)
+                let rhsPriority = previewSortPriority(rhs.element)
+                if lhsPriority != rhsPriority {
+                    return lhsPriority < rhsPriority
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
+    private func previewSortPriority(_ row: ImportPreviewRow) -> Int {
+        if row.status == "Rename" || row.status == "No destination" || row.status == "Not ready" {
+            return 0
+        }
+        if row.willCopy {
+            return 1
+        }
+        if row.status == "Known" || row.status == "Already exists" || row.status == "Copied" {
+            return 2
+        }
+        if row.status == "Unsupported" || row.mediaKind == .unsupported {
+            return 3
+        }
+        if row.status == "Excluded" {
+            return 4
+        }
+        return 5
     }
 
     private var customModeSummary: String {
@@ -657,6 +740,46 @@ private struct ImportPreviewSkipBreakdown: Hashable {
     let sidecarFiles: Int
 }
 
+private enum ImportPreviewFileFilter: String, CaseIterable, Identifiable {
+    case all
+    case willCopy
+    case skipped
+    case unsupported
+    case conflicts
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "All"
+        case .willCopy:
+            return "Will Copy"
+        case .skipped:
+            return "Skipped"
+        case .unsupported:
+            return "Unsupported"
+        case .conflicts:
+            return "Conflicts"
+        }
+    }
+
+    func includes(_ row: ImportPreviewRow) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .willCopy:
+            return row.willCopy
+        case .skipped:
+            return !row.willCopy && row.status != "Unsupported" && row.mediaKind != .unsupported
+        case .unsupported:
+            return !row.willCopy && (row.status == "Unsupported" || row.mediaKind == .unsupported)
+        case .conflicts:
+            return row.status == "Rename"
+        }
+    }
+}
+
 private struct DestinationSummaryRow: View {
     let destination: ImportPreviewDestination
 
@@ -706,16 +829,18 @@ private struct ImportPreviewRowView: View {
                 Label(row.status, systemImage: row.willCopy ? "arrow.down.circle" : "minus.circle")
                     .labelStyle(.titleAndIcon)
                     .foregroundStyle(row.willCopy ? .primary : .secondary)
-                    .frame(width: 78, alignment: .leading)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(width: 104, alignment: .leading)
 
                 Text(row.filename)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .frame(width: 150, alignment: .leading)
+                    .frame(width: 170, alignment: .leading)
 
                 Text(row.mediaKind.displayTitle)
                     .foregroundStyle(.secondary)
-                    .frame(width: 58, alignment: .leading)
+                    .frame(width: 62, alignment: .leading)
 
                 Text(destinationText)
                     .lineLimit(1)
