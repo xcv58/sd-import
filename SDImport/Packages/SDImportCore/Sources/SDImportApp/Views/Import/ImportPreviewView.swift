@@ -81,102 +81,7 @@ struct ImportPreviewView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if model.isCustomImportMode {
-                customControls
-            } else {
-                recommendedControls
-            }
-        }
-    }
-
-    private var recommendedControls: some View {
-        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
-            GridRow {
-                Text("Preset")
-                    .foregroundStyle(.secondary)
-                Picker("Preset", selection: workflowBinding) {
-                    ForEach(ImportWorkflowProfile.allCases) { profile in
-                        Text(profile.displayTitle).tag(profile)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-
-            GridRow {
-                Text("Folder grouping")
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 10) {
-                    Picker("Folder grouping", selection: folderGroupingBinding) {
-                        ForEach(ImportFolderGrouping.allCases) { grouping in
-                            Text(grouping.displayTitle).tag(grouping)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 260)
-
-                    Button {
-                        model.beginCustomImportMode()
-                    } label: {
-                        Label("Customize", systemImage: "slider.horizontal.3")
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-        }
-    }
-
-    private var customControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(customModeSummary, systemImage: "slider.horizontal.3")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
-                GridRow {
-                    Text("Media to import")
-                        .foregroundStyle(.secondary)
-                    Picker("Media to import", selection: customMediaSelectionBinding) {
-                        ForEach(ImportMediaSelection.allCases) { selection in
-                            Text(mediaSelectionTitle(selection))
-                                .tag(selection)
-                                .disabled(!isMediaSelectionAvailable(selection))
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                GridRow {
-                    Text("Organization")
-                        .foregroundStyle(.secondary)
-                    Picker("Organization", selection: customOrganizationBinding) {
-                        ForEach(ImportOrganizationPreset.allCases) { preset in
-                            Text(preset.displayTitle).tag(preset)
-                        }
-                    }
-                    .frame(width: 260)
-                }
-
-                GridRow {
-                    Text("Folder grouping")
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: 10) {
-                        Picker("Folder grouping", selection: folderGroupingBinding) {
-                            ForEach(ImportFolderGrouping.allCases) { grouping in
-                                Text(grouping.displayTitle).tag(grouping)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 260)
-
-                        Button {
-                            model.resetToRecommendedImportMode()
-                        } label: {
-                            Label("Reset to Preset", systemImage: "arrow.uturn.backward")
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-            }
+            importOptionControls
 
             if let warning = selectedMediaAvailabilityMessage {
                 Label(warning, systemImage: "info.circle")
@@ -186,27 +91,61 @@ struct ImportPreviewView: View {
         }
     }
 
-    private var workflowBinding: Binding<ImportWorkflowProfile> {
-        Binding {
-            model.workflowProfile
-        } set: { profile in
-            model.applyWorkflowProfile(profile)
+    private var importOptionControls: some View {
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+            GridRow {
+                Text("Import")
+                    .foregroundStyle(.secondary)
+                Picker("Import", selection: mediaSelectionBinding) {
+                    ForEach(ImportMediaSelection.allCases) { selection in
+                        Text(mediaSelectionTitle(selection))
+                            .tag(selection)
+                            .disabled(!isMediaSelectionAvailable(selection))
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            GridRow {
+                Text("Destination Layout")
+                    .foregroundStyle(.secondary)
+                Picker("Destination Layout", selection: destinationLayoutBinding) {
+                    ForEach(ImportDestinationLayout.allCases) { layout in
+                        Text(layout.displayTitle)
+                            .tag(layout)
+                            .disabled(!isDestinationLayoutAvailable(layout))
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            GridRow {
+                Text("Dates")
+                    .foregroundStyle(.secondary)
+                Picker("Dates", selection: folderGroupingBinding) {
+                    ForEach(ImportFolderGrouping.allCases) { grouping in
+                        Text(grouping.displayTitle).tag(grouping)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+            }
         }
     }
 
-    private var customMediaSelectionBinding: Binding<ImportMediaSelection> {
+    private var mediaSelectionBinding: Binding<ImportMediaSelection> {
         Binding {
             model.importMediaSelection
         } set: { selection in
-            model.useCustomMediaSelection(selection)
+            model.useImportMediaSelection(selection)
         }
     }
 
-    private var customOrganizationBinding: Binding<ImportOrganizationPreset> {
+    private var destinationLayoutBinding: Binding<ImportDestinationLayout> {
         Binding {
-            model.organizationPreset
-        } set: { preset in
-            model.useCustomOrganizationPreset(preset)
+            model.destinationLayout
+        } set: { layout in
+            model.useDestinationLayout(layout)
         }
     }
 
@@ -563,11 +502,6 @@ struct ImportPreviewView: View {
         return 5
     }
 
-    private var customModeSummary: String {
-        let profile = model.customImportBaseWorkflowProfile ?? model.workflowProfile
-        return "Custom settings started from \(profile.displayTitle)"
-    }
-
     private var selectedMediaAvailabilityMessage: String? {
         guard !isMediaSelectionAvailable(model.importMediaSelection) else {
             return nil
@@ -622,6 +556,19 @@ struct ImportPreviewView: View {
         case .photosOnly:
             return mediaContent.photoCount > 0
         case .videosOnly:
+            return mediaContent.videoCount > 0
+        }
+    }
+
+    private func isDestinationLayoutAvailable(_ layout: ImportDestinationLayout) -> Bool {
+        guard let mediaContent = model.mediaContentProfile else {
+            return true
+        }
+
+        switch layout {
+        case .singleLibrary, .separateMediaFolders:
+            return mediaContent.supportedCount > 0
+        case .footageBackup:
             return mediaContent.videoCount > 0
         }
     }
@@ -866,13 +813,13 @@ private extension ImportMediaSelection {
     }
 }
 
-private extension ImportOrganizationPreset {
+private extension ImportDestinationLayout {
     var displayTitle: String {
         switch self {
-        case .classicDatedFolders:
-            return "Classic"
-        case .shootSessionsByDate:
-            return "Shoot Sessions"
+        case .singleLibrary:
+            return "One Shoot Folder"
+        case .separateMediaFolders:
+            return "Separate Folders"
         case .footageBackup:
             return "Footage Backup"
         }
@@ -886,19 +833,6 @@ private extension ImportFolderGrouping {
             return "By Day"
         case .oneShootFolder:
             return "One Shoot Folder"
-        }
-    }
-}
-
-private extension ImportWorkflowProfile {
-    var displayTitle: String {
-        switch self {
-        case .photoImport:
-            return "Photo Import"
-        case .footageBackup:
-            return "Footage Backup"
-        case .mixedShootSession:
-            return "Mixed Shoot Session"
         }
     }
 }

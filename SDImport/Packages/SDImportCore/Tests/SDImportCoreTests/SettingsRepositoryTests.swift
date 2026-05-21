@@ -19,6 +19,8 @@ struct SettingsRepositoryTests {
             autoPromptEnabled: true,
             hasCompletedOnboarding: true,
             lastWorkflowProfile: .footageBackup,
+            lastMediaSelection: .videosOnly,
+            lastDestinationLayout: .footageBackup,
             lastFolderGrouping: .oneShootFolder,
             themePreference: .dark,
             workflowProfilesByVolume: [
@@ -50,10 +52,23 @@ struct SettingsRepositoryTests {
         let configuration = try JSONDecoder().decode(AppConfiguration.self, from: Data(json.utf8))
 
         #expect(configuration.lastWorkflowProfile == .mixedShootSession)
+        #expect(configuration.lastMediaSelection == .photosAndVideos)
+        #expect(configuration.lastDestinationLayout == .singleLibrary)
         #expect(configuration.lastFolderGrouping == .byDay)
         #expect(configuration.themePreference == .system)
         #expect(configuration.workflowProfilesByVolume.isEmpty)
         #expect(configuration.hiddenRecentPaths.isEmpty)
+    }
+
+    @Test("maps legacy organization presets to destination layouts")
+    func mapsLegacyOrganizationPresetsToDestinationLayouts() {
+        #expect(ImportDestinationLayout(organizationPreset: .classicDatedFolders) == .separateMediaFolders)
+        #expect(ImportDestinationLayout(organizationPreset: .shootSessionsByDate) == .singleLibrary)
+        #expect(ImportDestinationLayout(organizationPreset: .footageBackup) == .footageBackup)
+
+        #expect(ImportDestinationLayout.separateMediaFolders.organizationPreset == .classicDatedFolders)
+        #expect(ImportDestinationLayout.singleLibrary.organizationPreset == .shootSessionsByDate)
+        #expect(ImportDestinationLayout.footageBackup.organizationPreset == .footageBackup)
     }
 
     @Test("stores and resolves folder bookmarks")

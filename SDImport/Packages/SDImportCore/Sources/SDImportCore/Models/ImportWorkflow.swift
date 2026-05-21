@@ -22,11 +22,42 @@ public enum ImportMediaSelection: String, Codable, CaseIterable, Identifiable, S
 }
 
 public enum ImportOrganizationPreset: String, Codable, CaseIterable, Identifiable, Sendable {
+    // TODO: Rename or remove classicDatedFolders after destination layout replaces organization presets in the UI.
     case classicDatedFolders
     case shootSessionsByDate
     case footageBackup
 
     public var id: String { rawValue }
+}
+
+public enum ImportDestinationLayout: String, Codable, CaseIterable, Identifiable, Sendable {
+    case singleLibrary
+    case separateMediaFolders
+    case footageBackup
+
+    public var id: String { rawValue }
+
+    public init(organizationPreset: ImportOrganizationPreset) {
+        switch organizationPreset {
+        case .classicDatedFolders:
+            self = .separateMediaFolders
+        case .shootSessionsByDate:
+            self = .singleLibrary
+        case .footageBackup:
+            self = .footageBackup
+        }
+    }
+
+    public var organizationPreset: ImportOrganizationPreset {
+        switch self {
+        case .singleLibrary:
+            return .shootSessionsByDate
+        case .separateMediaFolders:
+            return .classicDatedFolders
+        case .footageBackup:
+            return .footageBackup
+        }
+    }
 }
 
 public enum ImportFolderGrouping: String, Codable, CaseIterable, Identifiable, Sendable {

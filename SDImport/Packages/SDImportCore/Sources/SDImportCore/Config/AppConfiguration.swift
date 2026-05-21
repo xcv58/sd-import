@@ -11,6 +11,8 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
     public var autoPromptEnabled: Bool
     public var hasCompletedOnboarding: Bool
     public var lastWorkflowProfile: ImportWorkflowProfile
+    public var lastMediaSelection: ImportMediaSelection
+    public var lastDestinationLayout: ImportDestinationLayout
     public var lastFolderGrouping: ImportFolderGrouping
     public var themePreference: AppThemePreference
     public var workflowProfilesByVolume: [String: ImportWorkflowProfile]
@@ -25,6 +27,8 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         autoPromptEnabled: Bool = false,
         hasCompletedOnboarding: Bool = false,
         lastWorkflowProfile: ImportWorkflowProfile = .mixedShootSession,
+        lastMediaSelection: ImportMediaSelection? = nil,
+        lastDestinationLayout: ImportDestinationLayout? = nil,
         lastFolderGrouping: ImportFolderGrouping = .byDay,
         themePreference: AppThemePreference = .system,
         workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:],
@@ -38,6 +42,10 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         self.autoPromptEnabled = autoPromptEnabled
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.lastWorkflowProfile = lastWorkflowProfile
+        self.lastMediaSelection = lastMediaSelection ?? lastWorkflowProfile.mediaSelection
+        self.lastDestinationLayout = lastDestinationLayout ?? ImportDestinationLayout(
+            organizationPreset: lastWorkflowProfile.organizationPreset
+        )
         self.lastFolderGrouping = lastFolderGrouping
         self.themePreference = themePreference
         self.workflowProfilesByVolume = workflowProfilesByVolume
@@ -62,6 +70,8 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         case autoPromptEnabled
         case hasCompletedOnboarding
         case lastWorkflowProfile
+        case lastMediaSelection
+        case lastDestinationLayout
         case lastFolderGrouping
         case themePreference
         case workflowProfilesByVolume
@@ -81,6 +91,14 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
             ImportWorkflowProfile.self,
             forKey: .lastWorkflowProfile
         ) ?? .mixedShootSession
+        lastMediaSelection = try container.decodeIfPresent(
+            ImportMediaSelection.self,
+            forKey: .lastMediaSelection
+        ) ?? lastWorkflowProfile.mediaSelection
+        lastDestinationLayout = try container.decodeIfPresent(
+            ImportDestinationLayout.self,
+            forKey: .lastDestinationLayout
+        ) ?? ImportDestinationLayout(organizationPreset: lastWorkflowProfile.organizationPreset)
         lastFolderGrouping = try container.decodeIfPresent(
             ImportFolderGrouping.self,
             forKey: .lastFolderGrouping

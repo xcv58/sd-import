@@ -49,11 +49,6 @@ struct ImportPreviewSpaceRequirement: Identifiable, Hashable {
     }
 }
 
-enum ImportPreviewMode: Hashable {
-    case recommended
-    case custom
-}
-
 struct RecentPathSuggestion: Identifiable {
     var id: String { choice.path }
     let choice: RecentPathChoice
@@ -126,9 +121,8 @@ final class AppModel: ObservableObject {
     @Published var workflowProfile: ImportWorkflowProfile
     @Published var importMediaSelection: ImportMediaSelection
     @Published var organizationPreset: ImportOrganizationPreset
+    @Published var destinationLayout: ImportDestinationLayout
     @Published var folderGrouping: ImportFolderGrouping
-    @Published var importPreviewMode: ImportPreviewMode = .recommended
-    @Published private(set) var customImportBaseWorkflowProfile: ImportWorkflowProfile?
     @Published var themePreference: AppThemePreference
     @Published var mediaContentProfile: MediaContentProfile?
     @Published var photoPairSummary: PhotoPairSummary?
@@ -206,9 +200,14 @@ final class AppModel: ObservableObject {
         self.importMediaSelection = ImportMediaSelection(
             rawValue: defaults.string(forKey: DefaultsKeys.importMediaSelection) ?? ""
         ) ?? storedWorkflowProfile.mediaSelection
-        self.organizationPreset = ImportOrganizationPreset(
+        let storedOrganizationPreset = ImportOrganizationPreset(
             rawValue: defaults.string(forKey: DefaultsKeys.organizationPreset) ?? ""
         ) ?? storedWorkflowProfile.organizationPreset
+        let storedDestinationLayout = ImportDestinationLayout(
+            rawValue: defaults.string(forKey: DefaultsKeys.destinationLayout) ?? ""
+        ) ?? ImportDestinationLayout(organizationPreset: storedOrganizationPreset)
+        self.destinationLayout = storedDestinationLayout
+        self.organizationPreset = storedDestinationLayout.organizationPreset
         self.folderGrouping = ImportFolderGrouping(
             rawValue: defaults.string(forKey: DefaultsKeys.folderGrouping) ?? ""
         ) ?? .byDay
@@ -270,7 +269,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func savePreferences() {
+    func savePreferences(refreshFolderBookmarks: Bool = false) {
         defaults.set(cardPath, forKey: DefaultsKeys.cardPath)
         defaults.set(photosPath, forKey: DefaultsKeys.photosPath)
         defaults.set(videosPath, forKey: DefaultsKeys.videosPath)
@@ -280,16 +279,27 @@ final class AppModel: ObservableObject {
         defaults.set(workflowProfile.rawValue, forKey: DefaultsKeys.workflowProfile)
         defaults.set(importMediaSelection.rawValue, forKey: DefaultsKeys.importMediaSelection)
         defaults.set(organizationPreset.rawValue, forKey: DefaultsKeys.organizationPreset)
+        defaults.set(destinationLayout.rawValue, forKey: DefaultsKeys.destinationLayout)
         defaults.set(folderGrouping.rawValue, forKey: DefaultsKeys.folderGrouping)
         defaults.set(themePreference.rawValue, forKey: DefaultsKeys.themePreference)
 
         do {
             try settingsRepository?.saveConfiguration(currentConfiguration())
+        } catch {
+            statusMessage = "Could not save settings: \(error)"
+            return
+        }
+
+        guard refreshFolderBookmarks else {
+            return
+        }
+
+        do {
             try saveFolderBookmark(.source, path: cardPath)
             try saveFolderBookmark(.photos, path: photosPath)
             try saveFolderBookmark(.videos, path: videosPath)
         } catch {
-            statusMessage = "Could not save settings: \(error)"
+            statusMessage = "Settings saved, but folder access could not be refreshed: \(error)"
         }
     }
 
@@ -298,7 +308,7 @@ final class AppModel: ObservableObject {
             unhideRecentPath(path)
             cardPath = path
             sourcePathDidChange()
-            savePreferences()
+            savePreferences(refreshFolderBookmarks: true)
         }
     }
 
@@ -307,7 +317,7 @@ final class AppModel: ObservableObject {
             unhideRecentPath(path)
             photosPath = path
             destinationPathDidChange()
-            savePreferences()
+            savePreferences(refreshFolderBookmarks: true)
         }
     }
 
@@ -316,7 +326,7 @@ final class AppModel: ObservableObject {
             unhideRecentPath(path)
             videosPath = path
             destinationPathDidChange()
-            savePreferences()
+            savePreferences(refreshFolderBookmarks: true)
         }
     }
 
@@ -405,8 +415,6 @@ final class AppModel: ObservableObject {
         knownImportedPreviewFileIDs = []
         mediaContentProfile = nil
         photoPairSummary = nil
-        importPreviewMode = .recommended
-        customImportBaseWorkflowProfile = nil
         workflowProfileWasManuallyChosenForCurrentJob = false
         validatePaths()
     }
@@ -562,36 +570,17 @@ final class AppModel: ObservableObject {
         }
     }
 
-    var isCustomImportMode: Bool {
-        importPreviewMode == .custom
-    }
-
-    func beginCustomImportMode() {
-        guard importPreviewMode != .custom else {
-            return
-        }
-        customImportBaseWorkflowProfile = workflowProfile
-        importPreviewMode = .custom
-    }
-
-    func resetToRecommendedImportMode() {
-        importPreviewMode = .recommended
-        customImportBaseWorkflowProfile = nil
-        let recommendedProfile = mediaContentProfile?.recommendedWorkflow ?? workflowProfile
-        applyWorkflowProfile(recommendedProfile, userInitiated: false)
-        workflowProfileWasManuallyChosenForCurrentJob = false
-    }
-
-    func useCustomMediaSelection(_ selection: ImportMediaSelection) {
-        beginCustomImportMode()
+    func useImportMediaSelection(_ selection: ImportMediaSelection) {
         importMediaSelection = selection
-        applyMediaSelectionToPreviewSessions(userInitiated: true)
+        if destinationLayout == .footageBackup && selection != .videosOnly {
+            destinationLayout = .singleLibrary
+        }
+        applyCurrentImportOptions(userInitiated: true)
     }
 
-    func useCustomOrganizationPreset(_ preset: ImportOrganizationPreset) {
-        beginCustomImportMode()
-        organizationPreset = preset
-        organizationPresetDidChange(userInitiated: true)
+    func useDestinationLayout(_ layout: ImportDestinationLayout) {
+        destinationLayout = layout
+        applyCurrentImportOptions(userInitiated: true)
     }
 
     func useFolderGrouping(_ grouping: ImportFolderGrouping) {
@@ -610,63 +599,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func applyMediaSelectionToPreviewSessions(userInitiated: Bool = true) {
-        if userInitiated {
-            beginCustomImportMode()
-        }
-
-        if organizationPreset == .footageBackup {
-            importMediaSelection = .videosOnly
-        }
-
-        if let matchedProfile = ImportWorkflowProfile.matching(
-            mediaSelection: importMediaSelection,
-            organizationPreset: organizationPreset
-        ) {
-            workflowProfile = matchedProfile
-        }
-
-        previewSessions = previewSessions.map { session in
-            var session = session
-            session.includePhotos = importMediaSelection.includes(.photo)
-            session.includeVideos = importMediaSelection.includes(.video)
-            session.includeSidecars = workflowProfile.includesSidecarsByDefault
-            return session
-        }
-        if userInitiated {
-            workflowProfileWasManuallyChosenForCurrentJob = true
-        }
-        validatePaths()
-        savePreferences()
-    }
-
-    func organizationPresetDidChange(userInitiated: Bool = true) {
-        if userInitiated {
-            beginCustomImportMode()
-        }
-
-        if organizationPreset == .footageBackup {
-            importMediaSelection = .videosOnly
-        } else if let matchedProfile = ImportWorkflowProfile.matching(
-            mediaSelection: importMediaSelection,
-            organizationPreset: organizationPreset
-        ) {
-            workflowProfile = matchedProfile
-        }
-        previewSessions = previewSessions.map { session in
-            var session = session
-            session.includePhotos = importMediaSelection.includes(.photo)
-            session.includeVideos = importMediaSelection.includes(.video)
-            session.includeSidecars = workflowProfile.includesSidecarsByDefault
-            return session
-        }
-        if userInitiated {
-            workflowProfileWasManuallyChosenForCurrentJob = true
-        }
-        validatePaths()
-        savePreferences()
-    }
-
     func folderGroupingDidChange() {
         rebuildPreviewPlanCache()
         savePreferences()
@@ -677,14 +609,10 @@ final class AppModel: ObservableObject {
     }
 
     func applyWorkflowProfile(_ profile: ImportWorkflowProfile, userInitiated: Bool = true) {
-        if userInitiated {
-            importPreviewMode = .recommended
-            customImportBaseWorkflowProfile = nil
-        }
-
         workflowProfile = profile
         importMediaSelection = profile.mediaSelection
-        organizationPreset = profile.organizationPreset
+        destinationLayout = ImportDestinationLayout(organizationPreset: profile.organizationPreset)
+        organizationPreset = destinationLayout.organizationPreset
         previewSessions = previewSessions.map { session in
             var session = session
             session.includePhotos = profile.mediaSelection.includes(.photo)
@@ -697,6 +625,46 @@ final class AppModel: ObservableObject {
         }
         validatePaths()
         savePreferences()
+    }
+
+    private func applyCurrentImportOptions(userInitiated: Bool) {
+        organizationPreset = destinationLayout.organizationPreset
+        if destinationLayout == .footageBackup {
+            importMediaSelection = .videosOnly
+        }
+        updateWorkflowProfileForCurrentOptions()
+
+        previewSessions = previewSessions.map { session in
+            var session = session
+            session.includePhotos = importMediaSelection.includes(.photo)
+            session.includeVideos = importMediaSelection.includes(.video)
+            session.includeSidecars = workflowProfile.includesSidecarsByDefault
+            return session
+        }
+        if userInitiated {
+            workflowProfileWasManuallyChosenForCurrentJob = true
+        }
+        validatePaths()
+        savePreferences()
+    }
+
+    private func updateWorkflowProfileForCurrentOptions() {
+        if let matchedProfile = ImportWorkflowProfile.matching(
+            mediaSelection: importMediaSelection,
+            organizationPreset: organizationPreset
+        ) {
+            workflowProfile = matchedProfile
+            return
+        }
+
+        switch importMediaSelection {
+        case .photosAndVideos:
+            workflowProfile = .mixedShootSession
+        case .photosOnly:
+            workflowProfile = .photoImport
+        case .videosOnly:
+            workflowProfile = .footageBackup
+        }
     }
 
     private func rebuildPreviewPlanCache() {
@@ -1632,8 +1600,6 @@ final class AppModel: ObservableObject {
         )
         mediaContentProfile = contentProfile
         photoPairSummary = PhotoPairDetector().summarize(files: files)
-        importPreviewMode = .recommended
-        customImportBaseWorkflowProfile = nil
 
         guard !workflowProfileWasManuallyChosenForCurrentJob else {
             return
@@ -1784,12 +1750,17 @@ final class AppModel: ObservableObject {
         autoPromptEnabled = configuration.autoPromptEnabled
         hasCompletedOnboarding = configuration.hasCompletedOnboarding
         workflowProfile = configuration.lastWorkflowProfile
+        importMediaSelection = configuration.lastMediaSelection
+        destinationLayout = configuration.lastDestinationLayout
+        organizationPreset = destinationLayout.organizationPreset
+        if destinationLayout == .footageBackup {
+            importMediaSelection = .videosOnly
+        }
+        updateWorkflowProfileForCurrentOptions()
         folderGrouping = configuration.lastFolderGrouping
         themePreference = configuration.themePreference
         workflowProfilesByVolume = configuration.workflowProfilesByVolume
         hiddenRecentPaths = Set(configuration.hiddenRecentPaths.map(normalizedRecentPath).filter { !$0.isEmpty })
-        importMediaSelection = workflowProfile.mediaSelection
-        organizationPreset = workflowProfile.organizationPreset
 
         if try settingsRepository.fetchConfiguration() == nil {
             try settingsRepository.saveConfiguration(currentConfiguration())
@@ -1806,6 +1777,8 @@ final class AppModel: ObservableObject {
             autoPromptEnabled: autoPromptEnabled,
             hasCompletedOnboarding: hasCompletedOnboarding,
             lastWorkflowProfile: workflowProfile,
+            lastMediaSelection: importMediaSelection,
+            lastDestinationLayout: destinationLayout,
             lastFolderGrouping: folderGrouping,
             themePreference: themePreference,
             workflowProfilesByVolume: workflowProfilesByVolume,
@@ -1915,6 +1888,7 @@ private enum DefaultsKeys {
     static let workflowProfile = "SDImport.workflowProfile"
     static let importMediaSelection = "SDImport.importMediaSelection"
     static let organizationPreset = "SDImport.organizationPreset"
+    static let destinationLayout = "SDImport.destinationLayout"
     static let folderGrouping = "SDImport.folderGrouping"
     static let themePreference = "SDImport.themePreference"
 }

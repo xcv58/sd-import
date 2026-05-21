@@ -50,8 +50,8 @@ struct ManualImportView: View {
                     SourceField()
                 }
 
-                switch model.organizationPreset {
-                case .classicDatedFolders:
+                switch model.destinationLayout {
+                case .separateMediaFolders:
                     if model.importMediaSelection.includes(.photo) {
                         GridRow {
                             Text("Photos")
@@ -82,7 +82,7 @@ struct ManualImportView: View {
                             )
                         }
                     }
-                case .shootSessionsByDate:
+                case .singleLibrary:
                     GridRow {
                         Text("Library")
                             .foregroundStyle(.secondary)
