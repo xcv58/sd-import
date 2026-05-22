@@ -1605,7 +1605,22 @@ final class AppModel: ObservableObject {
             return
         }
 
-        applyWorkflowProfile(contentProfile.recommendedWorkflow, userInitiated: false)
+        applyRecommendedWorkflowAfterScan(contentProfile)
+    }
+
+    private func applyRecommendedWorkflowAfterScan(_ contentProfile: MediaContentProfile) {
+        guard contentProfile.recommendedWorkflow == .mixedShootSession else {
+            applyWorkflowProfile(contentProfile.recommendedWorkflow, userInitiated: false)
+            return
+        }
+
+        importMediaSelection = .photosAndVideos
+        if destinationLayout == .footageBackup {
+            destinationLayout = .singleLibrary
+        }
+        organizationPreset = destinationLayout.organizationPreset
+        updateWorkflowProfileForCurrentOptions()
+        validatePaths()
     }
 
     private func workflowPreference(for summary: ScanSummary) -> ImportWorkflowProfile? {

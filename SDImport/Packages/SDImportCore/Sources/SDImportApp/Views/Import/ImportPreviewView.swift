@@ -10,18 +10,27 @@ struct ImportPreviewView: View {
         let rows = model.previewRows
         let totals = model.previewTotals
 
-        AppSection("Preview", systemImage: "list.bullet.rectangle") {
-            header(rows: rows, totals: totals)
-            controls
-            sessionList
-            destinationSummary(rows: rows, totals: totals)
-            if totals.copyFiles == 0 {
-                zeroMatchSection(rows: rows)
-                if showsExcludedFiles {
+        VStack(alignment: .leading, spacing: 18) {
+            AppSection("Import Plan", systemImage: "list.bullet.rectangle") {
+                header(rows: rows, totals: totals)
+                controls
+                if hasSupportedMedia {
+                    ImportDestinationFields()
+                    sessionList
+                }
+                destinationSummary(rows: rows, totals: totals)
+                importActionRow
+            }
+
+            AppSection("Files", systemImage: "doc.text.magnifyingglass") {
+                if totals.copyFiles == 0 {
+                    zeroMatchSection(rows: rows)
+                    if showsExcludedFiles {
+                        fileList(rows: rows, totals: totals)
+                    }
+                } else {
                     fileList(rows: rows, totals: totals)
                 }
-            } else {
-                fileList(rows: rows, totals: totals)
             }
         }
     }
@@ -89,6 +98,13 @@ struct ImportPreviewView: View {
                     .foregroundStyle(.orange)
             }
         }
+    }
+
+    private var hasSupportedMedia: Bool {
+        guard let mediaContent = model.mediaContentProfile else {
+            return true
+        }
+        return mediaContent.supportedCount > 0
     }
 
     private var importOptionControls: some View {
@@ -201,8 +217,6 @@ struct ImportPreviewView: View {
                     .help(ImportPlanBuilder.dateRangeTitle(for: dates))
                     .frame(width: 184, alignment: .leading)
 
-                ShootNameField(name: $model.location, width: 220, showsQuickPicks: false)
-
                 sessionMediaControls(
                     photoCount: photoCount,
                     videoCount: videoCount,
@@ -216,6 +230,34 @@ struct ImportPreviewView: View {
                 )
             }
         }
+    }
+
+    private var importActionRow: some View {
+        HStack(spacing: 10) {
+            Button {
+                model.importCurrentJob()
+            } label: {
+                Label(importButtonTitle, systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!model.canImportPlannedFiles)
+
+            if model.previewTotals.copyFiles == 0 {
+                Text("Nothing new is selected to copy")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    private var importButtonTitle: String {
+        let total = model.previewTotals.copyFiles
+        guard total > 0 else {
+            return "Copy Files"
+        }
+        return total == 1 ? "Copy 1 File" : "Copy \(total) Files"
     }
 
     @ViewBuilder
@@ -336,8 +378,6 @@ struct ImportPreviewView: View {
 
     private func zeroMatchSection(rows: [ImportPreviewRow]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Divider()
-
             Label(zeroMatchTitle(rows: rows), systemImage: "info.circle")
                 .font(.subheadline)
                 .fontWeight(.semibold)
@@ -390,7 +430,6 @@ struct ImportPreviewView: View {
         let displayedRows = sortedPreviewRows(rows.filter(fileFilter.includes))
 
         return VStack(alignment: .leading, spacing: 8) {
-            Divider()
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
                     fileListHeading(displayedCount: displayedRows.count, totalCount: rows.count, totals: totals)
@@ -435,10 +474,6 @@ struct ImportPreviewView: View {
         totals: ImportPreviewTotals
     ) -> some View {
         HStack(spacing: 8) {
-            Text("Files")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-
             Text(fileListCountText(displayedCount: displayedCount, totalCount: totalCount, totals: totals))
                 .font(.caption)
                 .foregroundStyle(.secondary)

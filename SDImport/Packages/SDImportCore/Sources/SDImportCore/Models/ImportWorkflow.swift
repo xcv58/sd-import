@@ -113,9 +113,9 @@ public enum ImportWorkflowProfile: String, Codable, CaseIterable, Identifiable, 
     public func isCompatible(photoCount: Int, videoCount: Int) -> Bool {
         switch self {
         case .photoImport:
-            return photoCount > 0
+            return photoCount > 0 && videoCount == 0
         case .footageBackup:
-            return videoCount > 0
+            return videoCount > 0 && photoCount == 0
         case .mixedShootSession:
             return photoCount > 0 && videoCount > 0
         }
@@ -124,7 +124,6 @@ public enum ImportWorkflowProfile: String, Codable, CaseIterable, Identifiable, 
 
 public enum RecommendationConfidence: String, Codable, Sendable {
     case exact
-    case dominant
     case mixed
     case remembered
     case empty

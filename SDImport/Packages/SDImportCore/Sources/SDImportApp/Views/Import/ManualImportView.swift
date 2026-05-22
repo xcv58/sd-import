@@ -7,8 +7,7 @@ struct ManualImportView: View {
     var body: some View {
         AppPage(title: "Import", status: model.statusMessage) {
             VStack(alignment: .leading, spacing: 18) {
-                pathSection
-                actionSection
+                sourceSection
 
                 if let progress = model.importProgress {
                     ImportProgressPanel(progress: progress)
@@ -40,8 +39,8 @@ struct ManualImportView: View {
         }
     }
 
-    private var pathSection: some View {
-        AppSection("Source and Destination", systemImage: "externaldrive") {
+    private var sourceSection: some View {
+        AppSection("Source", systemImage: "externaldrive") {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
                 GridRow {
                     Text("Source")
@@ -49,113 +48,32 @@ struct ManualImportView: View {
                         .frame(width: 92, alignment: .leading)
                     SourceField()
                 }
-
-                switch model.destinationLayout {
-                case .separateMediaFolders:
-                    if model.importMediaSelection.includes(.photo) {
-                        GridRow {
-                            Text("Photos")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 92, alignment: .leading)
-                            FolderField(
-                                title: "Photos",
-                                path: $model.photosPath,
-                                validation: model.photosValidation,
-                                recentChoices: model.recentPhotosPathSuggestions,
-                                selectRecentPath: model.selectPhotosPath,
-                                action: model.choosePhotosFolder
-                            )
-                        }
-                    }
-                    if model.importMediaSelection.includes(.video) {
-                        GridRow {
-                            Text("Videos")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 92, alignment: .leading)
-                            FolderField(
-                                title: "Videos",
-                                path: $model.videosPath,
-                                validation: model.videosValidation,
-                                recentChoices: model.recentVideosPathSuggestions,
-                                selectRecentPath: model.selectVideosPath,
-                                action: model.chooseVideosFolder
-                            )
-                        }
-                    }
-                case .singleLibrary:
-                    GridRow {
-                        Text("Library")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 92, alignment: .leading)
-                        FolderField(
-                            title: "Library",
-                            path: $model.photosPath,
-                            validation: model.photosValidation,
-                            recentChoices: model.recentPhotosPathSuggestions,
-                            selectRecentPath: model.selectPhotosPath,
-                            action: model.choosePhotosFolder
-                        )
-                    }
-                case .footageBackup:
-                    GridRow {
-                        Text("Footage")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 92, alignment: .leading)
-                        FolderField(
-                            title: "Footage",
-                            path: $model.videosPath,
-                            validation: model.videosValidation,
-                            recentChoices: model.recentVideosPathSuggestions,
-                            selectRecentPath: model.selectVideosPath,
-                            action: model.chooseVideosFolder
-                        )
-                    }
-                }
-
-                GridRow {
-                    Text("Shoot")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 92, alignment: .leading)
-                    ShootNameField(name: $model.location, width: 260)
-                }
             }
             .gridColumnAlignment(.leading)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    sourceActions
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    sourceActions
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var actionSection: some View {
-        AppSection("Actions", systemImage: "bolt") {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    actionButtons
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    actionButtons
-                }
-            }
-        }
-    }
-
-    private var actionButtons: some View {
+    private var sourceActions: some View {
         Group {
             Button {
                 model.scan()
             } label: {
-                Label("Scan Card", systemImage: "magnifyingglass")
+                Label(scanButtonTitle, systemImage: "magnifyingglass")
             }
             .buttonStyle(.bordered)
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!model.canScan)
-
-            Button {
-                model.importCurrentJob()
-            } label: {
-                Label(importButtonTitle, systemImage: "square.and.arrow.down")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!model.canImportPlannedFiles)
 
             if model.isWorking {
                 Button {
@@ -174,12 +92,86 @@ struct ManualImportView: View {
         }
     }
 
-    private var importButtonTitle: String {
-        let total = model.previewTotals.copyFiles
-        guard total > 0 else {
-            return "Copy Files"
+    private var scanButtonTitle: String {
+        model.currentSummary == nil ? "Scan Card" : "Scan Again"
+    }
+}
+
+struct ImportDestinationFields: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
+            GridRow {
+                Text("Shoot")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 92, alignment: .leading)
+                ShootNameField(name: $model.location, width: 260)
+            }
+
+            switch model.destinationLayout {
+            case .separateMediaFolders:
+                if model.importMediaSelection.includes(.photo) {
+                    GridRow {
+                        Text("Photos")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 92, alignment: .leading)
+                        FolderField(
+                            title: "Photos",
+                            path: $model.photosPath,
+                            validation: model.photosValidation,
+                            recentChoices: model.recentPhotosPathSuggestions,
+                            selectRecentPath: model.selectPhotosPath,
+                            action: model.choosePhotosFolder
+                        )
+                    }
+                }
+                if model.importMediaSelection.includes(.video) {
+                    GridRow {
+                        Text("Videos")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 92, alignment: .leading)
+                        FolderField(
+                            title: "Videos",
+                            path: $model.videosPath,
+                            validation: model.videosValidation,
+                            recentChoices: model.recentVideosPathSuggestions,
+                            selectRecentPath: model.selectVideosPath,
+                            action: model.chooseVideosFolder
+                        )
+                    }
+                }
+            case .singleLibrary:
+                GridRow {
+                    Text("Library")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 92, alignment: .leading)
+                    FolderField(
+                        title: "Library",
+                        path: $model.photosPath,
+                        validation: model.photosValidation,
+                        recentChoices: model.recentPhotosPathSuggestions,
+                        selectRecentPath: model.selectPhotosPath,
+                        action: model.choosePhotosFolder
+                    )
+                }
+            case .footageBackup:
+                GridRow {
+                    Text("Footage")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 92, alignment: .leading)
+                    FolderField(
+                        title: "Footage",
+                        path: $model.videosPath,
+                        validation: model.videosValidation,
+                        recentChoices: model.recentVideosPathSuggestions,
+                        selectRecentPath: model.selectVideosPath,
+                        action: model.chooseVideosFolder
+                    )
+                }
+            }
         }
-        return total == 1 ? "Copy 1 File" : "Copy \(total) Files"
+        .gridColumnAlignment(.leading)
     }
 }
 

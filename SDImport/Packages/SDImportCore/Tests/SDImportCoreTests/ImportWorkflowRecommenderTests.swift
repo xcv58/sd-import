@@ -64,8 +64,8 @@ struct ImportWorkflowRecommenderTests {
         #expect(profile.sidecarCount == 0)
     }
 
-    @Test("uses dominant content when one media type clearly wins")
-    func usesDominantContentWhenOneMediaTypeClearlyWins() {
+    @Test("keeps mixed cards on mixed workflow even when one media type dominates")
+    func keepsMixedCardsOnMixedWorkflowEvenWhenOneMediaTypeDominates() {
         let profile = ImportWorkflowRecommender().recommend(
             photoCount: 5,
             videoCount: 95,
@@ -73,12 +73,12 @@ struct ImportWorkflowRecommenderTests {
             unsupportedCount: 0
         )
 
-        #expect(profile.recommendedWorkflow == .footageBackup)
-        #expect(profile.confidence == .dominant)
+        #expect(profile.recommendedWorkflow == .mixedShootSession)
+        #expect(profile.confidence == .mixed)
     }
 
-    @Test("uses remembered workflow for compatible mixed cards")
-    func usesRememberedWorkflowForCompatibleMixedCards() {
+    @Test("ignores remembered partial workflow for mixed cards")
+    func ignoresRememberedPartialWorkflowForMixedCards() {
         let profile = ImportWorkflowRecommender().recommend(
             photoCount: 50,
             videoCount: 50,
@@ -87,7 +87,21 @@ struct ImportWorkflowRecommenderTests {
             rememberedProfile: .photoImport
         )
 
-        #expect(profile.recommendedWorkflow == .photoImport)
+        #expect(profile.recommendedWorkflow == .mixedShootSession)
+        #expect(profile.confidence == .mixed)
+    }
+
+    @Test("uses remembered mixed workflow for mixed cards")
+    func usesRememberedMixedWorkflowForMixedCards() {
+        let profile = ImportWorkflowRecommender().recommend(
+            photoCount: 50,
+            videoCount: 50,
+            sidecarCount: 0,
+            unsupportedCount: 0,
+            rememberedProfile: .mixedShootSession
+        )
+
+        #expect(profile.recommendedWorkflow == .mixedShootSession)
         #expect(profile.confidence == .remembered)
     }
 

@@ -1,11 +1,7 @@
 import Foundation
 
 public struct ImportWorkflowRecommender: Sendable {
-    private let dominantThreshold: Double
-
-    public init(dominantThreshold: Double = 0.9) {
-        self.dominantThreshold = dominantThreshold
-    }
+    public init() {}
 
     public func recommend(
         photoCount: Int,
@@ -43,31 +39,6 @@ public struct ImportWorkflowRecommender: Sendable {
             return profile(
                 .footageBackup,
                 confidence: .exact,
-                photoCount: photoCount,
-                videoCount: videoCount,
-                sidecarCount: sidecarCount,
-                unsupportedCount: unsupportedCount
-            )
-        }
-
-        let photoShare = Double(photoCount) / Double(supportedCount)
-        let videoShare = Double(videoCount) / Double(supportedCount)
-
-        if photoShare >= dominantThreshold {
-            return profile(
-                .photoImport,
-                confidence: .dominant,
-                photoCount: photoCount,
-                videoCount: videoCount,
-                sidecarCount: sidecarCount,
-                unsupportedCount: unsupportedCount
-            )
-        }
-
-        if videoShare >= dominantThreshold {
-            return profile(
-                .footageBackup,
-                confidence: .dominant,
                 photoCount: photoCount,
                 videoCount: videoCount,
                 sidecarCount: sidecarCount,
