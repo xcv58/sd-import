@@ -37,6 +37,10 @@ struct ImportProgressPanel: View {
                 ProgressMetric(title: "Failed", value: "\(progress.failedFiles)")
             }
 
+            if let destinationSummary {
+                ProgressDestinationSummary(summary: destinationSummary)
+            }
+
             if let currentFilename = progress.currentFilename, !currentFilename.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(currentFilename, systemImage: "doc")
@@ -94,6 +98,31 @@ struct ImportProgressPanel: View {
         "\(progress.doneFiles) of \(progress.totalFiles)"
     }
 
+    private var destinationSummary: ProgressDestinationSummaryModel? {
+        let directories = progress.destinationDirectories
+        if let firstDirectory = directories.first {
+            return ProgressDestinationSummaryModel(
+                count: directories.count,
+                primaryPath: firstDirectory,
+                allPaths: directories
+            )
+        }
+
+        let paths = ([progress.currentDestinationPath] + progress.recentFiles.map(\.destinationPath)).compactMap { $0 }
+        let directoriesFromEvents = Array(Set(paths.map {
+            URL(fileURLWithPath: $0, isDirectory: false).deletingLastPathComponent().path
+        }))
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        guard let firstDirectory = directoriesFromEvents.first else {
+            return nil
+        }
+        return ProgressDestinationSummaryModel(
+            count: directoriesFromEvents.count,
+            primaryPath: firstDirectory,
+            allPaths: directoriesFromEvents
+        )
+    }
+
     private static func bytes(_ value: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
     }
@@ -116,6 +145,46 @@ struct ImportProgressPanel: View {
         let hours = minutes / 60
         let remainderMinutes = minutes % 60
         return "\(hours)h \(remainderMinutes)m"
+    }
+}
+
+private struct ProgressDestinationSummaryModel {
+    let count: Int
+    let primaryPath: String
+    let allPaths: [String]
+
+    var title: String {
+        count == 1 ? "Destination" : "\(count) destination folders"
+    }
+
+    var detail: String {
+        count <= 1 ? primaryPath : "\(primaryPath) (+\(count - 1) more)"
+    }
+
+    var helpText: String {
+        allPaths.joined(separator: "\n")
+    }
+}
+
+private struct ProgressDestinationSummary: View {
+    let summary: ProgressDestinationSummaryModel
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Label(summary.title, systemImage: "folder")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 160, alignment: .leading)
+
+            Text(summary.detail)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(summary.helpText)
+
+            Spacer(minLength: 0)
+        }
     }
 }
 
@@ -165,6 +234,15 @@ private struct ProgressFileEventRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+
+                if let destinationPath = event.destinationPath, !destinationPath.isEmpty {
+                    Label(destinationPath, systemImage: "arrow.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(destinationPath)
+                }
             }
 
             Spacer(minLength: 0)

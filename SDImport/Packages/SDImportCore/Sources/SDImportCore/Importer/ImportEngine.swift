@@ -54,6 +54,7 @@ public struct ImportEngine {
         var currentDestinationPath: String?
         var recentFiles: [ImportProgressFileEvent] = []
         var progressEventSequence = 0
+        let destinationDirectories = Self.destinationDirectories(for: files)
 
         let filesNeedingDestinationSpace = try files.filter { file in
             let fingerprint = fingerprint(for: file)
@@ -119,6 +120,7 @@ public struct ImportEngine {
                     currentFilename: currentFile?.filename,
                     currentSourcePath: currentFile?.sourcePath,
                     currentDestinationPath: currentDestinationPath,
+                    destinationDirectories: destinationDirectories,
                     recentFiles: recentFiles,
                     reportPath: job.summaryMarkdownPath
                 )
@@ -346,6 +348,19 @@ public struct ImportEngine {
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         Thread.current.threadDictionary[Self.modificationDateFormatterKey] = formatter
         return formatter.date(from: string)
+    }
+
+    private static func destinationDirectories(for files: [JobFileRecord]) -> [String] {
+        let directories = files.compactMap { file -> String? in
+            if let destinationPath = file.plannedDestinationPath {
+                return URL(fileURLWithPath: destinationPath, isDirectory: false)
+                    .deletingLastPathComponent()
+                    .path
+            }
+            return file.destinationDirectory
+        }
+        return Array(Set(directories))
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
     private func fingerprint(for file: JobFileRecord) -> FileFingerprint {

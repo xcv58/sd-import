@@ -45,6 +45,7 @@ public struct ImportProgress: Hashable, Codable, Sendable {
     public let currentFilename: String?
     public let currentSourcePath: String?
     public let currentDestinationPath: String?
+    public let destinationDirectories: [String]
     public let recentFiles: [ImportProgressFileEvent]
     public let reportPath: String?
 
@@ -68,6 +69,7 @@ public struct ImportProgress: Hashable, Codable, Sendable {
         currentFilename: String?,
         currentSourcePath: String?,
         currentDestinationPath: String? = nil,
+        destinationDirectories: [String] = [],
         recentFiles: [ImportProgressFileEvent] = [],
         reportPath: String?
     ) {
@@ -90,6 +92,7 @@ public struct ImportProgress: Hashable, Codable, Sendable {
         self.currentFilename = currentFilename
         self.currentSourcePath = currentSourcePath
         self.currentDestinationPath = currentDestinationPath
+        self.destinationDirectories = destinationDirectories
         self.recentFiles = recentFiles
         self.reportPath = reportPath
     }

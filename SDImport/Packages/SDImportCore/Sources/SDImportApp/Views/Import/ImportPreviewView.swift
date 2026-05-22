@@ -119,6 +119,7 @@ struct ImportPreviewView: View {
                             .disabled(!isMediaSelectionAvailable(selection))
                     }
                 }
+                .labelsHidden()
                 .pickerStyle(.segmented)
             }
 
@@ -132,6 +133,7 @@ struct ImportPreviewView: View {
                                 .tag(layout)
                         }
                     }
+                    .labelsHidden()
                     .pickerStyle(.segmented)
                 }
             }
@@ -144,6 +146,7 @@ struct ImportPreviewView: View {
                         Text(grouping.displayTitle).tag(grouping)
                     }
                 }
+                .labelsHidden()
                 .pickerStyle(.segmented)
                 .frame(width: 320)
             }
@@ -854,7 +857,7 @@ private extension ImportDestinationLayout {
         case .singleLibrary:
             return "Same Library"
         case .separateMediaFolders:
-            return "Separate Roots"
+            return "Separate Folders"
         case .footageBackup:
             return "Videos"
         }

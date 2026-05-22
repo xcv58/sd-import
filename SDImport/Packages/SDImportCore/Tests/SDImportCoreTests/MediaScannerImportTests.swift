@@ -190,6 +190,8 @@ struct MediaScannerImportTests {
         #expect(progressEvents.count >= 3)
         #expect(progressEvents.contains { $0.currentFilename == "IMG_0002.JPG" })
         #expect(progressEvents.contains { $0.currentDestinationPath?.hasSuffix("IMG_0002.JPG") == true })
+        #expect(finalProgress.destinationDirectories.count == 1)
+        #expect(finalProgress.destinationDirectories.first?.hasSuffix("2024-07-15 TEST") == true)
         #expect(finalProgress.status == "completed")
         #expect(finalProgress.percent == 100)
         #expect(finalProgress.processedBytes == finalProgress.totalBytes)
