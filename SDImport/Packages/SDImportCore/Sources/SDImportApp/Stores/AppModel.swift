@@ -175,6 +175,7 @@ final class AppModel: ObservableObject {
     private var reportTask: Task<Void, Never>?
     private var mountObserver: MountEventObserver?
     private var workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
+    private var preferredMixedDestinationLayout: ImportDestinationLayout = .singleLibrary
     private var hiddenRecentPaths: Set<String> = []
     private var workflowProfileWasManuallyChosenForCurrentJob = false
     private var knownImportedPreviewFileIDs: Set<Int64> = []
@@ -206,14 +207,21 @@ final class AppModel: ObservableObject {
         let storedDestinationLayout = ImportDestinationLayout(
             rawValue: defaults.string(forKey: DefaultsKeys.destinationLayout) ?? ""
         ) ?? ImportDestinationLayout(organizationPreset: storedOrganizationPreset)
+        let storedPreferredMixedDestinationLayout = ImportDestinationLayout(
+            rawValue: defaults.string(forKey: DefaultsKeys.preferredMixedDestinationLayout) ?? ""
+        ) ?? (storedDestinationLayout == .footageBackup ? .singleLibrary : storedDestinationLayout)
         self.destinationLayout = storedDestinationLayout
         self.organizationPreset = storedDestinationLayout.organizationPreset
+        self.preferredMixedDestinationLayout = storedPreferredMixedDestinationLayout == .footageBackup
+            ? .singleLibrary
+            : storedPreferredMixedDestinationLayout
         self.folderGrouping = ImportFolderGrouping(
             rawValue: defaults.string(forKey: DefaultsKeys.folderGrouping) ?? ""
         ) ?? .byDay
         self.themePreference = AppThemePreference(
             rawValue: defaults.string(forKey: DefaultsKeys.themePreference) ?? ""
         ) ?? .system
+        normalizeDestinationForCurrentImportType()
         bootstrap()
     }
 
@@ -280,6 +288,7 @@ final class AppModel: ObservableObject {
         defaults.set(importMediaSelection.rawValue, forKey: DefaultsKeys.importMediaSelection)
         defaults.set(organizationPreset.rawValue, forKey: DefaultsKeys.organizationPreset)
         defaults.set(destinationLayout.rawValue, forKey: DefaultsKeys.destinationLayout)
+        defaults.set(preferredMixedDestinationLayout.rawValue, forKey: DefaultsKeys.preferredMixedDestinationLayout)
         defaults.set(folderGrouping.rawValue, forKey: DefaultsKeys.folderGrouping)
         defaults.set(themePreference.rawValue, forKey: DefaultsKeys.themePreference)
 
@@ -571,15 +580,25 @@ final class AppModel: ObservableObject {
     }
 
     func useImportMediaSelection(_ selection: ImportMediaSelection) {
+        rememberCurrentMixedDestinationLayout()
         importMediaSelection = selection
-        if destinationLayout == .footageBackup && selection != .videosOnly {
-            destinationLayout = .singleLibrary
+        switch selection {
+        case .photosAndVideos:
+            destinationLayout = preferredMixedDestinationLayout
+        case .photosOnly:
+            destinationLayout = .separateMediaFolders
+        case .videosOnly:
+            destinationLayout = .footageBackup
         }
         applyCurrentImportOptions(userInitiated: true)
     }
 
     func useDestinationLayout(_ layout: ImportDestinationLayout) {
-        destinationLayout = layout
+        guard importMediaSelection == .photosAndVideos else {
+            return
+        }
+        destinationLayout = layout == .footageBackup ? .singleLibrary : layout
+        preferredMixedDestinationLayout = destinationLayout
         applyCurrentImportOptions(userInitiated: true)
     }
 
@@ -611,7 +630,9 @@ final class AppModel: ObservableObject {
     func applyWorkflowProfile(_ profile: ImportWorkflowProfile, userInitiated: Bool = true) {
         workflowProfile = profile
         importMediaSelection = profile.mediaSelection
-        destinationLayout = ImportDestinationLayout(organizationPreset: profile.organizationPreset)
+        destinationLayout = profile.mediaSelection == .photosAndVideos
+            ? preferredMixedDestinationLayout
+            : ImportDestinationLayout(organizationPreset: profile.organizationPreset)
         organizationPreset = destinationLayout.organizationPreset
         previewSessions = previewSessions.map { session in
             var session = session
@@ -628,10 +649,7 @@ final class AppModel: ObservableObject {
     }
 
     private func applyCurrentImportOptions(userInitiated: Bool) {
-        organizationPreset = destinationLayout.organizationPreset
-        if destinationLayout == .footageBackup {
-            importMediaSelection = .videosOnly
-        }
+        normalizeDestinationForCurrentImportType()
         updateWorkflowProfileForCurrentOptions()
 
         previewSessions = previewSessions.map { session in
@@ -646,6 +664,30 @@ final class AppModel: ObservableObject {
         }
         validatePaths()
         savePreferences()
+    }
+
+    private func normalizeDestinationForCurrentImportType() {
+        switch importMediaSelection {
+        case .photosAndVideos:
+            if destinationLayout == .footageBackup {
+                destinationLayout = preferredMixedDestinationLayout
+            }
+            rememberCurrentMixedDestinationLayout()
+            organizationPreset = destinationLayout.organizationPreset
+        case .photosOnly:
+            destinationLayout = .separateMediaFolders
+            organizationPreset = .classicDatedFolders
+        case .videosOnly:
+            destinationLayout = .footageBackup
+            organizationPreset = .footageBackup
+        }
+    }
+
+    private func rememberCurrentMixedDestinationLayout() {
+        guard importMediaSelection == .photosAndVideos, destinationLayout != .footageBackup else {
+            return
+        }
+        preferredMixedDestinationLayout = destinationLayout
     }
 
     private func updateWorkflowProfileForCurrentOptions() {
@@ -1615,10 +1657,7 @@ final class AppModel: ObservableObject {
         }
 
         importMediaSelection = .photosAndVideos
-        if destinationLayout == .footageBackup {
-            destinationLayout = .singleLibrary
-        }
-        organizationPreset = destinationLayout.organizationPreset
+        normalizeDestinationForCurrentImportType()
         updateWorkflowProfileForCurrentOptions()
         validatePaths()
     }
@@ -1767,10 +1806,8 @@ final class AppModel: ObservableObject {
         workflowProfile = configuration.lastWorkflowProfile
         importMediaSelection = configuration.lastMediaSelection
         destinationLayout = configuration.lastDestinationLayout
-        organizationPreset = destinationLayout.organizationPreset
-        if destinationLayout == .footageBackup {
-            importMediaSelection = .videosOnly
-        }
+        preferredMixedDestinationLayout = configuration.preferredMixedDestinationLayout
+        normalizeDestinationForCurrentImportType()
         updateWorkflowProfileForCurrentOptions()
         folderGrouping = configuration.lastFolderGrouping
         themePreference = configuration.themePreference
@@ -1794,6 +1831,7 @@ final class AppModel: ObservableObject {
             lastWorkflowProfile: workflowProfile,
             lastMediaSelection: importMediaSelection,
             lastDestinationLayout: destinationLayout,
+            preferredMixedDestinationLayout: preferredMixedDestinationLayout,
             lastFolderGrouping: folderGrouping,
             themePreference: themePreference,
             workflowProfilesByVolume: workflowProfilesByVolume,
@@ -1904,6 +1942,7 @@ private enum DefaultsKeys {
     static let importMediaSelection = "SDImport.importMediaSelection"
     static let organizationPreset = "SDImport.organizationPreset"
     static let destinationLayout = "SDImport.destinationLayout"
+    static let preferredMixedDestinationLayout = "SDImport.preferredMixedDestinationLayout"
     static let folderGrouping = "SDImport.folderGrouping"
     static let themePreference = "SDImport.themePreference"
 }

@@ -109,9 +109,24 @@ struct ImportDestinationFields: View {
                 ShootNameField(name: $model.location, width: 260)
             }
 
-            switch model.destinationLayout {
-            case .separateMediaFolders:
-                if model.importMediaSelection.includes(.photo) {
+            switch model.importMediaSelection {
+            case .photosAndVideos:
+                switch model.destinationLayout {
+                case .singleLibrary:
+                    GridRow {
+                        Text("Library")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 92, alignment: .leading)
+                        FolderField(
+                            title: "Library",
+                            path: $model.photosPath,
+                            validation: model.photosValidation,
+                            recentChoices: model.recentPhotosPathSuggestions,
+                            selectRecentPath: model.selectPhotosPath,
+                            action: model.choosePhotosFolder
+                        )
+                    }
+                case .separateMediaFolders:
                     GridRow {
                         Text("Photos")
                             .foregroundStyle(.secondary)
@@ -125,8 +140,7 @@ struct ImportDestinationFields: View {
                             action: model.choosePhotosFolder
                         )
                     }
-                }
-                if model.importMediaSelection.includes(.video) {
+
                     GridRow {
                         Text("Videos")
                             .foregroundStyle(.secondary)
@@ -140,14 +154,16 @@ struct ImportDestinationFields: View {
                             action: model.chooseVideosFolder
                         )
                     }
+                case .footageBackup:
+                    EmptyView()
                 }
-            case .singleLibrary:
+            case .photosOnly:
                 GridRow {
-                    Text("Library")
+                    Text("Photos")
                         .foregroundStyle(.secondary)
                         .frame(width: 92, alignment: .leading)
                     FolderField(
-                        title: "Library",
+                        title: "Photos",
                         path: $model.photosPath,
                         validation: model.photosValidation,
                         recentChoices: model.recentPhotosPathSuggestions,
@@ -155,13 +171,13 @@ struct ImportDestinationFields: View {
                         action: model.choosePhotosFolder
                     )
                 }
-            case .footageBackup:
+            case .videosOnly:
                 GridRow {
-                    Text("Footage")
+                    Text("Videos")
                         .foregroundStyle(.secondary)
                         .frame(width: 92, alignment: .leading)
                     FolderField(
-                        title: "Footage",
+                        title: "Videos",
                         path: $model.videosPath,
                         validation: model.videosValidation,
                         recentChoices: model.recentVideosPathSuggestions,

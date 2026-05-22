@@ -13,6 +13,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
     public var lastWorkflowProfile: ImportWorkflowProfile
     public var lastMediaSelection: ImportMediaSelection
     public var lastDestinationLayout: ImportDestinationLayout
+    public var preferredMixedDestinationLayout: ImportDestinationLayout
     public var lastFolderGrouping: ImportFolderGrouping
     public var themePreference: AppThemePreference
     public var workflowProfilesByVolume: [String: ImportWorkflowProfile]
@@ -29,6 +30,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         lastWorkflowProfile: ImportWorkflowProfile = .mixedShootSession,
         lastMediaSelection: ImportMediaSelection? = nil,
         lastDestinationLayout: ImportDestinationLayout? = nil,
+        preferredMixedDestinationLayout: ImportDestinationLayout = .singleLibrary,
         lastFolderGrouping: ImportFolderGrouping = .byDay,
         themePreference: AppThemePreference = .system,
         workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:],
@@ -46,6 +48,9 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         self.lastDestinationLayout = lastDestinationLayout ?? ImportDestinationLayout(
             organizationPreset: lastWorkflowProfile.organizationPreset
         )
+        self.preferredMixedDestinationLayout = preferredMixedDestinationLayout == .footageBackup
+            ? .singleLibrary
+            : preferredMixedDestinationLayout
         self.lastFolderGrouping = lastFolderGrouping
         self.themePreference = themePreference
         self.workflowProfilesByVolume = workflowProfilesByVolume
@@ -72,6 +77,7 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
         case lastWorkflowProfile
         case lastMediaSelection
         case lastDestinationLayout
+        case preferredMixedDestinationLayout
         case lastFolderGrouping
         case themePreference
         case workflowProfilesByVolume
@@ -99,6 +105,15 @@ public struct AppConfiguration: Codable, Equatable, Sendable {
             ImportDestinationLayout.self,
             forKey: .lastDestinationLayout
         ) ?? ImportDestinationLayout(organizationPreset: lastWorkflowProfile.organizationPreset)
+        let decodedPreferredMixedDestinationLayout = try container.decodeIfPresent(
+            ImportDestinationLayout.self,
+            forKey: .preferredMixedDestinationLayout
+        )
+        preferredMixedDestinationLayout = decodedPreferredMixedDestinationLayout == .footageBackup
+            ? .singleLibrary
+            : decodedPreferredMixedDestinationLayout ?? (
+                lastDestinationLayout == .footageBackup ? .singleLibrary : lastDestinationLayout
+            )
         lastFolderGrouping = try container.decodeIfPresent(
             ImportFolderGrouping.self,
             forKey: .lastFolderGrouping

@@ -110,9 +110,9 @@ struct ImportPreviewView: View {
     private var importOptionControls: some View {
         Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
             GridRow {
-                Text("Import")
+                Text("Import Type")
                     .foregroundStyle(.secondary)
-                Picker("Import", selection: mediaSelectionBinding) {
+                Picker("Import Type", selection: mediaSelectionBinding) {
                     ForEach(ImportMediaSelection.allCases) { selection in
                         Text(mediaSelectionTitle(selection))
                             .tag(selection)
@@ -122,31 +122,42 @@ struct ImportPreviewView: View {
                 .pickerStyle(.segmented)
             }
 
-            GridRow {
-                Text("Destination Layout")
-                    .foregroundStyle(.secondary)
-                Picker("Destination Layout", selection: destinationLayoutBinding) {
-                    ForEach(ImportDestinationLayout.allCases) { layout in
-                        Text(layout.displayTitle)
-                            .tag(layout)
-                            .disabled(!isDestinationLayoutAvailable(layout))
+            if showsMixedDestinationLayout {
+                GridRow {
+                    Text("Destination")
+                        .foregroundStyle(.secondary)
+                    Picker("Destination", selection: destinationLayoutBinding) {
+                        ForEach(mixedDestinationLayouts) { layout in
+                            Text(layout.displayTitle)
+                                .tag(layout)
+                        }
                     }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
             }
 
             GridRow {
-                Text("Dates")
+                Text("Group Into")
                     .foregroundStyle(.secondary)
-                Picker("Dates", selection: folderGroupingBinding) {
+                Picker("Group Into", selection: folderGroupingBinding) {
                     ForEach(ImportFolderGrouping.allCases) { grouping in
                         Text(grouping.displayTitle).tag(grouping)
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 260)
+                .frame(width: 320)
             }
         }
+    }
+
+    private var showsMixedDestinationLayout: Bool {
+        model.importMediaSelection == .photosAndVideos
+            && (model.mediaContentProfile?.photoCount ?? 1) > 0
+            && (model.mediaContentProfile?.videoCount ?? 1) > 0
+    }
+
+    private var mixedDestinationLayouts: [ImportDestinationLayout] {
+        [.singleLibrary, .separateMediaFolders]
     }
 
     private var mediaSelectionBinding: Binding<ImportMediaSelection> {
@@ -315,8 +326,8 @@ struct ImportPreviewView: View {
         unsupportedCount: Int,
         includeSidecars: Binding<Bool>
     ) -> some View {
-        if model.organizationPreset == .footageBackup, unsupportedCount > 0 {
-            Toggle("Keep sidecars \(unsupportedCount)", isOn: includeSidecars)
+        if model.importMediaSelection == .videosOnly, unsupportedCount > 0 {
+            Toggle("Include sidecars \(unsupportedCount)", isOn: includeSidecars)
                 .frame(width: 180, alignment: .leading)
                 .help("Includes non-photo/video files from the card, such as metadata, thumbnails, proxies, or camera support files.")
         } else if unsupportedCount > 0 {
@@ -543,7 +554,7 @@ struct ImportPreviewView: View {
         }
         switch model.importMediaSelection {
         case .photosAndVideos:
-            return "No supported photos or videos were found on this card."
+            return "This card does not contain both photos and videos."
         case .photosOnly:
             return "No photos were found on this card."
         case .videosOnly:
@@ -587,23 +598,10 @@ struct ImportPreviewView: View {
 
         switch selection {
         case .photosAndVideos:
-            return mediaContent.supportedCount > 0
+            return mediaContent.photoCount > 0 && mediaContent.videoCount > 0
         case .photosOnly:
             return mediaContent.photoCount > 0
         case .videosOnly:
-            return mediaContent.videoCount > 0
-        }
-    }
-
-    private func isDestinationLayoutAvailable(_ layout: ImportDestinationLayout) -> Bool {
-        guard let mediaContent = model.mediaContentProfile else {
-            return true
-        }
-
-        switch layout {
-        case .singleLibrary, .separateMediaFolders:
-            return mediaContent.supportedCount > 0
-        case .footageBackup:
             return mediaContent.videoCount > 0
         }
     }
@@ -631,6 +629,8 @@ struct ImportPreviewView: View {
                 return "This card contains \(contents). Choose another media type to import."
             case .photosAndVideos where mediaContent.supportedCount == 0:
                 return "This card contains \(contents). There are no supported photo or video files to import."
+            case .photosAndVideos:
+                return "This card contains \(contents). Choose Photos or Videos to import a single media type."
             default:
                 break
             }
@@ -656,7 +656,7 @@ struct ImportPreviewView: View {
             reasons.append(summary)
         }
         if skipped.sidecarFiles > 0 {
-            reasons.append("\(countText(skipped.sidecarFiles, singular: "sidecar is", plural: "sidecars are")) skipped unless Footage Backup keeps sidecars.")
+            reasons.append("\(countText(skipped.sidecarFiles, singular: "sidecar is", plural: "sidecars are")) skipped unless videos include sidecars.")
         }
         if let mediaContent = model.mediaContentProfile, mediaContent.supportedCount == 0 {
             reasons.append("No supported photo or video files were found in the current source.")
@@ -852,11 +852,11 @@ private extension ImportDestinationLayout {
     var displayTitle: String {
         switch self {
         case .singleLibrary:
-            return "One Shoot Folder"
+            return "Same Library"
         case .separateMediaFolders:
-            return "Separate Folders"
+            return "Separate Roots"
         case .footageBackup:
-            return "Footage Backup"
+            return "Videos"
         }
     }
 }
@@ -865,9 +865,9 @@ private extension ImportFolderGrouping {
     var displayTitle: String {
         switch self {
         case .byDay:
-            return "By Day"
+            return "By Capture Date"
         case .oneShootFolder:
-            return "One Shoot Folder"
+            return "Single Shoot"
         }
     }
 }

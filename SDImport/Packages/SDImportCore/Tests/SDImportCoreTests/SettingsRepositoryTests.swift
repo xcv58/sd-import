@@ -21,6 +21,7 @@ struct SettingsRepositoryTests {
             lastWorkflowProfile: .footageBackup,
             lastMediaSelection: .videosOnly,
             lastDestinationLayout: .footageBackup,
+            preferredMixedDestinationLayout: .separateMediaFolders,
             lastFolderGrouping: .oneShootFolder,
             themePreference: .dark,
             workflowProfilesByVolume: [
@@ -54,10 +55,50 @@ struct SettingsRepositoryTests {
         #expect(configuration.lastWorkflowProfile == .mixedShootSession)
         #expect(configuration.lastMediaSelection == .photosAndVideos)
         #expect(configuration.lastDestinationLayout == .singleLibrary)
+        #expect(configuration.preferredMixedDestinationLayout == .singleLibrary)
         #expect(configuration.lastFolderGrouping == .byDay)
         #expect(configuration.themePreference == .system)
         #expect(configuration.workflowProfilesByVolume.isEmpty)
         #expect(configuration.hiddenRecentPaths.isEmpty)
+    }
+
+    @Test("decodes preferred mixed destination from last non-video layout")
+    func decodesPreferredMixedDestinationFromLastNonVideoLayout() throws {
+        let json = """
+        {
+          "sourcePath": "/Volumes/CARD",
+          "photosPath": "/Users/example/Pictures",
+          "videosPath": "/Users/example/Movies",
+          "defaultLocation": "Gardens",
+          "lastWorkflowProfile": "photoImport",
+          "lastMediaSelection": "photosOnly",
+          "lastDestinationLayout": "separateMediaFolders"
+        }
+        """
+
+        let configuration = try JSONDecoder().decode(AppConfiguration.self, from: Data(json.utf8))
+
+        #expect(configuration.preferredMixedDestinationLayout == .separateMediaFolders)
+    }
+
+    @Test("does not use footage backup as the preferred mixed destination")
+    func doesNotUseFootageBackupAsPreferredMixedDestination() throws {
+        let json = """
+        {
+          "sourcePath": "/Volumes/CARD",
+          "photosPath": "/Users/example/Pictures",
+          "videosPath": "/Users/example/Movies",
+          "defaultLocation": "Gardens",
+          "lastWorkflowProfile": "footageBackup",
+          "lastMediaSelection": "videosOnly",
+          "lastDestinationLayout": "footageBackup",
+          "preferredMixedDestinationLayout": "footageBackup"
+        }
+        """
+
+        let configuration = try JSONDecoder().decode(AppConfiguration.self, from: Data(json.utf8))
+
+        #expect(configuration.preferredMixedDestinationLayout == .singleLibrary)
     }
 
     @Test("maps legacy organization presets to destination layouts")
