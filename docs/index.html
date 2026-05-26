@@ -6,15 +6,15 @@
     <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="assets/images/favicon-16.png">
     <link rel="apple-touch-icon" href="assets/images/app-icon.png">
-    <link rel="preload" as="image" href="assets/images/sd-import-screenshot-light-1200-20260512.webp" imagesrcset="assets/images/sd-import-screenshot-light-640-20260512.webp 640w, assets/images/sd-import-screenshot-light-1200-20260512.webp 1200w, assets/images/sd-import-screenshot-light-1920-20260512.webp 1920w" imagesizes="(max-width: 460px) calc(100vw - 32px), (max-width: 860px) calc(100vw - 40px), 1060px" media="(prefers-color-scheme: light)">
-    <link rel="preload" as="image" href="assets/images/sd-import-screenshot-dark-1200-20260512.webp" imagesrcset="assets/images/sd-import-screenshot-dark-640-20260512.webp 640w, assets/images/sd-import-screenshot-dark-1200-20260512.webp 1200w, assets/images/sd-import-screenshot-dark-1920-20260512.webp 1920w" imagesizes="(max-width: 460px) calc(100vw - 32px), (max-width: 860px) calc(100vw - 40px), 1060px" media="(prefers-color-scheme: dark)">
+    <link rel="preload" as="image" href="assets/images/sd-import-screenshot-light-1200-20260525.webp" imagesrcset="assets/images/sd-import-screenshot-light-640-20260525.webp 640w, assets/images/sd-import-screenshot-light-1200-20260525.webp 1200w, assets/images/sd-import-screenshot-light-1920-20260525.webp 1920w" imagesizes="(max-width: 460px) calc(100vw - 32px), (max-width: 860px) calc(100vw - 40px), 1060px" media="(prefers-color-scheme: light)">
+    <link rel="preload" as="image" href="assets/images/sd-import-screenshot-dark-1200-20260525.webp" imagesrcset="assets/images/sd-import-screenshot-dark-640-20260525.webp 640w, assets/images/sd-import-screenshot-dark-1200-20260525.webp 1200w, assets/images/sd-import-screenshot-dark-1920-20260525.webp 1920w" imagesizes="(max-width: 460px) calc(100vw - 32px), (max-width: 860px) calc(100vw - 40px), 1060px" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
     <script>
         document.documentElement.setAttribute("data-theme", localStorage.getItem("theme") || "system");
     </script>
     <title>SD Import - Confident photo and video card imports for macOS.</title>
-    <meta name="description" content="SD Import is a free, open-source macOS app for copying SD-card photos and videos into dated folders with preview, dedupe, Sparkle updates, and signed GitHub Releases.">
+    <meta name="description" content="SD Import is a free, open-source macOS app for previewing and copying SD-card photos and videos with scan-first planning, dedupe, Sparkle updates, and signed GitHub Releases.">
     <meta property="og:title" content="SD Import">
     <meta property="og:description" content="Confident photo and video card imports for macOS.">
     <meta property="og:type" content="website">
@@ -37,7 +37,7 @@
             "applicationCategory": "MultimediaApplication",
             "operatingSystem": "macOS 14 or newer",
             "softwareRequirements": "Apple Silicon Mac",
-            "description": "A free, open-source macOS app for previewing and copying SD-card photos and videos into dated folders.",
+            "description": "A free, open-source macOS app for scan-first SD-card photo and video imports with previewed destinations.",
             "image": "https://macos-automation.vercel.app/assets/images/sd-import-screenshot.png",
             "downloadUrl": "https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg",
             "license": "https://github.com/xcv58/macos-automation/blob/main/LICENSE",
@@ -74,7 +74,7 @@
     <main id="main">
         <section class="hero container">
             <h1>Import the card. Keep the originals straight.</h1>
-            <p class="hero-copy">A quiet macOS utility for the after-shoot handoff: plug in a card, inspect what will copy, avoid duplicate originals, and keep camera metadata files visible before anything moves.</p>
+            <p class="hero-copy">A quiet macOS utility for the after-shoot handoff: choose a source, scan the card, confirm exactly what will copy, avoid duplicate originals, and keep camera metadata files visible before anything moves.</p>
             <div class="cta-group">
                 <a class="cta-button cta-primary" href="https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg">Download for Apple Silicon Mac</a>
                 <a class="cta-button cta-secondary" href="#workflow">Watch Workflow</a>
@@ -89,8 +89,8 @@
 
             <div class="hero-visual">
                 <picture class="hero-visual-picture">
-                    <source type="image/webp" srcset="assets/images/sd-import-screenshot-light-640-20260512.webp 640w, assets/images/sd-import-screenshot-light-1200-20260512.webp 1200w, assets/images/sd-import-screenshot-light-1920-20260512.webp 1920w" data-light-srcset="assets/images/sd-import-screenshot-light-640-20260512.webp 640w, assets/images/sd-import-screenshot-light-1200-20260512.webp 1200w, assets/images/sd-import-screenshot-light-1920-20260512.webp 1920w" data-dark-srcset="assets/images/sd-import-screenshot-dark-640-20260512.webp 640w, assets/images/sd-import-screenshot-dark-1200-20260512.webp 1200w, assets/images/sd-import-screenshot-dark-1920-20260512.webp 1920w" sizes="(max-width: 460px) calc(100vw - 32px), (max-width: 860px) calc(100vw - 40px), 1060px">
-                    <img class="hero-screenshot" src="assets/images/sd-import-screenshot-light-20260512.png" data-light-src="assets/images/sd-import-screenshot-light-20260512.png" data-dark-src="assets/images/sd-import-screenshot-dark-20260512.png" width="1920" height="1080" fetchpriority="high" decoding="async" alt="Real SD Import app preview for a PROGRADE card and Penghu Editorial shoot, showing destination folders, skipped camera metadata, and files to copy.">
+                    <source type="image/webp" srcset="assets/images/sd-import-screenshot-light-640-20260525.webp 640w, assets/images/sd-import-screenshot-light-1200-20260525.webp 1200w, assets/images/sd-import-screenshot-light-1920-20260525.webp 1920w" data-light-srcset="assets/images/sd-import-screenshot-light-640-20260525.webp 640w, assets/images/sd-import-screenshot-light-1200-20260525.webp 1200w, assets/images/sd-import-screenshot-light-1920-20260525.webp 1920w" data-dark-srcset="assets/images/sd-import-screenshot-dark-640-20260525.webp 640w, assets/images/sd-import-screenshot-dark-1200-20260525.webp 1200w, assets/images/sd-import-screenshot-dark-1920-20260525.webp 1920w" sizes="(max-width: 460px) calc(100vw - 32px), (max-width: 860px) calc(100vw - 40px), 1060px">
+                    <img class="hero-screenshot" src="assets/images/sd-import-screenshot-light-20260525.png" data-light-src="assets/images/sd-import-screenshot-light-20260525.png" data-dark-src="assets/images/sd-import-screenshot-dark-20260525.png" width="1920" height="1080" fetchpriority="high" decoding="async" alt="Real SD Import app preview after scanning a mixed photo and video source, showing Import Type, Destination, Group Into, and files to copy.">
                 </picture>
             </div>
         </section>
@@ -99,28 +99,28 @@
             <div class="container media-layout">
                 <div class="section-header">
                     <h2>See the decision before files move.</h2>
-                    <p>The screencast shows the core loop in the real app: scan a mounted PROGRADE card, confirm the Penghu Editorial destination, then review skipped camera metadata before copying.</p>
+                    <p>The screencast shows the core loop in the real app: choose a source, scan it, then confirm import type, destination folders, grouping, sidecars, and files before copying.</p>
                 </div>
                 <div class="media-grid">
                     <figure class="media-frame">
-                        <video controls playsinline muted preload="none" poster="assets/images/sd-import-screenshot-light-800-20260512.webp" data-light-poster="assets/images/sd-import-screenshot-light-800-20260512.webp" data-dark-poster="assets/images/sd-import-screenshot-dark-800-20260512.webp" aria-describedby="screencast-caption">
-                            <source src="assets/media/sd-import-screencast-light-20260512.mp4" data-light-src="assets/media/sd-import-screencast-light-20260512.mp4" data-dark-src="assets/media/sd-import-screencast-dark-20260512.mp4" type="video/mp4">
+                        <video controls playsinline muted preload="none" poster="assets/images/sd-import-screenshot-light-800-20260525.webp" data-light-poster="assets/images/sd-import-screenshot-light-800-20260525.webp" data-dark-poster="assets/images/sd-import-screenshot-dark-800-20260525.webp" aria-describedby="screencast-caption">
+                            <source src="assets/media/sd-import-screencast-light-20260525.mp4" data-light-src="assets/media/sd-import-screencast-light-20260525.mp4" data-dark-src="assets/media/sd-import-screencast-dark-20260525.mp4" type="video/mp4">
                             Your browser does not support the SD Import screencast.
                         </video>
                         <details class="video-transcript">
                             <summary>Screencast steps</summary>
                             <ol>
-                                <li>SD Import detects the mounted PROGRADE card and shows the selected source.</li>
-                                <li>The preview groups photos and footage into dated Penghu Editorial destinations.</li>
-                                <li>Already-copied files and camera metadata are shown before the copy starts.</li>
+                                <li>SD Import starts with the selected source and scans it on demand.</li>
+                                <li>The import plan recommends photos, videos, or both from the scan result.</li>
+                                <li>Destination folders, skipped sidecars, and files to copy are visible before the copy starts.</li>
                             </ol>
                         </details>
-                        <figcaption id="screencast-caption">Screencast: the real app scans a mounted PROGRADE card and builds the Penghu Editorial preview.</figcaption>
+                        <figcaption id="screencast-caption">Screencast: the real app scans a mixed photo and video source, then builds the Import Plan.</figcaption>
                     </figure>
                     <figure class="media-frame">
                         <picture>
-                            <source type="image/webp" srcset="assets/images/sd-import-screenshot-light-640-20260512.webp 640w, assets/images/sd-import-screenshot-light-1200-20260512.webp 1200w, assets/images/sd-import-screenshot-light-1920-20260512.webp 1920w" data-light-srcset="assets/images/sd-import-screenshot-light-640-20260512.webp 640w, assets/images/sd-import-screenshot-light-1200-20260512.webp 1200w, assets/images/sd-import-screenshot-light-1920-20260512.webp 1920w" data-dark-srcset="assets/images/sd-import-screenshot-dark-640-20260512.webp 640w, assets/images/sd-import-screenshot-dark-1200-20260512.webp 1200w, assets/images/sd-import-screenshot-dark-1920-20260512.webp 1920w" sizes="(max-width: 860px) calc(100vw - 40px), 709px">
-                            <img src="assets/images/sd-import-screenshot-light-20260512.png" data-light-src="assets/images/sd-import-screenshot-light-20260512.png" data-dark-src="assets/images/sd-import-screenshot-dark-20260512.png" width="1920" height="1080" loading="lazy" decoding="async" alt="Real SD Import app preview showing Penghu Editorial files to copy, skipped camera metadata, and destination folders.">
+                            <source type="image/webp" srcset="assets/images/sd-import-screenshot-light-640-20260525.webp 640w, assets/images/sd-import-screenshot-light-1200-20260525.webp 1200w, assets/images/sd-import-screenshot-light-1920-20260525.webp 1920w" data-light-srcset="assets/images/sd-import-screenshot-light-640-20260525.webp 640w, assets/images/sd-import-screenshot-light-1200-20260525.webp 1200w, assets/images/sd-import-screenshot-light-1920-20260525.webp 1920w" data-dark-srcset="assets/images/sd-import-screenshot-dark-640-20260525.webp 640w, assets/images/sd-import-screenshot-dark-1200-20260525.webp 1200w, assets/images/sd-import-screenshot-dark-1920-20260525.webp 1920w" sizes="(max-width: 860px) calc(100vw - 40px), 709px">
+                            <img src="assets/images/sd-import-screenshot-light-20260525.png" data-light-src="assets/images/sd-import-screenshot-light-20260525.png" data-dark-src="assets/images/sd-import-screenshot-dark-20260525.png" width="1920" height="1080" loading="lazy" decoding="async" alt="Real SD Import app preview showing the current Import Plan controls, skipped sidecars, and files to copy.">
                         </picture>
                         <figcaption>Screenshot: the real preview state before copying a mixed photo and video card.</figcaption>
                     </figure>
@@ -145,8 +145,8 @@
                     <li>
                         <span class="step-number">2</span>
                         <div>
-                            <h3>Confirm destinations.</h3>
-                            <p>Set separate photo and footage libraries, then review the dated destination folders before copying.</p>
+                            <h3>Scan, then choose the plan.</h3>
+                            <p>After the scan, choose photos, videos, or both, then decide whether they land in one library or separate folders.</p>
                         </div>
                     </li>
                     <li>
@@ -184,7 +184,7 @@
                     </article>
                     <article class="card">
                         <h3>Keep metadata files visible</h3>
-                        <p>Photo imports skip camera support files. Footage backups can keep sidecar metadata when the project needs it.</p>
+                        <p>Camera support files stay visible in the preview, so sidecars and unsupported files do not disappear into the copy silently.</p>
                     </article>
                 </div>
             </div>
@@ -202,8 +202,8 @@
                         <span>RAW and JPEG files are treated as photos and grouped into dated shoot folders.</span>
                     </div>
                     <div class="use-case-row">
-                        <strong>Footage backup</strong>
-                        <span>Video cards can keep camera metadata sidecar files when a project needs XML, metadata, or proxy files.</span>
+                        <strong>Video import</strong>
+                        <span>Video files can use their own destination folder while staying part of the same scanned import plan.</span>
                     </div>
                     <div class="use-case-row">
                         <strong>Repeat cards</strong>

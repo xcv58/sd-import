@@ -13,10 +13,12 @@ struct CaptureDateReaderTests {
         let exifDate = try #require(CaptureDateParser.date(from: "2022:05:06 07:08:09"))
         let isoDate = try #require(CaptureDateParser.date(from: "2023-04-05T06:07:08Z"))
         let quickTimeDate = try #require(CaptureDateParser.date(from: "2024-03-02T01:00:00+0000"))
+        var utcCalendar = Calendar(identifier: .gregorian)
+        utcCalendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
 
         #expect(CaptureDateParser.captureDateString(from: exifDate) == "2022-05-06")
-        #expect(CaptureDateParser.captureDateString(from: isoDate) == "2023-04-05")
-        #expect(CaptureDateParser.captureDateString(from: quickTimeDate) == "2024-03-02")
+        #expect(CaptureDateParser.captureDateString(from: isoDate, calendar: utcCalendar) == "2023-04-05")
+        #expect(CaptureDateParser.captureDateString(from: quickTimeDate, calendar: utcCalendar) == "2024-03-02")
     }
 
     @Test("scanner uses JPEG EXIF date before filesystem fallback")
