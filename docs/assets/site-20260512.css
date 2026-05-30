@@ -369,7 +369,7 @@ pre code {
 .hero-screenshot {
     width: 100%;
     aspect-ratio: 16 / 9;
-    object-fit: cover;
+    object-fit: contain;
     background: var(--surface);
     border-radius: 12px;
     box-shadow: 0 26px 54px var(--shadow);
@@ -587,7 +587,7 @@ picture.hero-visual-picture {
 .media-frame picture {
     width: 100%;
     aspect-ratio: 16 / 9;
-    object-fit: cover;
+    object-fit: contain;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
