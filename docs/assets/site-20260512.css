@@ -223,10 +223,9 @@ pre code {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    min-width: 34px;
+    width: 34px;
     height: 32px;
-    padding: 0 10px;
+    padding: 0;
     border: 0;
     border-radius: 99px;
     background: transparent;
@@ -250,7 +249,7 @@ pre code {
 }
 
 .theme-btn span {
-    line-height: 1;
+    display: none;
 }
 
 .theme-btn.active {
@@ -582,16 +581,165 @@ picture.hero-visual-picture {
     margin: 0;
 }
 
-.media-frame video,
+.lite-video-player,
 .media-frame img,
 .media-frame picture {
     width: 100%;
-    aspect-ratio: 16 / 9;
-    object-fit: contain;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     box-shadow: 0 18px 42px var(--shadow);
+}
+
+.media-frame img,
+.media-frame picture {
+    aspect-ratio: 16 / 9;
+    object-fit: contain;
+}
+
+.lite-video-player {
+    position: relative;
+    overflow: hidden;
+}
+
+.lite-video-player video {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    height: auto;
+    object-fit: contain;
+}
+
+.video-overlay-play {
+    position: absolute;
+    inset: 0 0 58px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.18) 100%);
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 0.18s ease;
+}
+
+.video-overlay-play svg {
+    width: 58px;
+    height: 58px;
+    padding: 16px;
+    fill: currentColor;
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.28));
+}
+
+.lite-video-player.is-playing .video-overlay-play {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.lite-video-controls {
+    position: relative;
+    display: grid;
+    grid-template-columns: 34px auto minmax(80px, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    min-height: 46px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface), var(--bg-color) 22%);
+    color: var(--text-primary);
+}
+
+.video-control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--surface-hover);
+    color: inherit;
+    cursor: pointer;
+}
+
+.video-control:hover {
+    background: color-mix(in srgb, var(--surface-hover), var(--accent) 10%);
+}
+
+.video-control svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.video-play-toggle .icon-play {
+    fill: currentColor;
+    stroke: none;
+}
+
+.video-play-toggle .icon-pause,
+.lite-video-player.is-playing .video-play-toggle .icon-play {
+    display: none;
+}
+
+.lite-video-player.is-playing .video-play-toggle .icon-pause {
+    display: block;
+}
+
+.video-time {
+    min-width: 38px;
+    font-size: 0.78rem;
+    font-weight: 650;
+    line-height: 1;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.video-scrubber {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+    height: 20px;
+    cursor: pointer;
+    touch-action: none;
+}
+
+.video-scrubber-track {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: var(--border);
+}
+
+.video-scrubber-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0%;
+    border-radius: inherit;
+    background: #0a84ff;
+}
+
+.video-scrubber::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: var(--video-progress, 0%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #0a84ff;
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.24);
+    transform: translate(-50%, -50%);
 }
 
 .media-frame picture {
@@ -896,10 +1044,6 @@ picture.hero-visual-picture {
         padding: 0;
     }
 
-    .theme-btn span {
-        display: none;
-    }
-
     .hero {
         display: flex;
         flex-direction: column;
@@ -1059,6 +1203,22 @@ picture.hero-visual-picture {
     .mock-pill {
         font-size: 0.78rem;
         padding: 5px 9px;
+    }
+
+    .lite-video-controls {
+        grid-template-columns: 32px minmax(60px, 1fr);
+        gap: 8px;
+        min-height: 42px;
+        padding: 5px 8px;
+    }
+
+    .video-time {
+        display: none;
+    }
+
+    .video-control {
+        width: 32px;
+        height: 32px;
     }
 
     .hero-use-case {
