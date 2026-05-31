@@ -21,9 +21,6 @@ struct SettingsView: View {
         .onDisappear {
             model.savePreferences()
         }
-        .onChange(of: model.cardPath) {
-            model.sourcePathDidChange()
-        }
         .onChange(of: model.photosPath) {
             model.validatePaths()
         }
@@ -33,13 +30,7 @@ struct SettingsView: View {
     }
 
     private var destinations: some View {
-        AppSection("Destinations", systemImage: "folder") {
-            FolderSettingRow(
-                title: "Card or source",
-                path: $model.cardPath,
-                validation: model.sourceValidation,
-                action: model.chooseCardFolder
-            )
+        AppSection("Default Destinations", systemImage: "folder") {
             FolderSettingRow(
                 title: "Photos",
                 path: $model.photosPath,
@@ -52,50 +43,108 @@ struct SettingsView: View {
                 validation: model.videosValidation,
                 action: model.chooseVideosFolder
             )
-            LabeledContent("Shoot name") {
-                TextField("Shoot name", text: $model.location)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 280)
-                    .onSubmit {
-                        model.savePreferences()
-                    }
-            }
         }
     }
 
     private var general: some View {
         AppSection("General", systemImage: "gearshape") {
-            Picker("Theme", selection: $model.themePreference) {
-                ForEach(AppThemePreference.allCases) { theme in
-                    Text(theme.settingsTitle).tag(theme)
+            SettingsFormRow("Theme") {
+                Picker(selection: $model.themePreference) {
+                    ForEach(AppThemePreference.allCases) { theme in
+                        Text(theme.settingsTitle).tag(theme)
+                    }
+                } label: {
+                    EmptyView()
+                }
+                .labelsHidden()
+                .accessibilityLabel("Theme")
+                .pickerStyle(.segmented)
+                .frame(width: SettingsLayout.segmentedControlWidth)
+                .offset(x: -SettingsLayout.segmentedPickerChromeInset)
+                .onChange(of: model.themePreference) {
+                    model.themePreferenceDidChange()
                 }
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 320)
-            .onChange(of: model.themePreference) {
-                model.themePreferenceDidChange()
-            }
 
-            Picker("History", selection: $model.historyRetention) {
-                ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
-                    Text(policy.settingsTitle).tag(policy)
+            SettingsFormRow("History") {
+                Picker(selection: $model.historyRetention) {
+                    ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
+                        Text(policy.settingsTitle).tag(policy)
+                    }
+                } label: {
+                    EmptyView()
                 }
-            }
-            .onChange(of: model.historyRetention) {
-                model.savePreferences()
-            }
-
-            Toggle("Prompt on card mount", isOn: $model.autoPromptEnabled)
-                .onChange(of: model.autoPromptEnabled) {
+                .labelsHidden()
+                .accessibilityLabel("History")
+                .frame(width: SettingsLayout.compactPickerWidth)
+                .offset(x: -SettingsLayout.menuPickerChromeInset)
+                .onChange(of: model.historyRetention) {
                     model.savePreferences()
-                    model.updateLoginItemRegistration()
                 }
+            }
+
+            SettingsFormRow {
+                Toggle("Prompt on card mount", isOn: $model.autoPromptEnabled)
+                    .onChange(of: model.autoPromptEnabled) {
+                        model.savePreferences()
+                        model.updateLoginItemRegistration()
+                    }
+            }
         }
     }
 
     private var updates: some View {
         AppSection("Updates", systemImage: "arrow.clockwise") {
-            UpdaterSettingsView(updater: updater)
+            UpdaterSettingsView(
+                updater: updater,
+                leadingInset: SettingsLayout.controlColumnStart
+            )
+        }
+    }
+}
+
+private enum SettingsLayout {
+    static let labelWidth: CGFloat = 118
+    static let columnSpacing: CGFloat = 12
+    static let controlWidth: CGFloat = 620
+    static let segmentedControlWidth: CGFloat = 280
+    static let compactPickerWidth: CGFloat = 140
+    static let controlColumnStart = labelWidth + columnSpacing
+    static let segmentedPickerChromeInset: CGFloat = 34
+    static let menuPickerChromeInset: CGFloat = 16
+}
+
+private struct SettingsFormRow<Content: View>: View {
+    private let title: String?
+    private let content: Content
+
+    init(
+        _ title: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: SettingsLayout.columnSpacing) {
+            Group {
+                if let title {
+                    Text(title)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: SettingsLayout.labelWidth, alignment: .trailing)
+            .padding(.top, 5)
+
+            content
+                .frame(maxWidth: SettingsLayout.controlWidth, alignment: .leading)
+
+            Spacer(minLength: 0)
         }
     }
 }
@@ -107,7 +156,7 @@ private struct FolderSettingRow: View {
     let action: () -> Void
 
     var body: some View {
-        LabeledContent(title) {
+        SettingsFormRow(title) {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     TextField(title, text: $path)
@@ -122,7 +171,7 @@ private struct FolderSettingRow: View {
                     .accessibilityLabel("Choose \(title.lowercased())")
                 }
 
-                PathStatusLine(result: validation)
+                DestinationStatusLine(result: validation)
 
                 if validation.isUsable, let capacityText {
                     Label(capacityText, systemImage: "internaldrive")
@@ -131,7 +180,7 @@ private struct FolderSettingRow: View {
                         .lineLimit(1)
                 }
             }
-            .frame(maxWidth: 520)
+            .frame(maxWidth: SettingsLayout.controlWidth)
         }
     }
 
@@ -148,14 +197,45 @@ private struct FolderSettingRow: View {
     }
 }
 
-private struct PathStatusLine: View {
+private struct DestinationStatusLine: View {
     let result: PathValidationResult
 
     var body: some View {
-        Label(result.message, systemImage: result.isUsable ? "checkmark.circle" : "exclamationmark.triangle")
+        Label(message, systemImage: systemImage)
             .font(.caption)
-            .foregroundStyle(result.isUsable ? Color.secondary : Color.orange)
+            .foregroundStyle(foregroundStyle)
             .lineLimit(1)
+    }
+
+    private var message: String {
+        switch result.status {
+        case .empty:
+            return "Choose a folder"
+        case .missing:
+            return "Unavailable"
+        default:
+            return result.message
+        }
+    }
+
+    private var systemImage: String {
+        switch result.status {
+        case .ready:
+            return "checkmark.circle"
+        case .missing:
+            return "externaldrive.badge.questionmark"
+        default:
+            return "exclamationmark.triangle"
+        }
+    }
+
+    private var foregroundStyle: Color {
+        switch result.status {
+        case .ready, .missing:
+            return .secondary
+        default:
+            return .orange
+        }
     }
 }
 

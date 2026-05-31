@@ -68,31 +68,36 @@ private struct EnabledCheckForUpdatesView: View {
 
 struct UpdaterSettingsView: View {
     private let updater: SPUUpdater?
+    private let leadingInset: CGFloat
 
     @State private var automaticallyChecksForUpdates: Bool
     @State private var automaticallyDownloadsUpdates: Bool
 
-    init(updater: SPUUpdater?) {
+    init(updater: SPUUpdater?, leadingInset: CGFloat = 0) {
         self.updater = updater
+        self.leadingInset = leadingInset
         self.automaticallyChecksForUpdates = updater?.automaticallyChecksForUpdates ?? false
         self.automaticallyDownloadsUpdates = updater?.automaticallyDownloadsUpdates ?? false
     }
 
     var body: some View {
-        if let updater {
-            Toggle("Automatically check for updates", isOn: $automaticallyChecksForUpdates)
-                .onChange(of: automaticallyChecksForUpdates) {
-                    updater.automaticallyChecksForUpdates = automaticallyChecksForUpdates
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            if let updater {
+                Toggle("Automatically check for updates", isOn: $automaticallyChecksForUpdates)
+                    .onChange(of: automaticallyChecksForUpdates) {
+                        updater.automaticallyChecksForUpdates = automaticallyChecksForUpdates
+                    }
 
-            Toggle("Automatically download updates", isOn: $automaticallyDownloadsUpdates)
-                .disabled(!automaticallyChecksForUpdates)
-                .onChange(of: automaticallyDownloadsUpdates) {
-                    updater.automaticallyDownloadsUpdates = automaticallyDownloadsUpdates
-                }
-        } else {
-            Text("Updates are not configured for this build.")
-                .foregroundStyle(.secondary)
+                Toggle("Automatically download updates", isOn: $automaticallyDownloadsUpdates)
+                    .disabled(!automaticallyChecksForUpdates)
+                    .onChange(of: automaticallyDownloadsUpdates) {
+                        updater.automaticallyDownloadsUpdates = automaticallyDownloadsUpdates
+                    }
+            } else {
+                Text("Updates are not configured for this build.")
+                    .foregroundStyle(.secondary)
+            }
         }
+        .padding(.leading, leadingInset)
     }
 }
