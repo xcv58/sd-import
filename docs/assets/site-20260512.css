@@ -945,24 +945,77 @@ picture.hero-visual-picture {
     margin-top: 18px;
 }
 
-.link-list {
+.resource-list {
     display: grid;
-    gap: 12px;
+    border-top: 1px solid var(--border);
 }
 
-.link-list a {
-    display: flex;
-    justify-content: space-between;
+.resource-link {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 24px;
     gap: 18px;
-    padding: 14px 0;
+    align-items: center;
+    min-width: 0;
+    min-height: 92px;
+    padding: 18px 0;
     border-bottom: 1px solid var(--border);
     color: var(--text-primary);
-    font-weight: 600;
 }
 
-.link-list a span {
+.resource-link:hover .resource-copy strong {
+    color: var(--accent);
+}
+
+.resource-link:hover .resource-arrow {
+    color: var(--accent);
+    transform: translateX(2px);
+}
+
+.resource-icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    color: var(--theme-muted);
+    background: var(--surface);
+    border-radius: 10px;
+}
+
+.resource-icon svg,
+.resource-arrow svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.resource-copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.resource-copy strong {
+    font-size: 1.08rem;
+    line-height: 1.25;
+    letter-spacing: 0;
+    transition: color 0.2s ease;
+}
+
+.resource-copy span {
     color: var(--text-secondary);
-    font-weight: 500;
+    font-size: 0.94rem;
+    line-height: 1.35;
+}
+
+.resource-arrow {
+    display: grid;
+    place-items: center;
+    color: var(--text-secondary);
+    transition: color 0.2s ease, transform 0.2s ease;
 }
 
 .site-footer {
@@ -1128,7 +1181,7 @@ picture.hero-visual-picture {
     .policy-box,
     .card,
     .step,
-    .link-list a,
+    .resource-link,
     .use-case-row {
         overflow-wrap: anywhere;
     }
@@ -1190,6 +1243,33 @@ picture.hero-visual-picture {
 
     .cta-group {
         max-width: 300px;
+    }
+
+    .resource-link {
+        grid-template-columns: 36px minmax(0, 1fr) 20px;
+        gap: 12px;
+        min-height: 82px;
+        padding: 14px 0;
+    }
+
+    .resource-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 9px;
+    }
+
+    .resource-icon svg,
+    .resource-arrow svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .resource-copy strong {
+        font-size: 1rem;
+    }
+
+    .resource-copy span {
+        font-size: 0.9rem;
     }
 
     .mock-main {
