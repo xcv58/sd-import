@@ -44,6 +44,14 @@ struct MountDetectionTests {
             volumeUUID: nil,
             isRemovable: true
         )
+        let namedDiskImage = MountedVolume(
+            id: "named-image",
+            name: "Gemini 1.72.2.419",
+            mountURL: URL(fileURLWithPath: "/Volumes/Gemini 1.72.2.419", isDirectory: true),
+            volumeUUID: nil,
+            isRemovable: true,
+            isDiskImage: true
+        )
         let backup = MountedVolume(
             id: "backup",
             name: "Time Machine Backups",
@@ -67,6 +75,7 @@ struct MountDetectionTests {
         )
 
         #expect(detector.isLikelyImportVolume(diskImage) == false)
+        #expect(detector.isLikelyImportVolume(namedDiskImage) == false)
         #expect(detector.isLikelyImportVolume(backup) == false)
         #expect(detector.isLikelyImportVolume(recovery) == false)
         #expect(detector.isLikelyImportVolume(nonRemovableVolumePath) == false)
@@ -129,6 +138,26 @@ struct MountDetectionTests {
         )
 
         #expect(available == 64_000_000_000)
+    }
+
+    @Test("mounted volume decoding treats older payloads as non disk images")
+    func mountedVolumeDecodingDefaultsDiskImageFlag() throws {
+        let json = """
+        {
+          "id": "card",
+          "name": "CARD",
+          "mountURL": "file:///Volumes/CARD/",
+          "volumeUUID": null,
+          "isRemovable": true,
+          "isInternal": false,
+          "totalCapacityBytes": null,
+          "availableCapacityBytes": null
+        }
+        """
+
+        let volume = try JSONDecoder().decode(MountedVolume.self, from: Data(json.utf8))
+
+        #expect(volume.isDiskImage == false)
     }
 
     @Test("volume detector finds importable media before prompting")

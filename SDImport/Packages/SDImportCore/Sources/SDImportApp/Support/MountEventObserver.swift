@@ -77,6 +77,7 @@ final class MountEventObserver {
                 volumeUUID: volume.volumeUUID,
                 isRemovable: volume.isRemovable,
                 isInternal: volume.isInternal,
+                isDiskImage: volume.isDiskImage,
                 totalCapacityBytes: volume.totalCapacityBytes,
                 availableCapacityBytes: volume.availableCapacityBytes
             )

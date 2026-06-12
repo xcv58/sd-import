@@ -1,3 +1,4 @@
+import DiskArbitration
 import Foundation
 
 public struct VolumeDetector: Sendable {
@@ -20,8 +21,11 @@ public struct VolumeDetector: Sendable {
             .volumeAvailableCapacityForImportantUsageKey
         ])
         let name = values?.volumeName ?? mountURL.lastPathComponent
+        let diskTraits = Self.diskTraits(for: mountURL)
         let isRemovable = (values?.volumeIsRemovable ?? false)
             || (values?.volumeIsEjectable ?? false)
+            || diskTraits.isRemovable
+            || diskTraits.isEjectable
         let totalCapacity = values?.volumeTotalCapacity.map(Int64.init)
         let availableCapacity = Self.sourceAvailableCapacity(
             available: values?.volumeAvailableCapacity.map(Int64.init),
@@ -35,6 +39,7 @@ public struct VolumeDetector: Sendable {
             volumeUUID: values?.volumeUUIDString,
             isRemovable: isRemovable,
             isInternal: values?.volumeIsInternal ?? false,
+            isDiskImage: diskTraits.isDiskImage || Self.hasDiskImageNameOrPath(name: name, path: mountURL.path),
             totalCapacityBytes: totalCapacity,
             availableCapacityBytes: availableCapacity
         )
@@ -129,12 +134,68 @@ public struct VolumeDetector: Sendable {
     }
 
     private func isDiskImage(_ volume: MountedVolume) -> Bool {
-        let name = volume.name.lowercased()
-        let path = volume.mountURL.path.lowercased()
+        volume.isDiskImage || Self.hasDiskImageNameOrPath(name: volume.name, path: volume.mountURL.path)
+    }
+
+    private static func hasDiskImageNameOrPath(name: String, path: String) -> Bool {
+        let name = name.lowercased()
+        let path = path.lowercased()
         return name.hasSuffix(".dmg")
             || name.hasSuffix(".sparsebundle")
             || path.hasSuffix(".dmg")
             || path.hasSuffix(".sparsebundle")
+    }
+
+    private static func diskTraits(for volumeURL: URL) -> DiskTraits {
+        guard
+            let session = DASessionCreate(kCFAllocatorDefault),
+            let disk = DADiskCreateFromVolumePath(kCFAllocatorDefault, session, volumeURL as CFURL),
+            let description = DADiskCopyDescription(disk) as? [String: Any]
+        else {
+            return DiskTraits()
+        }
+
+        return DiskTraits(
+            deviceModel: description[kDADiskDescriptionDeviceModelKey as String] as? String,
+            mediaName: description[kDADiskDescriptionMediaNameKey as String] as? String,
+            isRemovable: boolValue(description[kDADiskDescriptionMediaRemovableKey as String]),
+            isEjectable: boolValue(description[kDADiskDescriptionMediaEjectableKey as String])
+        )
+    }
+
+    private static func boolValue(_ value: Any?) -> Bool {
+        if let value = value as? Bool {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.boolValue
+        }
+        return false
+    }
+
+    private struct DiskTraits: Sendable {
+        let deviceModel: String?
+        let mediaName: String?
+        let isRemovable: Bool
+        let isEjectable: Bool
+
+        init(
+            deviceModel: String? = nil,
+            mediaName: String? = nil,
+            isRemovable: Bool = false,
+            isEjectable: Bool = false
+        ) {
+            self.deviceModel = deviceModel
+            self.mediaName = mediaName
+            self.isRemovable = isRemovable
+            self.isEjectable = isEjectable
+        }
+
+        var isDiskImage: Bool {
+            [deviceModel, mediaName]
+                .compactMap { $0?.lowercased() }
+                .contains { $0.contains("disk image") }
+        }
     }
 
     private func isDirectory(_ url: URL, fileManager: FileManager) -> Bool {
