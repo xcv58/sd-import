@@ -35,7 +35,8 @@ When the app opens:
 Default folder pattern:
 
 - Photos: `Pictures/Photos/YYYY-MM-DD Location`
-- Videos: `Downloads/tmp-YYYY-MM-DD-videos`
+- Videos: `Downloads/YYYY-MM-DD Location`
+- Same photo/video root: `YYYY-MM-DD Location-Photos` and `YYYY-MM-DD Location-Video`
 
 ## Import From A Card
 

@@ -5,8 +5,8 @@ import Testing
 
 @Suite("DestinationPlanner")
 struct DestinationPlannerTests {
-    @Test("plans photo and video destination directories")
-    func plansDestinationDirectories() throws {
+    @Test("plans separate photo and video roots with dated shoot folders")
+    func plansSeparateMediaDestinationDirectories() throws {
         let roots = DestinationRoots(
             photosURL: URL(fileURLWithPath: "/tmp/photos", isDirectory: true),
             videosURL: URL(fileURLWithPath: "/tmp/videos", isDirectory: true)
@@ -29,7 +29,36 @@ struct DestinationPlannerTests {
         )
 
         #expect(photoURL?.path == "/tmp/photos/2024-07-15 TEST/IMG_0001.JPG")
-        #expect(videoURL?.path == "/tmp/videos/tmp-2024-07-15-videos/VID_0001.MP4")
+        #expect(videoURL?.path == "/tmp/videos/2024-07-15 TEST/VID_0001.MP4")
+    }
+
+    @Test("suffixes media folders when separate media roots match")
+    func suffixesMatchingSeparateMediaRoots() throws {
+        let roots = DestinationRoots(
+            photosURL: URL(fileURLWithPath: "/tmp/library", isDirectory: true),
+            videosURL: URL(fileURLWithPath: "/tmp/library", isDirectory: true)
+        )
+        let planner = DestinationPlanner()
+
+        let photoURL = planner.destinationURL(
+            filename: "IMG_0001.JPG",
+            mediaKind: .photo,
+            captureDate: "2024-07-15",
+            sessionLabel: "TEST",
+            roots: roots,
+            organizationPreset: .classicDatedFolders
+        )
+        let videoURL = planner.destinationURL(
+            filename: "VID_0001.MP4",
+            mediaKind: .video,
+            captureDate: "2024-07-15",
+            sessionLabel: "TEST",
+            roots: roots,
+            organizationPreset: .classicDatedFolders
+        )
+
+        #expect(photoURL?.path == "/tmp/library/2024-07-15 TEST-Photos/IMG_0001.JPG")
+        #expect(videoURL?.path == "/tmp/library/2024-07-15 TEST-Video/VID_0001.MP4")
     }
 
     @Test("uses Untitled for blank photo locations")

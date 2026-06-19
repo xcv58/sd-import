@@ -356,7 +356,45 @@ class CaptureDateTests(unittest.TestCase):
 
             by_type = {row["media_type"]: row["dest_dir"] for row in rows}
             self.assertEqual(by_type["photo"], str(photos / "2024-07-15 TEST"))
-            self.assertEqual(by_type["video"], str(videos / "tmp-2024-07-15-videos"))
+            self.assertEqual(by_type["video"], str(videos / "2024-07-15 TEST"))
+
+    def test_scan_mount_suffixes_media_dirs_when_destination_roots_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            mount = root / "mount"
+            library = root / "library"
+            db_path = root / "state.db"
+            mount.mkdir(parents=True, exist_ok=True)
+            library.mkdir(parents=True, exist_ok=True)
+
+            (mount / "IMG_0001.JPG").write_bytes(b"photo-bytes")
+            (mount / "VID_0001.MP4").write_bytes(b"video-bytes")
+            capture_map = {
+                str(mount / "IMG_0001.JPG"): "2024-07-15",
+                str(mount / "VID_0001.MP4"): "2024-07-15",
+            }
+
+            conn = sd_import.connect_db(db_path)
+            try:
+                with mock.patch("sd_import_modules.scan.capture_dates_from_exiftool_batch", return_value=capture_map):
+                    summary = sd_import.scan_mount(
+                        conn=conn,
+                        mount_path=mount,
+                        location="TEST",
+                        photos_base=library,
+                        videos_base=library,
+                    )
+
+                rows = conn.execute(
+                    "SELECT media_type, dest_dir FROM job_files WHERE job_id=? ORDER BY media_type",
+                    (summary["job_id"],),
+                ).fetchall()
+            finally:
+                conn.close()
+
+            by_type = {row["media_type"]: row["dest_dir"] for row in rows}
+            self.assertEqual(by_type["photo"], str(library / "2024-07-15 TEST-Photos"))
+            self.assertEqual(by_type["video"], str(library / "2024-07-15 TEST-Video"))
 
 
 class DiskutilDetectionTests(unittest.TestCase):

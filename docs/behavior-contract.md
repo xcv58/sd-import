@@ -95,16 +95,18 @@ Rules:
 
 ## Destination Planning
 
-Photos:
+Separate Folders with different roots:
 
 ```text
 <photosRoot>/<YYYY-MM-DD> <location>/<filename>
+<videosRoot>/<YYYY-MM-DD> <location>/<filename>
 ```
 
-Videos:
+Separate Folders with the same root:
 
 ```text
-<videosRoot>/tmp-<YYYY-MM-DD>-videos/<filename>
+<root>/<YYYY-MM-DD> <location>-Photos/<filename>
+<root>/<YYYY-MM-DD> <location>-Video/<filename>
 ```
 
 Shoot Sessions:
@@ -134,6 +136,7 @@ Rules:
 
 - Empty location labels are treated as `Untitled`.
 - Destination roots are user-selected folders.
+- Separate Folders adds `-Photos` and `-Video` when the selected roots are the same directory.
 - The job stores the destination roots used at scan/import time.
 - Footage Backup uses flat files under the generated session folder for videos and selected sidecar files.
 - One Shoot Folder grouping flattens selected files directly under the generated shoot folder.

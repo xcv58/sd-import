@@ -26,6 +26,35 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+def safe_destination_component(value: Optional[str], fallback: str) -> str:
+    source = (value or "").strip() or fallback
+    return source.replace("/", "-").replace(":", "-")
+
+
+def destination_roots_match(photos_base: Path, videos_base: Path) -> bool:
+    photos_path = os.path.abspath(os.path.expanduser(str(photos_base)))
+    videos_path = os.path.abspath(os.path.expanduser(str(videos_base)))
+    return os.path.normcase(photos_path) == os.path.normcase(videos_path)
+
+
+def planned_media_dest_dir(
+    media_type: str,
+    capture_date: str,
+    location: str,
+    photos_base: Path,
+    videos_base: Path,
+) -> Path:
+    if media_type not in ("photo", "video"):
+        raise ValueError(f"unsupported media type for destination planning: {media_type}")
+
+    folder_name = f"{capture_date} {safe_destination_component(location, 'Untitled')}"
+    if destination_roots_match(photos_base, videos_base):
+        folder_name += "-Photos" if media_type == "photo" else "-Video"
+
+    root = photos_base if media_type == "photo" else videos_base
+    return root.expanduser() / folder_name
+
+
 def atomic_write_text(path: Path, content: str) -> None:
     ensure_dir(path.parent)
     tmp_path = path.with_suffix(path.suffix + ".tmp")

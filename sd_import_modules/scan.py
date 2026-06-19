@@ -10,7 +10,12 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
-from .common import make_job_id, metadata_fingerprint
+from .common import (
+    make_job_id,
+    metadata_fingerprint,
+    planned_media_dest_dir,
+    safe_destination_component,
+)
 from .db import begin_job, finalize_job_scan, get_diskutil_info, get_state_dir_from_conn
 from .importer import existing_hash_matches
 
@@ -194,13 +199,28 @@ def choose_location(config: Dict[str, Any], requested_location: Optional[str], v
     return str(config.get("default_location", "Untitled"))
 
 
-def make_photo_dest_dir(photos_base: Path, capture_date: str, location: str) -> Path:
-    safe_location = location.strip() or "Untitled"
-    return photos_base / f"{capture_date} {safe_location}"
+def make_photo_dest_dir(
+    photos_base: Path,
+    capture_date: str,
+    location: str,
+    videos_base: Optional[Path] = None,
+) -> Path:
+    if videos_base is None:
+        folder_name = f"{capture_date} {safe_destination_component(location, 'Untitled')}"
+        return photos_base.expanduser() / folder_name
+    return planned_media_dest_dir("photo", capture_date, location, photos_base, videos_base)
 
 
-def make_video_dest_dir(videos_base: Path, capture_date: str) -> Path:
-    return videos_base / f"tmp-{capture_date}-videos"
+def make_video_dest_dir(
+    videos_base: Path,
+    capture_date: str,
+    location: str = "Untitled",
+    photos_base: Optional[Path] = None,
+) -> Path:
+    if photos_base is None:
+        folder_name = f"{capture_date} {safe_destination_component(location, 'Untitled')}"
+        return videos_base.expanduser() / folder_name
+    return planned_media_dest_dir("video", capture_date, location, photos_base, videos_base)
 
 
 def write_report(report_path: Path, summary: Dict[str, Any], files: List[Dict[str, Any]]) -> None:
@@ -346,10 +366,7 @@ def scan_mount(
             else:
                 capture_date = capture_date_fallback_without_exiftool(file_path, st)
 
-        if media_type == "photo":
-            dest_dir = make_photo_dest_dir(photos_base, capture_date, location)
-        else:
-            dest_dir = make_video_dest_dir(videos_base, capture_date)
+        dest_dir = planned_media_dest_dir(media_type, capture_date, location, photos_base, videos_base)
 
         decision = "KNOWN" if exists else "NEW"
         copy_status = "SKIPPED" if exists else "PENDING"

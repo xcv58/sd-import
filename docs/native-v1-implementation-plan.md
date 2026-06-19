@@ -39,7 +39,8 @@ These behaviors from the current repo are release-blocking parity requirements:
 - Known files are skipped on later scans after import.
 - Capture date determines destination folder, with metadata preferred and filesystem dates as fallback.
 - Photo destination format: `Photos/YYYY-MM-DD <location>/filename`.
-- Video destination format: `Videos/tmp-YYYY-MM-DD-videos/filename`.
+- Video destination format: `Videos/YYYY-MM-DD <location>/filename`.
+- Matching photo/video roots use `YYYY-MM-DD <location>-Photos` and `YYYY-MM-DD <location>-Video`.
 - Supported photo extensions: `.jpg`, `.jpeg`, `.heif`, `.heic`, `.dng`, `.raw`, `.cr2`, `.nef`, `.arw`, `.raf`.
 - Supported video extensions: `.mp4`, `.mov`, `.avi`, `.mkv`.
 - Unsupported files are counted and skipped.

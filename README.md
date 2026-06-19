@@ -105,7 +105,8 @@ If you rename/delete destination folders or edit in Lightroom, re-inserting the 
 Folder naming:
 
 - photos: `~/Pictures/Photos/YYYY-MM-DD <location>/`
-- videos: `~/Downloads/tmp-YYYY-MM-DD-videos/`
+- videos: `~/Downloads/YYYY-MM-DD <location>/`
+- if photo and video roots are the same: `YYYY-MM-DD <location>-Photos/` and `YYYY-MM-DD <location>-Video/`
 
 `YYYY-MM-DD` is taken from capture date metadata when available (EXIF/QuickTime/Spotlight), with mtime as fallback.
 

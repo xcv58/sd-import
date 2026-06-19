@@ -9,15 +9,12 @@ public struct DestinationPlanner: Sendable {
         location: String,
         roots: DestinationRoots
     ) -> URL? {
-        switch mediaKind {
-        case .photo:
-            let safeLocation = location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Untitled" : location
-            return roots.photosURL.appendingPathComponent("\(captureDate) \(safeLocation)", isDirectory: true)
-        case .video:
-            return roots.videosURL.appendingPathComponent("tmp-\(captureDate)-videos", isDirectory: true)
-        case .unsupported:
-            return nil
-        }
+        classicDestinationDirectory(
+            for: mediaKind,
+            captureDate: captureDate,
+            sessionLabel: location,
+            roots: roots
+        )
     }
 
     public func destinationURL(
@@ -51,12 +48,12 @@ public struct DestinationPlanner: Sendable {
         switch organizationPreset {
         case .classicDatedFolders:
             if folderGrouping == .oneShootFolder {
-                guard mediaKind != .unsupported else {
-                    return nil
-                }
-                let root = mediaKind == .photo ? roots.photosURL : roots.videosURL
-                return root
-                    .appendingPathComponent(folderName, isDirectory: true)
+                return classicDestinationDirectory(
+                    for: mediaKind,
+                    captureDate: captureDate,
+                    sessionLabel: sessionLabel,
+                    roots: roots
+                )?
                     .appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
             }
 
@@ -91,6 +88,29 @@ public struct DestinationPlanner: Sendable {
                 .appendingPathComponent("\(captureDate) \(safeComponent(sessionLabel, fallback: "Footage"))", isDirectory: true)
             return sessionDirectory.appendingPathComponent(safeComponent(filename, fallback: "File"), isDirectory: false)
         }
+    }
+
+    private func classicDestinationDirectory(
+        for mediaKind: MediaKind,
+        captureDate: String,
+        sessionLabel: String,
+        roots: DestinationRoots
+    ) -> URL? {
+        guard mediaKind != .unsupported else {
+            return nil
+        }
+
+        var folderName = "\(captureDate) \(safeComponent(sessionLabel, fallback: "Untitled"))"
+        if rootsShareDirectory(roots) {
+            folderName += mediaKind == .photo ? "-Photos" : "-Video"
+        }
+
+        let root = mediaKind == .photo ? roots.photosURL : roots.videosURL
+        return root.appendingPathComponent(folderName, isDirectory: true)
+    }
+
+    private func rootsShareDirectory(_ roots: DestinationRoots) -> Bool {
+        roots.photosURL.standardizedFileURL.path == roots.videosURL.standardizedFileURL.path
     }
 
     private func safeComponent(_ value: String?, fallback: String) -> String {

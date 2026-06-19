@@ -15,6 +15,7 @@ from .common import (
     format_duration,
     metadata_fingerprint,
     now_local_iso,
+    planned_media_dest_dir,
     write_json_atomic,
 )
 from .db import get_state_dir_from_conn
@@ -90,11 +91,13 @@ def replan_pending_destinations(
             continue
 
         capture_date = capture_date_for_replan(row)
-        if media_type == "photo":
-            safe_location = shoot_location.strip() or "Untitled"
-            dest_dir = photos_base.expanduser() / f"{capture_date} {safe_location}"
-        else:
-            dest_dir = videos_base.expanduser() / f"tmp-{capture_date}-videos"
+        dest_dir = planned_media_dest_dir(
+            media_type,
+            capture_date,
+            shoot_location,
+            photos_base,
+            videos_base,
+        )
 
         dest_path = dest_dir / row["filename"]
         conn.execute(
