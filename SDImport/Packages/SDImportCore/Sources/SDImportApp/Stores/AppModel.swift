@@ -162,6 +162,7 @@ final class AppModel: ObservableObject {
     @Published var isWorking = false
     @Published private(set) var isEjectingSource = false
     @Published private(set) var ejectedSourceJobID: String?
+    @Published private(set) var ejectedSourceName: String?
     @Published var setupError: String?
 
     private let defaults = UserDefaults.standard
@@ -424,6 +425,7 @@ final class AppModel: ObservableObject {
         currentResult = nil
         importProgress = nil
         ejectedSourceJobID = nil
+        ejectedSourceName = nil
         previewSessions = []
         clearPreviewPlanCache()
         selectedJobFiles = []
@@ -972,6 +974,7 @@ final class AppModel: ObservableObject {
         currentResult = nil
         importProgress = nil
         ejectedSourceJobID = nil
+        ejectedSourceName = nil
         statusMessage = "Preparing import..."
         importLogger.info("Import started jobID=\(jobID, privacy: .private)")
 
@@ -1483,6 +1486,13 @@ final class AppModel: ObservableObject {
             && sourceEjectionTarget(for: result) != nil
     }
 
+    func sourceEjectionDisplayName(for result: ImportResult) -> String? {
+        if ejectedSourceJobID == result.jobID {
+            return ejectedSourceName
+        }
+        return sourceEjectionTarget(for: result)?.lastPathComponent
+    }
+
     func ejectSource(for result: ImportResult) {
         guard !isEjectingSource, let targetURL = sourceEjectionTarget(for: result) else {
             statusMessage = "Source cannot be ejected safely"
@@ -1501,6 +1511,7 @@ final class AppModel: ObservableObject {
                 guard !Task.isCancelled else {
                     return
                 }
+                self.ejectedSourceName = targetURL.lastPathComponent
                 self.ejectedSourceJobID = result.jobID
                 self.isEjectingSource = false
                 self.sourceEjectionTask = nil
