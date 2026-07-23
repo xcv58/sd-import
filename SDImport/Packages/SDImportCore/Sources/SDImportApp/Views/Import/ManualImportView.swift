@@ -255,8 +255,10 @@ private struct SourceField: View {
                     }
                 } label: {
                     Label(sourceMenuTitle, systemImage: "sdcard")
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 160, alignment: .leading)
                 }
-                .fixedSize(horizontal: true, vertical: false)
                 .help("Select source")
                 .accessibilityLabel("Select source")
                 .sheet(isPresented: $isManagingRecentSources) {

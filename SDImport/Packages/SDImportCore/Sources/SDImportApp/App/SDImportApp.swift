@@ -11,7 +11,7 @@ struct SDImportApp: App {
     @StateObject private var appUpdater = AppUpdater()
 
     var body: some Scene {
-        WindowGroup("SD Import") {
+        WindowGroup("SD Import", id: "main") {
             RootView(appUpdater: appUpdater)
                 .environmentObject(model)
                 .preferredColorScheme(model.themePreference.colorScheme)
@@ -22,8 +22,9 @@ struct SDImportApp: App {
 
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {
+                    openWindow(id: "main")
                     model.selectPanel(.settings)
-                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.activate()
                 }
                 .keyboardShortcut(",", modifiers: [.command])
             }

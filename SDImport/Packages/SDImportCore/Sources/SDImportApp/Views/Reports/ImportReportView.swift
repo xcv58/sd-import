@@ -362,8 +362,6 @@ private struct ReportFileRow: View {
 
                 HStack(spacing: 8) {
                     Text(detailPath)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
