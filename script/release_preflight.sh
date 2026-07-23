@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_FULL_NAME="${GITHUB_REPOSITORY:-xcv58/macos-automation}"
+REPO_FULL_NAME="${GITHUB_REPOSITORY:-xcv58/sd-import}"
 SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-xcv58-sd-import}"
 
 fail() {
@@ -29,7 +29,7 @@ Expected environment for public releases:
 Optional:
   SPARKLE_PRIVATE_KEY_FILE
   SPARKLE_PRIVATE_KEY
-  GITHUB_REPOSITORY           default: xcv58/macos-automation
+  GITHUB_REPOSITORY           default: xcv58/sd-import
   SPARKLE_ACCOUNT             default: xcv58-sd-import
 EOF
 }

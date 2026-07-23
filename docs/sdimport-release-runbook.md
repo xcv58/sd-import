@@ -4,9 +4,9 @@
 
 Use GitHub Releases for the stable update channel.
 
-- Human download page: `https://github.com/xcv58/macos-automation/releases`
-- Sparkle feed URL: `https://github.com/xcv58/macos-automation/releases/latest/download/appcast.xml`
-- Latest DMG URL: `https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg`
+- Human download page: `https://github.com/xcv58/sd-import/releases`
+- Sparkle feed URL: `https://github.com/xcv58/sd-import/releases/latest/download/appcast.xml`
+- Latest DMG URL: `https://github.com/xcv58/sd-import/releases/latest/download/SD-Import.dmg`
 - Supported public artifact: signed and notarized `SD-Import.dmg`
 - Supported app target: Apple Silicon (`arm64`) on macOS 14 or newer
 
@@ -164,7 +164,7 @@ After the script finishes, manually inspect the release page:
 
 ```bash
 gh release view "$RELEASE_TAG" \
-  --repo "xcv58/macos-automation" \
+  --repo "xcv58/sd-import" \
   --json tagName,name,isLatest,assets,url \
   --jq '{tagName,name,isLatest,url,assets:[.assets[].name]}'
 ```
@@ -180,8 +180,8 @@ codesign --verify --deep --strict --verbose=2 "dist/SD Import.app"
 Validate the public latest links:
 
 ```bash
-curl -fsI "https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg"
-curl -fsSL "https://github.com/xcv58/macos-automation/releases/latest/download/appcast.xml" -o /tmp/sdimport-appcast.xml
+curl -fsI "https://github.com/xcv58/sd-import/releases/latest/download/SD-Import.dmg"
+curl -fsSL "https://github.com/xcv58/sd-import/releases/latest/download/appcast.xml" -o /tmp/sdimport-appcast.xml
 ```
 
 Confirm `/tmp/sdimport-appcast.xml` references the versioned release asset for
@@ -209,7 +209,7 @@ Sparkle clients follow the appcast attached to the GitHub Release marked as
 latest. If a release must be pulled:
 
 1. Mark the previous known-good GitHub Release as latest.
-2. Confirm `https://github.com/xcv58/macos-automation/releases/latest/download/appcast.xml`
+2. Confirm `https://github.com/xcv58/sd-import/releases/latest/download/appcast.xml`
    now serves the previous known-good appcast.
 3. Leave the bad release visible only if users need the notes for context;
    otherwise mark it as a pre-release or delete the broken assets.

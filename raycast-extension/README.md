@@ -1,6 +1,6 @@
 # Raycast Extension: SD Import
 
-This local extension wraps `$HOME/work/macos-automation/sd-import`.
+This local extension wraps `$HOME/work/sd-import/sd-import`.
 
 ## Commands
 
@@ -13,14 +13,14 @@ This local extension wraps `$HOME/work/macos-automation/sd-import`.
 
 1. Open Raycast command: `Import Extension`
 2. Select this folder:
-   `$HOME/work/macos-automation/raycast-extension`
+   `$HOME/work/sd-import/raycast-extension`
 3. In extension preferences, confirm `sd-import Path`:
-   `$HOME/work/macos-automation/sd-import`
+   `$HOME/work/sd-import/sd-import`
 
 ## Dev
 
 ```bash
-cd $HOME/work/macos-automation/raycast-extension
+cd $HOME/work/sd-import/raycast-extension
 npm install
 npm run dev
 ```

@@ -9,7 +9,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/python3</string>
-    <string>/Users/YOUR_USER/work/macos-automation/sd_import.py</string>
+    <string>/Users/YOUR_USER/work/sd-import/sd_import.py</string>
     <string>auto</string>
     <string>--notify</string>
   </array>

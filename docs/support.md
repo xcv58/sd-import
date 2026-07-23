@@ -4,7 +4,7 @@ Support email: [i@xcv58.com](mailto:i@xcv58.com)
 
 Public bugs and feature requests should use GitHub Issues:
 
-https://github.com/xcv58/macos-automation/issues
+https://github.com/xcv58/sd-import/issues
 
 Do not attach private photos, videos, full card dumps, credentials, or
 unredacted logs to public issues.

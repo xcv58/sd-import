@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
 UPDATES_DIR="$DIST_DIR/sparkle-updates"
-REPO_FULL_NAME="${GITHUB_REPOSITORY:-xcv58/macos-automation}"
+REPO_FULL_NAME="${GITHUB_REPOSITORY:-xcv58/sd-import}"
 APP_VERSION="${APP_VERSION:-1.0}"
 APP_BUILD="${APP_BUILD:-1}"
 RELEASE_TAG="${RELEASE_TAG:-v$APP_VERSION}"
@@ -49,7 +49,7 @@ Common optional environment:
   SPARKLE_ACCOUNT             default: xcv58-sd-import
   SPARKLE_PRIVATE_KEY_FILE
   SPARKLE_PRIVATE_KEY
-  GITHUB_REPOSITORY           default: xcv58/macos-automation
+  GITHUB_REPOSITORY           default: xcv58/sd-import
   GITHUB_TOKEN / GH_TOKEN     needed by gh in CI
   ALLOW_NON_INCREMENTING_APP_BUILD=1
                               emergency override for replacing an existing

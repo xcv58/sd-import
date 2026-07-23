@@ -9,7 +9,7 @@ inserting the same card again only imports new content.
 GitHub Releases are the canonical public distribution path. Download the latest
 signed and notarized DMG here:
 
-https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg
+https://github.com/xcv58/sd-import/releases/latest/download/SD-Import.dmg
 
 Requirements:
 
@@ -27,7 +27,7 @@ SD Import uses Sparkle for in-app updates. To verify you are on the latest
 release, choose `SD Import > Check for Updates...` or compare your installed
 version with the latest GitHub Release:
 
-https://github.com/xcv58/macos-automation/releases/latest
+https://github.com/xcv58/sd-import/releases/latest
 
 Full user instructions are in [docs/user-guide.md](docs/user-guide.md). Privacy
 details are in [docs/privacy.md](docs/privacy.md).
@@ -82,7 +82,7 @@ This repo provides a deterministic SD-card importer with:
 - preview report before import
 - manual CLI trigger for debug/retry
 - Raycast extension
-- one canonical launcher script (`$HOME/work/macos-automation/sd-import`)
+- one canonical launcher script (`$HOME/work/sd-import/sd-import`)
 
 ## Internal Architecture
 
@@ -118,19 +118,19 @@ For normal users, install the signed DMG from GitHub Releases instead.
 One-line install from this repo:
 
 ```bash
-cd $HOME/work/macos-automation && ./install.sh
+cd $HOME/work/sd-import && ./install.sh
 ```
 
 Optional: include Raycast extension import prompt:
 
 ```bash
-cd $HOME/work/macos-automation && ./install.sh --with-raycast
+cd $HOME/work/sd-import && ./install.sh --with-raycast
 ```
 
 Optional: custom destination roots:
 
 ```bash
-cd $HOME/work/macos-automation && ./install.sh \
+cd $HOME/work/sd-import && ./install.sh \
   --photos-base $HOME/Pictures/Photos \
   --videos-base $HOME/Downloads
 ```
@@ -162,7 +162,7 @@ Create `~/.sd-import/config.json`:
 Smoke test manually:
 
 ```bash
-$HOME/work/macos-automation/sd-import run \
+$HOME/work/sd-import/sd-import run \
   --input /Volumes/YOUR_SD_CARD \
   --location NYC \
   --notify
@@ -216,7 +216,7 @@ Logs:
 
 Use the local extension:
 
-- `$HOME/work/macos-automation/raycast-extension`
+- `$HOME/work/sd-import/raycast-extension`
 - Import with Raycast `Import Extension` and point to that folder.
 - Includes commands:
   - `SD Import Auto`
@@ -227,16 +227,16 @@ Use the local extension:
 ## CLI (debug/recovery)
 
 ```bash
-$HOME/work/macos-automation/sd-import auto
-$HOME/work/macos-automation/sd-import retry-latest
-$HOME/work/macos-automation/sd-import list-jobs
-$HOME/work/macos-automation/sd-import show-job --job-id <JOB_ID>
-$HOME/work/macos-automation/sd-import status --job-id <JOB_ID> --follow
+$HOME/work/sd-import/sd-import auto
+$HOME/work/sd-import/sd-import retry-latest
+$HOME/work/sd-import/sd-import list-jobs
+$HOME/work/sd-import/sd-import show-job --job-id <JOB_ID>
+$HOME/work/sd-import/sd-import status --job-id <JOB_ID> --follow
 ```
 
 ## Tests
 
 ```bash
-cd $HOME/work/macos-automation
+cd $HOME/work/sd-import
 python3 -m unittest discover -s tests -v
 ```
