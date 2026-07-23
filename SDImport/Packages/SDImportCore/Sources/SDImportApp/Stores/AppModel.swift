@@ -480,6 +480,8 @@ final class AppModel: ObservableObject {
         savePreferences()
         currentResult = nil
         importProgress = nil
+        ejectedSourceJobID = nil
+        ejectedSourceName = nil
         previewSessions = []
         currentPreviewFiles = []
         clearPreviewPlanCache()
@@ -1499,6 +1501,42 @@ final class AppModel: ObservableObject {
             return
         }
 
+        ejectSource(jobID: result.jobID, targetURL: targetURL)
+    }
+
+    func shouldOfferSourceEjection(for summary: ScanSummary) -> Bool {
+        guard previewTotals.copyFiles == 0 else {
+            return false
+        }
+        guard ejectedSourceJobID != summary.jobID else {
+            return true
+        }
+        return sourceEjectionTarget(for: summary) != nil
+    }
+
+    func canEjectSource(for summary: ScanSummary) -> Bool {
+        !isEjectingSource
+            && ejectedSourceJobID != summary.jobID
+            && sourceEjectionTarget(for: summary) != nil
+    }
+
+    func sourceEjectionDisplayName(for summary: ScanSummary) -> String? {
+        if ejectedSourceJobID == summary.jobID {
+            return ejectedSourceName
+        }
+        return sourceEjectionTarget(for: summary)?.lastPathComponent
+    }
+
+    func ejectSource(for summary: ScanSummary) {
+        guard !isEjectingSource, let targetURL = sourceEjectionTarget(for: summary) else {
+            statusMessage = "Source cannot be ejected safely"
+            return
+        }
+
+        ejectSource(jobID: summary.jobID, targetURL: targetURL)
+    }
+
+    private func ejectSource(jobID: String, targetURL: URL) {
         isEjectingSource = true
         statusMessage = "Ejecting source..."
         sourceEjectionTask?.cancel()
@@ -1512,7 +1550,7 @@ final class AppModel: ObservableObject {
                     return
                 }
                 self.ejectedSourceName = targetURL.lastPathComponent
-                self.ejectedSourceJobID = result.jobID
+                self.ejectedSourceJobID = jobID
                 self.isEjectingSource = false
                 self.sourceEjectionTask = nil
                 self.refreshAvailableSourceVolumes()
@@ -1990,6 +2028,21 @@ final class AppModel: ObservableObject {
             let job = jobs.first(where: { $0.id == result.jobID }),
             let volume = Self.mountedSourceVolume(containing: job.mountPath),
             SourceEjectionPolicy().canEject(job: job, result: result, volume: volume)
+        else {
+            return nil
+        }
+        return volume.mountURL
+    }
+
+    private func sourceEjectionTarget(for summary: ScanSummary) -> URL? {
+        guard
+            currentSummary?.jobID == summary.jobID,
+            let volume = Self.mountedSourceVolume(containing: summary.mountPath),
+            SourceEjectionPolicy().canEjectAfterScan(
+                summary: summary,
+                plannedCopyFiles: previewTotals.copyFiles,
+                volume: volume
+            )
         else {
             return nil
         }

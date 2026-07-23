@@ -50,6 +50,7 @@ committing any excerpt.
 | Source subfolder | Select a folder inside the mounted card as the source, import, then eject | SD Import ejects the card's volume root rather than only the selected folder | Fixture policy coverage exists; confirm with hardware before release |
 | Built-in card reader | Import from a card that macOS reports as both internal-location and removable | The verified removable card remains eligible and ejects normally | Required before releasing source ejection |
 | Ejection completion UI | Complete a clean import, then eject from the copy receipt | The named source has a prominent eject action; success changes to a green `Ejected — Safe to Remove` confirmation | Required before releasing source ejection |
+| Zero-copy scan ejection | Scan a verified removable card whose files are all known or excluded | The Scan Summary offers manual ejection; automatic ejection does not run | Required before releasing source ejection |
 | Clean Mac user | Fresh user account, no prior settings | Onboarding appears; folders can be selected; Sparkle menu appears in release build | Accepted risk: clean-user manual pass unavailable |
 
 ## Evidence To Record

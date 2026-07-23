@@ -91,7 +91,14 @@ struct ImportResultView: View {
             }
 
             if model.shouldOfferSourceEjection(for: result) {
-                sourceEjectionControl
+                SourceEjectionControl(
+                    sourceName: model.sourceEjectionDisplayName(for: result) ?? "Source Card",
+                    isEjected: model.ejectedSourceJobID == result.jobID,
+                    isEjecting: model.isEjectingSource,
+                    canEject: model.canEjectSource(for: result)
+                ) {
+                    model.ejectSource(for: result)
+                }
             }
 
             ViewThatFits(in: .horizontal) {
@@ -104,52 +111,6 @@ struct ImportResultView: View {
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private var sourceEjectionControl: some View {
-        let sourceName = model.sourceEjectionDisplayName(for: result) ?? "Source Card"
-
-        if model.ejectedSourceJobID == result.jobID {
-            Label("\(sourceName) Ejected — Safe to Remove", systemImage: "checkmark.circle.fill")
-                .font(.headline)
-                .foregroundStyle(.green)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                .accessibilityLabel("\(sourceName) ejected. Safe to remove.")
-        } else {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    ejectSourceButton(sourceName: sourceName)
-                    Text("Safely unmount the card before removing it.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    ejectSourceButton(sourceName: sourceName)
-                    Text("Safely unmount the card before removing it.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    private func ejectSourceButton(sourceName: String) -> some View {
-        Button {
-            model.ejectSource(for: result)
-        } label: {
-            Label(
-                model.isEjectingSource ? "Ejecting \(sourceName)…" : "Eject “\(sourceName)”",
-                systemImage: "eject.fill"
-            )
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .disabled(!model.canEjectSource(for: result))
-        .accessibilityHint("Safely unmounts the source card")
     }
 
     private var receiptButtons: some View {

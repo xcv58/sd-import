@@ -31,6 +31,49 @@ struct SourceEjectionPolicyTests {
         #expect(!policy.canEject(job: job, result: result, volume: makeVolume(mountPath: "/Volumes/OTHER")))
     }
 
+    @Test("allows manual ejection after a matching zero-copy scan")
+    func allowsMatchingZeroCopyScan() {
+        let summary = makeSummary()
+
+        #expect(policy.canEjectAfterScan(summary: summary, plannedCopyFiles: 0, volume: makeVolume()))
+        #expect(policy.canEjectAfterScan(
+            summary: summary,
+            plannedCopyFiles: 0,
+            volume: makeVolume(isInternal: true)
+        ))
+        #expect(!policy.canEjectAfterScan(summary: summary, plannedCopyFiles: 1, volume: makeVolume()))
+        #expect(!policy.canEjectAfterScan(
+            summary: makeSummary(jobID: ""),
+            plannedCopyFiles: 0,
+            volume: makeVolume()
+        ))
+        #expect(!policy.canEjectAfterScan(
+            summary: makeSummary(volumeUUID: nil),
+            plannedCopyFiles: 0,
+            volume: makeVolume()
+        ))
+        #expect(!policy.canEjectAfterScan(
+            summary: makeSummary(volumeUUID: "other-card"),
+            plannedCopyFiles: 0,
+            volume: makeVolume()
+        ))
+        #expect(!policy.canEjectAfterScan(
+            summary: summary,
+            plannedCopyFiles: 0,
+            volume: makeVolume(isRemovable: false)
+        ))
+        #expect(!policy.canEjectAfterScan(
+            summary: summary,
+            plannedCopyFiles: 0,
+            volume: makeVolume(isDiskImage: true)
+        ))
+        #expect(!policy.canEjectAfterScan(
+            summary: summary,
+            plannedCopyFiles: 0,
+            volume: makeVolume(mountPath: "/Volumes/OTHER")
+        ))
+    }
+
     private func makeJob(
         status: ImportJobStatus = .imported,
         volumeUUID: String? = "card-uuid"
@@ -55,6 +98,24 @@ struct SourceEjectionPolicyTests {
             skippedFiles: 0,
             failedFiles: failedFiles,
             progressPath: nil
+        )
+    }
+
+    private func makeSummary(
+        jobID: String = "job-1",
+        volumeUUID: String? = "card-uuid"
+    ) -> ScanSummary {
+        ScanSummary(
+            jobID: jobID,
+            mountPath: "/Volumes/CARD/DCIM",
+            volumeName: "CARD",
+            volumeUUID: volumeUUID,
+            location: "Gardens",
+            scannedFiles: 3,
+            newFiles: 0,
+            knownFiles: 3,
+            unsupportedFiles: 0,
+            conflictFiles: 0
         )
     }
 

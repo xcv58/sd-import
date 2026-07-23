@@ -259,6 +259,7 @@ Terminal progress states:
 
 - A successful copy receipt may offer `Eject Source` for the source card.
 - The receipt presents ejection as the primary completion action, names the mounted source, and confirms when it is safe to remove.
+- A successful scan with zero files currently planned for copying offers the same manual eject action; it does not trigger automatic ejection.
 - `Eject source after successful import` is an opt-in setting and defaults off.
 - Automatic ejection requires an error-free imported job and a currently mounted removable volume whose UUID matches the scanned job.
 - Non-removable volumes, disk images, UUID mismatches, cancelled imports, and imports with failures are never ejected automatically.
