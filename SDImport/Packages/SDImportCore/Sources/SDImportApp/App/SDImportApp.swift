@@ -5,13 +5,14 @@ import SwiftUI
 @main
 @MainActor
 struct SDImportApp: App {
+    @Environment(\.openWindow) private var openWindow
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
     private let appUpdater = AppUpdater()
 
     var body: some Scene {
         WindowGroup("SD Import") {
-            RootView(updater: appUpdater.updater)
+            RootView()
                 .environmentObject(model)
                 .preferredColorScheme(model.themePreference.colorScheme)
                 .frame(minWidth: 760, minHeight: 560)
@@ -35,14 +36,6 @@ struct SDImportApp: App {
                 .keyboardShortcut("r", modifiers: [.command])
             }
 
-            CommandGroup(replacing: .appSettings) {
-                Button("Settings...") {
-                    model.selectPanel(.settings)
-                    NSApplication.shared.activate(ignoringOtherApps: true)
-                }
-                .keyboardShortcut(",", modifiers: [.command])
-            }
-
             CommandMenu("Navigate") {
                 Button("Import") {
                     model.selectPanel(.import)
@@ -53,16 +46,6 @@ struct SDImportApp: App {
                     model.selectPanel(.history)
                 }
                 .keyboardShortcut("2", modifiers: [.command])
-
-                Button("Settings") {
-                    model.selectPanel(.settings)
-                }
-                .keyboardShortcut("3", modifiers: [.command])
-
-                Button("Diagnostics") {
-                    model.selectPanel(.diagnostics)
-                }
-                .keyboardShortcut("4", modifiers: [.command])
 
                 Divider()
 
@@ -76,7 +59,27 @@ struct SDImportApp: App {
                 }
                 .keyboardShortcut(.tab, modifiers: [.control, .shift])
             }
+
+            CommandGroup(after: .help) {
+                Button("Diagnostics...") {
+                    openWindow(id: "diagnostics")
+                }
+            }
         }
+
+        Settings {
+            SettingsView(updater: appUpdater.updater)
+                .environmentObject(model)
+                .preferredColorScheme(model.themePreference.colorScheme)
+        }
+
+        Window("Diagnostics", id: "diagnostics") {
+            DiagnosticsView()
+                .environmentObject(model)
+                .preferredColorScheme(model.themePreference.colorScheme)
+                .frame(minWidth: 620, minHeight: 420)
+        }
+        .defaultSize(width: 720, height: 500)
     }
 }
 

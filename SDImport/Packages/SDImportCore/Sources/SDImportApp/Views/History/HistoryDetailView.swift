@@ -15,11 +15,15 @@ struct HistoryDetailView: View {
 
     var body: some View {
         if let job {
-            VStack(alignment: .leading, spacing: 16) {
-                header(job)
-                metrics(job)
-                actions(job)
-                fileList
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    header(job)
+                    metrics(job)
+                    actions(job)
+                        .buttonStyle(.bordered)
+                    fileSection
+                }
+                .padding(.trailing, 8)
             }
         } else {
             ContentUnavailableView("No Job Selected", systemImage: "clock.arrow.circlepath")
@@ -114,43 +118,64 @@ struct HistoryDetailView: View {
         }
     }
 
-    private var fileList: some View {
+    private var fileSection: some View {
         let files = filteredFiles
         let totalCount = self.files.count
         return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Files")
-                    .font(.headline)
-                Text(fileCountText(displayedCount: files.count, totalCount: totalCount))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Picker("File Filter", selection: $fileFilter) {
-                    ForEach(HistoryFileFilter.allCases) { filter in
-                        Text(filter.title).tag(filter)
-                    }
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    fileHeading(displayedCount: files.count, totalCount: totalCount)
+                    Spacer()
+                    fileFilterControl
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 320)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    fileHeading(displayedCount: files.count, totalCount: totalCount)
+                    fileFilterControl
+                }
             }
 
             if files.isEmpty {
                 ContentUnavailableView("No Files", systemImage: "doc")
                     .frame(maxWidth: .infinity, minHeight: 140)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(files) { file in
-                            HistoryFileRow(file: file)
-                            Divider()
-                        }
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(files) { file in
+                        HistoryFileRow(file: file)
+                        Divider()
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
                 }
-                .frame(maxHeight: 360)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
                 .appCardSurface()
             }
+        }
+    }
+
+    private func fileHeading(displayedCount: Int, totalCount: Int) -> some View {
+        HStack(spacing: 8) {
+            Text("Files")
+                .font(.headline)
+                .foregroundStyle(.primary)
+            Text(fileCountText(displayedCount: displayedCount, totalCount: totalCount))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var fileFilterControl: some View {
+        HStack {
+            Text("File Filter")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Picker("File Filter", selection: $fileFilter) {
+                ForEach(HistoryFileFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 320)
         }
     }
 
@@ -266,6 +291,7 @@ private struct HistoryFileRow: View {
                 } label: {
                     Label("Reveal", systemImage: "arrow.up.right.square")
                 }
+                .buttonStyle(.bordered)
                 .accessibilityLabel("Reveal \(file.filename)")
             }
         }

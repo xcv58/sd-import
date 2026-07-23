@@ -4,17 +4,24 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var isShowingPruneConfirmation = false
+
     let updater: SPUUpdater?
 
     var body: some View {
-        AppPage {
-            VStack(alignment: .leading, spacing: 18) {
-                destinations
-                general
-                updates
-            }
+        TabView {
+            generalForm
+                .tabItem {
+                    Label("General", systemImage: "gearshape")
+                }
+
+            advancedForm
+                .tabItem {
+                    Label("Advanced", systemImage: "wrench.and.screwdriver")
+                }
         }
-        .navigationTitle("Settings")
+        .scenePadding()
+        .frame(width: 680, height: 500)
         .onAppear {
             model.validatePaths()
         }
@@ -29,133 +36,113 @@ struct SettingsView: View {
         }
     }
 
-    private var destinations: some View {
-        AppSection("Default Destinations", systemImage: "folder") {
-            FolderSettingRow(
-                title: "Photos",
-                path: $model.photosPath,
-                validation: model.photosValidation,
-                action: model.choosePhotosFolder
-            )
-            FolderSettingRow(
-                title: "Videos",
-                path: $model.videosPath,
-                validation: model.videosValidation,
-                action: model.chooseVideosFolder
-            )
-        }
-    }
+    private var generalForm: some View {
+        Form {
+            Section("Default Destinations") {
+                FolderSettingRow(
+                    title: "Photos",
+                    path: $model.photosPath,
+                    validation: model.photosValidation,
+                    chooseAction: model.choosePhotosFolder,
+                    revealAction: model.revealPhotosFolder
+                )
 
-    private var general: some View {
-        AppSection("General", systemImage: "gearshape") {
-            SettingsFormRow("Theme") {
-                Picker(selection: $model.themePreference) {
+                FolderSettingRow(
+                    title: "Videos",
+                    path: $model.videosPath,
+                    validation: model.videosValidation,
+                    chooseAction: model.chooseVideosFolder,
+                    revealAction: model.revealVideosFolder
+                )
+            }
+
+            Section("Appearance") {
+                Picker("Theme", selection: $model.themePreference) {
                     ForEach(AppThemePreference.allCases) { theme in
                         Text(theme.settingsTitle).tag(theme)
                     }
-                } label: {
-                    EmptyView()
                 }
-                .labelsHidden()
-                .accessibilityLabel("Theme")
                 .pickerStyle(.segmented)
-                .frame(width: SettingsLayout.segmentedControlWidth)
                 .onChange(of: model.themePreference) {
                     model.themePreferenceDidChange()
                 }
             }
 
-            SettingsFormRow("History") {
-                Picker(selection: $model.historyRetention) {
-                    ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
-                        Text(policy.settingsTitle).tag(policy)
-                    }
-                } label: {
-                    EmptyView()
-                }
-                .labelsHidden()
-                .accessibilityLabel("History")
-                .frame(width: SettingsLayout.compactPickerWidth)
-                .onChange(of: model.historyRetention) {
-                    model.savePreferences()
-                }
-            }
-
-            SettingsFormRow {
-                Toggle("Prompt on card mount", isOn: $model.autoPromptEnabled)
+            Section("Import Behavior") {
+                Toggle("Prompt when a card is mounted", isOn: $model.autoPromptEnabled)
                     .onChange(of: model.autoPromptEnabled) {
                         model.savePreferences()
                         model.updateLoginItemRegistration()
                     }
-            }
 
-            SettingsFormRow {
-                VStack(alignment: .leading, spacing: 4) {
-                    Toggle("Eject source after successful import", isOn: $model.ejectAfterSuccessfulImport)
+                VStack(alignment: .leading, spacing: 5) {
+                    Toggle("Eject source after a successful import", isOn: $model.ejectAfterSuccessfulImport)
                         .onChange(of: model.ejectAfterSuccessfulImport) {
                             model.savePreferences()
                         }
 
                     Text("Only removable sources are ejected after an error-free copy. Zero-copy scans still offer a manual Eject button.")
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            Section("Updates") {
+                UpdaterSettingsView(updater: updater)
+            }
         }
+        .formStyle(.grouped)
     }
 
-    private var updates: some View {
-        AppSection("Updates", systemImage: "arrow.clockwise") {
-            UpdaterSettingsView(
-                updater: updater,
-                leadingInset: SettingsLayout.controlColumnStart
-            )
-        }
-    }
-}
+    private var advancedForm: some View {
+        Form {
+            Section("History") {
+                Picker("Keep import history", selection: $model.historyRetention) {
+                    ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
+                        Text(policy.settingsTitle).tag(policy)
+                    }
+                }
+                .onChange(of: model.historyRetention) {
+                    model.savePreferences()
+                }
 
-private enum SettingsLayout {
-    static let labelWidth: CGFloat = 118
-    static let columnSpacing: CGFloat = 12
-    static let controlWidth: CGFloat = 620
-    static let segmentedControlWidth: CGFloat = 280
-    static let compactPickerWidth: CGFloat = 140
-    static let controlColumnStart = labelWidth + columnSpacing
-}
+                Text("History records can be removed without deleting copied photos or videos.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
 
-private struct SettingsFormRow<Content: View>: View {
-    private let title: String?
-    private let content: Content
+                HStack {
+                    Button {
+                        model.pruneHistory(dryRun: true)
+                    } label: {
+                        Label("Preview Prune", systemImage: "doc.text.magnifyingglass")
+                    }
 
-    init(
-        _ title: String? = nil,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.title = title
-        self.content = content()
-    }
+                    Button(role: .destructive) {
+                        isShowingPruneConfirmation = true
+                    } label: {
+                        Label("Prune History", systemImage: "trash")
+                    }
+                    .disabled(model.isWorking)
+                    .alert("Prune old history?", isPresented: $isShowingPruneConfirmation) {
+                        Button("Prune History", role: .destructive) {
+                            model.pruneHistory(dryRun: false)
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This deletes old SD Import job records using the current retention setting. Copied media files are not deleted.")
+                    }
+                }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: SettingsLayout.columnSpacing) {
-            Group {
-                if let title {
-                    Text(title)
+                if !model.statusMessage.isEmpty, model.statusMessage != "Ready" {
+                    Label(model.statusMessage, systemImage: "info.circle")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.9)
-                } else {
-                    Color.clear
+                        .textSelection(.enabled)
                 }
             }
-            .frame(width: SettingsLayout.labelWidth, alignment: .trailing)
-            .padding(.top, 5)
-
-            content
-                .frame(maxWidth: SettingsLayout.controlWidth, alignment: .leading)
-
-            Spacer(minLength: 0)
         }
+        .formStyle(.grouped)
     }
 }
 
@@ -163,34 +150,43 @@ private struct FolderSettingRow: View {
     let title: String
     @Binding var path: String
     let validation: PathValidationResult
-    let action: () -> Void
+    let chooseAction: () -> Void
+    let revealAction: () -> Void
 
     var body: some View {
-        SettingsFormRow(title) {
-            VStack(alignment: .leading, spacing: 5) {
+        LabeledContent(title) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     TextField(title, text: $path)
                         .textFieldStyle(.roundedBorder)
 
                     Button {
-                        action()
+                        chooseAction()
                     } label: {
                         Image(systemName: "folder")
                     }
-                    .help("Choose \(title.lowercased())")
-                    .accessibilityLabel("Choose \(title.lowercased())")
+                    .help("Choose \(title.lowercased()) folder")
+                    .accessibilityLabel("Choose \(title.lowercased()) folder")
+
+                    Button {
+                        revealAction()
+                    } label: {
+                        Image(systemName: "arrow.forward.square")
+                    }
+                    .disabled(!validation.isUsable)
+                    .help("Reveal \(title.lowercased()) folder in Finder")
+                    .accessibilityLabel("Reveal \(title.lowercased()) folder in Finder")
                 }
 
                 DestinationStatusLine(result: validation)
 
                 if validation.isUsable, let capacityText {
                     Label(capacityText, systemImage: "internaldrive")
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
-            .frame(maxWidth: SettingsLayout.controlWidth)
         }
     }
 
@@ -212,7 +208,7 @@ private struct DestinationStatusLine: View {
 
     var body: some View {
         Label(message, systemImage: systemImage)
-            .font(.caption)
+            .font(.callout)
             .foregroundStyle(foregroundStyle)
             .lineLimit(1)
     }

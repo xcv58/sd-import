@@ -288,7 +288,7 @@ private struct SourceField: View {
 
             if let selectedVolume = model.selectedSourceVolume {
                 Label(selectedVolume.detailText, systemImage: "externaldrive")
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -532,7 +532,7 @@ private struct ValidationStatusView: View {
 
     var body: some View {
         Label(result.message, systemImage: result.isUsable ? "checkmark.circle" : "exclamationmark.triangle")
-            .font(.caption)
+            .font(.callout)
             .foregroundStyle(result.isUsable ? Color.secondary : Color.orange)
             .lineLimit(1)
     }

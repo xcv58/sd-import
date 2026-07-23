@@ -2,133 +2,114 @@ import SwiftUI
 
 struct DiagnosticsView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var isShowingPruneConfirmation = false
 
     var body: some View {
-        AppPage(
-            status: model.setupError,
-            statusRole: .error
-        ) {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 360), spacing: 16)],
-                alignment: .leading,
-                spacing: 16
-            ) {
-                foldersSection
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
                 diagnosticsExportSection
                 crashReportsSection
-                maintenanceSection
-            }
-        }
-        .navigationTitle("Diagnostics")
-    }
 
-    private var foldersSection: some View {
-        AppSection("Folders", systemImage: "folder") {
-            HStack {
-                Button {
-                    model.revealPhotosFolder()
-                } label: {
-                    Label("Reveal Photos", systemImage: "photo")
-                }
-                Button {
-                    model.revealVideosFolder()
-                } label: {
-                    Label("Reveal Videos", systemImage: "video")
+                if let statusText {
+                    Label(statusText, systemImage: model.setupError == nil ? "info.circle" : "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(model.setupError == nil ? Color.secondary : Color.red)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .padding(24)
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
     }
 
     private var diagnosticsExportSection: some View {
-        AppSection(
-            "Diagnostics Export",
-            systemImage: "waveform.path.ecg",
-            subtitle: "Opt-in and redacted"
-        ) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Exports app version, macOS version, settings, recent job counts, and selected-job file statuses. Media files, file names, and full paths are omitted.")
-                    .font(.caption)
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Exports the app and macOS versions, settings, recent job counts, and selected-job file statuses. Media files, file names, and full paths are omitted.")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack {
-                    Button {
-                        model.copyDiagnostics()
-                    } label: {
-                        Label("Copy Diagnostics", systemImage: "doc.on.doc")
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        diagnosticsButtons
                     }
 
-                    Button {
-                        model.exportDiagnostics()
-                    } label: {
-                        Label("Export Diagnostics", systemImage: "square.and.arrow.up")
+                    VStack(alignment: .leading, spacing: 8) {
+                        diagnosticsButtons
                     }
                 }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Label("Diagnostics Export", systemImage: "waveform.path.ecg")
+        }
+    }
+
+    private var diagnosticsButtons: some View {
+        Group {
+            Button {
+                model.copyDiagnostics()
+            } label: {
+                Label("Copy Diagnostics", systemImage: "doc.on.doc")
+            }
+
+            Button {
+                model.exportDiagnostics()
+            } label: {
+                Label("Export Diagnostics", systemImage: "square.and.arrow.up")
             }
         }
     }
 
     private var crashReportsSection: some View {
-        AppSection(
-            "Crash Reports",
-            systemImage: "exclamationmark.triangle",
-            subtitle: "Manual and local"
-        ) {
-            VStack(alignment: .leading, spacing: 10) {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("SD Import does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing.")
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack {
-                    Button {
-                        model.revealCrashReportsFolder()
-                    } label: {
-                        Label("Reveal Crash Reports", systemImage: "folder")
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        crashReportButtons
                     }
 
-                    Button {
-                        model.exportLatestCrashReport()
-                    } label: {
-                        Label("Export Latest Crash Report", systemImage: "square.and.arrow.up")
+                    VStack(alignment: .leading, spacing: 8) {
+                        crashReportButtons
                     }
                 }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Label("Crash Reports", systemImage: "exclamationmark.triangle")
+        }
+    }
+
+    private var crashReportButtons: some View {
+        Group {
+            Button {
+                model.revealCrashReportsFolder()
+            } label: {
+                Label("Reveal Crash Reports", systemImage: "folder")
+            }
+
+            Button {
+                model.exportLatestCrashReport()
+            } label: {
+                Label("Export Latest Crash Report", systemImage: "square.and.arrow.up")
             }
         }
     }
 
-    private var maintenanceSection: some View {
-        AppSection("Maintenance", systemImage: "wrench.and.screwdriver") {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Preview what the current retention setting would remove, or permanently prune old job records. Copied media is never deleted.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack {
-                    Button {
-                        model.pruneHistory(dryRun: true)
-                    } label: {
-                        Label("Preview Prune", systemImage: "doc.text.magnifyingglass")
-                    }
-
-                    Button(role: .destructive) {
-                        isShowingPruneConfirmation = true
-                    } label: {
-                        Label("Prune History", systemImage: "trash")
-                            .foregroundStyle(.red)
-                    }
-                    .alert("Prune old history?", isPresented: $isShowingPruneConfirmation) {
-                        Button("Prune History", role: .destructive) {
-                            model.pruneHistory(dryRun: false)
-                        }
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("This deletes old SD Import job records using the current retention setting. Copied media files are not deleted.")
-                    }
-                }
-            }
+    private var statusText: String? {
+        if let setupError = model.setupError, !setupError.isEmpty {
+            return setupError
         }
+        guard !model.statusMessage.isEmpty, model.statusMessage != "Ready" else {
+            return nil
+        }
+        return model.statusMessage
     }
 }

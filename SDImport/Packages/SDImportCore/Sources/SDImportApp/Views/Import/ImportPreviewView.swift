@@ -265,7 +265,7 @@ struct ImportPreviewView: View {
 
             if model.previewTotals.copyFiles == 0 {
                 Text("Nothing new is selected to copy")
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
@@ -404,13 +404,13 @@ struct ImportPreviewView: View {
                 .fontWeight(.semibold)
 
             Text(zeroMatchDetail(rows: rows))
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(zeroMatchReasons(rows: rows), id: \.self) { reason in
                     Label(reason, systemImage: "checkmark.circle")
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 }
             }

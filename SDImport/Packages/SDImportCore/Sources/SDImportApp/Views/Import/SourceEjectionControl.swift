@@ -46,7 +46,7 @@ struct SourceEjectionControl: View {
 
     private var guidance: some View {
         Text("Eject the card before removing it.")
-            .font(.caption)
+            .font(.callout)
             .foregroundStyle(.secondary)
     }
 }

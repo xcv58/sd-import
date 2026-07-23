@@ -80,11 +80,16 @@ struct OnboardingFlowView: View {
             }
 
             HStack {
+                Button("Set Up Later") {
+                    model.completeOnboarding()
+                }
+
                 Spacer()
+
                 Button {
                     model.completeOnboarding()
                 } label: {
-                    Text("Done")
+                    Text("Save and Continue")
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canComplete)
@@ -92,7 +97,6 @@ struct OnboardingFlowView: View {
         }
         .padding(24)
         .frame(width: 660)
-        .interactiveDismissDisabled(true)
         .onAppear {
             model.validatePaths()
         }
@@ -114,22 +118,15 @@ private struct OnboardingGuideItem: View {
     let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 9) {
-            Image(systemName: systemImage)
+        GroupBox {
+            Text(text)
+                .font(.callout)
                 .foregroundStyle(.secondary)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                Text(text)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Label(title, systemImage: systemImage)
         }
-        .padding(10)
-        .appCardSurface()
     }
 }
 
@@ -160,7 +157,7 @@ private struct OnboardingFolderRow: View {
             }
 
             Label(statusMessage, systemImage: statusImage)
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(statusColor)
                 .padding(.leading, 108)
         }

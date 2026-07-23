@@ -41,23 +41,19 @@ struct HistoryView: View {
         GeometryReader { proxy in
             if proxy.size.width >= 760 {
                 HStack(alignment: .top, spacing: 16) {
-                    ScrollView {
-                        recentJobsSection
-                    }
+                    recentJobsSection
                     .frame(width: 360)
 
-                    ScrollView {
-                        detailSection
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(minWidth: 0, maxWidth: .infinity)
+                    detailSection
+                        .frame(minWidth: 0, maxWidth: .infinity)
                 }
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        detailSection
-                        recentJobsSection
-                    }
+                VSplitView {
+                    recentJobsSection
+                        .frame(minHeight: 180)
+
+                    detailSection
+                        .frame(minHeight: 260)
                 }
             }
         }
@@ -86,22 +82,20 @@ struct HistoryView: View {
                     )
                     .frame(maxWidth: .infinity, minHeight: 220)
                 } else {
-                    LazyVStack(alignment: .leading, spacing: 6) {
+                    List(selection: selectedJobBinding) {
                         ForEach(filteredJobs) { job in
-                            Button {
-                                model.loadJobDetail(jobID: job.id)
-                            } label: {
-                                HistoryRow(job: job, isSelected: model.selectedJobID == job.id)
-                            }
-                            .buttonStyle(.plain)
+                            HistoryRow(job: job)
+                            .tag(job.id)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
                             .accessibilityLabel("\(HistoryJobPresentation.title(for: job)), \(HistoryJobPresentation.subtitle(for: job))")
-                            .accessibilityValue(model.selectedJobID == job.id ? "Selected" : "")
                         }
                     }
+                    .listStyle(.inset)
+                    .frame(minHeight: 180, maxHeight: .infinity)
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var detailSection: some View {
@@ -115,11 +109,22 @@ struct HistoryView: View {
                     .frame(maxWidth: .infinity, minHeight: 220)
             } else {
                 HistoryDetailView(job: model.selectedJob(), files: model.selectedJobFiles)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
         .padding(.top, 2)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var selectedJobBinding: Binding<String?> {
+        Binding {
+            model.selectedJobID
+        } set: { selectedJobID in
+            guard let selectedJobID, selectedJobID != model.selectedJobID else {
+                return
+            }
+            model.loadJobDetail(jobID: selectedJobID)
+        }
     }
 }
 
@@ -158,7 +163,6 @@ private enum HistoryFilter: String, CaseIterable, Identifiable {
 
 private struct HistoryRow: View {
     let job: ImportJob
-    let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -175,9 +179,8 @@ private struct HistoryRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(isSelected ? Color.accentColor.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
         .contentShape(Rectangle())
     }
 }

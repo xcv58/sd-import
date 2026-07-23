@@ -55,7 +55,7 @@ struct ImportResultView: View {
         AppSection("Copy Receipt", systemImage: "checkmark.seal") {
             HStack(alignment: .firstTextBaseline) {
                 Label(copyStatusTitle, systemImage: result.importedFiles == 0 ? "minus.circle" : "checkmark.seal")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(copyStatusColor)
                 Spacer()
             }

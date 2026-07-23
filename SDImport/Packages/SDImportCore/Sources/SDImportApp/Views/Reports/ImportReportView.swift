@@ -42,20 +42,19 @@ struct ImportReportView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                summaryGrid
-                pathDetails
-                fileSection
+        VStack(alignment: .leading, spacing: 16) {
+            header
+            summaryGrid
+            pathDetails
 
-                if let loadError = presentation.loadError {
-                    loadWarning(loadError)
-                }
+            if let loadError = presentation.loadError {
+                loadWarning(loadError)
             }
-            .padding(22)
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            fileSection
         }
+        .padding(22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .topTrailing) {
             Button {
                 dismiss()
@@ -173,20 +172,17 @@ struct ImportReportView: View {
                 ContentUnavailableView("No Files", systemImage: "doc")
                     .frame(maxWidth: .infinity, minHeight: 160)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(filteredFiles) { file in
-                            ReportFileRow(file: file)
-                            Divider()
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+                List(filteredFiles) { file in
+                    ReportFileRow(file: file)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+                        .listRowSeparator(.visible)
                 }
-                .frame(minHeight: 240, maxHeight: 420)
-                .appCardSurface()
+                .listStyle(.inset)
+                .environment(\.defaultMinListRowHeight, 1)
+                .frame(minHeight: 240, maxHeight: .infinity)
             }
         }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var fileSectionHeader: some View {
@@ -392,6 +388,7 @@ private struct ReportFileRow: View {
                 } label: {
                     Label("Reveal", systemImage: "arrow.up.right.square")
                 }
+                .buttonStyle(.bordered)
                 .accessibilityLabel("Reveal \(file.filename)")
             }
         }
