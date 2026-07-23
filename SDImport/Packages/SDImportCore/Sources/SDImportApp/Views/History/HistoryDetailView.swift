@@ -57,7 +57,7 @@ struct HistoryDetailView: View {
             MetricView(title: "Failed", value: job.failedFiles)
         }
         .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .appCardSurface()
     }
 
     private func actions(_ job: ImportJob) -> some View {
@@ -149,11 +149,7 @@ struct HistoryDetailView: View {
                     .padding(.vertical, 4)
                 }
                 .frame(maxHeight: 360)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(.quaternary, lineWidth: 1)
-                }
+                .appCardSurface()
             }
         }
     }
@@ -214,6 +210,10 @@ private struct HistoryFileRow: View {
         file.copyStatus == .copied ? file.finalDestinationPath : nil
     }
 
+    private var detailPath: String {
+        destinationPath ?? file.relativePath ?? file.sourcePath
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: statusImage)
@@ -232,26 +232,23 @@ private struct HistoryFileRow: View {
                         .background(statusColor.opacity(0.12), in: Capsule())
                 }
 
-                if let destinationPath {
-                    Text(destinationPath)
+                HStack(spacing: 8) {
+                    Text(detailPath)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
-                }
 
-                HStack(spacing: 8) {
+                    Spacer(minLength: 8)
                     Text(Self.bytes(file.size))
                     if let completedAt = file.completedAt {
                         Text(completedAt.formatted(date: .abbreviated, time: .shortened))
                     }
-                    Text(file.relativePath ?? file.sourcePath)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
                 }
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
+                .help(file.relativePath ?? file.sourcePath)
 
                 if let error = file.error, !error.isEmpty {
                     Text(error)
@@ -263,15 +260,14 @@ private struct HistoryFileRow: View {
 
             Spacer(minLength: 0)
 
-            Button {
-                if let revealPath {
+            if let revealPath {
+                Button {
                     model.reveal(path: revealPath)
+                } label: {
+                    Label("Reveal", systemImage: "arrow.up.right.square")
                 }
-            } label: {
-                Label("Reveal", systemImage: "arrow.up.right.square")
+                .accessibilityLabel("Reveal \(file.filename)")
             }
-            .disabled(revealPath == nil)
-            .accessibilityLabel("Reveal \(file.filename)")
         }
         .padding(.vertical, 6)
     }

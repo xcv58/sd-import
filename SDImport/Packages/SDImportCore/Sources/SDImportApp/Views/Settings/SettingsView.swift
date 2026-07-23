@@ -7,7 +7,7 @@ struct SettingsView: View {
     let updater: SPUUpdater?
 
     var body: some View {
-        AppPage(title: "Settings", status: model.statusMessage) {
+        AppPage {
             VStack(alignment: .leading, spacing: 18) {
                 destinations
                 general
@@ -60,7 +60,6 @@ struct SettingsView: View {
                 .accessibilityLabel("Theme")
                 .pickerStyle(.segmented)
                 .frame(width: SettingsLayout.segmentedControlWidth)
-                .offset(x: -SettingsLayout.segmentedPickerChromeInset)
                 .onChange(of: model.themePreference) {
                     model.themePreferenceDidChange()
                 }
@@ -77,7 +76,6 @@ struct SettingsView: View {
                 .labelsHidden()
                 .accessibilityLabel("History")
                 .frame(width: SettingsLayout.compactPickerWidth)
-                .offset(x: -SettingsLayout.menuPickerChromeInset)
                 .onChange(of: model.historyRetention) {
                     model.savePreferences()
                 }
@@ -92,10 +90,17 @@ struct SettingsView: View {
             }
 
             SettingsFormRow {
-                Toggle("Eject source after successful import", isOn: $model.ejectAfterSuccessfulImport)
-                    .onChange(of: model.ejectAfterSuccessfulImport) {
-                        model.savePreferences()
-                    }
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Eject source after successful import", isOn: $model.ejectAfterSuccessfulImport)
+                        .onChange(of: model.ejectAfterSuccessfulImport) {
+                            model.savePreferences()
+                        }
+
+                    Text("Only removable sources are ejected after an error-free copy. Zero-copy scans still offer a manual Eject button.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -117,8 +122,6 @@ private enum SettingsLayout {
     static let segmentedControlWidth: CGFloat = 280
     static let compactPickerWidth: CGFloat = 140
     static let controlColumnStart = labelWidth + columnSpacing
-    static let segmentedPickerChromeInset: CGFloat = 34
-    static let menuPickerChromeInset: CGFloat = 16
 }
 
 private struct SettingsFormRow<Content: View>: View {

@@ -10,7 +10,7 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        AppPage(title: "History", status: model.statusMessage, scrolls: false, maxContentWidth: .infinity) {
+        AppPage(scrolls: false, maxContentWidth: .infinity) {
             historyLayout
         }
         .navigationTitle("History")

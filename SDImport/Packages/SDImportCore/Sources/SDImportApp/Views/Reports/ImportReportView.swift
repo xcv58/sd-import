@@ -70,7 +70,7 @@ struct ImportReportView: View {
             .accessibilityLabel("Close report")
             .padding(18)
         }
-        .frame(minWidth: 560, idealWidth: 860, minHeight: 480, idealHeight: 680)
+        .frame(minWidth: 720, idealWidth: 960, minHeight: 560, idealHeight: 720)
     }
 
     private var header: some View {
@@ -125,6 +125,7 @@ struct ImportReportView: View {
             } label: {
                 Label("Original Report", systemImage: "doc.text")
             }
+            .fixedSize(horizontal: true, vertical: false)
             .disabled(!model.reportFileExists(for: job))
         }
     }
@@ -139,7 +140,7 @@ struct ImportReportView: View {
             MetricView(title: "Failed", value: summary.failedFiles)
         }
         .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .appCardSurface()
     }
 
     private var pathDetails: some View {
@@ -182,12 +183,8 @@ struct ImportReportView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                 }
-                .frame(minHeight: 180, maxHeight: 300)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(.quaternary, lineWidth: 1)
-                }
+                .frame(minHeight: 240, maxHeight: 420)
+                .appCardSurface()
             }
         }
     }
@@ -219,13 +216,17 @@ struct ImportReportView: View {
 
     private var fileControls: some View {
         HStack(spacing: 8) {
+            Text("Show")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Picker("File Filter", selection: $filter) {
                 ForEach(ReportFileFilter.allCases) { filter in
                     Text(filter.title).tag(filter)
                 }
             }
-            .pickerStyle(.segmented)
-            .frame(minWidth: 300, idealWidth: 410, maxWidth: 410)
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(width: 120)
         }
     }
 
@@ -338,6 +339,10 @@ private struct ReportFileRow: View {
         file.copyStatus == .copied ? file.finalDestinationPath : nil
     }
 
+    private var detailPath: String {
+        destinationPath ?? file.relativePath ?? file.sourcePath
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: statusImage)
@@ -356,23 +361,20 @@ private struct ReportFileRow: View {
                         .background(statusColor.opacity(0.12), in: Capsule())
                 }
 
-                if let destinationPath {
-                    Text(destinationPath)
+                HStack(spacing: 8) {
+                    Text(detailPath)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
-                }
 
-                HStack(spacing: 8) {
+                    Spacer(minLength: 8)
                     Text(Self.bytes(file.size))
-                    Text(file.relativePath ?? file.sourcePath)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
                 }
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
+                .help(file.relativePath ?? file.sourcePath)
 
                 if let error = file.error, !error.isEmpty {
                     Text(error)
@@ -384,15 +386,14 @@ private struct ReportFileRow: View {
 
             Spacer(minLength: 0)
 
-            Button {
-                if let revealPath {
+            if let revealPath {
+                Button {
                     model.reveal(path: revealPath)
+                } label: {
+                    Label("Reveal", systemImage: "arrow.up.right.square")
                 }
-            } label: {
-                Label("Reveal", systemImage: "arrow.up.right.square")
+                .accessibilityLabel("Reveal \(file.filename)")
             }
-            .disabled(revealPath == nil)
-            .accessibilityLabel("Reveal \(file.filename)")
         }
         .padding(.vertical, 6)
     }

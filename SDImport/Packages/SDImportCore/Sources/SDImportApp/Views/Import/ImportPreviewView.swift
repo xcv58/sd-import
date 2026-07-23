@@ -11,25 +11,32 @@ struct ImportPreviewView: View {
         let totals = model.previewTotals
 
         VStack(alignment: .leading, spacing: 18) {
-            AppSection("Import Plan", systemImage: "list.bullet.rectangle") {
-                header(rows: rows, totals: totals)
-                controls
-                if hasSupportedMedia {
-                    ImportDestinationFields()
-                    sessionList
-                }
-                destinationSummary(rows: rows, totals: totals)
-                importActionRow
-            }
-
-            AppSection("Files", systemImage: "doc.text.magnifyingglass") {
-                if totals.copyFiles == 0 {
+            if totals.copyFiles == 0 {
+                AppSection("Nothing New", systemImage: "checkmark.seal") {
                     zeroMatchSection(rows: rows)
                     if showsExcludedFiles {
                         fileList(rows: rows, totals: totals)
                     }
-                } else {
-                    fileList(rows: rows, totals: totals)
+                }
+            } else {
+                AppSection("Import Plan", systemImage: "list.bullet.rectangle") {
+                    header(rows: rows, totals: totals)
+                    controls
+                    if hasSupportedMedia {
+                        ImportDestinationFields()
+                        sessionList
+                    }
+                    destinationSummary(rows: rows, totals: totals)
+                    importActionRow
+                }
+
+                AppSection("Files", systemImage: "doc.text.magnifyingglass") {
+                    if rows.isEmpty {
+                        ContentUnavailableView("No Files", systemImage: "doc")
+                            .frame(maxWidth: .infinity, minHeight: 120)
+                    } else {
+                        fileList(rows: rows, totals: totals)
+                    }
                 }
             }
         }

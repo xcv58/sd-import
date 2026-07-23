@@ -129,7 +129,7 @@ private struct OnboardingGuideItem: View {
             }
         }
         .padding(10)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .appCardSurface()
     }
 }
 

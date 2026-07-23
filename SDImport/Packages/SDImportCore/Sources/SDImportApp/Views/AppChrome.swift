@@ -1,11 +1,10 @@
 import SwiftUI
 
 struct AppPage<Content: View>: View {
-    let title: String
     let status: String?
     var statusRole: StatusRole = .neutral
     var scrolls = true
-    var maxContentWidth: CGFloat = 980
+    var maxContentWidth: CGFloat = 1120
     let content: Content
 
     enum StatusRole {
@@ -14,14 +13,12 @@ struct AppPage<Content: View>: View {
     }
 
     init(
-        title: String,
         status: String? = nil,
         statusRole: StatusRole = .neutral,
         scrolls: Bool = true,
-        maxContentWidth: CGFloat = 980,
+        maxContentWidth: CGFloat = 1120,
         @ViewBuilder content: () -> Content
     ) {
-        self.title = title
         self.status = status
         self.statusRole = statusRole
         self.scrolls = scrolls
@@ -45,7 +42,9 @@ struct AppPage<Content: View>: View {
 
     private var pageContent: some View {
         VStack(alignment: .leading, spacing: 18) {
-            header
+            if let status, !status.isEmpty {
+                statusBanner(status)
+            }
 
             if scrolls {
                 content
@@ -56,23 +55,31 @@ struct AppPage<Content: View>: View {
         }
         .padding(24)
         .frame(maxWidth: maxContentWidth, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    @ViewBuilder
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.title)
-                .fontWeight(.semibold)
-
-            if let status, !status.isEmpty {
-                Text(status)
-                    .font(.subheadline)
-                    .foregroundStyle(statusRole == .error ? Color.red : Color.secondary)
-                    .lineLimit(2)
-                    .textSelection(.enabled)
-            }
+    private func statusBanner(_ status: String) -> some View {
+        Label(
+            status,
+            systemImage: statusRole == .error ? "exclamationmark.triangle.fill" : "info.circle"
+        )
+        .font(.callout)
+        .foregroundStyle(statusRole == .error ? Color.red : Color.secondary)
+        .lineLimit(2)
+        .textSelection(.enabled)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            (statusRole == .error ? Color.red : Color.accentColor).opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    (statusRole == .error ? Color.red : Color.accentColor).opacity(0.22),
+                    lineWidth: 1
+                )
         }
     }
 }
@@ -112,7 +119,31 @@ struct AppSection<Content: View>: View {
             content
         }
         .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .appCardSurface()
+    }
+}
+
+private struct AppCardSurfaceModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        let fillOpacity = colorScheme == .dark ? 0.055 : 0.032
+        let strokeOpacity = colorScheme == .dark ? 0.18 : 0.09
+
+        content
+            .background(Color.primary.opacity(fillOpacity), in: shape)
+            .overlay {
+                shape.stroke(Color.primary.opacity(strokeOpacity), lineWidth: 1)
+            }
+    }
+}
+
+extension View {
+    func appCardSurface(cornerRadius: CGFloat = 8) -> some View {
+        modifier(AppCardSurfaceModifier(cornerRadius: cornerRadius))
     }
 }
 
