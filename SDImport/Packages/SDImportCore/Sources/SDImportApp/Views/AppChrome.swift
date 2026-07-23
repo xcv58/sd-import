@@ -186,18 +186,20 @@ struct AppSection<Content: View>: View {
 
 private struct AppCardSurfaceModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
         let fillOpacity = colorScheme == .dark ? 0.055 : 0.024
-        let strokeOpacity = colorScheme == .dark ? 0.75 : 0.55
 
         content
             .background(Color.primary.opacity(fillOpacity), in: shape)
             .overlay {
-                shape.stroke(AppSurfacePalette.separator.opacity(strokeOpacity), lineWidth: 1)
+                if colorSchemeContrast == .increased {
+                    shape.stroke(AppSurfacePalette.separator, lineWidth: 1)
+                }
             }
     }
 }

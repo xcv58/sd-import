@@ -76,136 +76,155 @@ struct SettingsView: View {
     private var selectedForm: some View {
         switch selectedPane {
         case .general:
-            generalForm
+            generalSettings
         case .advanced:
-            advancedForm
+            advancedSettings
         }
     }
 
-    private var generalForm: some View {
-        Form {
-            settingsFeedbackSection
+    private var generalSettings: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 22) {
+                settingsFeedbackCard
 
-            Section("Default Destinations") {
-                FolderSettingRow(
-                    title: "Photos",
-                    path: $model.photosPath,
-                    validation: model.photosValidation,
-                    chooseAction: model.choosePhotosFolder,
-                    revealAction: model.revealPhotosFolder
-                )
+                SettingsGroup("Default Destinations") {
+                    VStack(spacing: 0) {
+                        FolderSettingRow(
+                            title: "Photos",
+                            path: $model.photosPath,
+                            validation: model.photosValidation,
+                            chooseAction: model.choosePhotosFolder,
+                            revealAction: model.revealPhotosFolder
+                        )
 
-                FolderSettingRow(
-                    title: "Videos",
-                    path: $model.videosPath,
-                    validation: model.videosValidation,
-                    chooseAction: model.chooseVideosFolder,
-                    revealAction: model.revealVideosFolder
-                )
-            }
+                        Divider()
+                            .padding(.vertical, 12)
 
-            Section("Appearance") {
-                Picker("Theme", selection: $model.themePreference) {
-                    ForEach(AppThemePreference.allCases) { theme in
-                        Text(theme.settingsTitle).tag(theme)
+                        FolderSettingRow(
+                            title: "Videos",
+                            path: $model.videosPath,
+                            validation: model.videosValidation,
+                            chooseAction: model.chooseVideosFolder,
+                            revealAction: model.revealVideosFolder
+                        )
                     }
                 }
-                .pickerStyle(.segmented)
-                .onChange(of: model.themePreference) {
-                    model.themePreferenceDidChange()
+
+                SettingsGroup("Appearance") {
+                    LabeledContent("Theme") {
+                        Picker("Theme", selection: $model.themePreference) {
+                            ForEach(AppThemePreference.allCases) { theme in
+                                Text(theme.settingsTitle).tag(theme)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 420)
+                        .onChange(of: model.themePreference) {
+                            model.themePreferenceDidChange()
+                        }
+                    }
+                }
+
+                SettingsGroup("Import Behavior") {
+                    VStack(alignment: .leading, spacing: 0) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Toggle("Prompt when a card is mounted", isOn: autoPromptBinding)
+
+                            Text("Runs a small background helper after login so SD Import can notice newly mounted cards.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Divider()
+                            .padding(.vertical, 12)
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            Toggle("Eject source after a successful import", isOn: $model.ejectAfterSuccessfulImport)
+                                .onChange(of: model.ejectAfterSuccessfulImport) {
+                                    model.savePreferences()
+                                }
+
+                            Text("Only removable sources are ejected after an error-free copy. Zero-copy scans still offer a manual Eject button.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+
+                SettingsGroup("Updates") {
+                    UpdaterSettingsView(appUpdater: appUpdater)
                 }
             }
+            .padding(.vertical, 8)
+        }
+    }
 
-            Section("Import Behavior") {
-                VStack(alignment: .leading, spacing: 5) {
-                    Toggle("Prompt when a card is mounted", isOn: autoPromptBinding)
+    private var advancedSettings: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 22) {
+                settingsFeedbackCard
 
-                    Text("Runs a small background helper after login so SD Import can notice newly mounted cards.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Toggle("Eject source after a successful import", isOn: $model.ejectAfterSuccessfulImport)
-                        .onChange(of: model.ejectAfterSuccessfulImport) {
+                SettingsGroup("History") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker("Keep import history", selection: $model.historyRetention) {
+                            ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
+                                Text(policy.settingsTitle).tag(policy)
+                            }
+                        }
+                        .onChange(of: model.historyRetention) {
                             model.savePreferences()
                         }
 
-                    Text("Only removable sources are ejected after an error-free copy. Zero-copy scans still offer a manual Eject button.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+                        Text("History records can be removed without deleting copied photos or videos.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
 
-            Section("Updates") {
-                UpdaterSettingsView(appUpdater: appUpdater)
-            }
-        }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-    }
+                        HStack {
+                            Button {
+                                model.pruneHistory(dryRun: true)
+                            } label: {
+                                Label("Preview Cleanup", systemImage: "doc.text.magnifyingglass")
+                            }
+                            .disabled(!canCleanHistory)
 
-    private var advancedForm: some View {
-        Form {
-            settingsFeedbackSection
-
-            Section("History") {
-                Picker("Keep import history", selection: $model.historyRetention) {
-                    ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
-                        Text(policy.settingsTitle).tag(policy)
-                    }
-                }
-                .onChange(of: model.historyRetention) {
-                    model.savePreferences()
-                }
-
-                Text("History records can be removed without deleting copied photos or videos.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-
-                HStack {
-                    Button {
-                        model.pruneHistory(dryRun: true)
-                    } label: {
-                        Label("Preview Cleanup", systemImage: "doc.text.magnifyingglass")
-                    }
-                    .disabled(!canCleanHistory)
-
-                    Button(role: .destructive) {
-                        isShowingPruneConfirmation = true
-                    } label: {
-                        Label("Delete Old History…", systemImage: "trash")
-                    }
-                    .disabled(!canCleanHistory)
-                    .alert("Delete old history?", isPresented: $isShowingPruneConfirmation) {
-                        Button("Delete Old History", role: .destructive) {
-                            model.pruneHistory(dryRun: false)
+                            Button(role: .destructive) {
+                                isShowingPruneConfirmation = true
+                            } label: {
+                                Label("Delete Old History…", systemImage: "trash")
+                            }
+                            .disabled(!canCleanHistory)
+                            .alert("Delete old history?", isPresented: $isShowingPruneConfirmation) {
+                                Button("Delete Old History", role: .destructive) {
+                                    model.pruneHistory(dryRun: false)
+                                }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text("This deletes old SD Import job records using the current retention setting. Copied media files are not deleted.")
+                            }
                         }
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("This deletes old SD Import job records using the current retention setting. Copied media files are not deleted.")
+
+                        if model.historyRetention.dayCount == nil {
+                            Text("Choose a retention period to preview or delete old history.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
-
-                if model.historyRetention.dayCount == nil {
-                    Text("Choose a retention period to preview or delete old history.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
             }
+            .padding(.vertical, 8)
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
-    private var settingsFeedbackSection: some View {
+    private var settingsFeedbackCard: some View {
         if let feedback = model.settingsFeedback {
-            Section {
-                SettingsFeedbackRow(feedback: feedback)
-            }
+            SettingsFeedbackRow(feedback: feedback)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .appCardSurface()
         }
     }
 
@@ -219,6 +238,29 @@ struct SettingsView: View {
 
     private var canCleanHistory: Bool {
         !model.isWorking && model.historyRetention.dayCount != nil
+    }
+}
+
+private struct SettingsGroup<Content: View>: View {
+    let title: String
+    let content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+                .padding(.leading, 16)
+
+            content
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .appCardSurface(cornerRadius: 10)
+        }
     }
 }
 
