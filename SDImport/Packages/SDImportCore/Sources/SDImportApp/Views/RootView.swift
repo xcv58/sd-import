@@ -27,7 +27,7 @@ struct RootView: View {
             case .history:
                 HistoryView()
             case .settings:
-                SettingsView(appUpdater: appUpdater, placement: .mainWindow)
+                SettingsView(appUpdater: appUpdater)
             }
         }
         .navigationSplitViewStyle(.balanced)

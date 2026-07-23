@@ -12,65 +12,45 @@ private struct DestinationPathInputs: Hashable {
 }
 
 struct SettingsView: View {
-    enum Placement {
-        case mainWindow
-        case settingsWindow
-    }
-
     @EnvironmentObject private var model: AppModel
     @AppStorage("SDImport.selectedSettingsPane") private var selectedPane = SettingsPane.general
     @State private var isShowingPruneConfirmation = false
     @State private var validatedDestinationInputs: DestinationPathInputs?
 
     let appUpdater: AppUpdater
-    let placement: Placement
-
-    init(appUpdater: AppUpdater, placement: Placement = .settingsWindow) {
-        self.appUpdater = appUpdater
-        self.placement = placement
-    }
 
     var body: some View {
-        Group {
-            switch placement {
-            case .mainWindow:
-                mainWindowSettings
-                    .padding(.horizontal, 24)
-                    .padding(.top, 14)
-                    .padding(.bottom, 24)
-                    .frame(maxWidth: 860, maxHeight: .infinity, alignment: .top)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .navigationTitle("Settings")
-            case .settingsWindow:
-                settingsTabs
-                    .scenePadding()
-                    .frame(width: 680, height: 560)
+        mainWindowSettings
+            .padding(.horizontal, 24)
+            .padding(.top, 14)
+            .padding(.bottom, 24)
+            .frame(maxWidth: 860, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .navigationTitle("Settings")
+            .onDisappear {
+                Task {
+                    await model.validateAndSaveDestinationSettings()
+                }
             }
-        }
-        .onDisappear {
-            Task {
-                await model.validateAndSaveDestinationSettings()
-            }
-        }
-        .task(id: destinationPathInputs) {
-            let inputs = destinationPathInputs
-            guard let previousInputs = validatedDestinationInputs else {
-                validatedDestinationInputs = inputs
-                return
-            }
-            guard inputs != previousInputs else {
-                return
-            }
+            .task(id: destinationPathInputs) {
+                let inputs = destinationPathInputs
+                guard let previousInputs = validatedDestinationInputs else {
+                    validatedDestinationInputs = inputs
+                    return
+                }
+                guard inputs != previousInputs else {
+                    return
+                }
 
-            try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else {
-                return
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else {
+                    return
+                }
+                await model.validateAndSaveDestinationSettings()
+                if inputs == destinationPathInputs {
+                    validatedDestinationInputs = inputs
+                }
             }
-            await model.validateAndSaveDestinationSettings()
-            if inputs == destinationPathInputs {
-                validatedDestinationInputs = inputs
-            }
-        }
     }
 
     private var destinationPathInputs: DestinationPathInputs {
@@ -99,22 +79,6 @@ struct SettingsView: View {
             generalForm
         case .advanced:
             advancedForm
-        }
-    }
-
-    private var settingsTabs: some View {
-        TabView(selection: $selectedPane) {
-            generalForm
-                .tabItem {
-                    Label("General", systemImage: "gearshape")
-                }
-                .tag(SettingsPane.general)
-
-            advancedForm
-                .tabItem {
-                    Label("Advanced", systemImage: "wrench.and.screwdriver")
-                }
-                .tag(SettingsPane.advanced)
         }
     }
 

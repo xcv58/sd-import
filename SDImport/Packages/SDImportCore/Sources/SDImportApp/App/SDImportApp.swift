@@ -20,6 +20,14 @@ struct SDImportApp: App {
         .commands {
             SidebarCommands()
 
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    model.selectPanel(.settings)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+                .keyboardShortcut(",", modifiers: [.command])
+            }
+
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: appUpdater.updater)
             }
@@ -70,12 +78,6 @@ struct SDImportApp: App {
                     openWindow(id: "diagnostics")
                 }
             }
-        }
-
-        Settings {
-            SettingsView(appUpdater: appUpdater)
-                .environmentObject(model)
-                .preferredColorScheme(model.themePreference.colorScheme)
         }
 
         Window("Diagnostics", id: "diagnostics") {
