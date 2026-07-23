@@ -117,6 +117,7 @@ final class AppModel: ObservableObject {
     }
     @Published var historyRetention: RetentionPolicy
     @Published var autoPromptEnabled: Bool
+    @Published var ejectAfterSuccessfulImport: Bool
     @Published var hasCompletedOnboarding: Bool
     @Published var workflowProfile: ImportWorkflowProfile
     @Published var importMediaSelection: ImportMediaSelection
@@ -159,6 +160,9 @@ final class AppModel: ObservableObject {
     @Published var reportPresentation: ImportReportPresentation?
     @Published var statusMessage = ""
     @Published var isWorking = false
+    @Published private(set) var isEjectingSource = false
+    @Published private(set) var ejectedSourceJobID: String?
+    @Published private(set) var ejectedSourceName: String?
     @Published var setupError: String?
 
     private let defaults = UserDefaults.standard
@@ -173,6 +177,7 @@ final class AppModel: ObservableObject {
     private var historyRefreshTask: Task<Void, Never>?
     private var historyDetailTask: Task<Void, Never>?
     private var reportTask: Task<Void, Never>?
+    private var sourceEjectionTask: Task<Void, Never>?
     private var mountObserver: MountEventObserver?
     private var workflowProfilesByVolume: [String: ImportWorkflowProfile] = [:]
     private var preferredMixedDestinationLayout: ImportDestinationLayout = .singleLibrary
@@ -193,6 +198,7 @@ final class AppModel: ObservableObject {
         self.location = defaults.string(forKey: DefaultsKeys.location) ?? "Untitled"
         self.historyRetention = .defaultPolicy
         self.autoPromptEnabled = defaults.bool(forKey: DefaultsKeys.autoPromptEnabled)
+        self.ejectAfterSuccessfulImport = defaults.bool(forKey: DefaultsKeys.ejectAfterSuccessfulImport)
         self.hasCompletedOnboarding = defaults.bool(forKey: DefaultsKeys.hasCompletedOnboarding)
         let storedWorkflowProfile = ImportWorkflowProfile(
             rawValue: defaults.string(forKey: DefaultsKeys.workflowProfile) ?? ""
@@ -283,6 +289,7 @@ final class AppModel: ObservableObject {
         defaults.set(videosPath, forKey: DefaultsKeys.videosPath)
         defaults.set(location, forKey: DefaultsKeys.location)
         defaults.set(autoPromptEnabled, forKey: DefaultsKeys.autoPromptEnabled)
+        defaults.set(ejectAfterSuccessfulImport, forKey: DefaultsKeys.ejectAfterSuccessfulImport)
         defaults.set(hasCompletedOnboarding, forKey: DefaultsKeys.hasCompletedOnboarding)
         defaults.set(workflowProfile.rawValue, forKey: DefaultsKeys.workflowProfile)
         defaults.set(importMediaSelection.rawValue, forKey: DefaultsKeys.importMediaSelection)
@@ -417,6 +424,8 @@ final class AppModel: ObservableObject {
         currentSummary = nil
         currentResult = nil
         importProgress = nil
+        ejectedSourceJobID = nil
+        ejectedSourceName = nil
         previewSessions = []
         clearPreviewPlanCache()
         selectedJobFiles = []
@@ -471,6 +480,8 @@ final class AppModel: ObservableObject {
         savePreferences()
         currentResult = nil
         importProgress = nil
+        ejectedSourceJobID = nil
+        ejectedSourceName = nil
         previewSessions = []
         currentPreviewFiles = []
         clearPreviewPlanCache()
@@ -479,6 +490,7 @@ final class AppModel: ObservableObject {
         importLogger.info("Scan started")
 
         let cardPath = resolvedPath(cardPath, validation: sourceValidation)
+        let sourceVolume = Self.mountedSourceVolume(containing: cardPath)
         let homeURL = FileManager.default.homeDirectoryForCurrentUser
         let photosPath = planningPath(
             photosPath,
@@ -503,7 +515,8 @@ final class AppModel: ObservableObject {
                 )
                 let request = ScanRequest(
                     mountURL: URL(fileURLWithPath: cardPath, isDirectory: true),
-                    volumeName: URL(fileURLWithPath: cardPath).lastPathComponent,
+                    volumeName: sourceVolume?.name ?? URL(fileURLWithPath: cardPath).lastPathComponent,
+                    volumeUUID: sourceVolume?.volumeUUID,
                     location: location,
                     roots: DestinationRoots(
                         photosURL: URL(fileURLWithPath: photosPath, isDirectory: true),
@@ -962,6 +975,8 @@ final class AppModel: ObservableObject {
         isWorking = true
         currentResult = nil
         importProgress = nil
+        ejectedSourceJobID = nil
+        ejectedSourceName = nil
         statusMessage = "Preparing import..."
         importLogger.info("Import started jobID=\(jobID, privacy: .private)")
 
@@ -1033,6 +1048,9 @@ final class AppModel: ObservableObject {
                     self.statusMessage = "Import finished"
                     self.isWorking = false
                     self.importTask = nil
+                    if self.ejectAfterSuccessfulImport, self.canEjectSource(for: result) {
+                        self.ejectSource(for: result)
+                    }
                 }
                 importLogger.info(
                     "Import finished imported=\(result.importedFiles, privacy: .public) skipped=\(result.skippedFiles, privacy: .public) failed=\(result.failedFiles, privacy: .public)"
@@ -1457,6 +1475,98 @@ final class AppModel: ObservableObject {
         return jobs.first { $0.id == selectedJobID }
     }
 
+    func shouldOfferSourceEjection(for result: ImportResult) -> Bool {
+        guard ejectedSourceJobID != result.jobID else {
+            return true
+        }
+        return sourceEjectionTarget(for: result) != nil
+    }
+
+    func canEjectSource(for result: ImportResult) -> Bool {
+        !isEjectingSource
+            && ejectedSourceJobID != result.jobID
+            && sourceEjectionTarget(for: result) != nil
+    }
+
+    func sourceEjectionDisplayName(for result: ImportResult) -> String? {
+        if ejectedSourceJobID == result.jobID {
+            return ejectedSourceName
+        }
+        return sourceEjectionTarget(for: result)?.lastPathComponent
+    }
+
+    func ejectSource(for result: ImportResult) {
+        guard !isEjectingSource, let targetURL = sourceEjectionTarget(for: result) else {
+            statusMessage = "Source cannot be ejected safely"
+            return
+        }
+
+        ejectSource(jobID: result.jobID, targetURL: targetURL)
+    }
+
+    func shouldOfferSourceEjection(for summary: ScanSummary) -> Bool {
+        guard previewTotals.copyFiles == 0 else {
+            return false
+        }
+        guard ejectedSourceJobID != summary.jobID else {
+            return true
+        }
+        return sourceEjectionTarget(for: summary) != nil
+    }
+
+    func canEjectSource(for summary: ScanSummary) -> Bool {
+        !isEjectingSource
+            && ejectedSourceJobID != summary.jobID
+            && sourceEjectionTarget(for: summary) != nil
+    }
+
+    func sourceEjectionDisplayName(for summary: ScanSummary) -> String? {
+        if ejectedSourceJobID == summary.jobID {
+            return ejectedSourceName
+        }
+        return sourceEjectionTarget(for: summary)?.lastPathComponent
+    }
+
+    func ejectSource(for summary: ScanSummary) {
+        guard !isEjectingSource, let targetURL = sourceEjectionTarget(for: summary) else {
+            statusMessage = "Source cannot be ejected safely"
+            return
+        }
+
+        ejectSource(jobID: summary.jobID, targetURL: targetURL)
+    }
+
+    private func ejectSource(jobID: String, targetURL: URL) {
+        isEjectingSource = true
+        statusMessage = "Ejecting source..."
+        sourceEjectionTask?.cancel()
+        sourceEjectionTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+            do {
+                try await Self.ejectDevice(at: targetURL)
+                guard !Task.isCancelled else {
+                    return
+                }
+                self.ejectedSourceName = targetURL.lastPathComponent
+                self.ejectedSourceJobID = jobID
+                self.isEjectingSource = false
+                self.sourceEjectionTask = nil
+                self.refreshAvailableSourceVolumes()
+                self.validatePaths()
+                self.statusMessage = "Source ejected safely"
+            } catch is CancellationError {
+                self.isEjectingSource = false
+                self.sourceEjectionTask = nil
+            } catch {
+                self.isEjectingSource = false
+                self.sourceEjectionTask = nil
+                self.statusMessage = "Could not eject source: \(error.localizedDescription)"
+            }
+        }
+    }
+
     private func expanded(_ path: String) -> String {
         (path as NSString).expandingTildeInPath
     }
@@ -1802,6 +1912,7 @@ final class AppModel: ObservableObject {
         location = configuration.defaultLocation
         historyRetention = configuration.historyRetention
         autoPromptEnabled = configuration.autoPromptEnabled
+        ejectAfterSuccessfulImport = configuration.ejectAfterSuccessfulImport
         hasCompletedOnboarding = configuration.hasCompletedOnboarding
         workflowProfile = configuration.lastWorkflowProfile
         importMediaSelection = configuration.lastMediaSelection
@@ -1827,6 +1938,7 @@ final class AppModel: ObservableObject {
             defaultLocation: Self.defaultSessionLabel(for: location),
             historyRetention: historyRetention,
             autoPromptEnabled: autoPromptEnabled,
+            ejectAfterSuccessfulImport: ejectAfterSuccessfulImport,
             hasCompletedOnboarding: hasCompletedOnboarding,
             lastWorkflowProfile: workflowProfile,
             lastMediaSelection: importMediaSelection,
@@ -1897,6 +2009,52 @@ final class AppModel: ObservableObject {
         }
     }
 
+    nonisolated private static func mountedSourceVolume(containing sourcePath: String) -> MountedVolume? {
+        let sourceURL = URL(fileURLWithPath: sourcePath, isDirectory: true)
+        guard
+            let values = try? sourceURL.resourceValues(forKeys: [.volumeURLKey]),
+            let volumeURL = values.volume
+        else {
+            return nil
+        }
+
+        let detector = VolumeDetector()
+        let volume = detector.mountedVolume(from: volumeURL)
+        return detector.isLikelyImportVolume(volume) ? volume : nil
+    }
+
+    private func sourceEjectionTarget(for result: ImportResult) -> URL? {
+        guard
+            let job = jobs.first(where: { $0.id == result.jobID }),
+            let volume = Self.mountedSourceVolume(containing: job.mountPath),
+            SourceEjectionPolicy().canEject(job: job, result: result, volume: volume)
+        else {
+            return nil
+        }
+        return volume.mountURL
+    }
+
+    private func sourceEjectionTarget(for summary: ScanSummary) -> URL? {
+        guard
+            currentSummary?.jobID == summary.jobID,
+            let volume = Self.mountedSourceVolume(containing: summary.mountPath),
+            SourceEjectionPolicy().canEjectAfterScan(
+                summary: summary,
+                plannedCopyFiles: previewTotals.copyFiles,
+                volume: volume
+            )
+        else {
+            return nil
+        }
+        return volume.mountURL
+    }
+
+    nonisolated private static func ejectDevice(at url: URL) async throws {
+        try await Task.detached(priority: .userInitiated) {
+            try NSWorkspace.shared.unmountAndEjectDevice(at: url)
+        }.value
+    }
+
     nonisolated private static func errorMessage(for error: Error) -> String {
         if case let SDImportError.insufficientDestinationSpace(path, requiredBytes, availableBytes) = error {
             let required = ByteCountFormatter.string(fromByteCount: requiredBytes, countStyle: .file)
@@ -1937,6 +2095,7 @@ private enum DefaultsKeys {
     static let videosPath = "SDImport.videosPath"
     static let location = "SDImport.location"
     static let autoPromptEnabled = "SDImport.autoPromptEnabled"
+    static let ejectAfterSuccessfulImport = "SDImport.ejectAfterSuccessfulImport"
     static let hasCompletedOnboarding = "SDImport.hasCompletedOnboarding"
     static let workflowProfile = "SDImport.workflowProfile"
     static let importMediaSelection = "SDImport.importMediaSelection"

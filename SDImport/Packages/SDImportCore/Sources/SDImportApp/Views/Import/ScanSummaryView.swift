@@ -2,6 +2,8 @@ import SDImportCore
 import SwiftUI
 
 struct ScanSummaryView: View {
+    @EnvironmentObject private var model: AppModel
+
     let summary: ScanSummary
 
     var body: some View {
@@ -12,6 +14,17 @@ struct ScanSummaryView: View {
                 MetricView(title: "Known", value: summary.knownFiles)
                 MetricView(title: "Conflicts", value: summary.conflictFiles)
                 MetricView(title: "Unsupported", value: summary.unsupportedFiles)
+            }
+
+            if model.shouldOfferSourceEjection(for: summary) {
+                SourceEjectionControl(
+                    sourceName: model.sourceEjectionDisplayName(for: summary) ?? "Source Card",
+                    isEjected: model.ejectedSourceJobID == summary.jobID,
+                    isEjecting: model.isEjectingSource,
+                    canEject: model.canEjectSource(for: summary)
+                ) {
+                    model.ejectSource(for: summary)
+                }
             }
 
             Text(summary.jobID)

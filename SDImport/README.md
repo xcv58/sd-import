@@ -92,7 +92,7 @@ Use the printed public key for release builds:
 ```bash
 APP_VERSION="1.0" \
 APP_BUILD="1" \
-SPARKLE_FEED_URL="https://github.com/xcv58/macos-automation/releases/latest/download/appcast.xml" \
+SPARKLE_FEED_URL="https://github.com/xcv58/sd-import/releases/latest/download/appcast.xml" \
 SPARKLE_PUBLIC_ED_KEY="base64-public-key" \
 DEVELOPER_ID_APPLICATION="Developer ID Application: Example (TEAMID)" \
 ./script/package_dmg.sh
@@ -129,7 +129,7 @@ generic placeholder.
 
 The release script should publish Sparkle release notes with a version-specific
 GitHub asset URL, such as
-`https://github.com/xcv58/macos-automation/releases/download/v1.0/SD-Import.md`.
+`https://github.com/xcv58/sd-import/releases/download/v1.0/SD-Import.md`.
 Avoid `releases/latest/download/SD-Import.md` for release notes because GitHub's
 latest-release redirect can be stale while a new update is being published.
 

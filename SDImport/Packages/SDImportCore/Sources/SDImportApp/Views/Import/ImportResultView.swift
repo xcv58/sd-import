@@ -90,6 +90,17 @@ struct ImportResultView: View {
                 }
             }
 
+            if model.shouldOfferSourceEjection(for: result) {
+                SourceEjectionControl(
+                    sourceName: model.sourceEjectionDisplayName(for: result) ?? "Source Card",
+                    isEjected: model.ejectedSourceJobID == result.jobID,
+                    isEjecting: model.isEjectingSource,
+                    canEject: model.canEjectSource(for: result)
+                ) {
+                    model.ejectSource(for: result)
+                }
+            }
+
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
                     receiptButtons
