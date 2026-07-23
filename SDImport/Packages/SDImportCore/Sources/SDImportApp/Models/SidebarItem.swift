@@ -4,7 +4,6 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case `import`
     case history
     case settings
-    case diagnostics
 
     var id: String { rawValue }
 
@@ -16,8 +15,6 @@ enum SidebarItem: String, CaseIterable, Identifiable {
             return "History"
         case .settings:
             return "Settings"
-        case .diagnostics:
-            return "Diagnostics"
         }
     }
 
@@ -29,8 +26,6 @@ enum SidebarItem: String, CaseIterable, Identifiable {
             return "clock.arrow.circlepath"
         case .settings:
             return "gearshape"
-        case .diagnostics:
-            return "stethoscope"
         }
     }
 
@@ -42,8 +37,6 @@ enum SidebarItem: String, CaseIterable, Identifiable {
             return "⌘2"
         case .settings:
             return "⌘3"
-        case .diagnostics:
-            return "⌘4"
         }
     }
 

@@ -1,11 +1,21 @@
+import AppKit
 import SwiftUI
 
+enum AppSurfacePalette {
+    static var contentBackground: Color {
+        Color(nsColor: .controlBackgroundColor)
+    }
+
+    static var separator: Color {
+        Color(nsColor: .separatorColor)
+    }
+}
+
 struct AppPage<Content: View>: View {
-    let title: String
     let status: String?
     var statusRole: StatusRole = .neutral
     var scrolls = true
-    var maxContentWidth: CGFloat = 980
+    var maxContentWidth: CGFloat = 1120
     let content: Content
 
     enum StatusRole {
@@ -14,14 +24,12 @@ struct AppPage<Content: View>: View {
     }
 
     init(
-        title: String,
         status: String? = nil,
         statusRole: StatusRole = .neutral,
         scrolls: Bool = true,
-        maxContentWidth: CGFloat = 980,
+        maxContentWidth: CGFloat = 1120,
         @ViewBuilder content: () -> Content
     ) {
-        self.title = title
         self.status = status
         self.statusRole = statusRole
         self.scrolls = scrolls
@@ -41,11 +49,14 @@ struct AppPage<Content: View>: View {
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppSurfacePalette.contentBackground)
     }
 
     private var pageContent: some View {
         VStack(alignment: .leading, spacing: 18) {
-            header
+            if let status, !status.isEmpty {
+                statusBanner(status)
+            }
 
             if scrolls {
                 content
@@ -56,23 +67,80 @@ struct AppPage<Content: View>: View {
         }
         .padding(24)
         .frame(maxWidth: maxContentWidth, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    @ViewBuilder
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.title)
-                .fontWeight(.semibold)
+    private func statusBanner(_ status: String) -> some View {
+        AppStatusLabel(
+            title: status,
+            systemImage: statusRole == .error ? "exclamationmark.triangle.fill" : "info.circle",
+            role: statusRole == .error ? .error : .info
+        )
+        .font(.callout)
+        .lineLimit(2)
+        .textSelection(.enabled)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            statusTint.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(statusTint.opacity(0.22), lineWidth: 1)
+        }
+    }
 
-            if let status, !status.isEmpty {
-                Text(status)
-                    .font(.subheadline)
-                    .foregroundStyle(statusRole == .error ? Color.red : Color.secondary)
-                    .lineLimit(2)
-                    .textSelection(.enabled)
-            }
+    private var statusTint: Color {
+        statusRole == .error ? .red : .accentColor
+    }
+}
+
+struct AppStatusLabel: View {
+    let title: String
+    let systemImage: String
+    var role: Role
+
+    enum Role {
+        case neutral
+        case info
+        case success
+        case warning
+        case error
+    }
+
+    var body: some View {
+        Label {
+            Text(title)
+                .foregroundStyle(usesPrimaryText ? Color.primary : Color.secondary)
+        } icon: {
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
+        }
+    }
+
+    private var usesPrimaryText: Bool {
+        switch role {
+        case .success, .warning, .error:
+            return true
+        case .neutral, .info:
+            return false
+        }
+    }
+
+    private var tint: Color {
+        switch role {
+        case .neutral:
+            return .secondary
+        case .info:
+            return .accentColor
+        case .success:
+            return .green
+        case .warning:
+            return .orange
+        case .error:
+            return .red
         }
     }
 }
@@ -112,7 +180,33 @@ struct AppSection<Content: View>: View {
             content
         }
         .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .appCardSurface()
+    }
+}
+
+private struct AppCardSurfaceModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        let fillOpacity = colorScheme == .dark ? 0.055 : 0.024
+
+        content
+            .background(Color.primary.opacity(fillOpacity), in: shape)
+            .overlay {
+                if colorSchemeContrast == .increased {
+                    shape.stroke(AppSurfacePalette.separator, lineWidth: 1)
+                }
+            }
+    }
+}
+
+extension View {
+    func appCardSurface(cornerRadius: CGFloat = 8) -> some View {
+        modifier(AppCardSurfaceModifier(cornerRadius: cornerRadius))
     }
 }
 
@@ -128,23 +222,26 @@ struct InfoPill: View {
     }
 
     var body: some View {
-        Label(title, systemImage: systemImage)
+        AppStatusLabel(
+            title: title,
+            systemImage: systemImage,
+            role: statusRole
+        )
             .font(.caption)
             .lineLimit(1)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(backgroundStyle, in: Capsule())
-            .foregroundStyle(foregroundStyle)
     }
 
-    private var foregroundStyle: Color {
+    private var statusRole: AppStatusLabel.Role {
         switch role {
         case .neutral:
-            return .secondary
+            return .neutral
         case .success:
-            return .green
+            return .success
         case .warning:
-            return .orange
+            return .warning
         }
     }
 

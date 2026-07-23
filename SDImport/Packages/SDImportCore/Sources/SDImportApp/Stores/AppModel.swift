@@ -103,6 +103,16 @@ struct ImportReportPresentation: Identifiable, Hashable {
     let loadError: String?
 }
 
+struct SettingsFeedback: Equatable {
+    enum Role {
+        case information
+        case error
+    }
+
+    let message: String
+    let role: Role
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var selection: SidebarItem = .import
@@ -159,6 +169,7 @@ final class AppModel: ObservableObject {
     @Published var pendingMountedVolume: MountedVolume?
     @Published var reportPresentation: ImportReportPresentation?
     @Published var statusMessage = ""
+    @Published private(set) var settingsFeedback: SettingsFeedback?
     @Published var isWorking = false
     @Published private(set) var isEjectingSource = false
     @Published private(set) var ejectedSourceJobID: String?
@@ -283,7 +294,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func savePreferences(refreshFolderBookmarks: Bool = false) {
+    @discardableResult
+    func savePreferences(refreshFolderBookmarks: Bool = false) -> Bool {
+        settingsFeedback = nil
         defaults.set(cardPath, forKey: DefaultsKeys.cardPath)
         defaults.set(photosPath, forKey: DefaultsKeys.photosPath)
         defaults.set(videosPath, forKey: DefaultsKeys.videosPath)
@@ -303,11 +316,12 @@ final class AppModel: ObservableObject {
             try settingsRepository?.saveConfiguration(currentConfiguration())
         } catch {
             statusMessage = "Could not save settings: \(error)"
-            return
+            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            return false
         }
 
         guard refreshFolderBookmarks else {
-            return
+            return true
         }
 
         do {
@@ -316,7 +330,10 @@ final class AppModel: ObservableObject {
             try saveFolderBookmark(.videos, path: videosPath)
         } catch {
             statusMessage = "Settings saved, but folder access could not be refreshed: \(error)"
+            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            return false
         }
+        return true
     }
 
     func chooseCardFolder() {
@@ -448,6 +465,31 @@ final class AppModel: ObservableObject {
         photosValidation = validator.validate(path: photosPath, purpose: .destination)
         videosValidation = validator.validate(path: videosPath, purpose: .destination)
         rebuildRecentImportSuggestions()
+    }
+
+    func validateAndSaveDestinationSettings() async {
+        let photosPath = self.photosPath
+        let videosPath = self.videosPath
+        let results = await Task.detached(priority: .userInitiated) {
+            let validator = PathValidator()
+            return (
+                validator.validate(path: photosPath, purpose: .destination),
+                validator.validate(path: videosPath, purpose: .destination)
+            )
+        }.value
+
+        guard
+            !Task.isCancelled,
+            photosPath == self.photosPath,
+            videosPath == self.videosPath
+        else {
+            return
+        }
+
+        photosValidation = results.0
+        videosValidation = results.1
+        rebuildRecentImportSuggestions()
+        savePreferences(refreshFolderBookmarks: true)
     }
 
     var canScan: Bool {
@@ -1118,12 +1160,36 @@ final class AppModel: ObservableObject {
         statusMessage = "Ready"
     }
 
+    @discardableResult
+    func setAutoPromptEnabled(
+        _ enabled: Bool,
+        registration: (Bool) throws -> Void = LoginItemController.setEnabled
+    ) -> Bool {
+        do {
+            try registration(enabled)
+            autoPromptEnabled = enabled
+            let saved = savePreferences()
+            guard saved else {
+                return false
+            }
+
+            statusMessage = enabled ? "Background prompt enabled" : "Background prompt disabled"
+            settingsFeedback = SettingsFeedback(message: statusMessage, role: .information)
+            return true
+        } catch {
+            statusMessage = "Could not update background prompt: \(error)"
+            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            return false
+        }
+    }
+
     func updateLoginItemRegistration() {
         do {
             try LoginItemController.setEnabled(autoPromptEnabled)
             statusMessage = autoPromptEnabled ? "Background prompt enabled" : "Background prompt disabled"
         } catch {
             statusMessage = "Could not update background prompt: \(error)"
+            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
         }
     }
 
@@ -1428,6 +1494,7 @@ final class AppModel: ObservableObject {
     func pruneHistory(dryRun: Bool) {
         guard let databaseURL else {
             statusMessage = "Database is not ready"
+            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
             return
         }
 
@@ -1439,12 +1506,14 @@ final class AppModel: ObservableObject {
             )
             refreshHistory()
             if dryRun {
-                statusMessage = "\(summary.matchedJobs) old jobs would be pruned"
+                statusMessage = "\(summary.matchedJobs) old jobs would be deleted"
             } else {
-                statusMessage = "Pruned \(summary.deletedJobs) jobs"
+                statusMessage = "Deleted \(summary.deletedJobs) old jobs"
             }
+            settingsFeedback = SettingsFeedback(message: statusMessage, role: .information)
         } catch {
             statusMessage = "Could not prune history: \(error)"
+            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
         }
     }
 

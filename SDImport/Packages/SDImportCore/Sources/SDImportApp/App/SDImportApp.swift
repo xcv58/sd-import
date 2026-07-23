@@ -5,19 +5,29 @@ import SwiftUI
 @main
 @MainActor
 struct SDImportApp: App {
+    @Environment(\.openWindow) private var openWindow
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
-    private let appUpdater = AppUpdater()
+    @StateObject private var appUpdater = AppUpdater()
 
     var body: some Scene {
-        WindowGroup("SD Import") {
-            RootView(updater: appUpdater.updater)
+        WindowGroup("SD Import", id: "main") {
+            RootView(appUpdater: appUpdater)
                 .environmentObject(model)
                 .preferredColorScheme(model.themePreference.colorScheme)
                 .frame(minWidth: 760, minHeight: 560)
         }
         .commands {
             SidebarCommands()
+
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    openWindow(id: "main")
+                    model.selectPanel(.settings)
+                    NSApp.activate()
+                }
+                .keyboardShortcut(",", modifiers: [.command])
+            }
 
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: appUpdater.updater)
@@ -33,14 +43,6 @@ struct SDImportApp: App {
                     model.refreshHistory()
                 }
                 .keyboardShortcut("r", modifiers: [.command])
-            }
-
-            CommandGroup(replacing: .appSettings) {
-                Button("Settings...") {
-                    model.selectPanel(.settings)
-                    NSApplication.shared.activate(ignoringOtherApps: true)
-                }
-                .keyboardShortcut(",", modifiers: [.command])
             }
 
             CommandMenu("Navigate") {
@@ -59,11 +61,6 @@ struct SDImportApp: App {
                 }
                 .keyboardShortcut("3", modifiers: [.command])
 
-                Button("Diagnostics") {
-                    model.selectPanel(.diagnostics)
-                }
-                .keyboardShortcut("4", modifiers: [.command])
-
                 Divider()
 
                 Button("Next Panel") {
@@ -76,7 +73,21 @@ struct SDImportApp: App {
                 }
                 .keyboardShortcut(.tab, modifiers: [.control, .shift])
             }
+
+            CommandGroup(after: .help) {
+                Button("Diagnostics...") {
+                    openWindow(id: "diagnostics")
+                }
+            }
         }
+
+        Window("Diagnostics", id: "diagnostics") {
+            DiagnosticsView()
+                .environmentObject(model)
+                .preferredColorScheme(model.themePreference.colorScheme)
+                .frame(minWidth: 620, minHeight: 420)
+        }
+        .defaultSize(width: 720, height: 500)
     }
 }
 

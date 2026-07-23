@@ -11,25 +11,32 @@ struct ImportPreviewView: View {
         let totals = model.previewTotals
 
         VStack(alignment: .leading, spacing: 18) {
-            AppSection("Import Plan", systemImage: "list.bullet.rectangle") {
-                header(rows: rows, totals: totals)
-                controls
-                if hasSupportedMedia {
-                    ImportDestinationFields()
-                    sessionList
-                }
-                destinationSummary(rows: rows, totals: totals)
-                importActionRow
-            }
-
-            AppSection("Files", systemImage: "doc.text.magnifyingglass") {
-                if totals.copyFiles == 0 {
+            if totals.copyFiles == 0 {
+                AppSection("Nothing New", systemImage: "checkmark.seal") {
                     zeroMatchSection(rows: rows)
                     if showsExcludedFiles {
                         fileList(rows: rows, totals: totals)
                     }
-                } else {
-                    fileList(rows: rows, totals: totals)
+                }
+            } else {
+                AppSection("Import Plan", systemImage: "list.bullet.rectangle") {
+                    header(rows: rows, totals: totals)
+                    controls
+                    if hasSupportedMedia {
+                        ImportDestinationFields()
+                        sessionList
+                    }
+                    destinationSummary(rows: rows, totals: totals)
+                    importActionRow
+                }
+
+                AppSection("Files", systemImage: "doc.text.magnifyingglass") {
+                    if rows.isEmpty {
+                        ContentUnavailableView("No Files", systemImage: "doc")
+                            .frame(maxWidth: .infinity, minHeight: 120)
+                    } else {
+                        fileList(rows: rows, totals: totals)
+                    }
                 }
             }
         }
@@ -93,9 +100,12 @@ struct ImportPreviewView: View {
             importOptionControls
 
             if let warning = selectedMediaAvailabilityMessage {
-                Label(warning, systemImage: "info.circle")
+                AppStatusLabel(
+                    title: warning,
+                    systemImage: "info.circle",
+                    role: .warning
+                )
                     .font(.caption)
-                    .foregroundStyle(.orange)
             }
         }
     }
@@ -258,7 +268,7 @@ struct ImportPreviewView: View {
 
             if model.previewTotals.copyFiles == 0 {
                 Text("Nothing new is selected to copy")
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
@@ -375,16 +385,22 @@ struct ImportPreviewView: View {
 
                 if !requirements.isEmpty {
                     ForEach(requirements) { requirement in
-                        Label(spaceText(for: requirement), systemImage: requirement.isSatisfied ? "checkmark.circle" : "exclamationmark.triangle")
+                        AppStatusLabel(
+                            title: spaceText(for: requirement),
+                            systemImage: requirement.isSatisfied ? "checkmark.circle" : "exclamationmark.triangle",
+                            role: requirement.isSatisfied ? .neutral : .warning
+                        )
                             .font(.caption)
-                            .foregroundStyle(requirement.isSatisfied ? Color.secondary : Color.orange)
                     }
                 }
 
                 if excludedCount > 0, let summary = exclusionSummary(rows: rows) {
-                    Label(summary, systemImage: "minus.circle")
+                    AppStatusLabel(
+                        title: summary,
+                        systemImage: "minus.circle",
+                        role: .warning
+                    )
                         .font(.caption)
-                        .foregroundStyle(.orange)
                 }
             }
         }
@@ -397,13 +413,13 @@ struct ImportPreviewView: View {
                 .fontWeight(.semibold)
 
             Text(zeroMatchDetail(rows: rows))
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(zeroMatchReasons(rows: rows), id: \.self) { reason in
                     Label(reason, systemImage: "checkmark.circle")
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 }
             }

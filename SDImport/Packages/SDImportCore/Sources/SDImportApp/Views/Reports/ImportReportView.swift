@@ -42,20 +42,19 @@ struct ImportReportView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                summaryGrid
-                pathDetails
-                fileSection
+        VStack(alignment: .leading, spacing: 16) {
+            header
+            summaryGrid
+            pathDetails
 
-                if let loadError = presentation.loadError {
-                    loadWarning(loadError)
-                }
+            if let loadError = presentation.loadError {
+                loadWarning(loadError)
             }
-            .padding(22)
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            fileSection
         }
+        .padding(22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .topTrailing) {
             Button {
                 dismiss()
@@ -70,7 +69,7 @@ struct ImportReportView: View {
             .accessibilityLabel("Close report")
             .padding(18)
         }
-        .frame(minWidth: 560, idealWidth: 860, minHeight: 480, idealHeight: 680)
+        .frame(minWidth: 720, idealWidth: 960, minHeight: 560, idealHeight: 720)
     }
 
     private var header: some View {
@@ -125,6 +124,7 @@ struct ImportReportView: View {
             } label: {
                 Label("Original Report", systemImage: "doc.text")
             }
+            .fixedSize(horizontal: true, vertical: false)
             .disabled(!model.reportFileExists(for: job))
         }
     }
@@ -139,7 +139,7 @@ struct ImportReportView: View {
             MetricView(title: "Failed", value: summary.failedFiles)
         }
         .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .appCardSurface()
     }
 
     private var pathDetails: some View {
@@ -172,24 +172,17 @@ struct ImportReportView: View {
                 ContentUnavailableView("No Files", systemImage: "doc")
                     .frame(maxWidth: .infinity, minHeight: 160)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(filteredFiles) { file in
-                            ReportFileRow(file: file)
-                            Divider()
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+                List(filteredFiles) { file in
+                    ReportFileRow(file: file)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+                        .listRowSeparator(.visible)
                 }
-                .frame(minHeight: 180, maxHeight: 300)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(.quaternary, lineWidth: 1)
-                }
+                .listStyle(.inset)
+                .environment(\.defaultMinListRowHeight, 1)
+                .frame(minHeight: 240, maxHeight: .infinity)
             }
         }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var fileSectionHeader: some View {
@@ -219,13 +212,17 @@ struct ImportReportView: View {
 
     private var fileControls: some View {
         HStack(spacing: 8) {
+            Text("Show")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Picker("File Filter", selection: $filter) {
                 ForEach(ReportFileFilter.allCases) { filter in
                     Text(filter.title).tag(filter)
                 }
             }
-            .pickerStyle(.segmented)
-            .frame(minWidth: 300, idealWidth: 410, maxWidth: 410)
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(width: 120)
         }
     }
 
@@ -258,9 +255,12 @@ struct ImportReportView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 4)
         } label: {
-            Label("Report opened with warnings", systemImage: "exclamationmark.triangle")
+            AppStatusLabel(
+                title: "Report opened with warnings",
+                systemImage: "exclamationmark.triangle",
+                role: .warning
+            )
                 .font(.caption)
-                .foregroundStyle(.orange)
         }
     }
 }
@@ -338,6 +338,10 @@ private struct ReportFileRow: View {
         file.copyStatus == .copied ? file.finalDestinationPath : nil
     }
 
+    private var detailPath: String {
+        destinationPath ?? file.relativePath ?? file.sourcePath
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: statusImage)
@@ -356,43 +360,38 @@ private struct ReportFileRow: View {
                         .background(statusColor.opacity(0.12), in: Capsule())
                 }
 
-                if let destinationPath {
-                    Text(destinationPath)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text(detailPath)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
-                }
 
-                HStack(spacing: 8) {
+                    Spacer(minLength: 8)
                     Text(Self.bytes(file.size))
-                    Text(file.relativePath ?? file.sourcePath)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
                 }
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
+                .help(file.relativePath ?? file.sourcePath)
 
                 if let error = file.error, !error.isEmpty {
                     Text(error)
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                 }
             }
 
             Spacer(minLength: 0)
 
-            Button {
-                if let revealPath {
+            if let revealPath {
+                Button {
                     model.reveal(path: revealPath)
+                } label: {
+                    Label("Reveal", systemImage: "arrow.up.right.square")
                 }
-            } label: {
-                Label("Reveal", systemImage: "arrow.up.right.square")
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Reveal \(file.filename)")
             }
-            .disabled(revealPath == nil)
-            .accessibilityLabel("Reveal \(file.filename)")
         }
         .padding(.vertical, 6)
     }
@@ -417,7 +416,7 @@ private struct ReportFileRow: View {
         case .copied:
             return .green
         case .failed:
-            return .orange
+            return .red
         }
     }
 

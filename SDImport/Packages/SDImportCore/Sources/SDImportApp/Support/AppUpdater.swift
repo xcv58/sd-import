@@ -3,20 +3,36 @@ import Sparkle
 import SwiftUI
 
 @MainActor
-final class AppUpdater {
+final class AppUpdater: ObservableObject {
     private let updaterController: SPUStandardUpdaterController?
 
+    @Published var automaticallyChecksForUpdates: Bool {
+        didSet {
+            updater?.automaticallyChecksForUpdates = automaticallyChecksForUpdates
+        }
+    }
+
+    @Published var automaticallyDownloadsUpdates: Bool {
+        didSet {
+            updater?.automaticallyDownloadsUpdates = automaticallyDownloadsUpdates
+        }
+    }
+
     init(bundle: Bundle = .main) {
-        guard Self.isConfigured(in: bundle) else {
-            updaterController = nil
-            return
+        let controller: SPUStandardUpdaterController?
+        if Self.isConfigured(in: bundle) {
+            controller = SPUStandardUpdaterController(
+                startingUpdater: true,
+                updaterDelegate: nil,
+                userDriverDelegate: nil
+            )
+        } else {
+            controller = nil
         }
 
-        updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
-            updaterDelegate: nil,
-            userDriverDelegate: nil
-        )
+        updaterController = controller
+        automaticallyChecksForUpdates = controller?.updater.automaticallyChecksForUpdates ?? false
+        automaticallyDownloadsUpdates = controller?.updater.automaticallyDownloadsUpdates ?? false
     }
 
     var updater: SPUUpdater? {
@@ -67,32 +83,27 @@ private struct EnabledCheckForUpdatesView: View {
 }
 
 struct UpdaterSettingsView: View {
-    private let updater: SPUUpdater?
+    @ObservedObject private var appUpdater: AppUpdater
     private let leadingInset: CGFloat
 
-    @State private var automaticallyChecksForUpdates: Bool
-    @State private var automaticallyDownloadsUpdates: Bool
-
-    init(updater: SPUUpdater?, leadingInset: CGFloat = 0) {
-        self.updater = updater
+    init(appUpdater: AppUpdater, leadingInset: CGFloat = 0) {
+        self.appUpdater = appUpdater
         self.leadingInset = leadingInset
-        self.automaticallyChecksForUpdates = updater?.automaticallyChecksForUpdates ?? false
-        self.automaticallyDownloadsUpdates = updater?.automaticallyDownloadsUpdates ?? false
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let updater {
-                Toggle("Automatically check for updates", isOn: $automaticallyChecksForUpdates)
-                    .onChange(of: automaticallyChecksForUpdates) {
-                        updater.automaticallyChecksForUpdates = automaticallyChecksForUpdates
-                    }
+            if appUpdater.updater != nil {
+                Toggle(
+                    "Automatically check for updates",
+                    isOn: $appUpdater.automaticallyChecksForUpdates
+                )
 
-                Toggle("Automatically download updates", isOn: $automaticallyDownloadsUpdates)
-                    .disabled(!automaticallyChecksForUpdates)
-                    .onChange(of: automaticallyDownloadsUpdates) {
-                        updater.automaticallyDownloadsUpdates = automaticallyDownloadsUpdates
-                    }
+                Toggle(
+                    "Automatically download updates",
+                    isOn: $appUpdater.automaticallyDownloadsUpdates
+                )
+                .disabled(!appUpdater.automaticallyChecksForUpdates)
             } else {
                 Text("Updates are not configured for this build.")
                     .foregroundStyle(.secondary)

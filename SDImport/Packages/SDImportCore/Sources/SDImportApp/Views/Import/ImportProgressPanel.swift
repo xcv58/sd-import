@@ -269,7 +269,7 @@ private struct ProgressFileEventRow: View {
         case .copied:
             return .green
         case .failed:
-            return .orange
+            return .red
         }
     }
 

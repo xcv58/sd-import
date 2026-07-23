@@ -80,11 +80,16 @@ struct OnboardingFlowView: View {
             }
 
             HStack {
+                Button("Set Up Later") {
+                    model.completeOnboarding()
+                }
+
                 Spacer()
+
                 Button {
                     model.completeOnboarding()
                 } label: {
-                    Text("Done")
+                    Text("Save and Continue")
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canComplete)
@@ -92,7 +97,6 @@ struct OnboardingFlowView: View {
         }
         .padding(24)
         .frame(width: 660)
-        .interactiveDismissDisabled(true)
         .onAppear {
             model.validatePaths()
         }
@@ -114,22 +118,15 @@ private struct OnboardingGuideItem: View {
     let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 9) {
-            Image(systemName: systemImage)
+        GroupBox {
+            Text(text)
+                .font(.callout)
                 .foregroundStyle(.secondary)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                Text(text)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Label(title, systemImage: systemImage)
         }
-        .padding(10)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -159,9 +156,12 @@ private struct OnboardingFolderRow: View {
                 .accessibilityLabel("Choose \(title.lowercased())")
             }
 
-            Label(statusMessage, systemImage: statusImage)
-                .font(.caption)
-                .foregroundStyle(statusColor)
+            AppStatusLabel(
+                title: statusMessage,
+                systemImage: statusImage,
+                role: statusRole
+            )
+                .font(.callout)
                 .padding(.leading, 108)
         }
     }
@@ -185,8 +185,11 @@ private struct OnboardingFolderRow: View {
         validation.isUsable ? "checkmark.circle" : (isSoftOptionalWarning ? "info.circle" : "exclamationmark.triangle")
     }
 
-    private var statusColor: Color {
-        validation.isUsable || isSoftOptionalWarning ? Color.secondary : Color.orange
+    private var statusRole: AppStatusLabel.Role {
+        if validation.isUsable {
+            return .neutral
+        }
+        return isSoftOptionalWarning ? .info : .warning
     }
 
     private var isSoftOptionalWarning: Bool {

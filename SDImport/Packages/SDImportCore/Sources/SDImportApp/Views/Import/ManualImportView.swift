@@ -5,7 +5,7 @@ struct ManualImportView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        AppPage(title: "Import", status: model.statusMessage) {
+        AppPage {
             VStack(alignment: .leading, spacing: 18) {
                 sourceSection
 
@@ -254,7 +254,10 @@ private struct SourceField: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "sdcard")
+                    Label(sourceMenuTitle, systemImage: "sdcard")
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 160, alignment: .leading)
                 }
                 .help("Select source")
                 .accessibilityLabel("Select source")
@@ -287,7 +290,7 @@ private struct SourceField: View {
 
             if let selectedVolume = model.selectedSourceVolume {
                 Label(selectedVolume.detailText, systemImage: "externaldrive")
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -295,6 +298,10 @@ private struct SourceField: View {
             ValidationStatusView(result: model.sourceValidation)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var sourceMenuTitle: String {
+        model.selectedSourceVolume?.name ?? "Sources"
     }
 }
 
@@ -461,11 +468,7 @@ private struct RecentPathManagementSheet: View {
                     .padding(.vertical, 4)
                 }
                 .frame(minHeight: 180, idealHeight: 260, maxHeight: 320)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(.quaternary, lineWidth: 1)
-                }
+                .appCardSurface()
             }
         }
         .padding(20)
@@ -530,9 +533,12 @@ private struct ValidationStatusView: View {
     let result: PathValidationResult
 
     var body: some View {
-        Label(result.message, systemImage: result.isUsable ? "checkmark.circle" : "exclamationmark.triangle")
-            .font(.caption)
-            .foregroundStyle(result.isUsable ? Color.secondary : Color.orange)
+        AppStatusLabel(
+            title: result.message,
+            systemImage: result.isUsable ? "checkmark.circle" : "exclamationmark.triangle",
+            role: result.isUsable ? .neutral : .warning
+        )
+            .font(.callout)
             .lineLimit(1)
     }
 }

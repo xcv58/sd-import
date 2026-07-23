@@ -9,9 +9,12 @@ struct SourceEjectionControl: View {
 
     var body: some View {
         if isEjected {
-            Label("\(sourceName) Ejected — Safe to Remove", systemImage: "checkmark.circle.fill")
+            AppStatusLabel(
+                title: "\(sourceName) Ejected — Safe to Remove",
+                systemImage: "checkmark.circle.fill",
+                role: .success
+            )
                 .font(.headline)
-                .foregroundStyle(.green)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
                 .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
@@ -46,7 +49,7 @@ struct SourceEjectionControl: View {
 
     private var guidance: some View {
         Text("Eject the card before removing it.")
-            .font(.caption)
+            .font(.callout)
             .foregroundStyle(.secondary)
     }
 }

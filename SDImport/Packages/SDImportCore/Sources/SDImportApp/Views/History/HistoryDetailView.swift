@@ -15,11 +15,15 @@ struct HistoryDetailView: View {
 
     var body: some View {
         if let job {
-            VStack(alignment: .leading, spacing: 16) {
-                header(job)
-                metrics(job)
-                actions(job)
-                fileList
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    header(job)
+                    metrics(job)
+                    actions(job)
+                        .buttonStyle(.bordered)
+                    fileSection
+                }
+                .padding(.trailing, 8)
             }
         } else {
             ContentUnavailableView("No Job Selected", systemImage: "clock.arrow.circlepath")
@@ -57,7 +61,7 @@ struct HistoryDetailView: View {
             MetricView(title: "Failed", value: job.failedFiles)
         }
         .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .appCardSurface()
     }
 
     private func actions(_ job: ImportJob) -> some View {
@@ -114,47 +118,64 @@ struct HistoryDetailView: View {
         }
     }
 
-    private var fileList: some View {
+    private var fileSection: some View {
         let files = filteredFiles
         let totalCount = self.files.count
         return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Files")
-                    .font(.headline)
-                Text(fileCountText(displayedCount: files.count, totalCount: totalCount))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Picker("File Filter", selection: $fileFilter) {
-                    ForEach(HistoryFileFilter.allCases) { filter in
-                        Text(filter.title).tag(filter)
-                    }
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    fileHeading(displayedCount: files.count, totalCount: totalCount)
+                    Spacer()
+                    fileFilterControl
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 320)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    fileHeading(displayedCount: files.count, totalCount: totalCount)
+                    fileFilterControl
+                }
             }
 
             if files.isEmpty {
                 ContentUnavailableView("No Files", systemImage: "doc")
                     .frame(maxWidth: .infinity, minHeight: 140)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(files) { file in
-                            HistoryFileRow(file: file)
-                            Divider()
-                        }
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(files) { file in
+                        HistoryFileRow(file: file)
+                        Divider()
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
                 }
-                .frame(maxHeight: 360)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(.quaternary, lineWidth: 1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .appCardSurface()
+            }
+        }
+    }
+
+    private func fileHeading(displayedCount: Int, totalCount: Int) -> some View {
+        HStack(spacing: 8) {
+            Text("Files")
+                .font(.headline)
+                .foregroundStyle(.primary)
+            Text(fileCountText(displayedCount: displayedCount, totalCount: totalCount))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var fileFilterControl: some View {
+        HStack {
+            Text("File Filter")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Picker("File Filter", selection: $fileFilter) {
+                ForEach(HistoryFileFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
                 }
             }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 320)
         }
     }
 
@@ -214,6 +235,10 @@ private struct HistoryFileRow: View {
         file.copyStatus == .copied ? file.finalDestinationPath : nil
     }
 
+    private var detailPath: String {
+        destinationPath ?? file.relativePath ?? file.sourcePath
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: statusImage)
@@ -232,46 +257,43 @@ private struct HistoryFileRow: View {
                         .background(statusColor.opacity(0.12), in: Capsule())
                 }
 
-                if let destinationPath {
-                    Text(destinationPath)
+                HStack(spacing: 8) {
+                    Text(detailPath)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
-                }
 
-                HStack(spacing: 8) {
+                    Spacer(minLength: 8)
                     Text(Self.bytes(file.size))
                     if let completedAt = file.completedAt {
                         Text(completedAt.formatted(date: .abbreviated, time: .shortened))
                     }
-                    Text(file.relativePath ?? file.sourcePath)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
                 }
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
+                .help(file.relativePath ?? file.sourcePath)
 
                 if let error = file.error, !error.isEmpty {
                     Text(error)
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                 }
             }
 
             Spacer(minLength: 0)
 
-            Button {
-                if let revealPath {
+            if let revealPath {
+                Button {
                     model.reveal(path: revealPath)
+                } label: {
+                    Label("Reveal", systemImage: "arrow.up.right.square")
                 }
-            } label: {
-                Label("Reveal", systemImage: "arrow.up.right.square")
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Reveal \(file.filename)")
             }
-            .disabled(revealPath == nil)
-            .accessibilityLabel("Reveal \(file.filename)")
         }
         .padding(.vertical, 6)
     }
@@ -296,7 +318,7 @@ private struct HistoryFileRow: View {
         case .copied:
             return .green
         case .failed:
-            return .orange
+            return .red
         }
     }
 
