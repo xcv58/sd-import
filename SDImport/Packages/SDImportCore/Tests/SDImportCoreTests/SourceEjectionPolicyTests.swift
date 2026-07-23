@@ -14,6 +14,7 @@ struct SourceEjectionPolicyTests {
         let volume = makeVolume()
 
         #expect(policy.canEject(job: job, result: result, volume: volume))
+        #expect(policy.canEject(job: job, result: result, volume: makeVolume(isInternal: true)))
     }
 
     @Test("rejects errors, identity mismatches, and unsafe volumes")
@@ -26,7 +27,6 @@ struct SourceEjectionPolicyTests {
         #expect(!policy.canEject(job: makeJob(volumeUUID: nil), result: result, volume: makeVolume()))
         #expect(!policy.canEject(job: job, result: result, volume: makeVolume(volumeUUID: "other-card")))
         #expect(!policy.canEject(job: job, result: result, volume: makeVolume(isRemovable: false)))
-        #expect(!policy.canEject(job: job, result: result, volume: makeVolume(isInternal: true)))
         #expect(!policy.canEject(job: job, result: result, volume: makeVolume(isDiskImage: true)))
         #expect(!policy.canEject(job: job, result: result, volume: makeVolume(mountPath: "/Volumes/OTHER")))
     }

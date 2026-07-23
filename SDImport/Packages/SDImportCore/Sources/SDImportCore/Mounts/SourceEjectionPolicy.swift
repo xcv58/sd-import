@@ -16,7 +16,6 @@ public struct SourceEjectionPolicy: Sendable {
             !jobVolumeUUID.isEmpty,
             volume.volumeUUID == jobVolumeUUID,
             volume.isRemovable,
-            !volume.isInternal,
             !volume.isDiskImage
         else {
             return false
