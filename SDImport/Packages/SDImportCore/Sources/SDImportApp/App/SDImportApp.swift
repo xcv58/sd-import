@@ -12,7 +12,7 @@ struct SDImportApp: App {
 
     var body: some Scene {
         WindowGroup("SD Import") {
-            RootView()
+            RootView(updater: appUpdater.updater)
                 .environmentObject(model)
                 .preferredColorScheme(model.themePreference.colorScheme)
                 .frame(minWidth: 760, minHeight: 560)
@@ -46,6 +46,11 @@ struct SDImportApp: App {
                     model.selectPanel(.history)
                 }
                 .keyboardShortcut("2", modifiers: [.command])
+
+                Button("Settings") {
+                    model.selectPanel(.settings)
+                }
+                .keyboardShortcut("3", modifiers: [.command])
 
                 Divider()
 

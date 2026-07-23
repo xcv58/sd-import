@@ -3,6 +3,7 @@ import Foundation
 enum SidebarItem: String, CaseIterable, Identifiable {
     case `import`
     case history
+    case settings
 
     var id: String { rawValue }
 
@@ -12,6 +13,8 @@ enum SidebarItem: String, CaseIterable, Identifiable {
             return "Import"
         case .history:
             return "History"
+        case .settings:
+            return "Settings"
         }
     }
 
@@ -21,6 +24,8 @@ enum SidebarItem: String, CaseIterable, Identifiable {
             return "square.and.arrow.down"
         case .history:
             return "clock.arrow.circlepath"
+        case .settings:
+            return "gearshape"
         }
     }
 
@@ -30,6 +35,8 @@ enum SidebarItem: String, CaseIterable, Identifiable {
             return "⌘1"
         case .history:
             return "⌘2"
+        case .settings:
+            return "⌘3"
         }
     }
 

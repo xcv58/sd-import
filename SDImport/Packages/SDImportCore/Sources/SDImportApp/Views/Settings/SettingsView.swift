@@ -3,25 +3,37 @@ import Sparkle
 import SwiftUI
 
 struct SettingsView: View {
+    enum Placement {
+        case mainWindow
+        case settingsWindow
+    }
+
     @EnvironmentObject private var model: AppModel
     @State private var isShowingPruneConfirmation = false
 
     let updater: SPUUpdater?
+    let placement: Placement
+
+    init(updater: SPUUpdater?, placement: Placement = .settingsWindow) {
+        self.updater = updater
+        self.placement = placement
+    }
 
     var body: some View {
-        TabView {
-            generalForm
-                .tabItem {
-                    Label("General", systemImage: "gearshape")
-                }
-
-            advancedForm
-                .tabItem {
-                    Label("Advanced", systemImage: "wrench.and.screwdriver")
-                }
+        Group {
+            switch placement {
+            case .mainWindow:
+                settingsTabs
+                    .padding(24)
+                    .frame(maxWidth: 860, maxHeight: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .navigationTitle("Settings")
+            case .settingsWindow:
+                settingsTabs
+                    .scenePadding()
+                    .frame(width: 680, height: 560)
+            }
         }
-        .scenePadding()
-        .frame(width: 680, height: 560)
         .onAppear {
             model.validatePaths()
         }
@@ -33,6 +45,20 @@ struct SettingsView: View {
         }
         .onChange(of: model.videosPath) {
             model.validatePaths()
+        }
+    }
+
+    private var settingsTabs: some View {
+        TabView {
+            generalForm
+                .tabItem {
+                    Label("General", systemImage: "gearshape")
+                }
+
+            advancedForm
+                .tabItem {
+                    Label("Advanced", systemImage: "wrench.and.screwdriver")
+                }
         }
     }
 
