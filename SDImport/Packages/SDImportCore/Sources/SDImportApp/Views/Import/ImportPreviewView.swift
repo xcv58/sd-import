@@ -100,9 +100,12 @@ struct ImportPreviewView: View {
             importOptionControls
 
             if let warning = selectedMediaAvailabilityMessage {
-                Label(warning, systemImage: "info.circle")
+                AppStatusLabel(
+                    title: warning,
+                    systemImage: "info.circle",
+                    role: .warning
+                )
                     .font(.caption)
-                    .foregroundStyle(.orange)
             }
         }
     }
@@ -382,16 +385,22 @@ struct ImportPreviewView: View {
 
                 if !requirements.isEmpty {
                     ForEach(requirements) { requirement in
-                        Label(spaceText(for: requirement), systemImage: requirement.isSatisfied ? "checkmark.circle" : "exclamationmark.triangle")
+                        AppStatusLabel(
+                            title: spaceText(for: requirement),
+                            systemImage: requirement.isSatisfied ? "checkmark.circle" : "exclamationmark.triangle",
+                            role: requirement.isSatisfied ? .neutral : .warning
+                        )
                             .font(.caption)
-                            .foregroundStyle(requirement.isSatisfied ? Color.secondary : Color.orange)
                     }
                 }
 
                 if excludedCount > 0, let summary = exclusionSummary(rows: rows) {
-                    Label(summary, systemImage: "minus.circle")
+                    AppStatusLabel(
+                        title: summary,
+                        systemImage: "minus.circle",
+                        role: .warning
+                    )
                         .font(.caption)
-                        .foregroundStyle(.orange)
                 }
             }
         }

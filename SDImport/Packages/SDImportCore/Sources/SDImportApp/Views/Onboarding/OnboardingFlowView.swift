@@ -156,9 +156,12 @@ private struct OnboardingFolderRow: View {
                 .accessibilityLabel("Choose \(title.lowercased())")
             }
 
-            Label(statusMessage, systemImage: statusImage)
+            AppStatusLabel(
+                title: statusMessage,
+                systemImage: statusImage,
+                role: statusRole
+            )
                 .font(.callout)
-                .foregroundStyle(statusColor)
                 .padding(.leading, 108)
         }
     }
@@ -182,8 +185,11 @@ private struct OnboardingFolderRow: View {
         validation.isUsable ? "checkmark.circle" : (isSoftOptionalWarning ? "info.circle" : "exclamationmark.triangle")
     }
 
-    private var statusColor: Color {
-        validation.isUsable || isSoftOptionalWarning ? Color.secondary : Color.orange
+    private var statusRole: AppStatusLabel.Role {
+        if validation.isUsable {
+            return .neutral
+        }
+        return isSoftOptionalWarning ? .info : .warning
     }
 
     private var isSoftOptionalWarning: Bool {

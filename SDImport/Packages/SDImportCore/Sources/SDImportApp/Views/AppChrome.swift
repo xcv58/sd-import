@@ -1,4 +1,15 @@
+import AppKit
 import SwiftUI
+
+enum AppSurfacePalette {
+    static var contentBackground: Color {
+        Color(nsColor: .controlBackgroundColor)
+    }
+
+    static var separator: Color {
+        Color(nsColor: .separatorColor)
+    }
+}
 
 struct AppPage<Content: View>: View {
     let status: String?
@@ -38,6 +49,7 @@ struct AppPage<Content: View>: View {
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppSurfacePalette.contentBackground)
     }
 
     private var pageContent: some View {
@@ -59,27 +71,76 @@ struct AppPage<Content: View>: View {
     }
 
     private func statusBanner(_ status: String) -> some View {
-        Label(
-            status,
-            systemImage: statusRole == .error ? "exclamationmark.triangle.fill" : "info.circle"
+        AppStatusLabel(
+            title: status,
+            systemImage: statusRole == .error ? "exclamationmark.triangle.fill" : "info.circle",
+            role: statusRole == .error ? .error : .info
         )
         .font(.callout)
-        .foregroundStyle(statusRole == .error ? Color.red : Color.secondary)
         .lineLimit(2)
         .textSelection(.enabled)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            (statusRole == .error ? Color.red : Color.accentColor).opacity(0.08),
+            statusTint.opacity(0.08),
             in: RoundedRectangle(cornerRadius: 8)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(
-                    (statusRole == .error ? Color.red : Color.accentColor).opacity(0.22),
-                    lineWidth: 1
-                )
+                .stroke(statusTint.opacity(0.22), lineWidth: 1)
+        }
+    }
+
+    private var statusTint: Color {
+        statusRole == .error ? .red : .accentColor
+    }
+}
+
+struct AppStatusLabel: View {
+    let title: String
+    let systemImage: String
+    var role: Role
+
+    enum Role {
+        case neutral
+        case info
+        case success
+        case warning
+        case error
+    }
+
+    var body: some View {
+        Label {
+            Text(title)
+                .foregroundStyle(usesPrimaryText ? Color.primary : Color.secondary)
+        } icon: {
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
+        }
+    }
+
+    private var usesPrimaryText: Bool {
+        switch role {
+        case .success, .warning, .error:
+            return true
+        case .neutral, .info:
+            return false
+        }
+    }
+
+    private var tint: Color {
+        switch role {
+        case .neutral:
+            return .secondary
+        case .info:
+            return .accentColor
+        case .success:
+            return .green
+        case .warning:
+            return .orange
+        case .error:
+            return .red
         }
     }
 }
@@ -130,13 +191,13 @@ private struct AppCardSurfaceModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
-        let fillOpacity = colorScheme == .dark ? 0.055 : 0.032
-        let strokeOpacity = colorScheme == .dark ? 0.18 : 0.09
+        let fillOpacity = colorScheme == .dark ? 0.055 : 0.024
+        let strokeOpacity = colorScheme == .dark ? 0.75 : 0.55
 
         content
             .background(Color.primary.opacity(fillOpacity), in: shape)
             .overlay {
-                shape.stroke(Color.primary.opacity(strokeOpacity), lineWidth: 1)
+                shape.stroke(AppSurfacePalette.separator.opacity(strokeOpacity), lineWidth: 1)
             }
     }
 }
@@ -159,23 +220,26 @@ struct InfoPill: View {
     }
 
     var body: some View {
-        Label(title, systemImage: systemImage)
+        AppStatusLabel(
+            title: title,
+            systemImage: systemImage,
+            role: statusRole
+        )
             .font(.caption)
             .lineLimit(1)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(backgroundStyle, in: Capsule())
-            .foregroundStyle(foregroundStyle)
     }
 
-    private var foregroundStyle: Color {
+    private var statusRole: AppStatusLabel.Role {
         switch role {
         case .neutral:
-            return .secondary
+            return .neutral
         case .success:
-            return .green
+            return .success
         case .warning:
-            return .orange
+            return .warning
         }
     }
 

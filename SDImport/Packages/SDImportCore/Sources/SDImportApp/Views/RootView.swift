@@ -21,14 +21,18 @@ struct RootView: View {
             .frame(minWidth: 184, idealWidth: 196, maxWidth: 220)
             .navigationSplitViewColumnWidth(min: 184, ideal: 196, max: 220)
         } detail: {
-            switch model.selection {
-            case .import:
-                ManualImportView()
-            case .history:
-                HistoryView()
-            case .settings:
-                SettingsView(appUpdater: appUpdater)
+            Group {
+                switch model.selection {
+                case .import:
+                    ManualImportView()
+                case .history:
+                    HistoryView()
+                case .settings:
+                    SettingsView(appUpdater: appUpdater)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppSurfacePalette.contentBackground)
         }
         .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: onboardingBinding) {

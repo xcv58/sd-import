@@ -255,9 +255,12 @@ struct ImportReportView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 4)
         } label: {
-            Label("Report opened with warnings", systemImage: "exclamationmark.triangle")
+            AppStatusLabel(
+                title: "Report opened with warnings",
+                systemImage: "exclamationmark.triangle",
+                role: .warning
+            )
                 .font(.caption)
-                .foregroundStyle(.orange)
         }
     }
 }
@@ -375,7 +378,7 @@ private struct ReportFileRow: View {
                 if let error = file.error, !error.isEmpty {
                     Text(error)
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                 }
             }
@@ -415,7 +418,7 @@ private struct ReportFileRow: View {
         case .copied:
             return .green
         case .failed:
-            return .orange
+            return .red
         }
     }
 

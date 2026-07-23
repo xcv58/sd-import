@@ -144,6 +144,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     private var advancedForm: some View {
@@ -196,6 +197,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
@@ -224,19 +226,18 @@ private struct SettingsFeedbackRow: View {
     let feedback: SettingsFeedback
 
     var body: some View {
-        Label(feedback.message, systemImage: systemImage)
+        AppStatusLabel(
+            title: feedback.message,
+            systemImage: systemImage,
+            role: feedback.role == .error ? .error : .info
+        )
             .font(.callout)
-            .foregroundStyle(foregroundStyle)
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
     }
 
     private var systemImage: String {
         feedback.role == .error ? "exclamationmark.triangle.fill" : "info.circle"
-    }
-
-    private var foregroundStyle: Color {
-        feedback.role == .error ? .red : .secondary
     }
 }
 
@@ -369,9 +370,12 @@ private struct DestinationStatusLine: View {
     let result: PathValidationResult
 
     var body: some View {
-        Label(message, systemImage: systemImage)
+        AppStatusLabel(
+            title: message,
+            systemImage: systemImage,
+            role: statusRole
+        )
             .font(.callout)
-            .foregroundStyle(foregroundStyle)
             .lineLimit(1)
     }
 
@@ -397,12 +401,12 @@ private struct DestinationStatusLine: View {
         }
     }
 
-    private var foregroundStyle: Color {
+    private var statusRole: AppStatusLabel.Role {
         switch result.status {
         case .ready, .missing:
-            return .secondary
+            return .neutral
         default:
-            return .orange
+            return .warning
         }
     }
 }

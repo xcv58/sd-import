@@ -10,9 +10,12 @@ struct DiagnosticsView: View {
                 crashReportsSection
 
                 if let statusText {
-                    Label(statusText, systemImage: model.setupError == nil ? "info.circle" : "exclamationmark.triangle")
+                    AppStatusLabel(
+                        title: statusText,
+                        systemImage: model.setupError == nil ? "info.circle" : "exclamationmark.triangle",
+                        role: model.setupError == nil ? .info : .error
+                    )
                         .font(.callout)
-                        .foregroundStyle(model.setupError == nil ? Color.secondary : Color.red)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -21,6 +24,7 @@ struct DiagnosticsView: View {
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity, alignment: .top)
         }
+        .background(AppSurfacePalette.contentBackground)
     }
 
     private var diagnosticsExportSection: some View {

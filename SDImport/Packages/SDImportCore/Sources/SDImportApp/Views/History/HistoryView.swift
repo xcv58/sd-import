@@ -167,7 +167,7 @@ private struct HistoryRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: job.failedFiles > 0 ? "exclamationmark.triangle" : "checkmark.circle")
-                .foregroundStyle(job.failedFiles > 0 ? .orange : .secondary)
+                .foregroundStyle(job.failedFiles > 0 ? .red : .secondary)
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 3) {
                 Text(HistoryJobPresentation.title(for: job))

@@ -47,16 +47,15 @@ struct ImportResultView: View {
         return result.failedFiles == 0 ? "Copied" : "Copied with Errors"
     }
 
-    private var copyStatusColor: Color {
-        result.importedFiles > 0 && result.failedFiles == 0 ? .green : .secondary
-    }
-
     var body: some View {
         AppSection("Copy Receipt", systemImage: "checkmark.seal") {
             HStack(alignment: .firstTextBaseline) {
-                Label(copyStatusTitle, systemImage: result.importedFiles == 0 ? "minus.circle" : "checkmark.seal")
+                AppStatusLabel(
+                    title: copyStatusTitle,
+                    systemImage: copyStatusImage,
+                    role: copyStatusRole
+                )
                     .font(.subheadline)
-                    .foregroundStyle(copyStatusColor)
                 Spacer()
             }
 
@@ -111,6 +110,20 @@ struct ImportResultView: View {
                 }
             }
         }
+    }
+
+    private var copyStatusRole: AppStatusLabel.Role {
+        if result.failedFiles > 0 {
+            return .error
+        }
+        return result.importedFiles > 0 ? .success : .neutral
+    }
+
+    private var copyStatusImage: String {
+        if result.failedFiles > 0 {
+            return "exclamationmark.triangle"
+        }
+        return result.importedFiles > 0 ? "checkmark.seal" : "minus.circle"
     }
 
     private var receiptButtons: some View {

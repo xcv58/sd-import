@@ -531,9 +531,12 @@ private struct ValidationStatusView: View {
     let result: PathValidationResult
 
     var body: some View {
-        Label(result.message, systemImage: result.isUsable ? "checkmark.circle" : "exclamationmark.triangle")
+        AppStatusLabel(
+            title: result.message,
+            systemImage: result.isUsable ? "checkmark.circle" : "exclamationmark.triangle",
+            role: result.isUsable ? .neutral : .warning
+        )
             .font(.callout)
-            .foregroundStyle(result.isUsable ? Color.secondary : Color.orange)
             .lineLimit(1)
     }
 }

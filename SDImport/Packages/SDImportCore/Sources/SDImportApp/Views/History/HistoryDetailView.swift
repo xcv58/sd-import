@@ -278,7 +278,7 @@ private struct HistoryFileRow: View {
                 if let error = file.error, !error.isEmpty {
                     Text(error)
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                 }
             }
@@ -318,7 +318,7 @@ private struct HistoryFileRow: View {
         case .copied:
             return .green
         case .failed:
-            return .orange
+            return .red
         }
     }
 
