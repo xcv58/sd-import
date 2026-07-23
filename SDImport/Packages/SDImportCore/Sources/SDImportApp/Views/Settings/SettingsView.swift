@@ -21,7 +21,7 @@ struct SettingsView: View {
                 }
         }
         .scenePadding()
-        .frame(width: 680, height: 500)
+        .frame(width: 680, height: 560)
         .onAppear {
             model.validatePaths()
         }
@@ -158,7 +158,9 @@ private struct FolderSettingRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     TextField(title, text: $path)
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("\(title) destination folder")
 
                     Button {
                         chooseAction()
