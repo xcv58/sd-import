@@ -127,6 +127,23 @@ struct ImportResultView: View {
             } label: {
                 Label("View Imported Files", systemImage: "list.bullet.rectangle")
             }
+
+            if model.shouldOfferSourceEjection(for: result) {
+                if model.ejectedSourceJobID == result.jobID {
+                    Label("Source Ejected", systemImage: "eject.fill")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        model.ejectSource(for: result)
+                    } label: {
+                        Label(
+                            model.isEjectingSource ? "Ejecting Source..." : "Eject Source",
+                            systemImage: "eject"
+                        )
+                    }
+                    .disabled(!model.canEjectSource(for: result))
+                }
+            }
         }
     }
 

@@ -17,6 +17,7 @@ struct SettingsRepositoryTests {
             defaultLocation: "Gardens",
             historyRetention: .days(365),
             autoPromptEnabled: true,
+            ejectAfterSuccessfulImport: true,
             hasCompletedOnboarding: true,
             lastWorkflowProfile: .footageBackup,
             lastMediaSelection: .videosOnly,
@@ -53,6 +54,7 @@ struct SettingsRepositoryTests {
         let configuration = try JSONDecoder().decode(AppConfiguration.self, from: Data(json.utf8))
 
         #expect(configuration.lastWorkflowProfile == .mixedShootSession)
+        #expect(configuration.ejectAfterSuccessfulImport == false)
         #expect(configuration.lastMediaSelection == .photosAndVideos)
         #expect(configuration.lastDestinationLayout == .singleLibrary)
         #expect(configuration.preferredMixedDestinationLayout == .singleLibrary)

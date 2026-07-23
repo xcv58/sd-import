@@ -43,6 +43,11 @@ committing any excerpt.
 | Duplicate filenames | Two camera folders containing the same clip filename | Destination plan suffixes later copies and avoids overwrites | Fixture coverage exists; hardware unavailable |
 | Card removal during scan | Remove card after scan starts | User-facing failure; no duplicate job loop | Fixture coverage exists; hardware unavailable |
 | Card removal during import | Remove card during copy | Failed file recorded; retry remains available | Fixture coverage exists; hardware unavailable |
+| Manual source eject | Complete an error-free import, then choose `Eject Source` on the receipt | The whole source volume unmounts; the receipt says `Source Ejected`; destination files remain accessible | Required before releasing source ejection |
+| Automatic source eject | Enable `Eject source after successful import`, then complete an error-free import | The verified removable source volume ejects only after the receipt and report are finalized | Required before releasing source ejection |
+| Eject blocked by another app | Keep a source file open in another app, then request ejection | macOS refusal is shown in SD Import; the source remains mounted; no force-eject occurs | Required before releasing source ejection |
+| Import completed with errors | Enable automatic ejection, then produce a retryable copy failure | The source remains mounted and retry stays available | Fixture policy coverage exists; confirm with hardware before release |
+| Source subfolder | Select a folder inside the mounted card as the source, import, then eject | SD Import ejects the card's volume root rather than only the selected folder | Fixture policy coverage exists; confirm with hardware before release |
 | Clean Mac user | Fresh user account, no prior settings | Onboarding appears; folders can be selected; Sparkle menu appears in release build | Accepted risk: clean-user manual pass unavailable |
 
 ## Evidence To Record

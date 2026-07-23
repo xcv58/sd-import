@@ -90,6 +90,13 @@ struct SettingsView: View {
                         model.updateLoginItemRegistration()
                     }
             }
+
+            SettingsFormRow {
+                Toggle("Eject source after successful import", isOn: $model.ejectAfterSuccessfulImport)
+                    .onChange(of: model.ejectAfterSuccessfulImport) {
+                        model.savePreferences()
+                    }
+            }
         }
     }
 

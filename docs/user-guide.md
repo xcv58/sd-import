@@ -7,7 +7,7 @@ SD Import is a macOS app for copying photos and videos from SD cards into dated 
 GitHub Releases are the canonical public download location. Use this link to
 install the latest signed and notarized DMG:
 
-https://github.com/xcv58/macos-automation/releases/latest/download/SD-Import.dmg
+https://github.com/xcv58/sd-import/releases/latest/download/SD-Import.dmg
 
 Requirements:
 
@@ -31,6 +31,7 @@ When the app opens:
 2. In `Destinations`, choose where imported photos and videos should go.
 3. In `General`, keep Theme set to `System` unless you want to force Light or Dark.
 4. Leave `Prompt on card mount` on if you want SD Import to appear when you insert a card.
+5. Turn on `Eject source after successful import` if you want verified removable cards ejected automatically. It is off by default.
 
 Default folder pattern:
 
@@ -45,6 +46,9 @@ Default folder pattern:
 3. Review what is new, already imported, unsupported, or conflicting.
 4. Start the import.
 5. Keep the card connected until the progress finishes.
+6. Use `Eject Source` on the copy receipt, or wait for automatic ejection if you enabled it in Settings.
+
+SD Import never ejects automatically after a cancelled import, a copy failure, or an import completed with errors. If another app is using the card, macOS may refuse the eject and SD Import will leave it mounted.
 
 You can also open the app and choose `Import From Card...` from the menu.
 
@@ -82,7 +86,7 @@ To verify you are on the latest release:
 3. You can also compare the installed version from the macOS app information
    panel with the latest GitHub Release:
 
-https://github.com/xcv58/macos-automation/releases/latest
+https://github.com/xcv58/sd-import/releases/latest
 
 ## Safety Notes
 
@@ -101,7 +105,7 @@ If an import does not start automatically:
 
 For release details and public support, see:
 
-https://github.com/xcv58/macos-automation/releases
+https://github.com/xcv58/sd-import/releases
 
 Support email: [i@xcv58.com](mailto:i@xcv58.com)
 
