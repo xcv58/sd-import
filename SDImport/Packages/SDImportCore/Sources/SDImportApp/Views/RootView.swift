@@ -1,12 +1,11 @@
 import SDImportCore
-import Sparkle
 import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
-    let updater: SPUUpdater?
+    let appUpdater: AppUpdater
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -28,7 +27,7 @@ struct RootView: View {
             case .history:
                 HistoryView()
             case .settings:
-                SettingsView(updater: updater, placement: .mainWindow)
+                SettingsView(appUpdater: appUpdater, placement: .mainWindow)
             }
         }
         .navigationSplitViewStyle(.balanced)

@@ -5,6 +5,27 @@ import Testing
 
 @Suite("HistoryRetentionService")
 struct HistoryRetentionServiceTests {
+    @Test("forever retention never selects history for deletion")
+    func foreverRetentionNeverSelectsHistoryForDeletion() throws {
+        let pool = try migratedPool()
+        let repository = JobRepository(pool: pool)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        try repository.insertJob(
+            job(
+                id: "old-job",
+                createdAt: now.addingTimeInterval(-400 * 24 * 60 * 60),
+                reportPath: "/tmp/old.md"
+            )
+        )
+
+        let summary = try HistoryRetentionService(pool: pool, now: { now })
+            .prune(policy: .forever, dryRun: false)
+
+        #expect(summary.matchedJobs == 0)
+        #expect(summary.deletedJobs == 0)
+        #expect(try repository.fetchJob(id: "old-job") != nil)
+    }
+
     @Test("prunes old jobs and reports without deleting dedupe items")
     func prunesOldJobsAndReportsWithoutDeletingDedupeItems() throws {
         let pool = try migratedPool()

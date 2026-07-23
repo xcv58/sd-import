@@ -1,6 +1,15 @@
 import SDImportCore
-import Sparkle
 import SwiftUI
+
+private enum SettingsPane: String {
+    case general
+    case advanced
+}
+
+private struct DestinationPathInputs: Hashable {
+    let photos: String
+    let videos: String
+}
 
 struct SettingsView: View {
     enum Placement {
@@ -9,13 +18,15 @@ struct SettingsView: View {
     }
 
     @EnvironmentObject private var model: AppModel
+    @AppStorage("SDImport.selectedSettingsPane") private var selectedPane = SettingsPane.general
     @State private var isShowingPruneConfirmation = false
+    @State private var validatedDestinationInputs: DestinationPathInputs?
 
-    let updater: SPUUpdater?
+    let appUpdater: AppUpdater
     let placement: Placement
 
-    init(updater: SPUUpdater?, placement: Placement = .settingsWindow) {
-        self.updater = updater
+    init(appUpdater: AppUpdater, placement: Placement = .settingsWindow) {
+        self.appUpdater = appUpdater
         self.placement = placement
     }
 
@@ -23,8 +34,10 @@ struct SettingsView: View {
         Group {
             switch placement {
             case .mainWindow:
-                settingsTabs
-                    .padding(24)
+                mainWindowSettings
+                    .padding(.horizontal, 24)
+                    .padding(.top, 14)
+                    .padding(.bottom, 24)
                     .frame(maxWidth: 860, maxHeight: .infinity, alignment: .top)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .navigationTitle("Settings")
@@ -34,36 +47,81 @@ struct SettingsView: View {
                     .frame(width: 680, height: 560)
             }
         }
-        .onAppear {
-            model.validatePaths()
-        }
         .onDisappear {
-            model.savePreferences()
+            Task {
+                await model.validateAndSaveDestinationSettings()
+            }
         }
-        .onChange(of: model.photosPath) {
-            model.validatePaths()
+        .task(id: destinationPathInputs) {
+            let inputs = destinationPathInputs
+            guard let previousInputs = validatedDestinationInputs else {
+                validatedDestinationInputs = inputs
+                return
+            }
+            guard inputs != previousInputs else {
+                return
+            }
+
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else {
+                return
+            }
+            await model.validateAndSaveDestinationSettings()
+            if inputs == destinationPathInputs {
+                validatedDestinationInputs = inputs
+            }
         }
-        .onChange(of: model.videosPath) {
-            model.validatePaths()
+    }
+
+    private var destinationPathInputs: DestinationPathInputs {
+        DestinationPathInputs(photos: model.photosPath, videos: model.videosPath)
+    }
+
+    private var mainWindowSettings: some View {
+        VStack(spacing: 12) {
+            Picker("Settings section", selection: $selectedPane) {
+                Text("General").tag(SettingsPane.general)
+                Text("Advanced").tag(SettingsPane.advanced)
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 260)
+            .accessibilityLabel("Settings section")
+
+            selectedForm
+        }
+    }
+
+    @ViewBuilder
+    private var selectedForm: some View {
+        switch selectedPane {
+        case .general:
+            generalForm
+        case .advanced:
+            advancedForm
         }
     }
 
     private var settingsTabs: some View {
-        TabView {
+        TabView(selection: $selectedPane) {
             generalForm
                 .tabItem {
                     Label("General", systemImage: "gearshape")
                 }
+                .tag(SettingsPane.general)
 
             advancedForm
                 .tabItem {
                     Label("Advanced", systemImage: "wrench.and.screwdriver")
                 }
+                .tag(SettingsPane.advanced)
         }
     }
 
     private var generalForm: some View {
         Form {
+            settingsFeedbackSection
+
             Section("Default Destinations") {
                 FolderSettingRow(
                     title: "Photos",
@@ -95,11 +153,14 @@ struct SettingsView: View {
             }
 
             Section("Import Behavior") {
-                Toggle("Prompt when a card is mounted", isOn: $model.autoPromptEnabled)
-                    .onChange(of: model.autoPromptEnabled) {
-                        model.savePreferences()
-                        model.updateLoginItemRegistration()
-                    }
+                VStack(alignment: .leading, spacing: 5) {
+                    Toggle("Prompt when a card is mounted", isOn: autoPromptBinding)
+
+                    Text("Runs a small background helper after login so SD Import can notice newly mounted cards.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 VStack(alignment: .leading, spacing: 5) {
                     Toggle("Eject source after a successful import", isOn: $model.ejectAfterSuccessfulImport)
@@ -115,7 +176,7 @@ struct SettingsView: View {
             }
 
             Section("Updates") {
-                UpdaterSettingsView(updater: updater)
+                UpdaterSettingsView(appUpdater: appUpdater)
             }
         }
         .formStyle(.grouped)
@@ -123,6 +184,8 @@ struct SettingsView: View {
 
     private var advancedForm: some View {
         Form {
+            settingsFeedbackSection
+
             Section("History") {
                 Picker("Keep import history", selection: $model.historyRetention) {
                     ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
@@ -141,17 +204,18 @@ struct SettingsView: View {
                     Button {
                         model.pruneHistory(dryRun: true)
                     } label: {
-                        Label("Preview Prune", systemImage: "doc.text.magnifyingglass")
+                        Label("Preview Cleanup", systemImage: "doc.text.magnifyingglass")
                     }
+                    .disabled(!canCleanHistory)
 
                     Button(role: .destructive) {
                         isShowingPruneConfirmation = true
                     } label: {
-                        Label("Prune History", systemImage: "trash")
+                        Label("Delete Old History…", systemImage: "trash")
                     }
-                    .disabled(model.isWorking)
-                    .alert("Prune old history?", isPresented: $isShowingPruneConfirmation) {
-                        Button("Prune History", role: .destructive) {
+                    .disabled(!canCleanHistory)
+                    .alert("Delete old history?", isPresented: $isShowingPruneConfirmation) {
+                        Button("Delete Old History", role: .destructive) {
                             model.pruneHistory(dryRun: false)
                         }
                         Button("Cancel", role: .cancel) {}
@@ -160,15 +224,55 @@ struct SettingsView: View {
                     }
                 }
 
-                if !model.statusMessage.isEmpty, model.statusMessage != "Ready" {
-                    Label(model.statusMessage, systemImage: "info.circle")
+                if model.historyRetention.dayCount == nil {
+                    Text("Choose a retention period to preview or delete old history.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
                 }
             }
         }
         .formStyle(.grouped)
+    }
+
+    @ViewBuilder
+    private var settingsFeedbackSection: some View {
+        if let feedback = model.settingsFeedback {
+            Section {
+                SettingsFeedbackRow(feedback: feedback)
+            }
+        }
+    }
+
+    private var autoPromptBinding: Binding<Bool> {
+        Binding {
+            model.autoPromptEnabled
+        } set: { enabled in
+            model.setAutoPromptEnabled(enabled)
+        }
+    }
+
+    private var canCleanHistory: Bool {
+        !model.isWorking && model.historyRetention.dayCount != nil
+    }
+}
+
+private struct SettingsFeedbackRow: View {
+    let feedback: SettingsFeedback
+
+    var body: some View {
+        Label(feedback.message, systemImage: systemImage)
+            .font(.callout)
+            .foregroundStyle(foregroundStyle)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+    }
+
+    private var systemImage: String {
+        feedback.role == .error ? "exclamationmark.triangle.fill" : "info.circle"
+    }
+
+    private var foregroundStyle: Color {
+        feedback.role == .error ? .red : .secondary
     }
 }
 
@@ -179,6 +283,9 @@ private struct FolderSettingRow: View {
     let chooseAction: () -> Void
     let revealAction: () -> Void
 
+    @State private var capacityText: String?
+    @State private var isLoadingCapacity = false
+
     var body: some View {
         LabeledContent(title) {
             VStack(alignment: .leading, spacing: 6) {
@@ -188,27 +295,21 @@ private struct FolderSettingRow: View {
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("\(title) destination folder")
 
-                    Button {
-                        chooseAction()
-                    } label: {
-                        Image(systemName: "folder")
-                    }
-                    .help("Choose \(title.lowercased()) folder")
-                    .accessibilityLabel("Choose \(title.lowercased()) folder")
-
-                    Button {
-                        revealAction()
-                    } label: {
-                        Image(systemName: "arrow.forward.square")
-                    }
-                    .disabled(!validation.isUsable)
-                    .help("Reveal \(title.lowercased()) folder in Finder")
-                    .accessibilityLabel("Reveal \(title.lowercased()) folder in Finder")
+                    FolderActionButtons(
+                        title: title,
+                        canReveal: validation.isUsable,
+                        chooseAction: chooseAction,
+                        revealAction: revealAction
+                    )
                 }
 
                 DestinationStatusLine(result: validation)
 
-                if validation.isUsable, let capacityText {
+                if isLoadingCapacity {
+                    Label("Checking available space…", systemImage: "internaldrive")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else if let capacityText {
                     Label(capacityText, systemImage: "internaldrive")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -216,18 +317,87 @@ private struct FolderSettingRow: View {
                 }
             }
         }
+        .task(id: capacityLookupID) {
+            await loadCapacity()
+        }
     }
 
-    private var capacityText: String? {
-        guard let capacity = try? DestinationSpaceChecker.fileSystemCapacity(for: validation.expandedPath) else {
-            return nil
+    private var capacityLookupID: String {
+        "\(validation.expandedPath)|\(validation.isUsable)"
+    }
+
+    private func loadCapacity() async {
+        capacityText = nil
+        guard validation.isUsable else {
+            isLoadingCapacity = false
+            return
         }
+
+        isLoadingCapacity = true
+        let path = validation.expandedPath
+        let capacity = await Task.detached(priority: .utility) {
+            try? DestinationSpaceChecker.fileSystemCapacity(for: path)
+        }.value
+
+        guard !Task.isCancelled, path == validation.expandedPath else {
+            return
+        }
+
+        isLoadingCapacity = false
+        guard let capacity else {
+            return
+        }
+
         let available = ByteCountFormatter.string(fromByteCount: capacity.availableBytes, countStyle: .file)
         if let totalBytes = capacity.totalBytes {
             let total = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
-            return "\(available) available of \(total)"
+            capacityText = "\(available) available of \(total)"
+        } else {
+            capacityText = "\(available) available"
         }
-        return "\(available) available"
+    }
+}
+
+private struct FolderActionButtons: View {
+    let title: String
+    let canReveal: Bool
+    let chooseAction: () -> Void
+    let revealAction: () -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                Button(action: chooseAction) {
+                    Label("Choose…", systemImage: "folder.badge.plus")
+                }
+                .help("Choose \(title.lowercased()) destination folder")
+                .accessibilityLabel("Choose \(title.lowercased()) destination folder")
+
+                Button(action: revealAction) {
+                    Label("Reveal", systemImage: "magnifyingglass")
+                }
+                .disabled(!canReveal)
+                .help("Reveal \(title.lowercased()) destination folder in Finder")
+                .accessibilityLabel("Reveal \(title.lowercased()) destination folder in Finder")
+            }
+            .fixedSize()
+
+            HStack(spacing: 8) {
+                Button(action: chooseAction) {
+                    Image(systemName: "folder.badge.plus")
+                }
+                .help("Choose \(title.lowercased()) destination folder")
+                .accessibilityLabel("Choose \(title.lowercased()) destination folder")
+
+                Button(action: revealAction) {
+                    Image(systemName: "magnifyingglass")
+                }
+                .disabled(!canReveal)
+                .help("Reveal \(title.lowercased()) destination folder in Finder")
+                .accessibilityLabel("Reveal \(title.lowercased()) destination folder in Finder")
+            }
+        }
+        .accessibilityElement(children: .contain)
     }
 }
 

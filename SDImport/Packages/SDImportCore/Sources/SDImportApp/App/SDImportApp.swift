@@ -8,11 +8,11 @@ struct SDImportApp: App {
     @Environment(\.openWindow) private var openWindow
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
-    private let appUpdater = AppUpdater()
+    @StateObject private var appUpdater = AppUpdater()
 
     var body: some Scene {
         WindowGroup("SD Import") {
-            RootView(updater: appUpdater.updater)
+            RootView(appUpdater: appUpdater)
                 .environmentObject(model)
                 .preferredColorScheme(model.themePreference.colorScheme)
                 .frame(minWidth: 760, minHeight: 560)
@@ -73,7 +73,7 @@ struct SDImportApp: App {
         }
 
         Settings {
-            SettingsView(updater: appUpdater.updater)
+            SettingsView(appUpdater: appUpdater)
                 .environmentObject(model)
                 .preferredColorScheme(model.themePreference.colorScheme)
         }
