@@ -45,7 +45,7 @@ struct SourceEjectionControl: View {
     }
 
     private var guidance: some View {
-        Text("Safely unmount the card before removing it.")
+        Text("Eject the card before removing it.")
             .font(.caption)
             .foregroundStyle(.secondary)
     }

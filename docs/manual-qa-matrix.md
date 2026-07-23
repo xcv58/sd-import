@@ -3,14 +3,15 @@
 Use this checklist before major public releases and whenever scanner/import
 behavior changes.
 
-No real SD cards are available for the current release-prep pass. The release
-therefore ships with fixture/synthetic scanner coverage and this hardware matrix
-as an accepted compatibility risk. Do not treat this file as evidence that the
-physical-card pass has been executed.
+A focused physical-card pass is available for source ejection from a built-in
+SD reader. Broader camera and failure-path coverage still relies on fixtures and
+the remaining hardware matrix below.
 
 Release decision for this pass:
 
-- Physical Sony/Canon/Fujifilm/Nikon card QA is unavailable.
+- Focused built-in-reader passes are complete for manual ejection after an
+  error-free import and after a zero-copy scan.
+- Physical Sony/Canon/Fujifilm/Nikon compatibility QA remains unavailable.
 - Fixture coverage exists for common RAW extensions, RAW/JPEG pairing, sidecar
   handling, duplicate filename planning, and card-removal failure paths.
 - Broad camera-compatibility claims should wait until the hardware matrix below
@@ -43,15 +44,32 @@ committing any excerpt.
 | Duplicate filenames | Two camera folders containing the same clip filename | Destination plan suffixes later copies and avoids overwrites | Fixture coverage exists; hardware unavailable |
 | Card removal during scan | Remove card after scan starts | User-facing failure; no duplicate job loop | Fixture coverage exists; hardware unavailable |
 | Card removal during import | Remove card during copy | Failed file recorded; retry remains available | Fixture coverage exists; hardware unavailable |
-| Manual source eject | Complete an error-free import, then choose `Eject Source` on the receipt | The whole source volume unmounts; the receipt says `Source Ejected`; destination files remain accessible | Required before releasing source ejection |
+| Manual source eject | Complete an error-free import, then choose the named eject action on the receipt | The whole source volume unmounts; the receipt says `Ejected — Safe to Remove`; destination files remain accessible | Passed 2026-07-22: 11 of 11 files (200.1 MB) copied, then the built-in-reader source ejected |
 | Automatic source eject | Enable `Eject source after successful import`, then complete an error-free import | The verified removable source volume ejects only after the receipt and report are finalized | Required before releasing source ejection |
 | Eject blocked by another app | Keep a source file open in another app, then request ejection | macOS refusal is shown in SD Import; the source remains mounted; no force-eject occurs | Required before releasing source ejection |
 | Import completed with errors | Enable automatic ejection, then produce a retryable copy failure | The source remains mounted and retry stays available | Fixture policy coverage exists; confirm with hardware before release |
 | Source subfolder | Select a folder inside the mounted card as the source, import, then eject | SD Import ejects the card's volume root rather than only the selected folder | Fixture policy coverage exists; confirm with hardware before release |
-| Built-in card reader | Import from a card that macOS reports as both internal-location and removable | The verified removable card remains eligible and ejects normally | Required before releasing source ejection |
-| Ejection completion UI | Complete a clean import, then eject from the copy receipt | The named source has a prominent eject action; success changes to a green `Ejected — Safe to Remove` confirmation | Required before releasing source ejection |
-| Zero-copy scan ejection | Scan a verified removable card whose files are all known or excluded | The Scan Summary offers manual ejection; automatic ejection does not run | Required before releasing source ejection |
+| Built-in card reader | Import from a card that macOS reports as both internal-location and removable | The verified removable card remains eligible and ejects normally | Passed 2026-07-22 with a removable Secure Digital source reported at an internal device location |
+| Ejection completion UI | Complete a clean import, then eject from the copy receipt | The named source has a prominent eject action; success changes to a green `Ejected — Safe to Remove` confirmation | Passed 2026-07-22 with source `Untitled` |
+| Zero-copy scan ejection | Scan a verified removable card whose files are all known or excluded | The Scan Summary offers manual ejection; automatic ejection does not run | Passed 2026-07-22: user confirmed the manual zero-copy eject flow; automatic ejection was not exercised |
 | Clean Mac user | Fresh user account, no prior settings | Onboarding appears; folders can be selected; Sparkle menu appears in release build | Accepted risk: clean-user manual pass unavailable |
+
+## Recorded Ejection Evidence
+
+- Date: 2026-07-22.
+- Build: SD Import 2.2 (31), local ad-hoc test build.
+- Reader: built-in Secure Digital reader; macOS reported the removable card at
+  an internal device location.
+- Source: `Untitled`, 512.64 GB capacity.
+- Successful-import pass: 11 of 11 files copied, 200.1 MB total, zero failures;
+  the named manual eject action unmounted the source and showed the safe-removal
+  confirmation.
+- Zero-copy pass: the user confirmed that a completed scan with zero files
+  planned for copying offered manual ejection and successfully ejected the
+  source.
+- Not recorded for this pass: macOS version, Mac model, card brand, filesystem,
+  automatic ejection, blocked ejection, copy-failure behavior, and source
+  subfolder behavior.
 
 ## Evidence To Record
 
