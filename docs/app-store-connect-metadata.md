@@ -38,6 +38,11 @@ These values intentionally match
 
 ### IAP Review Notes
 
+The copy below reflects the renamed app. App Store Connect locks the attached
+IAP record during this submission; its existing review notes still refer to
+SD Import for Mac. The new name and refreshed purchase screenshot were sent
+to App Review in the September 10 response instead.
+
 SD Card Import includes one successfully completed import at no charge.
 Previewing and scanning do not consume the allowance. After that first import,
 start another import or open Settings > Purchase and choose Unlock Unlimited
@@ -58,10 +63,11 @@ price and Family Sharing disclosure. The image uses only synthetic media
 and contains no personal filenames, volume names, or paths. It is not a
 TestFlight purchase capture.
 
-Use this image as the IAP review screenshot. If App Review requires a capture
-from the processed TestFlight build, repeat the same flow with a fresh sandbox
-account that does not own the product; do not describe the local StoreKit image
-as a TestFlight purchase capture.
+This image was attached to the App Review response for the current
+resubmission. If App Review requires a capture from the processed TestFlight
+build, repeat the same flow with a fresh sandbox account that does not own
+the product; do not describe this local development capture as a TestFlight
+purchase capture.
 
 ## Product Page Copy
 
@@ -168,25 +174,18 @@ a minimized window without creating a duplicate window.
 
 ### Reply to App Review
 
-Prepared response; send after build 6 and its updated materials are attached:
+Sent on September 10, 2026 at 1:10 AM EDT, with
+`03-lifetime-purchase-2560x1600.png` attached:
 
-> Thank you for the review. We have addressed both issues in version 1.0,
-> build 6.
+> Thank you for the review. We have addressed both issues in version 1.0, build 6.
 >
-> For Guideline 5.2.5, we renamed both the App Store listing and the installed
-> application to "SD Card Import," removing "for Mac." The bundle identifier
-> remains media.jenny.sdimport.
+> For Guideline 5.2.5, we renamed both the App Store listing and the installed application to “SD Card Import,” removing “for Mac.” The bundle identifier remains media.jenny.sdimport.
 >
-> For Guideline 4, the Window menu now includes "Show SD Card Import," which
-> reopens the main window after it is closed. File > Import From Card
-> (Command-I), the Navigate menu, the Settings command, and clicking the Dock
-> icon also restore the window. We verified the close-and-reopen behavior with
-> native application tests and manual testing.
+> For Guideline 4, the Window menu now includes “Show SD Card Import,” which reopens the main window after it is closed. File > Import From Card (Command-I), the Navigate menu, the Settings command, and clicking the Dock icon also restore the window. We verified the close-and-reopen behavior with native application tests and manual local testing.
 >
-> We have attached the corrected build and refreshed screenshots for review.
-> To verify, launch the app, close its main window with the red close button,
-> then choose Window > Show SD Card Import. No sign-in is required to test this
-> behavior.
+> The corrected build is attached to this submission, and we refreshed the product-page screenshots for file preview, import organization, and the lifetime purchase sheet. To verify the window fix, launch the app, close its main window with the red close button, then choose Window > Show SD Card Import. No sign-in is required.
+>
+> The attached purchase screenshot shows the genuine purchase sheet in the local development build of version 1.0 (6), including the $9.99 price and Family Sharing disclosure. The existing non-consumable product and bundle identifiers are unchanged.
 
 ## Owner-Supplied Fields
 
@@ -204,23 +203,52 @@ unaltered native window capture, including its real controls and transparent
 rounded corners, alongside each App Store composition. Use only synthetic
 media; never use the volume `Sandisk 4T`.
 
-Build 6 preparation status, 2026-09-10 UTC:
+Final submitted gallery, September 10, 2026:
 
-1. File preview: prepared from the local development build, 27 synthetic files.
-2. Import plan: prepared with Sample Shoot and the Shared library destination.
-3. Lifetime purchase sheet: prepared with the displayed $9.99 price.
-4. Successful import receipt: pending installation of the processed build.
-5. Settings: pending installation of the processed build, so the screenshot
-   shows the renamed installed copy and its actual helper/purchase state.
+1. `01-file-preview-2560x1600.png`: 27 synthetic files in the preview grid.
+2. `02-import-plan-2560x1600.png`: Sample Shoot and the Shared library destination.
+3. `03-lifetime-purchase-2560x1600.png`: genuine purchase sheet showing $9.99
+   and Family Sharing.
+
+All three are fresh native captures of the local development build of version
+1.0 (6). They are not TestFlight captures. Superseded receipt and Settings
+images were removed from the product-page gallery; original files remain in
+the local release archives. The purchase image was also attached to the review
+response because the separate IAP review materials are locked.
 
 Prepared files and their SHA-256 manifest are in:
 
 `/Users/Shared/SD Card Import Release/2026-09-10/screenshots/`
 
 Native images are 3024 x 1896 with transparent corners. App Store compositions
-are opaque 2560 x 1600. The three prepared images were inspected, including
-all four corners. They contain no sharing indicator or cursor, and no controls
-were repainted. The purchase sheet legitimately disables the red close button.
+are opaque 2560 x 1600. All three images were inspected, including all four
+corners. They contain no sharing indicator or cursor, and no controls were
+repainted. The purchase sheet legitimately disables the red close button.
 
-The prepared screenshots are not yet uploaded. Build 6 is not yet uploaded or
-resubmitted. Update this status after App Store Connect confirms each action.
+## Resubmission Record
+
+- Source commit: `615a51f3287a5d470d56fce66bbdacb36bd71d79`.
+- Version/build: `1.0 (6)`, built with stable Xcode 26.6 (`17F113`).
+- App and helper: universal arm64/x86_64, Apple Distribution signed, exact
+  provisioning profiles, sandbox/App Group entitlements and privacy manifests
+  verified. Strict bundle audit passed; no Sparkle or development test artifacts.
+- Validation: 234 package tests, 9 hosted StoreKit/window tests, and user-confirmed
+  local manual window testing passed. The processed build was not installed
+  through TestFlight: assigning it to Internal QA required additional permission.
+- Upload succeeded: September 10, 2026 at 04:51:43 UTC; processing completed.
+- Build ID: `335968b5-e0d8-4181-8ab4-1f00da30dbe7`.
+- App name, description, review notes, three screenshots, and selected build 6
+  verified in App Store Connect.
+- Review response and purchase screenshot sent at 1:10 AM EDT.
+- Resubmitted at 1:10 AM EDT. Both the app version and SD Import Unlimited are
+  **Waiting for Review**. Manual release after approval remains selected.
+- Submission ID: `2f1632a6-a99f-4fba-99ff-3c443bd68523`.
+- [Submission and review response](https://appstoreconnect.apple.com/apps/6807178069/distribution/reviewsubmissions/details/2f1632a6-a99f-4fba-99ff-3c443bd68523).
+- Signed archive, verification record, sent reply, and submission screenshot:
+  `/Users/Shared/SD Card Import Release/2026-09-10/`.
+
+The existing IAP record was preserved. Automatic approval review blocked
+removing it from the unresolved submission because Apple's confirmation warns
+about releasing other accepted items. No IAP pricing, identifiers, availability,
+Family Sharing, or separate IAP review materials were changed. The refreshed
+purchase capture was delivered through the app gallery and review response.
