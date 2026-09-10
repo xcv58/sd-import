@@ -140,7 +140,7 @@ struct SettingsView: View {
                             Toggle("Prompt when a card is mounted", isOn: autoPromptBinding)
                                 .disabled(!model.backgroundPromptCanConfigure)
 
-                            Text("Runs a small background helper after login so SD Import can notice newly mounted cards.")
+                            Text("Runs a small background helper after login so \(AppDistribution.current.displayName) can notice newly mounted cards.")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -305,7 +305,7 @@ struct SettingsView: View {
                                 }
                                 Button("Cancel", role: .cancel) {}
                             } message: {
-                                Text("This deletes old SD Import job records using the current retention setting. Copied media files are not deleted.")
+                                Text("This deletes old \(AppDistribution.current.displayName) job records using the current retention setting. Copied media files are not deleted.")
                             }
                         }
 

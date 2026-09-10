@@ -140,7 +140,7 @@ struct DiagnosticsView: View {
     private var crashReportsSection: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
-                Text("SD Import does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing.")
+                Text("\(AppDistribution.current.displayName) does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

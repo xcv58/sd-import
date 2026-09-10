@@ -32,7 +32,7 @@ targets:
       base:
         CODE_SIGN_ENTITLEMENTS: Packaging/MacAppStore/SDImportAgent.entitlements
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: "4"
+        CURRENT_PROJECT_VERSION: "6"
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Packaging/MacAppStore/SDImportAgent-Info.plist
         MARKETING_VERSION: "1.0"
@@ -64,7 +64,7 @@ targets:
   SDImportForMac:
     type: application
     platform: macOS
-    productName: SD Import for Mac
+    productName: SD Card Import
     sources:
       - path: Packages/SDImportCore/Sources/SDImportApp
       - path: Packaging/MacAppStore/PrivacyInfo.xcprivacy
@@ -80,14 +80,14 @@ targets:
       base:
         CODE_SIGN_ENTITLEMENTS: Packaging/MacAppStore/SDImport.entitlements
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: "4"
+        CURRENT_PROJECT_VERSION: "6"
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Packaging/MacAppStore/SDImport-Info.plist
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
         MARKETING_VERSION: "1.0"
         PRODUCT_BUNDLE_IDENTIFIER: media.jenny.sdimport
         PRODUCT_MODULE_NAME: SDImportForMac
-        PRODUCT_NAME: SD Import for Mac
+        PRODUCT_NAME: SD Card Import
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SDIMPORT_MAC_APP_STORE"
       configs:
         Debug:

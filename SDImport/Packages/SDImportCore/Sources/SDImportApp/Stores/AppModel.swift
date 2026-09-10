@@ -1940,7 +1940,7 @@ final class AppModel: ObservableObject {
                     title: "Allow Access to \(volume.name)",
                     initialPath: volume.mountURL.path,
                     prompt: "Allow Access",
-                    message: "SD Import will scan this folder only after you allow access."
+                    message: "\(AppDistribution.current.displayName) will scan this folder only after you allow access."
                 ) else {
                     pendingMountedVolume = nil
                     statusMessage = "Card scan cancelled"
@@ -2123,7 +2123,7 @@ final class AppModel: ObservableObject {
             if let path = backgroundPromptApplicationOwnership.authoritativeApplicationPath {
                 return "Background prompts are managed by the installed copy at \(path). Open that copy to change this setting."
             }
-            return "Move SD Import to /Applications or ~/Applications before enabling background prompts."
+            return "Move \(AppDistribution.current.displayName) to /Applications or ~/Applications before enabling background prompts."
         }
         if let backgroundPromptEffectiveError {
             return backgroundPromptEffectiveError
@@ -2140,9 +2140,9 @@ final class AppModel: ObservableObject {
         case .notRegistered:
             return "The saved setting is on, but the background helper is not registered."
         case .requiresApproval:
-            return "Allow SD Import in System Settings → General → Login Items & Extensions."
+            return "Allow \(AppDistribution.current.displayName) in System Settings → General → Login Items & Extensions."
         case .notFound:
-            return "The bundled background helper could not be found. Reinstall SD Import in Applications."
+            return "The bundled background helper could not be found. Reinstall \(AppDistribution.current.displayName) in Applications."
         case .unknown:
             return "macOS returned an unrecognized background helper status."
         }
@@ -2974,7 +2974,7 @@ final class AppModel: ObservableObject {
             return
         }
         guard let report = CrashReportLocator.findReports(limit: 1).first else {
-            statusMessage = "No SD Import crash reports found"
+            statusMessage = "No \(AppDistribution.current.displayName) crash reports found"
             return
         }
 
@@ -3673,7 +3673,7 @@ final class AppModel: ObservableObject {
             title: "Allow Access to Source",
             initialPath: sourcePath,
             prompt: "Allow Access",
-            message: "Choose the card or source folder before SD Import scans it."
+            message: "Choose the card or source folder before \(AppDistribution.current.displayName) scans it."
         ) else {
             statusMessage = "Card scan cancelled"
             return false
@@ -3703,7 +3703,7 @@ final class AppModel: ObservableObject {
                 title: "Allow Access to \(displayName)",
                 initialPath: expandedPath,
                 prompt: "Allow Access",
-                message: "Choose the destination before SD Import copies files to it."
+                message: "Choose the destination before \(AppDistribution.current.displayName) copies files to it."
             ) else {
                 statusMessage = "Import cancelled"
                 return false
@@ -3754,7 +3754,7 @@ final class AppModel: ObservableObject {
                 title: "Allow Access to \(request.title)",
                 initialPath: request.path,
                 prompt: "Allow Access",
-                message: "Choose this folder again so SD Import can retry the existing job."
+                message: "Choose this folder again so \(AppDistribution.current.displayName) can retry the existing job."
             ) else {
                 statusMessage = "Retry cancelled"
                 return false

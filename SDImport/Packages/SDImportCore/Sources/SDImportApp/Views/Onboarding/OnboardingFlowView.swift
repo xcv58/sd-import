@@ -15,10 +15,10 @@ struct OnboardingFlowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Set Up SD Import")
+                Text("Set Up \(AppDistribution.current.displayName)")
                     .font(.title2)
                     .fontWeight(.semibold)
-                Text("Choose where cards are scanned and where copied media should land. SD Import previews everything before copying.")
+                Text("Choose where cards are scanned and where copied media should land. \(AppDistribution.current.displayName) previews everything before copying.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

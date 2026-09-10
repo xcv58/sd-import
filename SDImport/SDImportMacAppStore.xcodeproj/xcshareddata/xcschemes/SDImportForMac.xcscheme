@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D73854480BE34E4A73182CE5"
-               BuildableName = "SD Import for Mac.app"
+               BuildableName = "SD Card Import.app"
                BlueprintName = "SDImportForMac"
                ReferencedContainer = "container:SDImportMacAppStore.xcodeproj">
             </BuildableReference>
@@ -33,7 +33,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D73854480BE34E4A73182CE5"
-            BuildableName = "SD Import for Mac.app"
+            BuildableName = "SD Card Import.app"
             BlueprintName = "SDImportForMac"
             ReferencedContainer = "container:SDImportMacAppStore.xcodeproj">
          </BuildableReference>
@@ -71,7 +71,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D73854480BE34E4A73182CE5"
-            BuildableName = "SD Import for Mac.app"
+            BuildableName = "SD Card Import.app"
             BlueprintName = "SDImportForMac"
             ReferencedContainer = "container:SDImportMacAppStore.xcodeproj">
          </BuildableReference>
@@ -93,7 +93,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D73854480BE34E4A73182CE5"
-            BuildableName = "SD Import for Mac.app"
+            BuildableName = "SD Card Import.app"
             BlueprintName = "SDImportForMac"
             ReferencedContainer = "container:SDImportMacAppStore.xcodeproj">
          </BuildableReference>

@@ -42,7 +42,7 @@ struct HistoryDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("SD Import will keep the copied files and job history. Files first imported by this job can be imported again for another destination.")
+            Text("\(AppDistribution.current.displayName) will keep the copied files and job history. Files first imported by this job can be imported again for another destination.")
         }
     }
 

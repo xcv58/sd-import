@@ -7,7 +7,7 @@
   <key>CFBundleExecutable</key>
   <string>$(EXECUTABLE_NAME)</string>
   <key>CFBundleDisplayName</key>
-  <string>SD Import for Mac</string>
+  <string>SD Card Import</string>
   <key>CFBundleIconFile</key>
   <string>SDImport</string>
   <key>CFBundleIdentifier</key>

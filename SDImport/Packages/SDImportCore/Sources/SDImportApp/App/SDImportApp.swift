@@ -50,7 +50,7 @@ struct SDImportApp: App {
     }
 
     var body: some Scene {
-        Window("SD Import", id: "main") {
+        Window(AppDistribution.current.displayName, id: "main") {
             RootView(appUpdater: appUpdater)
                 .environmentObject(model)
                 .environmentObject(purchaseManager)
@@ -71,9 +71,7 @@ struct SDImportApp: App {
 
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {
-                    MainWindowPresenter.present()
-                    model.selectPanel(.settings)
-                    NSApp.activate()
+                    showPanel(.settings)
                 }
                 .keyboardShortcut(",", modifiers: [.command])
             }
@@ -84,7 +82,7 @@ struct SDImportApp: App {
 
             CommandGroup(replacing: .newItem) {
                 Button("Import From Card...") {
-                    model.selection = .import
+                    showPanel(.import)
                 }
                 .keyboardShortcut("i", modifiers: [.command])
 
@@ -94,19 +92,25 @@ struct SDImportApp: App {
                 .keyboardShortcut("r", modifiers: [.command])
             }
 
+            CommandGroup(before: .windowArrangement) {
+                Button("Show \(AppDistribution.current.displayName)") {
+                    showMainWindow()
+                }
+            }
+
             CommandMenu("Navigate") {
                 Button("Import") {
-                    model.selectPanel(.import)
+                    showPanel(.import)
                 }
                 .keyboardShortcut("1", modifiers: [.command])
 
                 Button("History") {
-                    model.selectPanel(.history)
+                    showPanel(.history)
                 }
                 .keyboardShortcut("2", modifiers: [.command])
 
                 Button("Settings") {
-                    model.selectPanel(.settings)
+                    showPanel(.settings)
                 }
                 .keyboardShortcut("3", modifiers: [.command])
 
@@ -114,11 +118,13 @@ struct SDImportApp: App {
 
                 Button("Next Panel") {
                     model.selectNextPanel()
+                    showMainWindow()
                 }
                 .keyboardShortcut(.tab, modifiers: [.control])
 
                 Button("Previous Panel") {
                     model.selectPreviousPanel()
+                    showMainWindow()
                 }
                 .keyboardShortcut(.tab, modifiers: [.control, .shift])
             }
@@ -137,6 +143,16 @@ struct SDImportApp: App {
                 .frame(minWidth: 620, minHeight: 420)
         }
         .defaultSize(width: 720, height: 500)
+    }
+
+    private func showPanel(_ panel: SidebarItem) {
+        model.selectPanel(panel)
+        showMainWindow()
+    }
+
+    private func showMainWindow() {
+        ApplicationLifecycleCoordinator.shared.mainWindowWillPresent()
+        MainWindowPresenter.present()
     }
 }
 

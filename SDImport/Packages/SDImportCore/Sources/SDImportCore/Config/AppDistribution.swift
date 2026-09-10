@@ -25,6 +25,13 @@ public enum AppDistribution: String, Codable, Sendable {
     public static let appGroupIdentifier = "group.media.jenny.sdimport"
     public static let lifetimeProductIdentifier = "media.jenny.sdimport.unlimited"
 
+    public var displayName: String {
+        switch self {
+        case .direct: "SD Import"
+        case .macAppStore: "SD Card Import"
+        }
+    }
+
     public static var current: AppDistribution {
         guard
             let value = Bundle.main.object(forInfoDictionaryKey: "SDImportDistribution") as? String,
