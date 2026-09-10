@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://macos-automation.vercel.app/sitemap.xml
+Sitemap: https://sd.jenny.media/sitemap.xml

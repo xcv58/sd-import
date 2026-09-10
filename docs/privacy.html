@@ -8,18 +8,18 @@
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
     <script>try { const t = localStorage.getItem("theme"); if (["light", "dark", "system"].includes(t)) document.documentElement.dataset.theme = t; } catch {}</script>
-    <title>SD Import Privacy Policy</title>
-    <meta name="description" content="Privacy policy for SD Import.">
-    <meta property="og:title" content="SD Import Privacy Policy">
-    <meta property="og:description" content="How SD Import stores app data locally and handles diagnostics and update checks.">
+    <title>SD Import &amp; SD Card Import Privacy Policy</title>
+    <meta name="description" content="Privacy policy for SD Import and SD Card Import.">
+    <meta property="og:title" content="SD Import &amp; SD Card Import Privacy Policy">
+    <meta property="og:description" content="How SD Import and SD Card Import store data locally and handle diagnostics, updates, and purchases.">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://macos-automation.vercel.app/privacy.html">
+    <meta property="og:url" content="https://sd.jenny.media/privacy.html">
     <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-import-social-20260905.png">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="SD Import Privacy Policy">
-    <meta name="twitter:description" content="How SD Import stores app data locally and handles diagnostics and update checks.">
+    <meta name="twitter:title" content="SD Import &amp; SD Card Import Privacy Policy">
+    <meta name="twitter:description" content="How SD Import and SD Card Import store data locally and handle diagnostics, updates, and purchases.">
     <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-import-social-20260905.png">
-    <link rel="canonical" href="https://macos-automation.vercel.app/privacy.html">
+    <link rel="canonical" href="https://sd.jenny.media/privacy.html">
     <link rel="stylesheet" href="assets/site-20260512.css?v=20260530c">
     <link rel="stylesheet" href="assets/redesign-20260906.css">
 </head>
@@ -47,18 +47,20 @@
     <main id="main" class="container">
         <section class="page-title">
             <h1>Privacy Policy</h1>
-            <p>Last updated: 2026-07-31. SD Import is a local macOS utility for copying photos and videos from SD cards or selected source folders.</p>
+            <p>Last updated: 2026-09-10. This policy covers SD Import (direct download) and SD Card Import (App Store edition), local macOS utilities for copying photos and videos from SD cards or selected source folders.</p>
         </section>
         <section class="section section-divider">
             <article class="policy-box">
                 <h2>Data stored locally</h2>
-                <p>SD Import stores app settings, security-scoped folder bookmarks, import history, and dedupe records on your Mac under <code>~/Library/Application Support/SD Import/state.sqlite</code>. It may also store ordinary preferences through macOS UserDefaults.</p>
+                <p>Both editions store app settings, folder permissions, import history, and records used to skip duplicate imports locally on your Mac. The direct edition uses <code>~/Library/Application Support/SD Import/state.sqlite</code>. SD Card Import uses a local App Group container shared with its card-detection helper. Both may also store ordinary preferences through macOS UserDefaults.</p>
                 <h2>Optional portable import receipts</h2>
-                <p>If you enable portable import receipts, SD Import creates or appends <code>.sd-import/imported-v1.jsonl</code> on writable sources. The hidden ledger contains versioned file fingerprints, relative source paths, sizes, modification and import timestamps, and validation checksums so another Mac can avoid duplicate imports. It does not contain destination paths, usernames, or media contents. The option is disabled by default, read-only sources continue without writing portable history, and ledger access refuses symbolic-link redirection outside the selected source.</p>
+                <p>If you enable portable import receipts, the app creates or appends <code>.sd-import/imported-v1.jsonl</code> on writable sources. The hidden ledger contains versioned file fingerprints, relative source paths, sizes, modification and import timestamps, and validation checksums so another Mac can avoid duplicate imports. It does not contain destination paths, usernames, or media contents. The option is disabled by default, read-only sources continue without writing portable history, and ledger access refuses symbolic-link redirection outside the selected source.</p>
                 <h2>Network use</h2>
-                <p>The native app uses the network for Sparkle update checks when updates are configured in the installed release build. Update checks contact the GitHub Release-hosted appcast for this repository.</p>
+                <p>The direct edition uses Sparkle for update checks when configured in the installed release. These checks contact the GitHub Release-hosted appcast for this repository. SD Card Import receives updates through the App Store and does not include Sparkle.</p>
+                <h2>App Store purchases</h2>
+                <p>Apple processes purchases and restores for SD Card Import. The app uses StoreKit transaction and entitlement information to determine purchase access. It stores purchase-access state and free-import usage locally. We do not receive payment card details.</p>
                 <h2>No automatic telemetry</h2>
-                <p>SD Import does not send analytics, telemetry, import history, media files, folder listings, or crash reports to the maintainer. Diagnostics export is opt-in and redacted. The app can reveal the local macOS crash-report folder or export the latest local SD Import crash report, but it does not upload crash reports automatically.</p>
+                <p>Neither edition sends analytics, telemetry, import history, media files, folder listings, or crash reports to the maintainer. Diagnostics export is opt-in and redacted. The direct edition can reveal the macOS crash-report folder or export the latest local app crash report. The App Store edition cannot browse system crash reports. Neither edition uploads crash reports automatically.</p>
                 <h2>Support requests</h2>
                 <p>Public GitHub issues are visible to everyone. Do not attach private photos, videos, full card dumps, credentials, or unredacted logs to public issues.</p>
                 <h2>Contact</h2>
