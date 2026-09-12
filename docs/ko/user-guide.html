@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="system" data-page="user-guide">
+<head>
+    <meta charset="UTF-8"><script id="site-config" type="application/json">{"language": "ko", "page": "user-guide", "messages": {"ui.themeDark": "다크 테마로 전환", "ui.themeLight": "라이트 테마로 전환", "ui.play": "데모 재생", "ui.pause": "데모 일시 정지", "ui.timeline": "{duration} 중 {current}", "ui.enlarge": "스크린샷 확대: {title}"}}</script><script src="../assets/site-settings-20260912.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/images/favicon-32.png">
+    <link rel="apple-touch-icon" href="../assets/images/app-icon.png">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
+
+    <title data-i18n="m180">SD Card Import — 사용 가이드</title>
+    <meta name="description" content="SD Import 초기 설정, 카드 가져오기, 안전 안내, 키보드 단축키 및 도움말." data-i18n-attr-content="m181">
+    <meta property="og:title" content="SD Card Import — 사용 가이드" data-i18n-attr-content="m180">
+    <meta property="og:description" content="SD Import 초기 설정, 카드 가져오기, 안전 안내, 키보드 단축키 및 도움말." data-i18n-attr-content="m181">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://sd.jenny.media/ko/user-guide.html">
+    <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SD Card Import — 사용 가이드" data-i18n-attr-content="m180">
+    <meta name="twitter:description" content="SD Import 초기 설정, 카드 가져오기, 안전 안내, 키보드 단축키 및 도움말." data-i18n-attr-content="m181">
+    <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
+    <link rel="canonical" href="https://sd.jenny.media/ko/user-guide.html">
+    <link rel="stylesheet" href="../assets/site-20260512.css?v=20260530c">
+    <link rel="stylesheet" href="../assets/redesign-20260906.css">
+<link rel="stylesheet" href="../assets/site-controls-20260912.css"><link rel="alternate" hreflang="en" href="https://sd.jenny.media/user-guide.html"><link rel="alternate" hreflang="zh-Hans" href="https://sd.jenny.media/zh-Hans/user-guide.html"><link rel="alternate" hreflang="zh-Hant" href="https://sd.jenny.media/zh-Hant/user-guide.html"><link rel="alternate" hreflang="ja" href="https://sd.jenny.media/ja/user-guide.html"><link rel="alternate" hreflang="ko" href="https://sd.jenny.media/ko/user-guide.html"><link rel="alternate" hreflang="de" href="https://sd.jenny.media/de/user-guide.html"><link rel="alternate" hreflang="fr" href="https://sd.jenny.media/fr/user-guide.html"><link rel="alternate" hreflang="es" href="https://sd.jenny.media/es/user-guide.html"><link rel="alternate" hreflang="pt-BR" href="https://sd.jenny.media/pt-BR/user-guide.html"><link rel="alternate" hreflang="it" href="https://sd.jenny.media/it/user-guide.html"><link rel="alternate" hreflang="x-default" href="https://sd.jenny.media/user-guide.html"></head>
+<body class="preload">
+    <a class="skip-link" href="#main" data-i18n="m003">본문으로 이동</a>
+    <div class="container">
+        <header class="site-header"><a class="logo" href="index.html" aria-label="SD Card Import 홈" data-i18n-attr-aria-label="m004"><img src="../assets/images/app-icon-72-20260512.webp" width="36" height="36" alt=""><span>SD Card Import</span></a><nav class="nav-links" aria-label="기본 탐색" data-i18n-attr-aria-label="m005">
+                    <a href="install.html" data-i18n="m152">설치</a>
+                    <a href="user-guide.html" data-i18n="m008">가이드</a>
+                    <a href="updates.html" data-i18n="m153">업데이트</a>
+                    <a href="support.html" data-i18n="m144">지원</a>
+                    <a href="https://github.com/xcv58/sd-import">GitHub</a>
+                </nav><div class="site-controls"><details class="language-picker"><summary aria-label="언어 선택" data-i18n-attr-aria-label="m010"><svg viewbox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c-5 5-5 13 0 18M12 3c5 5 5 13 0 18"></path></svg><span data-language-name>한국어</span><span data-language-short>KO</span></summary><nav class="language-menu" data-language-menu aria-label="언어" data-i18n-attr-aria-label="m306"><a href="../user-guide.html?lang=en" lang="en" hreflang="en">English</a><a href="../zh-Hans/user-guide.html" lang="zh-Hans" hreflang="zh-Hans">简体中文</a><a href="../zh-Hant/user-guide.html" lang="zh-Hant" hreflang="zh-Hant">繁體中文</a><a href="../ja/user-guide.html" lang="ja" hreflang="ja">日本語</a><a href="../ko/user-guide.html" lang="ko" hreflang="ko" aria-current="page">한국어</a><a href="../de/user-guide.html" lang="de" hreflang="de">Deutsch</a><a href="../fr/user-guide.html" lang="fr" hreflang="fr">Français</a><a href="../es/user-guide.html" lang="es" hreflang="es">Español</a><a href="../pt-BR/user-guide.html" lang="pt-BR" hreflang="pt-BR">Português (Brasil)</a><a href="../it/user-guide.html" lang="it" hreflang="it">Italiano</a></nav></details><button class="theme-toggle" type="button" data-theme-toggle hidden aria-label="다크 테마로 전환" data-i18n-attr-aria-label="m011"><svg class="theme-moon" viewbox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path></svg><svg class="theme-sun" viewbox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"></path></svg></button></div></header>
+    </div>
+
+    <main id="main" class="container">
+        <section class="page-title">
+            <h1 data-i18n="m182">사용 가이드</h1>
+            <p data-i18n="m183">대상을 한 번 설정하고, 복사 전마다 카드를 미리 확인하고, SD Import로 이미 가져온 항목의 기록을 명확히 남기세요.</p>
+            <p data-i18n="m184">이 가이드의 화면은 직접 다운로드 에디션 SD Import입니다. SD Card Import는 App Store 에디션입니다. <a href="install.html#app-store">이용 방법 및 가격</a>과 <a href="support.html#purchases">구매 및 복원 도움말</a>을 확인하세요.</p>
+        <p data-i18n="m185">SD Card Import를 사용하시나요? <a href="install.html#app-store">Mac App Store에서 설치</a>한 뒤 원본 및 대상 폴더를 선택하세요. 아래 과정은 직접 다운로드 에디션 SD Import를 보여 줍니다.</p></section>
+
+        <section class="section section-divider">
+            <div class="section-header">
+                <h2 data-i18n="m186">빠른 시작.</h2>
+                <p data-i18n="m187">대부분은 앱 설치와 대상 설정을 한 번만 하고, 카드를 넣을 때마다 미리보기를 확인하면 됩니다.</p>
+            </div>
+            <div class="grid">
+                <article class="step">
+                    <span class="step-number">1</span>
+                    <h3 data-i18n="m152">설치</h3>
+                    <p data-i18n="m188">서명된 DMG를 다운로드해 열고 <code>SD Import.app</code>을 <code>Applications</code>으로 드래그하세요.</p>
+                </article>
+                <article class="step">
+                    <span class="step-number">2</span>
+                    <h3 data-i18n="m189">폴더 설정</h3>
+                    <p data-i18n="m190">설정에서 사진 및 동영상 대상을 선택하고, 필요하면 자동 추출이나 휴대용 가져오기 기록을 활성화하세요. 휴대용 기록은 쓰기 가능한 원본에 숨김 기록 파일 <code>.sd-import</code>을 저장해 다른 Mac에서 중복 가져오기를 피하도록 합니다.</p>
+                </article>
+                <article class="step">
+                    <span class="step-number">3</span>
+                    <h3 data-i18n="m191">가져오기</h3>
+                    <p data-i18n="m192">카드를 넣고 미리보기를 확인한 뒤 복사가 끝날 때까지 연결해 두세요. 휴대용 기록으로 인식한 파일은 <code>다른 Mac</code>으로 표시됩니다. 복사 전에 기록을 다시 확인하며 대상 계획을 다시 구성하는 동안에도 <code>그래도 가져오기</code>은 활성 상태입니다. 완료 후 결과 화면에서 원본을 추출하세요.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section section-divider two-column">
+            <div class="section-header">
+                <h2 data-i18n="m193">카드에서 가져오기.</h2>
+                <p data-i18n="m194">카드가 마운트되면 SD Import가 자동으로 나타날 수 있습니다. 앱을 직접 열고 <code>카드에서 가져오기…</code>을 선택할 수도 있습니다.</p>
+            </div>
+            <ol class="workflow-steps">
+                <li><span class="step-number">1</span><div><h3 data-i18n="m195">카드를 연결하세요.</h3><p data-i18n="m196">SD 카드를 넣거나 카메라 카드 리더기를 연결하세요.</p></div></li>
+                <li><span class="step-number">2</span><div><h3 data-i18n="m197">스캔을 검토하세요.</h3><p data-i18n="m198">새 파일, 이미 가져온 파일, 지원되지 않거나 충돌하는 파일을 확인하세요.</p></div></li>
+                <li><span class="step-number">3</span><div><h3 data-i18n="m199">복사를 시작하세요.</h3><p data-i18n="m200">대상을 확인하고 가져오기가 끝날 때까지 원본을 연결해 두세요.</p></div></li>
+                <li><span class="step-number">4</span><div><h3 data-i18n="m201">안전하게 추출하세요.</h3><p data-i18n="m202">결과 화면에서 <code>소스 추출</code>을 선택하거나 설정에서 자동 추출을 켜세요. 자동 추출은 오류 없이 가져오기를 마친 경우에만 실행됩니다.</p></div></li>
+            </ol>
+        </section>
+
+        <section class="section section-divider two-column">
+            <div class="policy-box">
+                <h2 data-i18n="m203">안전 안내</h2>
+                <ul>
+                    <li data-i18n="m204">SD Import는 파일을 복사하며 카드를 지우지 않습니다.</li>
+                    <li data-i18n="m205">휴대용 기록을 켜면 SD Import는 원본에 숨김 기록 파일 <code>.sd-import</code>만 씁니다. 잠겼거나 읽기 전용인 원본은 경고와 함께 계속 처리합니다.</li>
+                    <li data-i18n="m206">이미 가져온 파일은 다음 실행부터 건너뜁니다. <code>그래도 가져오기</code>은 휴대용 기록에서 인식한 파일에만 사용할 수 있습니다. 스캔 후 원본 파일이 변경되면 오래된 기록을 사용하지 않고 다시 스캔하도록 요청합니다.</li>
+                    <li data-i18n="m207">대상에 이름은 같지만 내용이 다른 파일이 있으면 SD Import는 접미사를 붙여 두 파일을 모두 보존합니다.</li>
+                    <li data-i18n="m208">업데이트가 올바르게 설치되도록 앱을 <code>Applications</code>에 두세요.</li>
+                </ul>
+            </div>
+            <div class="policy-box">
+                <h2 data-i18n="m209">키보드 단축키</h2>
+                <ul>
+                    <li data-i18n="m210"><code>Command-I</code>: 가져오기 열기.</li>
+                    <li data-i18n="m211"><code>Command-1</code>부터 <code>Command-4</code>: 가져오기, 기록, 설정, 진단.</li>
+                    <li data-i18n="m212"><code>Control-Tab</code>: 다음 패널.</li>
+                    <li data-i18n="m213"><code>Command-R</code>: 기록 새로 고침.</li>
+                    <li data-i18n="m214"><code>Command-,</code>: 설정.</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section section-divider">
+            <div class="section-header">
+                <h2 data-i18n="m215">가져오기가 자동으로 시작되지 않는 경우.</h2>
+                <p data-i18n="m216">설정에서 <code>카드 마운트 시 알림</code>이 켜져 있는지 확인하고 SD Import를 직접 연 뒤 <code>카드에서 가져오기…</code>을 선택하세요. 문제가 계속되면 진단 정보를 내보내고 지원팀에 문의하세요.</p>
+            </div>
+            <div class="cta-group" data-i18n="m217"><a class="cta-button cta-primary" href="support.html">지원 받기</a> <a class="cta-button cta-secondary" href="https://github.com/xcv58/sd-import/releases/latest">릴리스 노트</a></div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-links" data-i18n="m218"><a href="index.html">홈</a> <a href="install.html">설치</a> <a href="updates.html">업데이트</a> <a href="privacy.html">개인정보 보호</a> <a href="support.html">지원</a></div>
+        </div>
+    </footer>
+    <script src="../assets/site-theme-media-20260912.js"></script>
+</body>
+</html>

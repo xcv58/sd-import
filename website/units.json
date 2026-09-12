@@ -1,0 +1,1494 @@
+{
+  "m001": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m002": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m003": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m004": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m005": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m006": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m007": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m008": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m009": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<svg viewbox=\"0 0 24 24\" aria-hidden=\"true\">\n              <path d=\"M5 12h14m-5-5 5 5-5 5\"></path></svg>"
+    }
+  },
+  "m010": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m011": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m012": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<span class=\"status-dot\">",
+      "{/0}": "</span>"
+    }
+  },
+  "m013": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br>",
+      "{1}": "<em>",
+      "{/1}": "</em>"
+    }
+  },
+  "m014": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br class=\"desktop-break\">"
+    }
+  },
+  "m015": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m016": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<svg viewbox=\"0 0 24 24\" aria-hidden=\"true\">\n              <path d=\"m9 5 11 7-11 7Z\"></path>\n            </svg>"
+    }
+  },
+  "m017": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<span aria-hidden=\"true\">·</span>"
+    }
+  },
+  "m018": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<a href=\"#app-store\">",
+      "{/0}": "</a>",
+      "{1}": "<span aria-hidden=\"true\">→</span>"
+    }
+  },
+  "m019": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m020": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<span aria-hidden=\"true\">→</span>",
+      "{1}": "<span aria-hidden=\"true\">→</span>"
+    }
+  },
+  "m021": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m022": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<span class=\"status-dot\">",
+      "{/0}": "</span>"
+    }
+  },
+  "m023": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m024": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m025": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m026": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m027": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br>"
+    }
+  },
+  "m028": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m029": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m030": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br>"
+    }
+  },
+  "m031": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m032": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m033": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m034": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m035": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<span aria-hidden=\"true\">→</span>"
+    }
+  },
+  "m036": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m037": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m038": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br>"
+    }
+  },
+  "m039": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m040": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m041": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m042": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m043": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m044": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br>"
+    }
+  },
+  "m045": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m046": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m047": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m048": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m049": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m050": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m051": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m052": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br class=\"desktop-break\">"
+    }
+  },
+  "m053": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m054": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m055": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m056": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m057": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m058": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m059": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m060": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<strong>",
+      "{/0}": "</strong>"
+    }
+  },
+  "m061": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m062": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m063": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m064": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m065": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m066": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m067": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m068": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m069": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m070": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<b>",
+      "{/0}": "</b>"
+    }
+  },
+  "m071": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m072": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m073": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m074": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<b>",
+      "{/0}": "</b>"
+    }
+  },
+  "m075": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m076": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m077": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m078": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<b>",
+      "{/0}": "</b>"
+    }
+  },
+  "m079": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m080": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m081": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m082": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<b>",
+      "{/0}": "</b>"
+    }
+  },
+  "m083": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m084": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m085": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m086": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<b>",
+      "{/0}": "</b>"
+    }
+  },
+  "m087": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m088": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m089": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m090": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<b>",
+      "{/0}": "</b>"
+    }
+  },
+  "m091": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m092": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m093": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m094": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<b>",
+      "{/0}": "</b>"
+    }
+  },
+  "m095": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m096": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<span aria-hidden=\"true\">↗</span>"
+    }
+  },
+  "m097": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m098": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m099": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m100": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m101": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m102": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<strong>",
+      "{/0}": "</strong>",
+      "{1}": "<br>"
+    }
+  },
+  "m103": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br>"
+    }
+  },
+  "m104": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<span aria-hidden=\"true\">→</span>"
+    }
+  },
+  "m105": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m106": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m107": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m108": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m109": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m110": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m111": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m112": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m113": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m114": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m115": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m116": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<a href=\"#download\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m117": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m118": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br>"
+    }
+  },
+  "m119": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m120": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m121": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<span>",
+      "{/0}": "</span>"
+    }
+  },
+  "m122": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<svg viewbox=\"0 0 24 24\" aria-hidden=\"true\">\n                <path d=\"M12 3v12m-5-5 5 5 5-5M5 17v4h14v-4\"></path>\n              </svg>"
+    }
+  },
+  "m123": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br>"
+    }
+  },
+  "m124": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<svg viewbox=\"0 0 24 24\" aria-hidden=\"true\">\n                <path d=\"M5 12h14m-5-5 5 5-5 5\"></path></svg>"
+    }
+  },
+  "m125": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m126": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<svg viewbox=\"0 0 24 24\" aria-hidden=\"true\">\n              <path d=\"M5 12h14m-5-5 5 5-5 5\"></path></svg>"
+    }
+  },
+  "m127": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m128": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<br>"
+    }
+  },
+  "m129": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<svg viewbox=\"0 0 24 24\" aria-hidden=\"true\">\n              <path d=\"M5 12h14m-5-5 5 5-5 5\"></path></svg>"
+    }
+  },
+  "m130": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m131": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<a href=\"user-guide.html\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m132": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m133": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m134": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m135": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m136": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m137": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m138": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m139": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<a href=\"https://github.com/xcv58/sd-import\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m140": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m141": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<a href=\"install.html\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m142": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m143": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m144": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m145": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m146": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m147": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m148": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m149": {
+    "page": "index",
+    "tokens": {
+      "{0}": "<span aria-hidden=\"true\">↗</span>"
+    }
+  },
+  "m150": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m151": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m152": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m153": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m154": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m155": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m156": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m157": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m158": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m159": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m160": {
+    "page": "install",
+    "tokens": {
+      "{0}": "<a href=\"index.html#app-store\">",
+      "{/0}": "</a>",
+      "{1}": "<a href=\"support.html#purchases\">",
+      "{/1}": "</a>"
+    }
+  },
+  "m161": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m162": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m163": {
+    "page": "install",
+    "tokens": {
+      "{0}": "<strong>",
+      "{/0}": "</strong>"
+    }
+  },
+  "m164": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m165": {
+    "page": "install",
+    "tokens": {
+      "{0}": "<code>SD-Import.dmg</code>"
+    }
+  },
+  "m166": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m167": {
+    "page": "install",
+    "tokens": {
+      "{0}": "<code>SD Import.app</code>",
+      "{1}": "<code>Applications</code>"
+    }
+  },
+  "m168": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m169": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m170": {
+    "page": "install",
+    "tokens": {
+      "{0}": "<a class=\"cta-button cta-primary\" href=\"https://github.com/xcv58/sd-import/releases/latest/download/SD-Import.dmg\">",
+      "{/0}": "</a>",
+      "{1}": "<a class=\"cta-button cta-secondary\" href=\"https://github.com/xcv58/sd-import/releases/latest\">",
+      "{/1}": "</a>"
+    }
+  },
+  "m171": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m172": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m173": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m174": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m175": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m176": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m177": {
+    "page": "install",
+    "tokens": {}
+  },
+  "m178": {
+    "page": "install",
+    "tokens": {
+      "{0}": "<a href=\"mailto:i@xcv58.com\">i@xcv58.com</a>"
+    }
+  },
+  "m179": {
+    "page": "install",
+    "tokens": {
+      "{0}": "<a href=\"index.html\">",
+      "{/0}": "</a>",
+      "{1}": "<a href=\"user-guide.html\">",
+      "{/1}": "</a>",
+      "{2}": "<a href=\"support.html\">",
+      "{/2}": "</a>",
+      "{3}": "<a href=\"privacy.html\">",
+      "{/3}": "</a>"
+    }
+  },
+  "m180": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m181": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m182": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m183": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m184": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<a href=\"install.html#app-store\">",
+      "{/0}": "</a>",
+      "{1}": "<a href=\"support.html#purchases\">",
+      "{/1}": "</a>"
+    }
+  },
+  "m185": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<a href=\"install.html#app-store\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m186": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m187": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m188": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>SD Import.app</code>",
+      "{1}": "<code>Applications</code>"
+    }
+  },
+  "m189": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m190": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>.sd-import</code>"
+    }
+  },
+  "m191": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m192": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>",
+      "{1}": "<code>",
+      "{/0}": "</code>",
+      "{/1}": "</code>"
+    }
+  },
+  "m193": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m194": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>",
+      "{/0}": "</code>"
+    }
+  },
+  "m195": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m196": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m197": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m198": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m199": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m200": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m201": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m202": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>",
+      "{/0}": "</code>"
+    }
+  },
+  "m203": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m204": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m205": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>.sd-import</code>"
+    }
+  },
+  "m206": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>",
+      "{/0}": "</code>"
+    }
+  },
+  "m207": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m208": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>Applications</code>"
+    }
+  },
+  "m209": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m210": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>Command-I</code>"
+    }
+  },
+  "m211": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>Command-1</code>",
+      "{1}": "<code>Command-4</code>"
+    }
+  },
+  "m212": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>Control-Tab</code>"
+    }
+  },
+  "m213": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>Command-R</code>"
+    }
+  },
+  "m214": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>Command-,</code>"
+    }
+  },
+  "m215": {
+    "page": "user-guide",
+    "tokens": {}
+  },
+  "m216": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>",
+      "{1}": "<code>",
+      "{/0}": "</code>",
+      "{/1}": "</code>"
+    }
+  },
+  "m217": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<a class=\"cta-button cta-primary\" href=\"support.html\">",
+      "{/0}": "</a>",
+      "{1}": "<a class=\"cta-button cta-secondary\" href=\"https://github.com/xcv58/sd-import/releases/latest\">",
+      "{/1}": "</a>"
+    }
+  },
+  "m218": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<a href=\"index.html\">",
+      "{/0}": "</a>",
+      "{1}": "<a href=\"install.html\">",
+      "{/1}": "</a>",
+      "{2}": "<a href=\"updates.html\">",
+      "{/2}": "</a>",
+      "{3}": "<a href=\"privacy.html\">",
+      "{/3}": "</a>",
+      "{4}": "<a href=\"support.html\">",
+      "{/4}": "</a>"
+    }
+  },
+  "m219": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m220": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m221": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m222": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m223": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m224": {
+    "page": "support",
+    "tokens": {
+      "{0}": "<a href=\"mailto:i@xcv58.com\">i@xcv58.com</a>"
+    }
+  },
+  "m225": {
+    "page": "support",
+    "tokens": {
+      "{0}": "<a href=\"https://github.com/xcv58/sd-import/issues\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m226": {
+    "page": "support",
+    "tokens": {
+      "{0}": "<a href=\"https://github.com/xcv58/sd-import/blob/master/SECURITY.md\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m227": {
+    "page": "support",
+    "tokens": {
+      "{0}": "<a class=\"cta-button cta-primary\" href=\"mailto:i@xcv58.com\">",
+      "{1}": "<a class=\"cta-button cta-secondary\" href=\"https://github.com/xcv58/sd-import/issues/new/choose\">",
+      "{/1}": "</a>",
+      "{/0}": "</a>"
+    }
+  },
+  "m228": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m229": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m230": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m231": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m232": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m233": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m234": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m235": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m236": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m237": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m238": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m239": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m240": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m241": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m242": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m243": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m244": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m245": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m246": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m247": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m248": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m249": {
+    "page": "support",
+    "tokens": {}
+  },
+  "m250": {
+    "page": "support",
+    "tokens": {
+      "{0}": "<a href=\"index.html\">",
+      "{/0}": "</a>",
+      "{1}": "<a href=\"user-guide.html\">",
+      "{/1}": "</a>",
+      "{2}": "<a href=\"privacy.html\">",
+      "{/2}": "</a>",
+      "{3}": "<a href=\"eula.html\">",
+      "{/3}": "</a>",
+      "{4}": "<a href=\"https://github.com/xcv58/sd-import/issues/new/choose\">",
+      "{/4}": "</a>"
+    }
+  },
+  "m251": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m252": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m253": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m254": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m255": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m256": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m257": {
+    "page": "privacy",
+    "tokens": {
+      "{0}": "<code>~/Library/Application Support/SD Import/state.sqlite</code>"
+    }
+  },
+  "m258": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m259": {
+    "page": "privacy",
+    "tokens": {
+      "{0}": "<code>.sd-import/imported-v1.jsonl</code>"
+    }
+  },
+  "m260": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m261": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m262": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m263": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m264": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m265": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m266": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m267": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m268": {
+    "page": "privacy",
+    "tokens": {
+      "{0}": "<a href=\"mailto:i@xcv58.com\">i@xcv58.com</a>"
+    }
+  },
+  "m269": {
+    "page": "privacy",
+    "tokens": {
+      "{0}": "<a href=\"index.html\">",
+      "{/0}": "</a>",
+      "{1}": "<a href=\"user-guide.html\">",
+      "{/1}": "</a>",
+      "{2}": "<a href=\"support.html\">",
+      "{/2}": "</a>",
+      "{3}": "<a href=\"eula.html\">",
+      "{/3}": "</a>"
+    }
+  },
+  "m270": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m271": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m272": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m273": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m274": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m275": {
+    "page": "eula",
+    "tokens": {
+      "{0}": "<a href=\"install.html#app-store\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m276": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m277": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m278": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m279": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m280": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m281": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m282": {
+    "page": "eula",
+    "tokens": {}
+  },
+  "m283": {
+    "page": "eula",
+    "tokens": {
+      "{0}": "<a href=\"https://github.com/xcv58/sd-import/blob/master/LICENSE\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m284": {
+    "page": "eula",
+    "tokens": {
+      "{0}": "<a href=\"index.html\">",
+      "{/0}": "</a>",
+      "{1}": "<a href=\"user-guide.html\">",
+      "{/1}": "</a>",
+      "{2}": "<a href=\"privacy.html\">",
+      "{/2}": "</a>"
+    }
+  },
+  "m285": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m286": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m287": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m288": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m289": {
+    "page": "updates",
+    "tokens": {
+      "{0}": "<a href=\"install.html#app-store\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m290": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m291": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m292": {
+    "page": "updates",
+    "tokens": {
+      "{0}": "<code>",
+      "{/0}": "</code>"
+    }
+  },
+  "m293": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m294": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m295": {
+    "page": "updates",
+    "tokens": {
+      "{0}": "<code>SD-Import.dmg</code>",
+      "{1}": "<code>SD-Import.zip</code>",
+      "{2}": "<code>appcast.xml</code>"
+    }
+  },
+  "m296": {
+    "page": "updates",
+    "tokens": {
+      "{0}": "<a class=\"cta-button cta-secondary\" href=\"https://github.com/xcv58/sd-import/releases/latest\">",
+      "{/0}": "</a>"
+    }
+  },
+  "m297": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m298": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m299": {
+    "page": "updates",
+    "tokens": {}
+  },
+  "m300": {
+    "page": "updates",
+    "tokens": {
+      "{0}": "<a href=\"index.html\">",
+      "{/0}": "</a>",
+      "{1}": "<a href=\"install.html\">",
+      "{/1}": "</a>",
+      "{2}": "<a href=\"user-guide.html\">",
+      "{/2}": "</a>",
+      "{3}": "<a href=\"support.html\">",
+      "{/3}": "</a>"
+    }
+  },
+  "m306": {
+    "page": "shared",
+    "tokens": {}
+  },
+  "m301": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m302": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m303": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m304": {
+    "page": "index",
+    "tokens": {}
+  },
+  "m305": {
+    "page": "index",
+    "tokens": {}
+  }
+}
