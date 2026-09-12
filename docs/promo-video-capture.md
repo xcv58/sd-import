@@ -262,6 +262,15 @@ retains only the first 28 seconds of that candidate and ends on the successful
 copy receipt. The final eight seconds, including the separate safe-eject ending,
 were removed after review. The original 36-second candidate remains preserved.
 
+The subsequent approved website pacing edit is
+`sd-import-screencast-light-20260912-20s.mp4`. It trims idle source-selection,
+permission-dialog, and import-preview holds from the 28-second version, while
+preserving the recorded clicks and continuous scan/copy progression at original
+speed. The existing final receipt frame is extended so the successful result
+remains on screen for about two seconds. It still ends on the receipt and adds
+no eject action. The exact source frame ranges, hashes, and reproduction filter
+are recorded in `website/screencast-edit.json`; both earlier videos are retained.
+
 Use the native window alpha as the video's corner mask and alpha-composite onto
 the neutral background. Do not use a YUV mask blend that also changes the app's
 colors. Window-region inputs already exclude the menu bar; use `--crop-top 0`

@@ -37,6 +37,10 @@ def check():
     build(check=True)
     english = load_json(SITE / 'locales/en.json')
     units = load_json(SITE / 'units.json')
+    screencast = load_json(SITE / 'screencast-edit.json')
+    for field in ['source', 'output']:
+        asset = DOCS.parent / screencast[field]
+        assert hashlib.sha256(asset.read_bytes()).hexdigest() == screencast[field + '_sha256'], asset
     for key, unit in units.items():
         try:
             check_token_copy(unit['tokens'])
@@ -88,6 +92,8 @@ def check():
     parsed_pages = {}
     for language in LANGUAGES:
         catalog = load_json(SITE / 'locales' / f'{language}.json')
+        for key in ['m016', 'm052', 'm063']:
+            assert str(screencast['duration_seconds']) in catalog[key] and '28' not in catalog[key], (language, key)
         for page in PAGES:
             path = DOCS / ('' if language == 'en' else language) / f'{page}.html'
             content = path.read_text()
@@ -121,6 +127,9 @@ def check():
                 assert n.attrs['alt'] == catalog['m015'] and int(n.attrs['height']) >= 40
                 assert f'mac-app-store-{language}-20260912.svg' in n.attrs['src']
             if page == 'index':
+                video = next(n for n in nodes if n.tag == 'video')
+                media = next(n for n in video.children if n.tag == 'source')
+                assert (path.parent / media.attrs['src']).resolve() == (DOCS.parent / screencast['output']).resolve(), path
                 assert len([n for n in nodes if n.tag == 'a' and n.attrs.get('href') == APP_STORE]) == 3
                 assert next(n for n in nodes if n.tag == 'video').attrs.get('controls') is None
                 assert 'controls' in next(n for n in nodes if n.tag == 'video').attrs

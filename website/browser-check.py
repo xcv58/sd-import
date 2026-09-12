@@ -16,6 +16,7 @@ SESSION = f'sd-import-website-check-{os.getpid()}'
 LANGUAGES = ['en','zh-Hans','zh-Hant','ja','ko','de','fr','es','pt-BR','it']
 PAGES = ['install','user-guide','support','privacy','eula','updates']
 CATALOGS = {code:json.loads((Path(__file__).parent/'locales'/f'{code}.json').read_text()) for code in LANGUAGES}
+SCREENCAST = json.loads((Path(__file__).parent/'screencast-edit.json').read_text())
 COUNT = 0
 
 def command(*args):
@@ -105,10 +106,24 @@ try:
     assert evaluate('document.activeElement.hasAttribute("data-gallery-open")')
     command('click','[data-video-play]')
     command('wait','--fn','!document.querySelector("video").paused && document.querySelector("video").currentTime>0')
+    assert evaluate('document.querySelector("video").duration') == SCREENCAST['duration_seconds']
+    assert evaluate('document.querySelector("video").currentSrc').endswith('/' + SCREENCAST['output'].removeprefix('docs/'))
+    assert evaluate('document.querySelector("[data-video-duration]").textContent') == '0:20'
     assert evaluate('document.querySelector("[data-video-play]").getAttribute("aria-label")')==CATALOGS['ja']['ui.pause']
     command('click','[data-video-play]');command('focus','[data-video-scrubber]');command('press','ArrowRight')
     assert evaluate('document.querySelector("video").currentTime')>=5
     assert '中' in evaluate('document.querySelector("[data-video-scrubber]").getAttribute("aria-valuetext")')
+    # Verify the new ending can be reached, played through, and replayed.
+    command('eval', 'document.querySelector("video").currentTime = 18.25')
+    command('wait', '--fn', '!document.querySelector("video").seeking && document.querySelector("video").readyState >= 2')
+    command('screenshot', str(OUT/'video-receipt.png'))
+    command('click', '[data-video-play]')
+    command('wait', '--fn', 'document.querySelector("video").ended')
+    assert evaluate('document.querySelector("[data-video-scrubber]").getAttribute("aria-valuenow")') == '1000'
+    assert evaluate('document.querySelector("[data-video-play]").getAttribute("aria-label")') == CATALOGS['ja']['ui.play']
+    command('click', '[data-video-play]')
+    command('wait', '--fn', '!document.querySelector("video").paused && document.querySelector("video").currentTime > 0 && document.querySelector("video").currentTime < 2')
+    command('click', '[data-video-play]')
     assert not evaluate('[...document.images].filter(i=>i.complete&&!i.naturalWidth).length')
     # Browser regional preference and English override with localStorage denied.
     command('close')

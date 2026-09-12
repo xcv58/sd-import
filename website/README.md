@@ -61,3 +61,24 @@ The site displays one badge per page at 48 pixels high with 12 pixels of padding
 
 Assets are cached as immutable for a year. Publish changed CSS, JavaScript and
 media at new versioned filenames; do not overwrite previously published assets.
+
+The website demo is 20 seconds. `screencast-edit.json` records its source/output
+hashes, source frame ranges (end exclusive), and reproducible FFmpeg filter.
+It removes idle holds while preserving recorded clicks, scanning, and copying
+at their original speed, then holds the existing receipt for about two seconds.
+The original 28-second MP4 remains available. To reproduce a separate preview:
+
+```sh
+python3 - <<'PY'
+import json, subprocess
+from pathlib import Path
+edit = json.loads(Path('website/screencast-edit.json').read_text())
+subprocess.run(['ffmpeg', '-n', '-i', edit['source'], '-filter_complex',
+                edit['filter_complex'], *edit['encoder_arguments'],
+                '/tmp/sd-import-demo-preview.mp4'], check=True)
+PY
+```
+
+After editing the demo, update its three duration messages (`m016`, `m052`,
+`m063`) in every catalog, the English template, the edit record, and the browser
+duration/ending checks, then regenerate the site.
