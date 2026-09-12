@@ -107,7 +107,7 @@ public struct MountedDeviceGrouper: Sendable {
         if volumes.count == 1, let volume = volumes.first {
             return volume.name
         }
-        return "External Device"
+        return L10n.tr("External Device")
     }
 
     private func isSafeEjectionCandidate(_ volume: MountedVolume) -> Bool {

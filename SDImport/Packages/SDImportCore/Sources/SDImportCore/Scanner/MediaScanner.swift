@@ -89,7 +89,7 @@ public struct MediaScanner {
                 portableReceiptWarning = snapshot.warning
             } catch {
                 portableWritesAvailable = false
-                portableReceiptWarning = "Portable import history is unavailable: \(error.localizedDescription)"
+                portableReceiptWarning = L10n.tr("Portable import history is unavailable: \(error.localizedDescription)")
             }
         }
 
@@ -262,7 +262,7 @@ public struct MediaScanner {
                         .joined(separator: ". ")
                 }
             } catch {
-                portableReceiptWarning = "Portable import history could not be updated: \(error.localizedDescription)"
+                portableReceiptWarning = L10n.tr("Portable import history could not be updated: \(error.localizedDescription)")
             }
         }
 

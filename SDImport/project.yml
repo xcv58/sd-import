@@ -110,6 +110,8 @@ targets:
         outputFiles:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SDImport.icns
       - name: Embed Background Helper
+        # Nested resources can change without the app directory timestamp changing.
+        basedOnDependencyAnalysis: false
         script: |
           set -euo pipefail
           source_bundle="${BUILT_PRODUCTS_DIR}/SDImportAgent.app"

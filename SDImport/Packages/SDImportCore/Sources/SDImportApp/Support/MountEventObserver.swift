@@ -108,7 +108,7 @@ final class MountEventObserver {
             return
         }
         guard let handoffStore else {
-            errorHandler("The background prompt mailbox is unavailable", nil)
+            errorHandler(L10n.tr("The background prompt mailbox is unavailable"), nil)
             return
         }
         do {
@@ -127,7 +127,7 @@ final class MountEventObserver {
                 process(claim)
             }
         } catch {
-            errorHandler("Could not persist a foreground mounted-card event", nil)
+            errorHandler(L10n.tr("Could not persist a foreground mounted-card event"), nil)
         }
     }
 
@@ -142,7 +142,7 @@ final class MountEventObserver {
 
         do {
             guard let handoffStore else {
-                errorHandler("The background prompt mailbox is unavailable", nil)
+                errorHandler(L10n.tr("The background prompt mailbox is unavailable"), nil)
                 return
             }
             guard let claim = try handoffStore.claimEvent(
@@ -153,13 +153,13 @@ final class MountEventObserver {
             }
             process(claim)
         } catch {
-            errorHandler("Could not claim a background prompt event", nil)
+            errorHandler(L10n.tr("Could not claim a background prompt event"), nil)
         }
     }
 
     func consumePendingHandoffs() {
         guard let handoffStore else {
-            errorHandler("The background prompt mailbox is unavailable", nil)
+            errorHandler(L10n.tr("The background prompt mailbox is unavailable"), nil)
             return
         }
 
@@ -170,7 +170,7 @@ final class MountEventObserver {
                 process(claim)
             }
         } catch {
-            errorHandler("Could not read pending background prompt events", nil)
+            errorHandler(L10n.tr("Could not read pending background prompt events"), nil)
         }
     }
 
@@ -290,7 +290,7 @@ final class MountEventObserver {
             try handoffStore?.acknowledge(claim)
             handoffAcknowledgedHandler(claim.event)
         } catch {
-            errorHandler("Could not acknowledge a background prompt event", claim.event.agentSequence)
+            errorHandler(L10n.tr("Could not acknowledge a background prompt event"), claim.event.agentSequence)
         }
     }
 

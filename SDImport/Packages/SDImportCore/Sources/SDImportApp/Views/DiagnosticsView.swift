@@ -47,7 +47,7 @@ struct DiagnosticsView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let state = model.backgroundPromptAgentState {
-                    Text("Helper build \(state.agentBuild) · last started \(state.launchedAt.formatted(date: .abbreviated, time: .standard))")
+                    Text(L10n.tr("Helper build \(state.agentBuild) · last started \(state.launchedAt.formatted(date: .abbreviated, time: .standard))"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -55,15 +55,15 @@ struct DiagnosticsView: View {
 
                 HStack {
                     if !model.backgroundPromptCanConfigure {
-                        Button(model.backgroundPromptApplicationOwnership.authoritativeApplicationPath == nil ? "Open Applications" : "Open Installed Copy") {
+                        Button(model.backgroundPromptApplicationOwnership.authoritativeApplicationPath == nil ? L10n.tr("Open Applications") : L10n.tr("Open Installed Copy")) {
                             model.openBackgroundPromptOwner()
                         }
                     } else if model.backgroundPromptServiceStatus == .requiresApproval {
-                        Button("Open Login Items") {
+                        Button(L10n.tr("Open Login Items")) {
                             model.openBackgroundPromptSystemSettings()
                         }
                     } else if model.backgroundPromptCanRepair {
-                        Button("Repair Background Helper") {
+                        Button(L10n.tr("Repair Background Helper")) {
                             model.repairBackgroundPrompt()
                         }
                     }
@@ -71,7 +71,7 @@ struct DiagnosticsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
-            Label("Background Prompt", systemImage: "externaldrive.badge.timemachine")
+            Label(L10n.tr("Background Prompt"), systemImage: "externaldrive.badge.timemachine")
         }
     }
 
@@ -100,7 +100,7 @@ struct DiagnosticsView: View {
     private var diagnosticsExportSection: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Exports the app and macOS versions, settings, recent job counts, and selected-job file statuses. Media files, file names, and full paths are omitted.")
+                Text(L10n.tr("Exports the app and macOS versions, settings, recent job counts, and selected-job file statuses. Media files, file names, and full paths are omitted."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -117,7 +117,7 @@ struct DiagnosticsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
-            Label("Diagnostics Export", systemImage: "waveform.path.ecg")
+            Label(L10n.tr("Diagnostics Export"), systemImage: "waveform.path.ecg")
         }
     }
 
@@ -126,13 +126,13 @@ struct DiagnosticsView: View {
             Button {
                 model.copyDiagnostics()
             } label: {
-                Label("Copy Diagnostics", systemImage: "doc.on.doc")
+                Label(L10n.tr("Copy Diagnostics"), systemImage: "doc.on.doc")
             }
 
             Button {
                 model.exportDiagnostics()
             } label: {
-                Label("Export Diagnostics", systemImage: "square.and.arrow.up")
+                Label(L10n.tr("Export Diagnostics"), systemImage: "square.and.arrow.up")
             }
         }
     }
@@ -140,7 +140,7 @@ struct DiagnosticsView: View {
     private var crashReportsSection: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
-                Text("\(AppDistribution.current.displayName) does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing.")
+                Text(L10n.tr("\(AppDistribution.current.displayName) does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -157,7 +157,7 @@ struct DiagnosticsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
-            Label("Crash Reports", systemImage: "exclamationmark.triangle")
+            Label(L10n.tr("Crash Reports"), systemImage: "exclamationmark.triangle")
         }
     }
 
@@ -166,13 +166,13 @@ struct DiagnosticsView: View {
             Button {
                 model.revealCrashReportsFolder()
             } label: {
-                Label("Reveal Crash Reports", systemImage: "folder")
+                Label(L10n.tr("Reveal Crash Reports"), systemImage: "folder")
             }
 
             Button {
                 model.exportLatestCrashReport()
             } label: {
-                Label("Export Latest Crash Report", systemImage: "square.and.arrow.up")
+                Label(L10n.tr("Export Latest Crash Report"), systemImage: "square.and.arrow.up")
             }
         }
     }
@@ -181,7 +181,7 @@ struct DiagnosticsView: View {
         if let setupError = model.setupError, !setupError.isEmpty {
             return setupError
         }
-        guard !model.statusMessage.isEmpty, model.statusMessage != "Ready" else {
+        guard !model.statusMessage.isEmpty, model.statusMessage != L10n.tr("Ready") else {
             return nil
         }
         return model.statusMessage

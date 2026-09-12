@@ -21,19 +21,19 @@ public enum PathValidationStatus: Equatable, Sendable {
     public func message(for purpose: PathValidationPurpose) -> String {
         switch self {
         case .empty:
-            return purpose == .source ? "Choose a card or source folder" : "Choose a destination folder"
+            return purpose == .source ? L10n.tr("Choose a card or source folder") : L10n.tr("Choose a destination folder")
         case .missing:
-            return purpose == .source ? "Card is not mounted" : "Folder does not exist"
+            return purpose == .source ? L10n.tr("Card is not mounted") : L10n.tr("Folder does not exist")
         case .notDirectory:
-            return "Not a folder"
+            return L10n.tr("Not a folder")
         case .unreadable:
-            return "Permission needed"
+            return L10n.tr("Permission needed")
         case .unwritable:
-            return "Permission needed"
+            return L10n.tr("Permission needed")
         case .placeholder:
-            return "Choose a specific card or source folder"
+            return L10n.tr("Choose a specific card or source folder")
         case .ready:
-            return "Ready"
+            return L10n.tr("Ready")
         }
     }
 }

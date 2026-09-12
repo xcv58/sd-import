@@ -154,12 +154,12 @@ public final class PurchaseManager: ObservableObject {
 
     public var allowanceSummary: String {
         if accessState.hasLifetimeUnlock {
-            return "Lifetime access unlocked"
+            return L10n.tr("Lifetime access unlocked")
         }
         if accessState.remainingFreeImports(distribution: distribution) == 1 {
-            return "Your first completed import is free"
+            return L10n.tr("Your first completed import is free")
         }
-        return "The free import has been used"
+        return L10n.tr("The free import has been used")
     }
 
     public var statusMessage: String? {
@@ -167,17 +167,17 @@ public final class PurchaseManager: ObservableObject {
         case .idle, .available, .purchased:
             return nil
         case .loading:
-            return "Loading purchase information…"
+            return L10n.tr("Loading purchase information…")
         case .purchasing:
-            return "Completing purchase…"
+            return L10n.tr("Completing purchase…")
         case .pending:
-            return "Purchase is pending approval."
+            return L10n.tr("Purchase is pending approval.")
         case .cancelled:
-            return "Purchase cancelled."
+            return L10n.tr("Purchase cancelled.")
         case .verificationFailed:
-            return "The App Store transaction could not be verified."
+            return L10n.tr("The App Store transaction could not be verified.")
         case .unavailable:
-            return "Purchase information is temporarily unavailable."
+            return L10n.tr("Purchase information is temporarily unavailable.")
         case .failed(let message):
             return message
         }
@@ -230,7 +230,7 @@ public final class PurchaseManager: ObservableObject {
             case .userCancelled:
                 accessState.apply(.cancelled)
             @unknown default:
-                accessState.apply(.failed("The App Store returned an unknown purchase result."))
+                accessState.apply(.failed(L10n.tr("The App Store returned an unknown purchase result.")))
             }
         } catch StoreKitError.userCancelled {
             accessState.apply(.cancelled)
@@ -262,7 +262,7 @@ public final class PurchaseManager: ObservableObject {
             return
         case .timedOut:
             accessState.apply(.failed(
-                "The App Store did not finish restoring purchases. Your purchase is safe; try again."
+                L10n.tr("The App Store did not finish restoring purchases. Your purchase is safe; try again.")
             ))
             return
         }
@@ -278,7 +278,7 @@ public final class PurchaseManager: ObservableObject {
             // becomes visible to currentEntitlements.
             try? await Task.sleep(for: .milliseconds(100))
         }
-        accessState.apply(.failed("No restorable purchase was found for this App Store account."))
+        accessState.apply(.failed(L10n.tr("No restorable purchase was found for this App Store account.")))
     }
 
     public func refreshStoreState() async {
@@ -353,7 +353,7 @@ public final class PurchaseManager: ObservableObject {
             applyProductLoadFailure(message)
         case .timedOut:
             isFamilyShareable = false
-            applyProductLoadFailure("Purchase information is taking longer than expected. Try again.")
+            applyProductLoadFailure(L10n.tr("Purchase information is taking longer than expected. Try again."))
         }
     }
 
@@ -395,7 +395,7 @@ public final class PurchaseManager: ObservableObject {
         case .timedOut:
             if !accessState.hasLifetimeUnlock {
                 accessState.apply(.failed(
-                    "The App Store did not finish checking purchases. Try Restore Purchases."
+                    L10n.tr("The App Store did not finish checking purchases. Try Restore Purchases.")
                 ))
             }
         }
@@ -435,7 +435,7 @@ public final class PurchaseManager: ObservableObject {
         case .timedOut:
             if !accessState.hasLifetimeUnlock {
                 accessState.apply(.failed(
-                    "The App Store did not finish checking purchases. Try Restore Purchases."
+                    L10n.tr("The App Store did not finish checking purchases. Try Restore Purchases.")
                 ))
             }
         }
@@ -514,7 +514,7 @@ public final class PurchaseManager: ObservableObject {
             }
         }
         var iterator = stream.makeAsyncIterator()
-        let outcome = await iterator.next() ?? .failed("The App Store operation ended unexpectedly.")
+        let outcome = await iterator.next() ?? .failed(L10n.tr("The App Store operation ended unexpectedly."))
         operationTask.cancel()
         timeoutTask.cancel()
         continuation.finish()

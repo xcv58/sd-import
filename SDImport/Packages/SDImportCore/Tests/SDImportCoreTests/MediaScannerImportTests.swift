@@ -767,6 +767,33 @@ struct MediaScannerImportTests {
         #expect(files.first?.error == "source file missing")
     }
 
+    @Test("copy verification failures retain localized detail in progress and history")
+    func copyFailureUsesLocalizedDetail() throws {
+        let fixture = try Fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.rootURL) }
+        let source = fixture.mountURL.appendingPathComponent("IMG_100%.JPG")
+        try fixture.writeFile(source, bytes: Data(repeating: 1, count: 12))
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: "job-copy-failure"))
+        // A source changing after scan causes real CopyEngine size verification to fail.
+        try fixture.writeFile(source, bytes: Data(repeating: 1, count: 4))
+
+        var events: [ImportProgressFileEvent] = []
+        let result = try fixture.importEngine.importFiles(jobID: "job-copy-failure") { progress in
+            events.append(contentsOf: progress.recentFiles)
+        }
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: "job-copy-failure")
+        let expected: Int64 = 12, actual: Int64 = 4
+        let detail = L10n.tr("Copy verification failed: expected \(expected) bytes, found \(actual) bytes.")
+
+        #expect(result.failedFiles == 1)
+        #expect(result.importedFiles == 0)
+        #expect(files.first?.copyStatus == .failed)
+        #expect(files.first?.error == detail)
+        #expect(events.contains { $0.status == .failed && $0.detail == detail })
+        let destinationPath = try #require(files.first?.plannedDestinationPath)
+        #expect(!FileManager.default.fileExists(atPath: destinationPath))
+    }
+
     @Test("import emits byte progress speed and current file")
     func importEmitsProgressDetails() throws {
         let fixture = try Fixture()

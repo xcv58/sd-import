@@ -24,7 +24,7 @@ struct ManualImportView: View {
                 recoveryPage
             }
         }
-        .navigationTitle("Import")
+        .navigationTitle(L10n.tr("Import"))
         .onAppear {
             model.refreshAvailableSourceVolumes()
             model.validatePaths()
@@ -46,7 +46,7 @@ struct ManualImportView: View {
     private var sourcePage: some View {
         AppPage(status: visibleStatus) {
             VStack(alignment: .leading, spacing: 18) {
-                phaseHeading("Choose a source", detail: "Select a card or folder, then scan it before anything is copied.")
+                phaseHeading(L10n.tr("Choose a source"), detail: L10n.tr("Select a card or folder, then scan it before anything is copied."))
                 sourceSection
             }
         }
@@ -55,15 +55,15 @@ struct ManualImportView: View {
     private var scanningPage: some View {
         AppPage {
             VStack(alignment: .leading, spacing: 18) {
-                phaseHeading("Scanning source", detail: "Reading media and checking previous imports.")
+                phaseHeading(L10n.tr("Scanning source"), detail: L10n.tr("Reading media and checking previous imports."))
                 ImportSourceSummaryView(allowsChange: false)
-                AppSection("Scanning", systemImage: "magnifyingglass") {
+                AppSection(L10n.tr("Scanning"), systemImage: "magnifyingglass") {
                     ProgressView()
                         .controlSize(.small)
                     Button(role: .cancel) {
                         model.cancelImport()
                     } label: {
-                        Label("Cancel Scan", systemImage: "xmark.circle")
+                        Label(L10n.tr("Cancel Scan"), systemImage: "xmark.circle")
                     }
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("import.cancel.scan")
@@ -75,14 +75,14 @@ struct ManualImportView: View {
     private var preparingPage: some View {
         AppPage {
             VStack(alignment: .leading, spacing: 18) {
-                phaseHeading("Preparing import", detail: model.statusMessage)
-                AppSection("Preparing", systemImage: "gearshape.2") {
+                phaseHeading(L10n.tr("Preparing import"), detail: model.statusMessage)
+                AppSection(L10n.tr("Preparing"), systemImage: "gearshape.2") {
                     ProgressView()
                         .controlSize(.small)
                     Button(role: .cancel) {
                         model.cancelImport()
                     } label: {
-                        Label("Cancel", systemImage: "xmark.circle")
+                        Label(L10n.tr("Cancel"), systemImage: "xmark.circle")
                     }
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("import.cancel.preparation")
@@ -96,7 +96,7 @@ struct ManualImportView: View {
         if let progress = model.importProgress {
             AppPage {
                 VStack(alignment: .leading, spacing: 18) {
-                    phaseHeading("Copying files", detail: "Keep the source connected until copying finishes.")
+                    phaseHeading(L10n.tr("Copying files"), detail: L10n.tr("Keep the source connected until copying finishes."))
                     ImportProgressPanel(progress: progress) {
                         model.cancelImport()
                     }
@@ -113,10 +113,10 @@ struct ManualImportView: View {
             AppPage {
                 VStack(alignment: .leading, spacing: 18) {
                     phaseHeading(
-                        result.failedFiles == 0 ? "Import complete" : "Completed with errors",
+                        result.failedFiles == 0 ? L10n.tr("Import complete") : L10n.tr("Completed with errors"),
                         detail: result.failedFiles == 0
-                            ? "Your copied files are ready."
-                            : "Review the failed files before removing the source."
+                            ? L10n.tr("Your copied files are ready.")
+                            : L10n.tr("Review the failed files before removing the source.")
                     )
                     ImportResultView(result: result)
                 }
@@ -130,12 +130,12 @@ struct ManualImportView: View {
         AppPage {
             VStack(alignment: .leading, spacing: 18) {
                 phaseHeading(
-                    model.importUIPhase == .cancelled ? "Operation cancelled" : "Import needs attention",
+                    model.importUIPhase == .cancelled ? L10n.tr("Operation cancelled") : L10n.tr("Import needs attention"),
                     detail: model.importFailure?.message ?? model.statusMessage
                 )
 
                 AppSection(
-                    model.importUIPhase == .cancelled ? "Cancelled" : "Couldn’t Continue",
+                    model.importUIPhase == .cancelled ? L10n.tr("Cancelled") : L10n.tr("Couldn’t Continue"),
                     systemImage: model.importUIPhase == .cancelled ? "xmark.circle" : "exclamationmark.triangle"
                 ) {
                     Text(model.importFailure?.message ?? model.statusMessage)
@@ -144,7 +144,7 @@ struct ManualImportView: View {
 
                     HStack(spacing: 10) {
                         if model.importUIPhase == .failed {
-                            Button("Retry") {
+                            Button(L10n.tr("Retry")) {
                                 model.retryFailedImportOperation()
                             }
                             .buttonStyle(.borderedProminent)
@@ -180,20 +180,20 @@ struct ManualImportView: View {
 
     private var recoveryButtonTitle: String {
         if model.currentResult != nil {
-            return "Back to Receipt"
+            return L10n.tr("Back to Receipt")
         }
-        return model.currentSummary == nil ? "Back to Source" : "Back to Review"
+        return model.currentSummary == nil ? L10n.tr("Back to Source") : L10n.tr("Back to Review")
     }
 
     private var visibleStatus: String? {
-        guard model.statusMessage != "Ready", !model.statusMessage.isEmpty else {
+        guard model.statusMessage != L10n.tr("Ready"), !model.statusMessage.isEmpty else {
             return nil
         }
         return model.statusMessage
     }
 
     private var sourceSection: some View {
-        AppSection("Source", systemImage: "externaldrive") {
+        AppSection(L10n.tr("Source"), systemImage: "externaldrive") {
             SourceField()
 
             ViewThatFits(in: .horizontal) {
@@ -230,14 +230,14 @@ struct ManualImportView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(!model.canEjectSelectedSource)
-                .accessibilityHint("Safely unmounts all storage volumes on the selected source device")
+                .accessibilityHint(L10n.tr("Safely unmounts all storage volumes on the selected source device"))
             }
 
         }
     }
 
     private var scanButtonTitle: String {
-        model.currentSummary == nil ? "Scan Card" : "Scan Again"
+        model.currentSummary == nil ? L10n.tr("Scan Card") : L10n.tr("Scan Again")
     }
 }
 
@@ -274,9 +274,9 @@ struct ImportSourceSummaryView: View {
                 .padding(12)
                 .appCardSurface()
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel("Source")
+                .accessibilityLabel(L10n.tr("Source"))
             } else {
-                AppSection("Source", systemImage: "externaldrive") {
+                AppSection(L10n.tr("Source"), systemImage: "externaldrive") {
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 12) {
                             sourceIdentity
@@ -292,13 +292,13 @@ struct ImportSourceSummaryView: View {
                 }
             }
         }
-        .alert("Change source?", isPresented: $isConfirmingSourceChange) {
-            Button("Change Source") {
+        .alert(L10n.tr("Change source?"), isPresented: $isConfirmingSourceChange) {
+            Button(L10n.tr("Change Source")) {
                 model.sourcePathDidChange()
             }
-            Button("Keep Review", role: .cancel) {}
+            Button(L10n.tr("Keep Review"), role: .cancel) {}
         } message: {
-            Text("The current scan and review will be discarded. No copied files are deleted.")
+            Text(L10n.tr("The current scan and review will be discarded. No copied files are deleted."))
         }
     }
 
@@ -315,7 +315,7 @@ struct ImportSourceSummaryView: View {
                 .help(model.cardPath)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Source, \(sourceTitle), \(sourceDetail)")
+        .accessibilityLabel(L10n.tr("Source, \(sourceTitle), \(sourceDetail)"))
     }
 
     private var actions: some View {
@@ -324,7 +324,7 @@ struct ImportSourceSummaryView: View {
                 Button {
                     model.scan()
                 } label: {
-                    Label("Scan Again", systemImage: "arrow.clockwise")
+                    Label(L10n.tr("Scan Again"), systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
                 .disabled(!model.canScan)
@@ -334,14 +334,14 @@ struct ImportSourceSummaryView: View {
                 Button {
                     model.ejectSelectedSource()
                 } label: {
-                    Label("Eject", systemImage: "eject")
+                    Label(L10n.tr("Eject"), systemImage: "eject")
                 }
                 .buttonStyle(.bordered)
                 .disabled(!model.canEjectSelectedSource)
             }
 
             if allowsChange {
-                Button("Change…") {
+                Button(L10n.tr("Change…")) {
                     isConfirmingSourceChange = true
                 }
                 .buttonStyle(.bordered)
@@ -353,7 +353,7 @@ struct ImportSourceSummaryView: View {
     private var sourceTitle: String {
         model.selectedSourceVolume?.name
             ?? URL(fileURLWithPath: model.cardPath, isDirectory: true).lastPathComponent.nilIfBlank
-            ?? "Source Folder"
+            ?? L10n.tr("Source Folder")
     }
 
     private var sourceDetail: String {
@@ -361,7 +361,7 @@ struct ImportSourceSummaryView: View {
             return volume.detailText
         }
         if let summary = model.currentSummary {
-            return "\(summary.scannedFiles) scanned files · \(model.cardPath)"
+            return L10n.tr("\(summary.scannedFiles) scanned files · \(model.cardPath)")
         }
         return model.cardPath
     }
@@ -390,7 +390,7 @@ struct ImportDestinationFields: View {
             verticalSpacing: 12
         ) {
             GridRow {
-                Text("Shoot")
+                Text(L10n.tr("Shoot"))
                     .foregroundStyle(.secondary)
                     .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
                 ShootNameField(name: $model.location)
@@ -401,11 +401,11 @@ struct ImportDestinationFields: View {
                 switch model.destinationLayout {
                 case .singleLibrary:
                     GridRow {
-                        Text("Library")
+                        Text(L10n.tr("Library"))
                             .foregroundStyle(.secondary)
                             .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
                         FolderField(
-                            title: "Library",
+                            title: L10n.tr("Library"),
                             path: $model.photosPath,
                             validation: model.photosValidation,
                             recentChoices: model.recentPhotosPathSuggestions,
@@ -415,11 +415,11 @@ struct ImportDestinationFields: View {
                     }
                 case .separateMediaFolders:
                     GridRow {
-                        Text("Photos")
+                        Text(L10n.tr("Photos"))
                             .foregroundStyle(.secondary)
                             .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
                         FolderField(
-                            title: "Photos",
+                            title: L10n.tr("Photos"),
                             path: $model.photosPath,
                             validation: model.photosValidation,
                             recentChoices: model.recentPhotosPathSuggestions,
@@ -429,11 +429,11 @@ struct ImportDestinationFields: View {
                     }
 
                     GridRow {
-                        Text("Videos")
+                        Text(L10n.tr("Videos"))
                             .foregroundStyle(.secondary)
                             .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
                         FolderField(
-                            title: "Videos",
+                            title: L10n.tr("Videos"),
                             path: $model.videosPath,
                             validation: model.videosValidation,
                             recentChoices: model.recentVideosPathSuggestions,
@@ -446,11 +446,11 @@ struct ImportDestinationFields: View {
                 }
             case .photosOnly:
                 GridRow {
-                    Text("Photos")
+                    Text(L10n.tr("Photos"))
                         .foregroundStyle(.secondary)
                         .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
                     FolderField(
-                        title: "Photos",
+                        title: L10n.tr("Photos"),
                         path: $model.photosPath,
                         validation: model.photosValidation,
                         recentChoices: model.recentPhotosPathSuggestions,
@@ -460,11 +460,11 @@ struct ImportDestinationFields: View {
                 }
             case .videosOnly:
                 GridRow {
-                    Text("Videos")
+                    Text(L10n.tr("Videos"))
                         .foregroundStyle(.secondary)
                         .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
                     FolderField(
-                        title: "Videos",
+                        title: L10n.tr("Videos"),
                         path: $model.videosPath,
                         validation: model.videosValidation,
                         recentChoices: model.recentVideosPathSuggestions,
@@ -510,7 +510,7 @@ private struct SourceField: View {
     }
 
     private var sourcePathField: some View {
-        TextField("Card or source path", text: $model.cardPath)
+        TextField(L10n.tr("Card or source path"), text: $model.cardPath)
             .textFieldStyle(.roundedBorder)
             .lineLimit(1)
             .frame(minWidth: 180, maxWidth: 420)
@@ -526,27 +526,27 @@ private struct SourceField: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .help("Refresh mounted cards")
-            .accessibilityLabel("Refresh mounted cards")
+            .help(L10n.tr("Refresh mounted cards"))
+            .accessibilityLabel(L10n.tr("Refresh mounted cards"))
 
             Button {
                 model.chooseCardFolder()
             } label: {
                 Image(systemName: "folder")
             }
-            .help("Choose source folder")
-            .accessibilityLabel("Choose source folder")
+            .help(L10n.tr("Choose source folder"))
+            .accessibilityLabel(L10n.tr("Choose source folder"))
         }
     }
 
     private var sourceMenu: some View {
         Menu {
             if model.availableSourceVolumes.isEmpty && model.recentSourcePathSuggestions.isEmpty {
-                Text("No cards or recent sources")
+                Text(L10n.tr("No cards or recent sources"))
             }
 
             if !model.availableSourceVolumes.isEmpty {
-                Section("Mounted Cards") {
+                Section(L10n.tr("Mounted Cards")) {
                     ForEach(model.availableSourceDeviceGroups) { group in
                         ForEach(group.volumes) { volume in
                             Button {
@@ -564,7 +564,7 @@ private struct SourceField: View {
             }
 
             if !model.recentSourcePathSuggestions.isEmpty {
-                Section("Recent Sources") {
+                Section(L10n.tr("Recent Sources")) {
                     ForEach(model.recentSourcePathSuggestions) { suggestion in
                         Button {
                             model.selectSourcePath(suggestion.path)
@@ -585,7 +585,7 @@ private struct SourceField: View {
             Button {
                 isManagingRecentSources = true
             } label: {
-                Label("Manage Recent Sources...", systemImage: "slider.horizontal.3")
+                Label(L10n.tr("Manage Recent Sources..."), systemImage: "slider.horizontal.3")
             }
             .disabled(model.recentSourcePathSuggestions.isEmpty)
 
@@ -593,7 +593,7 @@ private struct SourceField: View {
                 Button {
                     model.restoreForgottenRecentPaths()
                 } label: {
-                    Label("Show Forgotten Folders Again", systemImage: "arrow.uturn.backward")
+                    Label(L10n.tr("Show Forgotten Folders Again"), systemImage: "arrow.uturn.backward")
                 }
             }
         } label: {
@@ -602,11 +602,11 @@ private struct SourceField: View {
                 .truncationMode(.tail)
                 .frame(maxWidth: 160, alignment: .leading)
         }
-        .help("Select source")
-        .accessibilityLabel("Select source")
+        .help(L10n.tr("Select source"))
+        .accessibilityLabel(L10n.tr("Select source"))
         .sheet(isPresented: $isManagingRecentSources) {
             RecentPathManagementSheet(
-                title: "Recent Sources",
+                title: L10n.tr("Recent Sources"),
                 choices: model.recentSourcePathSuggestions,
                 selectRecentPath: model.selectSourcePath,
                 forgetRecentPath: model.forgetRecentPath
@@ -615,7 +615,7 @@ private struct SourceField: View {
     }
 
     private var sourceMenuTitle: String {
-        model.selectedSourceVolume?.name ?? "Sources"
+        model.selectedSourceVolume?.name ?? L10n.tr("Sources")
     }
 }
 
@@ -649,10 +649,10 @@ private extension MountedVolume {
         if let usedCapacityBytes, let totalCapacityBytes {
             let used = ByteCountFormatter.string(fromByteCount: usedCapacityBytes, countStyle: .file)
             let total = ByteCountFormatter.string(fromByteCount: totalCapacityBytes, countStyle: .file)
-            return "\(available) free, \(used) used of \(total)"
+            return L10n.tr("\(available) free, \(used) used of \(total)")
         }
 
-        return "\(available) free"
+        return L10n.tr("\(available) free")
     }
 }
 
@@ -670,7 +670,7 @@ private struct FolderField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                TextField("\(title) folder path", text: $path)
+                TextField(L10n.tr("\(title) folder path"), text: $path)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1)
                     .frame(
@@ -680,7 +680,7 @@ private struct FolderField: View {
 
                 Menu {
                     if recentChoices.isEmpty {
-                        Text("No recent folders")
+                        Text(L10n.tr("No recent folders"))
                     } else {
                         ForEach(recentChoices) { suggestion in
                             Button {
@@ -701,7 +701,7 @@ private struct FolderField: View {
                     Button {
                         isManagingRecentFolders = true
                     } label: {
-                        Label("Manage Recent Folders...", systemImage: "slider.horizontal.3")
+                        Label(L10n.tr("Manage Recent Folders..."), systemImage: "slider.horizontal.3")
                     }
                     .disabled(recentChoices.isEmpty)
 
@@ -709,18 +709,18 @@ private struct FolderField: View {
                         Button {
                             model.restoreForgottenRecentPaths()
                         } label: {
-                            Label("Show Forgotten Folders Again", systemImage: "arrow.uturn.backward")
+                            Label(L10n.tr("Show Forgotten Folders Again"), systemImage: "arrow.uturn.backward")
                         }
                     }
                 } label: {
                     Image(systemName: "clock.arrow.circlepath")
                 }
-                .help("Choose recent \(title.lowercased()) folder")
-                .accessibilityLabel("Choose recent \(title.lowercased()) folder")
+                .help(L10n.tr("Choose recent \(title) folder"))
+                .accessibilityLabel(L10n.tr("Choose recent \(title) folder"))
                 .fixedSize()
                 .sheet(isPresented: $isManagingRecentFolders) {
                     RecentPathManagementSheet(
-                        title: "Recent \(title) Folders",
+                        title: L10n.tr("Recent \(title) Folders"),
                         choices: recentChoices,
                         selectRecentPath: selectRecentPath,
                         forgetRecentPath: model.forgetRecentPath
@@ -732,8 +732,8 @@ private struct FolderField: View {
                 } label: {
                     Image(systemName: "folder")
                 }
-                .help("Choose \(title.lowercased()) folder")
-                .accessibilityLabel("Choose \(title.lowercased()) folder")
+                .help(L10n.tr("Choose \(title) folder"))
+                .accessibilityLabel(L10n.tr("Choose \(title) folder"))
                 .fixedSize()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -761,14 +761,14 @@ private struct RecentPathManagementSheet: View {
 
                 Spacer()
 
-                Button("Done") {
+                Button(L10n.tr("Done")) {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
             }
 
             if choices.isEmpty {
-                ContentUnavailableView("No Recent Folders", systemImage: "clock.arrow.circlepath")
+                ContentUnavailableView(L10n.tr("No Recent Folders"), systemImage: "clock.arrow.circlepath")
                     .frame(maxWidth: .infinity, minHeight: 180)
             } else {
                 ScrollView {
@@ -834,7 +834,7 @@ private struct RecentPathManagementRow: View {
             Button {
                 selectRecentPath()
             } label: {
-                Label("Use", systemImage: "checkmark")
+                Label(L10n.tr("Use"), systemImage: "checkmark")
             }
             .disabled(!suggestion.isAvailable)
             .buttonStyle(.borderless)
@@ -842,7 +842,7 @@ private struct RecentPathManagementRow: View {
             Button(role: .destructive) {
                 forgetRecentPath()
             } label: {
-                Label("Forget", systemImage: "trash")
+                Label(L10n.tr("Forget"), systemImage: "trash")
             }
             .buttonStyle(.borderless)
         }
@@ -850,7 +850,7 @@ private struct RecentPathManagementRow: View {
     }
 
     private var detailText: String {
-        let usage = suggestion.choice.useCount == 1 ? "used once" : "used \(suggestion.choice.useCount) times"
+        let usage = suggestion.choice.useCount == 1 ? L10n.tr("used once") : L10n.tr("used \(suggestion.choice.useCount) times")
         return "\(suggestion.validation.message) · \(usage)"
     }
 }

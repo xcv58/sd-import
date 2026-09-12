@@ -28,7 +28,7 @@ struct SettingsView: View {
             .padding(.bottom, 24)
             .frame(maxWidth: 860, maxHeight: .infinity, alignment: .top)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .navigationTitle("Settings")
+            .navigationTitle(L10n.tr("Settings"))
             .onAppear {
                 model.validateDefaultPaths()
             }
@@ -67,14 +67,14 @@ struct SettingsView: View {
 
     private var mainWindowSettings: some View {
         VStack(spacing: 12) {
-            Picker("Settings section", selection: $selectedPane) {
-                Text("General").tag(SettingsPane.general)
-                Text("Advanced").tag(SettingsPane.advanced)
+            Picker(L10n.tr("Settings section"), selection: $selectedPane) {
+                Text(L10n.tr("General")).tag(SettingsPane.general)
+                Text(L10n.tr("Advanced")).tag(SettingsPane.advanced)
             }
             .labelsHidden()
             .pickerStyle(.segmented)
             .frame(width: 260)
-            .accessibilityLabel("Settings section")
+            .accessibilityLabel(L10n.tr("Settings section"))
 
             selectedForm
         }
@@ -95,10 +95,10 @@ struct SettingsView: View {
             LazyVStack(alignment: .leading, spacing: 22) {
                 settingsFeedbackCard
 
-                SettingsGroup("Default Destinations") {
+                SettingsGroup(L10n.tr("Default Destinations")) {
                     VStack(spacing: 0) {
                         FolderSettingRow(
-                            title: "Photos",
+                            title: L10n.tr("Photos"),
                             path: $model.importDefaults.photosPath,
                             validation: model.defaultPhotosValidation,
                             chooseAction: model.chooseDefaultPhotosFolder,
@@ -109,7 +109,7 @@ struct SettingsView: View {
                             .padding(.vertical, 12)
 
                         FolderSettingRow(
-                            title: "Videos",
+                            title: L10n.tr("Videos"),
                             path: $model.importDefaults.videosPath,
                             validation: model.defaultVideosValidation,
                             chooseAction: model.chooseDefaultVideosFolder,
@@ -118,9 +118,9 @@ struct SettingsView: View {
                     }
                 }
 
-                SettingsGroup("Appearance") {
-                    LabeledContent("Theme") {
-                        Picker("Theme", selection: $model.themePreference) {
+                SettingsGroup(L10n.tr("Appearance")) {
+                    LabeledContent(L10n.tr("Theme")) {
+                        Picker(L10n.tr("Theme"), selection: $model.themePreference) {
                             ForEach(AppThemePreference.allCases) { theme in
                                 Text(theme.settingsTitle).tag(theme)
                             }
@@ -134,20 +134,20 @@ struct SettingsView: View {
                     }
                 }
 
-                SettingsGroup("Import Behavior") {
+                SettingsGroup(L10n.tr("Import Behavior")) {
                     VStack(alignment: .leading, spacing: 0) {
                         VStack(alignment: .leading, spacing: 5) {
-                            Toggle("Prompt when a card is mounted", isOn: autoPromptBinding)
+                            Toggle(L10n.tr("Prompt when a card is mounted"), isOn: autoPromptBinding)
                                 .disabled(!model.backgroundPromptCanConfigure)
 
-                            Text("Runs a small background helper after login so \(AppDistribution.current.displayName) can notice newly mounted cards.")
+                            Text(L10n.tr("Runs a small background helper after login so \(AppDistribution.current.displayName) can notice newly mounted cards."))
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
 
                             HStack(spacing: 12) {
                                 AppStatusLabel(
-                                    title: "Background helper: \(model.backgroundPromptStatusTitle)",
+                                    title: L10n.tr("Background helper: \(model.backgroundPromptStatusTitle)"),
                                     systemImage: backgroundPromptStatusImage,
                                     role: backgroundPromptStatusRole
                                 )
@@ -156,15 +156,15 @@ struct SettingsView: View {
                                 Spacer()
 
                                 if !model.backgroundPromptCanConfigure {
-                                    Button(model.backgroundPromptApplicationOwnership.authoritativeApplicationPath == nil ? "Open Applications" : "Open Installed Copy") {
+                                    Button(model.backgroundPromptApplicationOwnership.authoritativeApplicationPath == nil ? L10n.tr("Open Applications") : L10n.tr("Open Installed Copy")) {
                                         model.openBackgroundPromptOwner()
                                     }
                                 } else if model.backgroundPromptServiceStatus == .requiresApproval {
-                                    Button("Open Login Items") {
+                                    Button(L10n.tr("Open Login Items")) {
                                         model.openBackgroundPromptSystemSettings()
                                     }
                                 } else if model.backgroundPromptNeedsAttention && model.backgroundPromptCanRepair {
-                                    Button("Repair") {
+                                    Button(L10n.tr("Repair")) {
                                         model.repairBackgroundPrompt()
                                     }
                                 }
@@ -183,12 +183,12 @@ struct SettingsView: View {
                                 .padding(.vertical, 12)
 
                             VStack(alignment: .leading, spacing: 5) {
-                                Toggle("Eject source device after a successful import", isOn: $model.ejectAfterSuccessfulImport)
+                                Toggle(L10n.tr("Eject source device after a successful import"), isOn: $model.ejectAfterSuccessfulImport)
                                     .onChange(of: model.ejectAfterSuccessfulImport) {
                                         model.savePreferences()
                                     }
 
-                                Text("After an error-free copy, ejects all removable storage volumes macOS identifies as belonging to the source device. Zero-copy scans still require manual ejection.")
+                                Text(L10n.tr("After an error-free copy, ejects all removable storage volumes macOS identifies as belonging to the source device. Zero-copy scans still require manual ejection."))
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -200,14 +200,14 @@ struct SettingsView: View {
 
                         VStack(alignment: .leading, spacing: 5) {
                             Toggle(
-                                "Store portable import receipts on source drives",
+                                L10n.tr("Store portable import receipts on source drives"),
                                 isOn: $model.portableImportReceiptsEnabled
                             )
                             .onChange(of: model.portableImportReceiptsEnabled) {
                                 model.savePreferences()
                             }
 
-                            Text("Writes a validated, hidden .sd-import ledger after successful copies and uses it to avoid duplicate imports on other Macs. Read-only sources continue without portable history.")
+                            Text(L10n.tr("Writes a validated, hidden .sd-import ledger after successful copies and uses it to avoid duplicate imports on other Macs. Read-only sources continue without portable history."))
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -216,18 +216,18 @@ struct SettingsView: View {
                 }
 
                 if purchaseManager.isMacAppStoreEdition {
-                    SettingsGroup("Purchase") {
+                    SettingsGroup(L10n.tr("Purchase")) {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(purchaseManager.allowanceSummary)
                                 .foregroundStyle(.secondary)
 
                             HStack(spacing: 10) {
-                                Button("Unlock Unlimited Imports…") {
+                                Button(L10n.tr("Unlock Unlimited Imports…")) {
                                     purchaseManager.isShowingPurchase = true
                                 }
                                 .disabled(purchaseManager.hasLifetimeUnlock)
 
-                                Button("Restore Purchases") {
+                                Button(L10n.tr("Restore Purchases")) {
                                     Task {
                                         await purchaseManager.restorePurchases()
                                     }
@@ -244,20 +244,20 @@ struct SettingsView: View {
                     }
                 }
 
-                SettingsGroup("Privacy & Support") {
+                SettingsGroup(L10n.tr("Privacy & Support")) {
                     HStack(spacing: 10) {
                         Link(
-                            "Privacy Policy",
+                            L10n.tr("Privacy Policy"),
                             destination: URL(string: "https://macos-automation.vercel.app/privacy.html")!
                         )
                         Link(
-                            "Support",
+                            L10n.tr("Support"),
                             destination: URL(string: "https://macos-automation.vercel.app/support.html")!
                         )
                     }
                 }
 
-                SettingsGroup("Updates") {
+                SettingsGroup(L10n.tr("Updates")) {
                     UpdaterSettingsView(appUpdater: appUpdater)
                 }
             }
@@ -270,9 +270,9 @@ struct SettingsView: View {
             LazyVStack(alignment: .leading, spacing: 22) {
                 settingsFeedbackCard
 
-                SettingsGroup("History") {
+                SettingsGroup(L10n.tr("History")) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Picker("Keep import history", selection: $model.historyRetention) {
+                        Picker(L10n.tr("Keep import history"), selection: $model.historyRetention) {
                             ForEach(RetentionPolicy.supportedValues, id: \.self) { policy in
                                 Text(policy.settingsTitle).tag(policy)
                             }
@@ -281,7 +281,7 @@ struct SettingsView: View {
                             model.savePreferences()
                         }
 
-                        Text("History records can be removed without deleting copied photos or videos.")
+                        Text(L10n.tr("History records can be removed without deleting copied photos or videos."))
                             .font(.callout)
                             .foregroundStyle(.secondary)
 
@@ -289,28 +289,28 @@ struct SettingsView: View {
                             Button {
                                 model.pruneHistory(dryRun: true)
                             } label: {
-                                Label("Preview Cleanup", systemImage: "doc.text.magnifyingglass")
+                                Label(L10n.tr("Preview Cleanup"), systemImage: "doc.text.magnifyingglass")
                             }
                             .disabled(!canCleanHistory)
 
                             Button(role: .destructive) {
                                 isShowingPruneConfirmation = true
                             } label: {
-                                Label("Delete Old History…", systemImage: "trash")
+                                Label(L10n.tr("Delete Old History…"), systemImage: "trash")
                             }
                             .disabled(!canCleanHistory)
-                            .alert("Delete old history?", isPresented: $isShowingPruneConfirmation) {
-                                Button("Delete Old History", role: .destructive) {
+                            .alert(L10n.tr("Delete old history?"), isPresented: $isShowingPruneConfirmation) {
+                                Button(L10n.tr("Delete Old History"), role: .destructive) {
                                     model.pruneHistory(dryRun: false)
                                 }
-                                Button("Cancel", role: .cancel) {}
+                                Button(L10n.tr("Cancel"), role: .cancel) {}
                             } message: {
-                                Text("This deletes old \(AppDistribution.current.displayName) job records using the current retention setting. Copied media files are not deleted.")
+                                Text(L10n.tr("This deletes old \(AppDistribution.current.displayName) job records using the current retention setting. Copied media files are not deleted."))
                             }
                         }
 
                         if model.historyRetention.dayCount == nil {
-                            Text("Choose a retention period to preview or delete old history.")
+                            Text(L10n.tr("Choose a retention period to preview or delete old history."))
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         }
@@ -425,7 +425,7 @@ private struct FolderSettingRow: View {
                     TextField(title, text: $path)
                         .labelsHidden()
                         .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("\(title) destination folder")
+                        .accessibilityLabel(L10n.tr("\(title) destination folder"))
 
                     FolderActionButtons(
                         title: title,
@@ -438,7 +438,7 @@ private struct FolderSettingRow: View {
                 DestinationStatusLine(result: validation)
 
                 if isLoadingCapacity {
-                    Label("Checking available space…", systemImage: "internaldrive")
+                    Label(L10n.tr("Checking available space…"), systemImage: "internaldrive")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 } else if let capacityText {
@@ -483,9 +483,9 @@ private struct FolderSettingRow: View {
         let available = ByteCountFormatter.string(fromByteCount: capacity.availableBytes, countStyle: .file)
         if let totalBytes = capacity.totalBytes {
             let total = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
-            capacityText = "\(available) available of \(total)"
+            capacityText = L10n.tr("\(available) available of \(total)")
         } else {
-            capacityText = "\(available) available"
+            capacityText = L10n.tr("\(available) available")
         }
     }
 }
@@ -500,17 +500,17 @@ private struct FolderActionButtons: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
                 Button(action: chooseAction) {
-                    Label("Choose…", systemImage: "folder.badge.plus")
+                    Label(L10n.tr("Choose…"), systemImage: "folder.badge.plus")
                 }
-                .help("Choose \(title.lowercased()) destination folder")
-                .accessibilityLabel("Choose \(title.lowercased()) destination folder")
+                .help(L10n.tr("Choose \(title) destination folder"))
+                .accessibilityLabel(L10n.tr("Choose \(title) destination folder"))
 
                 Button(action: revealAction) {
-                    Label("Reveal", systemImage: "magnifyingglass")
+                    Label(L10n.tr("Reveal"), systemImage: "magnifyingglass")
                 }
                 .disabled(!canReveal)
-                .help("Reveal \(title.lowercased()) destination folder in Finder")
-                .accessibilityLabel("Reveal \(title.lowercased()) destination folder in Finder")
+                .help(L10n.tr("Reveal \(title) destination folder in Finder"))
+                .accessibilityLabel(L10n.tr("Reveal \(title) destination folder in Finder"))
             }
             .fixedSize()
 
@@ -518,15 +518,15 @@ private struct FolderActionButtons: View {
                 Button(action: chooseAction) {
                     Image(systemName: "folder.badge.plus")
                 }
-                .help("Choose \(title.lowercased()) destination folder")
-                .accessibilityLabel("Choose \(title.lowercased()) destination folder")
+                .help(L10n.tr("Choose \(title) destination folder"))
+                .accessibilityLabel(L10n.tr("Choose \(title) destination folder"))
 
                 Button(action: revealAction) {
                     Image(systemName: "magnifyingglass")
                 }
                 .disabled(!canReveal)
-                .help("Reveal \(title.lowercased()) destination folder in Finder")
-                .accessibilityLabel("Reveal \(title.lowercased()) destination folder in Finder")
+                .help(L10n.tr("Reveal \(title) destination folder in Finder"))
+                .accessibilityLabel(L10n.tr("Reveal \(title) destination folder in Finder"))
             }
         }
         .accessibilityElement(children: .contain)
@@ -549,9 +549,9 @@ private struct DestinationStatusLine: View {
     private var message: String {
         switch result.status {
         case .empty:
-            return "Choose a folder"
+            return L10n.tr("Choose a folder")
         case .missing:
-            return "Unavailable"
+            return L10n.tr("Unavailable")
         default:
             return result.message
         }
@@ -582,11 +582,11 @@ private extension AppThemePreference {
     var settingsTitle: String {
         switch self {
         case .system:
-            return "System"
+            return L10n.tr("System")
         case .light:
-            return "Light"
+            return L10n.tr("Light")
         case .dark:
-            return "Dark"
+            return L10n.tr("Dark")
         }
     }
 }
@@ -595,9 +595,9 @@ private extension RetentionPolicy {
     var settingsTitle: String {
         switch self {
         case .days(let days):
-            return "\(days) days"
+            return L10n.tr("\(days) days")
         case .forever:
-            return "Forever"
+            return L10n.tr("Forever")
         }
     }
 }

@@ -50,11 +50,12 @@ public struct PortableImportReceiptSnapshot: Sendable {
     public var warning: String? {
         var warnings: [String] = []
         if invalidRecordCount > 0 {
-            let noun = invalidRecordCount == 1 ? "record" : "records"
-            warnings.append("Ignored \(invalidRecordCount) invalid or corrupted portable import \(noun)")
+            warnings.append(invalidRecordCount == 1
+                ? L10n.tr("Ignored 1 invalid or corrupted portable import record")
+                : L10n.tr("Ignored \(invalidRecordCount) invalid or corrupted portable import records"))
         }
         if advisoryLockUnavailable {
-            warnings.append("Portable import history cannot coordinate with other apps because this source does not support file locking")
+            warnings.append(L10n.tr("Portable import history cannot coordinate with other apps because this source does not support file locking"))
         }
         return warnings.isEmpty ? nil : warnings.joined(separator: ". ")
     }
@@ -78,7 +79,7 @@ struct PortableImportReceiptLedgerAppendResult: Sendable {
 
     var warning: String? {
         advisoryLockUnavailable
-            ? "Portable import history cannot coordinate with other apps because this source does not support file locking"
+            ? L10n.tr("Portable import history cannot coordinate with other apps because this source does not support file locking")
             : nil
     }
 }
@@ -95,19 +96,19 @@ public enum PortableImportReceiptLedgerError: LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .sourceUnavailable(let path):
-            return "The source is no longer available at \(path)"
+            return L10n.tr("The source is no longer available at \(path)")
         case .sourceNotDirectory(let path):
-            return "The source is not a directory at \(path)"
+            return L10n.tr("The source is not a directory at \(path)")
         case .ledgerTooLarge(let size):
-            return "The portable import ledger is too large (\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))"
+            return L10n.tr("The portable import ledger is too large (\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))")
         case .recordTooLarge(let size):
-            return "The portable import receipt is too large (\(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)))"
+            return L10n.tr("The portable import receipt is too large (\(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)))")
         case .invalidReceipt:
-            return "The portable import receipt contains invalid or inconsistent file identity data"
+            return L10n.tr("The portable import receipt contains invalid or inconsistent file identity data")
         case .ledgerIsNotAFile(let path):
-            return "The portable import ledger is not a regular file at \(path)"
+            return L10n.tr("The portable import ledger is not a regular file at \(path)")
         case .unsafeLedgerPath(let path):
-            return "The portable import ledger path is unsafe at \(path)"
+            return L10n.tr("The portable import ledger path is unsafe at \(path)")
         }
     }
 }

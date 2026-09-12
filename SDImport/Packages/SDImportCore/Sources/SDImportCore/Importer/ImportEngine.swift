@@ -84,7 +84,7 @@ public struct ImportEngine {
             } catch {
                 portableFingerprints.removeAll()
                 portableWritesAvailable = false
-                portableReceiptWarning = "Portable import history is unavailable: \(error.localizedDescription)"
+                portableReceiptWarning = L10n.tr("Portable import history is unavailable: \(error.localizedDescription)")
             }
         }
 
@@ -108,7 +108,7 @@ public struct ImportEngine {
                 return
             }
             guard validatedPortableIdentity(for: file) == identity else {
-                portableReceiptWarning = "Portable import history was not updated because the source changed during import"
+                portableReceiptWarning = L10n.tr("Portable import history was not updated because the source changed during import")
                 return
             }
             let portableFingerprint = PortableImportReceiptLedger.portableFingerprint(for: identity)
@@ -137,7 +137,7 @@ public struct ImportEngine {
                 }
             } catch {
                 portableWritesAvailable = false
-                portableReceiptWarning = "Portable import history could not be updated: \(error.localizedDescription)"
+                portableReceiptWarning = L10n.tr("Portable import history could not be updated: \(error.localizedDescription)")
             }
         }
 
@@ -449,15 +449,16 @@ public struct ImportEngine {
                     failedFiles += 1
                     doneFiles += 1
                     processedBytes += file.size
+                    let detail = L10n.errorMessage(for: error)
                     try jobRepository.updateFileCopyStatus(
                         id: fileID,
                         status: .failed,
-                        error: String(describing: error)
+                        error: detail
                     )
                     recordFileEvent(
                         file: file,
                         status: .failed,
-                        detail: String(describing: error),
+                        detail: detail,
                         destinationPath: destinationURL.path
                     )
                 }

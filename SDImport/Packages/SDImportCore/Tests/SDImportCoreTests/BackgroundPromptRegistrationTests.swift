@@ -348,7 +348,7 @@ struct BackgroundPromptRegistrationTests {
         let failedState = try #require(loadedState)
         #expect(
             BackgroundPromptHealth.effectiveError(appError: nil, agentState: failedState)
-                == "Could not launch the containing SD Import application"
+                == L10n.tr("Could not launch the containing SD Import application")
         )
         #expect(
             BackgroundPromptHealth.appErrorAfterRefresh(

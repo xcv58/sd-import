@@ -58,25 +58,25 @@ public enum ImportPlanDisposition: Hashable, Sendable {
     public var title: String {
         switch self {
         case .notReady:
-            return "Not ready"
+            return L10n.tr("Not ready")
         case .copied:
-            return "Copied"
+            return L10n.tr("Copied")
         case .unsupported:
-            return "Unsupported"
+            return L10n.tr("Unsupported")
         case .excluded:
-            return "Excluded"
+            return L10n.tr("Excluded")
         case .known(let source):
-            return source == .portableLedger ? "Other Mac" : "Known"
+            return source == .portableLedger ? L10n.tr("Other Mac") : L10n.tr("Known")
         case .noDestination:
-            return "No destination"
+            return L10n.tr("No destination")
         case .alreadyExists:
-            return "Already exists"
+            return L10n.tr("Already exists")
         case .rename:
-            return "Rename"
+            return L10n.tr("Rename")
         case .supportFile:
-            return "Support file"
+            return L10n.tr("Support file")
         case .copy:
-            return "Will copy"
+            return L10n.tr("Will copy")
         }
     }
 

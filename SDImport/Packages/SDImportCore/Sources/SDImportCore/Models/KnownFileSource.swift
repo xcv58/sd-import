@@ -8,11 +8,11 @@ public enum KnownFileSource: String, Codable, Hashable, Sendable {
     public var skippedStatusTitle: String {
         switch self {
         case .portableLedger:
-            return "Other Mac"
+            return L10n.tr("Other Mac")
         case .localLedger:
-            return "Known"
+            return L10n.tr("Known")
         case .destination:
-            return "Already Exists"
+            return L10n.tr("Already Exists")
         }
     }
 }

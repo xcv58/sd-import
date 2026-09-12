@@ -14,7 +14,7 @@ struct ImportProgressPanel: View {
     }
 
     var body: some View {
-        AppSection("Copy Monitor", systemImage: "speedometer") {
+        AppSection(L10n.tr("Copy Monitor"), systemImage: "speedometer") {
             HStack(alignment: .firstTextBaseline) {
                 Text(percentText)
                     .font(.headline)
@@ -33,20 +33,20 @@ struct ImportProgressPanel: View {
                 Button(role: .cancel) {
                     cancelAction()
                 } label: {
-                    Label("Cancel Copy", systemImage: "xmark.circle")
+                    Label(L10n.tr("Cancel Copy"), systemImage: "xmark.circle")
                 }
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("import.cancel.copy")
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], alignment: .leading, spacing: 12) {
-                ProgressMetric(title: "Data", value: copiedText)
-                ProgressMetric(title: "Speed", value: speedText)
-                ProgressMetric(title: "Remaining", value: remainingText)
-                ProgressMetric(title: "Files", value: fileCountText)
-                ProgressMetric(title: "Copied", value: "\(progress.importedFiles)")
-                ProgressMetric(title: "Skipped", value: "\(progress.skippedFiles)")
-                ProgressMetric(title: "Failed", value: "\(progress.failedFiles)")
+                ProgressMetric(title: L10n.tr("Data"), value: copiedText)
+                ProgressMetric(title: L10n.tr("Speed"), value: speedText)
+                ProgressMetric(title: L10n.tr("Remaining"), value: remainingText)
+                ProgressMetric(title: L10n.tr("Files"), value: fileCountText)
+                ProgressMetric(title: L10n.tr("Copied"), value: "\(progress.importedFiles)")
+                ProgressMetric(title: L10n.tr("Skipped"), value: "\(progress.skippedFiles)")
+                ProgressMetric(title: L10n.tr("Failed"), value: "\(progress.failedFiles)")
             }
 
             if let destinationSummary {
@@ -73,7 +73,7 @@ struct ImportProgressPanel: View {
 
             if !progress.recentFiles.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Recent Files")
+                    Text(L10n.tr("Recent Files"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -86,28 +86,28 @@ struct ImportProgressPanel: View {
     }
 
     private var copiedText: String {
-        "\(Self.bytes(progress.copiedBytes)) of \(Self.bytes(progress.totalBytes))"
+        L10n.tr("\(Self.bytes(progress.copiedBytes)) of \(Self.bytes(progress.totalBytes))")
     }
 
     private var speedText: String {
         guard progress.throughputBytesPerSecond > 1 else {
-            return "Estimating"
+            return L10n.tr("Estimating")
         }
         return "\(Self.bytes(Int64(progress.throughputBytesPerSecond)))/s"
     }
 
     private var remainingText: String {
         if progress.status == "completed" || progress.status == "completed_with_errors" || fractionComplete >= 1 {
-            return "Complete"
+            return L10n.tr("Complete")
         }
         guard let etaSeconds = progress.etaSeconds else {
-            return "Estimating"
+            return L10n.tr("Estimating")
         }
         return Self.duration(etaSeconds)
     }
 
     private var fileCountText: String {
-        "\(progress.doneFiles) of \(progress.totalFiles)"
+        L10n.tr("\(progress.doneFiles) of \(progress.totalFiles)")
     }
 
     private var destinationSummary: ProgressDestinationSummaryModel? {
@@ -140,23 +140,13 @@ struct ImportProgressPanel: View {
     }
 
     private static func duration(_ seconds: Double) -> String {
-        let rounded = max(0, Int(seconds.rounded(.up)))
-        if rounded < 1 {
-            return "<1s"
-        }
-        if rounded < 60 {
-            return "\(rounded)s"
-        }
-
-        let minutes = rounded / 60
-        let remainderSeconds = rounded % 60
-        if minutes < 60 {
-            return "\(minutes)m \(remainderSeconds)s"
-        }
-
-        let hours = minutes / 60
-        let remainderMinutes = minutes % 60
-        return "\(hours)h \(remainderMinutes)m"
+        guard seconds.isFinite else { return L10n.tr("Estimating") }
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .abbreviated
+        formatter.allowedUnits = seconds >= 3600 ? [.hour, .minute] : [.minute, .second]
+        formatter.maximumUnitCount = 2
+        formatter.zeroFormattingBehavior = .dropAll
+        return formatter.string(from: max(1, seconds.rounded(.up))) ?? L10n.tr("Estimating")
     }
 }
 
@@ -166,11 +156,11 @@ private struct ProgressDestinationSummaryModel {
     let allPaths: [String]
 
     var title: String {
-        count == 1 ? "Destination" : "\(count) destination folders"
+        count == 1 ? L10n.tr("Destination") : L10n.tr("\(count) destination folders")
     }
 
     var detail: String {
-        count <= 1 ? primaryPath : "\(primaryPath) (+\(count - 1) more)"
+        count <= 1 ? primaryPath : L10n.tr("\(primaryPath) (+\(count - 1) more)")
     }
 
     var helpText: String {
@@ -239,7 +229,7 @@ private struct ProgressFileEventRow: View {
                     Text(statusText)
                     Text(Self.bytes(event.size))
                     if let detail = event.detail, !detail.isEmpty {
-                        Text(detail)
+                        Text(L10n.storedMessage(detail))
                     }
                 }
                 .font(.caption2)
@@ -288,13 +278,13 @@ private struct ProgressFileEventRow: View {
     private var statusText: String {
         switch event.status {
         case .pending:
-            return "Pending"
+            return L10n.tr("Pending")
         case .copied:
-            return "Copied"
+            return L10n.tr("Copied")
         case .skipped:
-            return "Skipped"
+            return L10n.tr("Skipped")
         case .failed:
-            return "Failed"
+            return L10n.tr("Failed")
         }
     }
 

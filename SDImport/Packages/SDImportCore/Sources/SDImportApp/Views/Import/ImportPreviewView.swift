@@ -111,12 +111,12 @@ struct ImportPreviewView: View {
     private var reviewHeader: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Review import")
+                Text(L10n.tr("Review import"))
                     .font(.title2)
                     .fontWeight(.semibold)
                     .accessibilityFocused($reviewHeadingIsFocused)
                     .accessibilityIdentifier("import.phase.review.heading")
-                Text("Confirm what will be copied and where it will go.")
+                Text(L10n.tr("Confirm what will be copied and where it will go."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -135,7 +135,7 @@ struct ImportPreviewView: View {
     }
 
     private var importPlanCard: some View {
-        AppSection("Import Plan", systemImage: "list.bullet.rectangle") {
+        AppSection(L10n.tr("Import Plan"), systemImage: "list.bullet.rectangle") {
             reviewSummary
 
             if let mediaContent = model.mediaContentProfile {
@@ -184,8 +184,8 @@ struct ImportPreviewView: View {
     private func summaryPills(summary: ScanSummary?) -> some View {
         InfoPill(
             title: model.previewTotals.copyFiles == 1
-                ? "1 file ready"
-                : "\(model.previewTotals.copyFiles) files ready",
+                ? L10n.tr("1 file ready")
+                : L10n.tr("\(model.previewTotals.copyFiles) files ready"),
             systemImage: "arrow.down.circle",
             role: .success
         )
@@ -194,11 +194,11 @@ struct ImportPreviewView: View {
             systemImage: "externaldrive"
         )
         if let summary, summary.knownFiles > 0 {
-            InfoPill(title: "\(summary.knownFiles) known", systemImage: "checkmark.seal")
+            InfoPill(title: L10n.tr("\(summary.knownFiles) known"), systemImage: "checkmark.seal")
         }
         if model.previewAttentionCount > 0 {
             InfoPill(
-                title: "\(model.previewAttentionCount) attention",
+                title: L10n.tr("\(model.previewAttentionCount) attention"),
                 systemImage: "exclamationmark.triangle",
                 role: .warning
             )
@@ -206,8 +206,8 @@ struct ImportPreviewView: View {
         if model.previewDestinationIssueCount > 0 {
             InfoPill(
                 title: model.previewDestinationIssueCount == 1
-                    ? "1 destination issue"
-                    : "\(model.previewDestinationIssueCount) destination issues",
+                    ? L10n.tr("1 destination issue")
+                    : L10n.tr("\(model.previewDestinationIssueCount) destination issues"),
                 systemImage: "externaldrive.badge.exclamationmark",
                 role: .warning
             )
@@ -217,10 +217,10 @@ struct ImportPreviewView: View {
     private var importOptionControls: some View {
         VStack(alignment: .leading, spacing: 10) {
             optionRow(
-                "Copy",
+                L10n.tr("Copy"),
                 maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth
             ) {
-                Picker("Copy", selection: mediaSelectionBinding) {
+                Picker(L10n.tr("Copy"), selection: mediaSelectionBinding) {
                     ForEach(ImportMediaSelection.allCases) { selection in
                         Text(mediaSelectionTitle(selection))
                             .tag(selection)
@@ -234,10 +234,10 @@ struct ImportPreviewView: View {
 
             if showsMixedDestinationLayout {
                 optionRow(
-                    "Save to",
+                    L10n.tr("Save to"),
                     maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth
                 ) {
-                    Picker("Save to", selection: destinationLayoutBinding) {
+                    Picker(L10n.tr("Save to"), selection: destinationLayoutBinding) {
                         ForEach([ImportDestinationLayout.singleLibrary, .separateMediaFolders]) { layout in
                             Text(layout.displayTitle).tag(layout)
                         }
@@ -249,10 +249,10 @@ struct ImportPreviewView: View {
             }
 
             optionRow(
-                "Organize",
+                L10n.tr("Organize"),
                 maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth
             ) {
-                Picker("Organize", selection: folderGroupingBinding) {
+                Picker(L10n.tr("Organize"), selection: folderGroupingBinding) {
                     ForEach(ImportFolderGrouping.allCases) { grouping in
                         Text(grouping.displayTitle).tag(grouping)
                     }
@@ -317,13 +317,13 @@ struct ImportPreviewView: View {
         if !model.importDraftUsesDefaults {
             HStack(spacing: 8) {
                 AppStatusLabel(
-                    title: "These choices apply to this import only",
+                    title: L10n.tr("These choices apply to this import only"),
                     systemImage: "info.circle",
                     role: .info
                 )
                 .font(.caption)
 
-                Button("Use as Defaults") {
+                Button(L10n.tr("Use as Defaults")) {
                     model.saveImportDraftAsDefaults()
                 }
                 .buttonStyle(.bordered)
@@ -338,14 +338,14 @@ struct ImportPreviewView: View {
 
         if model.importMediaSelection == .videosOnly, unsupportedCount > 0 {
             Toggle(
-                "Include camera support files (\(unsupportedCount))",
+                L10n.tr("Include camera support files (\(unsupportedCount))"),
                 isOn: allSessionsBinding(\.includeSidecars)
             )
-            .help("Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups.")
+            .help(L10n.tr("Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups."))
         }
 
         if model.folderGrouping == .byDay, model.previewSessions.count > 1 {
-            DisclosureGroup("Customize Dates", isExpanded: $showsDateCustomization) {
+            DisclosureGroup(L10n.tr("Customize Dates"), isExpanded: $showsDateCustomization) {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach($model.previewSessions) { $session in
                         sessionEditor(session: $session)
@@ -363,19 +363,19 @@ struct ImportPreviewView: View {
                 Text(value.date)
                     .font(.system(.callout, design: .monospaced))
                     .frame(width: 96, alignment: .leading)
-                TextField("Folder label", text: session.label)
+                TextField(L10n.tr("Folder label"), text: session.label)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 260)
                 if value.photoCount > 0 {
                     mediaSessionControl(
-                        title: "Photos \(value.photoCount)",
+                        title: L10n.tr("Photos \(value.photoCount)"),
                         isGloballyIncluded: model.importMediaSelection.includes(.photo),
                         isIncluded: session.includePhotos
                     )
                 }
                 if value.videoCount > 0 {
                     mediaSessionControl(
-                        title: "Videos \(value.videoCount)",
+                        title: L10n.tr("Videos \(value.videoCount)"),
                         isGloballyIncluded: model.importMediaSelection.includes(.video),
                         isIncluded: session.includeVideos
                     )
@@ -385,19 +385,19 @@ struct ImportPreviewView: View {
             VStack(alignment: .leading, spacing: 7) {
                 Text(value.date)
                     .font(.system(.callout, design: .monospaced))
-                TextField("Folder label", text: session.label)
+                TextField(L10n.tr("Folder label"), text: session.label)
                     .textFieldStyle(.roundedBorder)
                 HStack(spacing: 12) {
                     if value.photoCount > 0 {
                         mediaSessionControl(
-                            title: "Photos \(value.photoCount)",
+                            title: L10n.tr("Photos \(value.photoCount)"),
                             isGloballyIncluded: model.importMediaSelection.includes(.photo),
                             isIncluded: session.includePhotos
                         )
                     }
                     if value.videoCount > 0 {
                         mediaSessionControl(
-                            title: "Videos \(value.videoCount)",
+                            title: L10n.tr("Videos \(value.videoCount)"),
                             isGloballyIncluded: model.importMediaSelection.includes(.video),
                             isIncluded: session.includeVideos
                         )
@@ -418,10 +418,10 @@ struct ImportPreviewView: View {
         if isGloballyIncluded {
             Toggle(title, isOn: isIncluded)
         } else {
-            Text("\(title) excluded")
+            Text(L10n.tr("\(title) excluded"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("\(title), excluded by Copy selection")
+                .accessibilityLabel(L10n.tr("\(title), excluded by Copy selection"))
         }
     }
 
@@ -432,7 +432,7 @@ struct ImportPreviewView: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
                     portableReceiptLabel(count: count)
-                    Button("Import Anyway") {
+                    Button(L10n.tr("Import Anyway")) {
                         model.importPortableKnownFilesAnyway()
                     }
                     .buttonStyle(.bordered)
@@ -440,7 +440,7 @@ struct ImportPreviewView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     portableReceiptLabel(count: count)
-                    Button("Import Anyway") {
+                    Button(L10n.tr("Import Anyway")) {
                         model.importPortableKnownFilesAnyway()
                     }
                     .buttonStyle(.bordered)
@@ -452,8 +452,8 @@ struct ImportPreviewView: View {
     private func portableReceiptLabel(count: Int) -> some View {
         AppStatusLabel(
             title: count == 1
-                ? "1 file was imported on another Mac"
-                : "\(count) files were imported on another Mac",
+                ? L10n.tr("1 file was imported on another Mac")
+                : L10n.tr("\(count) files were imported on another Mac"),
             systemImage: "externaldrive.badge.checkmark",
             role: .neutral
         )
@@ -464,7 +464,7 @@ struct ImportPreviewView: View {
     private var destinationTree: some View {
         if !model.previewDestinations.isEmpty || !model.previewSpaceRequirements.isEmpty {
             Divider()
-            Text("Destinations")
+            Text(L10n.tr("Destinations"))
                 .font(.subheadline)
                 .fontWeight(.semibold)
 
@@ -487,7 +487,7 @@ struct ImportPreviewView: View {
     }
 
     private var zeroCopyCard: some View {
-        AppSection("Nothing New", systemImage: "checkmark.seal") {
+        AppSection(L10n.tr("Nothing New"), systemImage: "checkmark.seal") {
             Text(zeroCopyTitle)
                 .font(.headline)
             Text(zeroCopyDetail)
@@ -507,14 +507,14 @@ struct ImportPreviewView: View {
 
             HStack(spacing: 8) {
                 if canRecoverPhotos {
-                    Button("Import Photos") {
+                    Button(L10n.tr("Import Photos")) {
                         selectFileFilter(.copy)
                         model.applyWorkflowProfile(.photoImport)
                     }
                     .buttonStyle(.bordered)
                 }
                 if canRecoverVideos {
-                    Button("Import Videos") {
+                    Button(L10n.tr("Import Videos")) {
                         selectFileFilter(.copy)
                         model.applyWorkflowProfile(.footageBackup)
                     }
@@ -551,7 +551,7 @@ struct ImportPreviewView: View {
             Group {
                 if filteredRows.isEmpty {
                     ContentUnavailableView(
-                        "No Matching Files",
+                        L10n.tr("No Matching Files"),
                         systemImage: "line.3.horizontal.decrease.circle"
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -562,7 +562,7 @@ struct ImportPreviewView: View {
                 }
             }
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Import file preview")
+            .accessibilityLabel(L10n.tr("Import file preview"))
 
             if filePageCount > 1 {
                 filePagination
@@ -600,7 +600,7 @@ struct ImportPreviewView: View {
 
     private var fileBrowserHeading: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Files")
+            Text(L10n.tr("Files"))
                 .font(.headline)
             Text(fileBrowserSubtitle)
                 .font(.caption)
@@ -609,14 +609,14 @@ struct ImportPreviewView: View {
     }
 
     private var fileBrowserSubtitle: String {
-        let count = "\(filteredRows.count) of \(model.previewRows.count)"
+        let count = L10n.tr("\(filteredRows.count) of \(model.previewRows.count)")
         return model.previewTotals.copyFiles == 0
-            ? "\(count) · Nothing selected"
+            ? L10n.tr("\(count) · Nothing selected")
             : count
     }
 
     private var filterPicker: some View {
-        Picker("File Filter", selection: fileFilterBinding) {
+        Picker(L10n.tr("File Filter"), selection: fileFilterBinding) {
             ForEach(ImportPreviewFileFilter.allCases) { filter in
                 Text(filterTitle(filter)).tag(filter)
             }
@@ -625,12 +625,12 @@ struct ImportPreviewView: View {
         .labelsHidden()
         .pickerStyle(.segmented)
         .frame(maxWidth: 430)
-        .accessibilityLabel("File filter")
+        .accessibilityLabel(L10n.tr("File filter"))
         .accessibilityIdentifier("import.review.file-filter")
     }
 
     private var filterMenu: some View {
-        Picker("File Filter", selection: fileFilterBinding) {
+        Picker(L10n.tr("File Filter"), selection: fileFilterBinding) {
             ForEach(ImportPreviewFileFilter.allCases) { filter in
                 Text(filterTitle(filter)).tag(filter)
             }
@@ -640,15 +640,15 @@ struct ImportPreviewView: View {
     }
 
     private var modePicker: some View {
-        Picker("Preview Mode", selection: $previewMode) {
-            Label("List", systemImage: "list.bullet").tag(ImportPreviewMode.list)
-            Label("Grid", systemImage: "square.grid.2x2").tag(ImportPreviewMode.grid)
+        Picker(L10n.tr("Preview Mode"), selection: $previewMode) {
+            Label(L10n.tr("List"), systemImage: "list.bullet").tag(ImportPreviewMode.list)
+            Label(L10n.tr("Grid"), systemImage: "square.grid.2x2").tag(ImportPreviewMode.grid)
         }
         .id("import-preview-mode-picker")
         .labelsHidden()
         .pickerStyle(.segmented)
         .frame(width: 120)
-        .accessibilityLabel("Preview mode")
+        .accessibilityLabel(L10n.tr("Preview mode"))
         .accessibilityIdentifier("import.review.preview-mode")
     }
 
@@ -673,12 +673,12 @@ struct ImportPreviewView: View {
                     presentQuickLook(for: row)
                 })
                 .contextMenu {
-                    Button("Quick Look") {
+                    Button(L10n.tr("Quick Look")) {
                         selectedRowID = row.id
                         presentQuickLook(for: row)
                     }
                 }
-                .accessibilityHint("Press Space for Quick Look")
+                .accessibilityHint(L10n.tr("Press Space for Quick Look"))
             }
         }
         .onKeyPress(.space) {
@@ -690,15 +690,15 @@ struct ImportPreviewView: View {
 
     private var fileListHeader: some View {
         HStack(spacing: 12) {
-            Text("Status")
+            Text(L10n.tr("Status"))
                 .frame(width: 112, alignment: .leading)
-            Text("File")
+            Text(L10n.tr("File"))
                 .frame(minWidth: 150, maxWidth: 240, alignment: .leading)
-            Text("Kind")
+            Text(L10n.tr("Kind"))
                 .frame(width: 72, alignment: .leading)
-            Text("Size")
+            Text(L10n.tr("Size"))
                 .frame(width: 80, alignment: .trailing)
-            Text("Destination")
+            Text(L10n.tr("Destination"))
                 .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
         }
         .font(.caption)
@@ -736,7 +736,7 @@ struct ImportPreviewView: View {
                     presentQuickLook(for: item.primaryRow)
                     return .handled
                 }
-                .accessibilityHint("Press Space for Quick Look")
+                .accessibilityHint(L10n.tr("Press Space for Quick Look"))
                 .accessibilityIdentifier("import.review.grid-item.\(item.primaryRow.id)")
             }
         }
@@ -758,34 +758,34 @@ struct ImportPreviewView: View {
                 filePage = max(0, currentFilePage - 1)
                 selectedRowID = nil
             } label: {
-                Label("Previous Page", systemImage: "chevron.left")
+                Label(L10n.tr("Previous Page"), systemImage: "chevron.left")
             }
             .labelStyle(.iconOnly)
             .disabled(currentFilePage == 0)
-            .help("Previous page")
+            .help(L10n.tr("Previous page"))
 
-            Text("Page \(currentFilePage + 1) of \(filePageCount)")
+            Text(L10n.tr("Page \(currentFilePage + 1) of \(filePageCount)"))
                 .monospacedDigit()
 
             Button {
                 filePage = min(filePageCount - 1, currentFilePage + 1)
                 selectedRowID = nil
             } label: {
-                Label("Next Page", systemImage: "chevron.right")
+                Label(L10n.tr("Next Page"), systemImage: "chevron.right")
             }
             .labelStyle(.iconOnly)
             .disabled(currentFilePage == filePageCount - 1)
-            .help("Next page")
+            .help(L10n.tr("Next page"))
         }
         .font(.caption)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("File pages")
+        .accessibilityLabel(L10n.tr("File pages"))
     }
 
     private var filePageRangeText: String {
         let start = currentFilePage * filePageSize + 1
         let end = min(start + filePageSize - 1, filteredRows.count)
-        return "Showing \(start)\u{2013}\(end) of \(filteredRows.count)"
+        return L10n.tr("Showing \(start)\u{2013}\(end) of \(filteredRows.count)")
     }
 
     private var fileFilterBinding: Binding<ImportPreviewFileFilter> {
@@ -862,11 +862,11 @@ struct ImportPreviewView: View {
         }
         switch model.importMediaSelection {
         case .photosAndVideos:
-            return "This source does not contain both photos and videos."
+            return L10n.tr("This source does not contain both photos and videos.")
         case .photosOnly:
-            return "No photos were found on this source."
+            return L10n.tr("No photos were found on this source.")
         case .videosOnly:
-            return "No videos were found on this source."
+            return L10n.tr("No videos were found on this source.")
         }
     }
 
@@ -889,22 +889,22 @@ struct ImportPreviewView: View {
             return selectedMediaAvailabilityMessage
         }
         if model.previewRows.contains(where: { $0.disposition == .excluded }) {
-            return "Current choices exclude every matching file"
+            return L10n.tr("Current choices exclude every matching file")
         }
         if model.previewRows.contains(where: { $0.isKnown }) {
-            return "No new files to copy"
+            return L10n.tr("No new files to copy")
         }
-        return "No files will be copied"
+        return L10n.tr("No files will be copied")
     }
 
     private var zeroCopyDetail: String {
         if let mediaContent = model.mediaContentProfile, mediaContent.supportedCount == 0 {
-            return "No supported photo or video files were found in this source."
+            return L10n.tr("No supported photo or video files were found in this source.")
         }
         if model.previewRows.contains(where: { $0.isKnown }) {
-            return "These files are already imported, already copied, or already present at the destination."
+            return L10n.tr("These files are already imported, already copied, or already present at the destination.")
         }
-        return "Change the selected media type, date customization, or destinations to continue."
+        return L10n.tr("Change the selected media type, date customization, or destinations to continue.")
     }
 
     private func mediaSelectionTitle(_ selection: ImportMediaSelection) -> String {
@@ -913,11 +913,11 @@ struct ImportPreviewView: View {
         }
         switch selection {
         case .photosAndVideos:
-            return "Photos + Videos"
+            return L10n.tr("Photos + Videos")
         case .photosOnly:
-            return "Photos (\(mediaContent.photoCount))"
+            return L10n.tr("Photos (\(mediaContent.photoCount))")
         case .videosOnly:
-            return "Videos (\(mediaContent.videoCount))"
+            return L10n.tr("Videos (\(mediaContent.videoCount))")
         }
     }
 
@@ -940,15 +940,15 @@ struct ImportPreviewView: View {
     private func mediaContentSummary(_ profile: MediaContentProfile) -> String {
         var parts: [String] = []
         if profile.photoCount > 0 {
-            parts.append("\(profile.photoCount) photos")
+            parts.append(L10n.tr("\(profile.photoCount) photos"))
         }
         if profile.videoCount > 0 {
-            parts.append("\(profile.videoCount) videos")
+            parts.append(L10n.tr("\(profile.videoCount) videos"))
         }
         if profile.sidecarCount > 0 {
-            parts.append("\(profile.sidecarCount) support files")
+            parts.append(L10n.tr("\(profile.sidecarCount) support files"))
         }
-        return parts.isEmpty ? "No supported media" : parts.joined(separator: " · ")
+        return parts.isEmpty ? L10n.tr("No supported media") : parts.joined(separator: " · ")
     }
 
     private func isMediaSelectionAvailable(_ selection: ImportMediaSelection) -> Bool {
@@ -995,25 +995,25 @@ struct ImportPreviewView: View {
     private func destinationRootTitle(for destination: ImportPreviewDestination) -> String {
         switch destination.root {
         case .library:
-            return "Library"
+            return L10n.tr("Library")
         case .photos:
-            return "Photos"
+            return L10n.tr("Photos")
         case .videos:
-            return "Videos"
+            return L10n.tr("Videos")
         case .other:
-            return "Destination"
+            return L10n.tr("Destination")
         }
     }
 
     private func spaceText(for requirement: ImportPreviewSpaceRequirement) -> String {
         let required = ByteCountFormatter.string(fromByteCount: requirement.requiredBytes, countStyle: .file)
         guard let availableBytes = requirement.availableBytes else {
-            return "Couldn’t check available space · \(required) planned"
+            return L10n.tr("Couldn’t check available space · \(required) planned")
         }
         let available = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
         return requirement.isSatisfied
-            ? "\(required) needed · \(available) available"
-            : "Not enough space: \(required) needed · \(available) available"
+            ? L10n.tr("\(required) needed · \(available) available")
+            : L10n.tr("Not enough space: \(required) needed · \(available) available")
     }
 
     private func visualItems(from rows: [ImportPreviewRow]) -> [ImportPreviewVisualItem] {
@@ -1087,21 +1087,21 @@ private struct ImportReviewPrimaryAction: View {
         .controlSize(.large)
         .keyboardShortcut(.defaultAction)
         .disabled(!model.canImportPlannedFiles)
-        .help(model.importReadinessMessage ?? "Start importing the reviewed files")
-        .accessibilityHint(model.importReadinessMessage ?? "Begins copying the reviewed files")
+        .help(model.importReadinessMessage ?? L10n.tr("Start importing the reviewed files"))
+        .accessibilityHint(model.importReadinessMessage ?? L10n.tr("Begins copying the reviewed files"))
         .accessibilityIdentifier("import.review.copy")
     }
 
     private var buttonTitle: String {
         guard model.previewTotals.copyFiles > 0 else {
-            return "Nothing to Import"
+            return L10n.tr("Nothing to Import")
         }
         if !purchaseManager.canStartImport {
-            return "Unlock Unlimited Imports"
+            return L10n.tr("Unlock Unlimited Imports")
         }
         return model.previewTotals.copyFiles == 1
-            ? "Import 1 File"
-            : "Import \(model.previewTotals.copyFiles) Files"
+            ? L10n.tr("Import 1 File")
+            : L10n.tr("Import \(model.previewTotals.copyFiles) Files")
     }
 }
 
@@ -1124,7 +1124,7 @@ private struct ImportReviewFooter: View {
             Spacer(minLength: 12)
 
             if model.canImportPlannedFiles {
-                Text("Press Return to start")
+                Text(L10n.tr("Press Return to start"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1141,16 +1141,16 @@ private struct ImportReviewFooter: View {
     private var summary: String {
         let bytes = ByteCountFormatter.string(fromByteCount: model.previewTotals.copyBytes, countStyle: .file)
         let files = model.previewTotals.copyFiles == 1
-            ? "1 file"
-            : "\(model.previewTotals.copyFiles) files"
+            ? L10n.tr("1 file")
+            : L10n.tr("\(model.previewTotals.copyFiles) files")
         let folders = model.previewDestinations.count == 1
-            ? "1 folder"
-            : "\(model.previewDestinations.count) folders"
+            ? L10n.tr("1 folder")
+            : L10n.tr("\(model.previewDestinations.count) folders")
         return "\(files) · \(bytes) · \(folders)"
     }
 
     private var statusTitle: String {
-        model.importReadinessMessage ?? "Ready to import"
+        model.importReadinessMessage ?? L10n.tr("Ready to import")
     }
 
     private var statusSystemImage: String {
@@ -1180,13 +1180,13 @@ private enum ImportPreviewFileFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all:
-            return "All"
+            return L10n.tr("All")
         case .copy:
-            return "Copy"
+            return L10n.tr("Copy")
         case .skipped:
-            return "Skipped"
+            return L10n.tr("Skipped")
         case .attention:
-            return "Attention"
+            return L10n.tr("Attention")
         }
     }
 
@@ -1212,7 +1212,7 @@ private struct PreviewStatusBadge: View {
             .font(.caption)
             .foregroundStyle(color)
             .lineLimit(1)
-            .accessibilityLabel("Status, \(row.status)")
+            .accessibilityLabel(L10n.tr("Status, \(row.status)"))
     }
 
     private var systemImage: String {
@@ -1303,7 +1303,7 @@ private struct DestinationTreeRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(rootTitle)
                     .fontWeight(.medium)
-                Text("└─ \(relativePath) · \(destination.fileCount) files · \(bytes)")
+                Text(L10n.tr("└─ \(relativePath) · \(destination.fileCount) files · \(bytes)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -1312,11 +1312,11 @@ private struct DestinationTreeRow: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(rootTitle), \(relativePath), \(destination.fileCount) files, \(bytes)")
+        .accessibilityLabel(L10n.tr("\(rootTitle), \(relativePath), \(destination.fileCount) files, \(bytes)"))
     }
 
     private var relativePath: String {
-        destination.relativePath.isEmpty ? "Root" : destination.relativePath
+        destination.relativePath.isEmpty ? L10n.tr("Root") : destination.relativePath
     }
 
     private var bytes: String {
@@ -1351,13 +1351,13 @@ private struct ImportPreviewVisualItem: Identifiable {
         switch rows.first?.visualGroupKind {
         case .rawJPEG:
             return rows.count == totalGroupCount
-                ? "RAW + JPEG · \(rows.count) files"
-                : "\(primaryRow.mediaKind.displayTitle) · \(rows.count) of \(totalGroupCount) paired files"
+                ? L10n.tr("RAW + JPEG · \(rows.count) files")
+                : L10n.tr("\(primaryRow.mediaKind.displayTitle) · \(rows.count) of \(totalGroupCount) paired files")
         case .videoSidecars:
             if rows.count == totalGroupCount {
-                return "Video + \(max(0, rows.count - 1)) sidecars"
+                return L10n.tr("Video + \(max(0, rows.count - 1)) sidecars")
             }
-            return "\(primaryRow.mediaKind.displayTitle) · \(rows.count) of \(totalGroupCount) grouped files"
+            return L10n.tr("\(primaryRow.mediaKind.displayTitle) · \(rows.count) of \(totalGroupCount) grouped files")
         case nil:
             return primaryRow.mediaKind.displayTitle
         }
@@ -1526,33 +1526,33 @@ private struct ImportFileInspector: View {
                     .textSelection(.enabled)
                 PreviewStatusBadge(row: row)
 
-                inspectorField("Type", value: row.mediaKind.displayTitle)
-                inspectorField("Capture Date", value: row.date)
+                inspectorField(L10n.tr("Type"), value: row.mediaKind.displayTitle)
+                inspectorField(L10n.tr("Capture Date"), value: L10n.storedMessage(row.date))
                 inspectorField(
-                    "Size",
+                    L10n.tr("Size"),
                     value: ByteCountFormatter.string(fromByteCount: row.size, countStyle: .file)
                 )
-                inspectorField("Source", value: row.sourcePath)
-                inspectorField("Destination", value: row.destinationPath ?? "No destination")
+                inspectorField(L10n.tr("Source"), value: row.sourcePath)
+                inspectorField(L10n.tr("Destination"), value: row.destinationPath ?? L10n.tr("No destination"))
 
                 if case .rename(let originalPath, let destinationPath, let reason) = row.disposition {
-                    inspectorField("Original Name", value: URL(fileURLWithPath: originalPath).lastPathComponent)
-                    inspectorField("Resolved Name", value: URL(fileURLWithPath: destinationPath).lastPathComponent)
+                    inspectorField(L10n.tr("Original Name"), value: URL(fileURLWithPath: originalPath).lastPathComponent)
+                    inspectorField(L10n.tr("Resolved Name"), value: URL(fileURLWithPath: destinationPath).lastPathComponent)
                     if let reason {
-                        inspectorField("Reason", value: reason)
+                        inspectorField(L10n.tr("Reason"), value: L10n.storedMessage(reason))
                     }
                 }
 
                 Button {
                     quickLookAction()
                 } label: {
-                    Label("Quick Look", systemImage: "eye")
+                    Label(L10n.tr("Quick Look"), systemImage: "eye")
                 }
                 .buttonStyle(.bordered)
             }
             .padding()
         }
-        .navigationTitle("File Details")
+        .navigationTitle(L10n.tr("File Details"))
     }
 
     private func inspectorField(_ title: String, value: String) -> some View {
@@ -1590,11 +1590,11 @@ extension ImportMediaSelection {
     var displayTitle: String {
         switch self {
         case .photosAndVideos:
-            return "Photos + Videos"
+            return L10n.tr("Photos + Videos")
         case .photosOnly:
-            return "Photos"
+            return L10n.tr("Photos")
         case .videosOnly:
-            return "Videos"
+            return L10n.tr("Videos")
         }
     }
 }
@@ -1603,11 +1603,11 @@ extension ImportDestinationLayout {
     var displayTitle: String {
         switch self {
         case .singleLibrary:
-            return "Same Library"
+            return L10n.tr("Same Library")
         case .separateMediaFolders:
-            return "Separate Folders"
+            return L10n.tr("Separate Folders")
         case .footageBackup:
-            return "Videos"
+            return L10n.tr("Videos")
         }
     }
 }
@@ -1616,9 +1616,9 @@ extension ImportFolderGrouping {
     var displayTitle: String {
         switch self {
         case .byDay:
-            return "By Capture Date"
+            return L10n.tr("By Capture Date")
         case .oneShootFolder:
-            return "One Shoot"
+            return L10n.tr("One Shoot")
         }
     }
 }
@@ -1627,11 +1627,11 @@ extension MediaKind {
     var displayTitle: String {
         switch self {
         case .photo:
-            return "Photo"
+            return L10n.tr("Photo")
         case .video:
-            return "Video"
+            return L10n.tr("Video")
         case .unsupported:
-            return "Other"
+            return L10n.tr("Other")
         }
     }
 }

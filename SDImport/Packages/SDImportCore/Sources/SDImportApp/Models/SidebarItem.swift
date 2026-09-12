@@ -1,3 +1,4 @@
+import SDImportCore
 import Foundation
 
 enum SidebarItem: String, CaseIterable, Identifiable {
@@ -10,11 +11,11 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .import:
-            return "Import"
+            return L10n.tr("Import")
         case .history:
-            return "History"
+            return L10n.tr("History")
         case .settings:
-            return "Settings"
+            return L10n.tr("Settings")
         }
     }
 

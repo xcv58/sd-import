@@ -70,7 +70,7 @@ struct SDImportApp: App {
             SidebarCommands()
 
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") {
+                Button(L10n.tr("Settings…")) {
                     showPanel(.settings)
                 }
                 .keyboardShortcut(",", modifiers: [.command])
@@ -81,48 +81,48 @@ struct SDImportApp: App {
             }
 
             CommandGroup(replacing: .newItem) {
-                Button("Import From Card...") {
+                Button(L10n.tr("Import From Card...")) {
                     showPanel(.import)
                 }
                 .keyboardShortcut("i", modifiers: [.command])
 
-                Button("Refresh History") {
+                Button(L10n.tr("Refresh History")) {
                     model.refreshHistory()
                 }
                 .keyboardShortcut("r", modifiers: [.command])
             }
 
             CommandGroup(before: .windowArrangement) {
-                Button("Show \(AppDistribution.current.displayName)") {
+                Button(L10n.tr("Show \(AppDistribution.current.displayName)")) {
                     showMainWindow()
                 }
             }
 
-            CommandMenu("Navigate") {
-                Button("Import") {
+            CommandMenu(L10n.tr("Navigate")) {
+                Button(L10n.tr("Import")) {
                     showPanel(.import)
                 }
                 .keyboardShortcut("1", modifiers: [.command])
 
-                Button("History") {
+                Button(L10n.tr("History")) {
                     showPanel(.history)
                 }
                 .keyboardShortcut("2", modifiers: [.command])
 
-                Button("Settings") {
+                Button(L10n.tr("Settings")) {
                     showPanel(.settings)
                 }
                 .keyboardShortcut("3", modifiers: [.command])
 
                 Divider()
 
-                Button("Next Panel") {
+                Button(L10n.tr("Next Panel")) {
                     model.selectNextPanel()
                     showMainWindow()
                 }
                 .keyboardShortcut(.tab, modifiers: [.control])
 
-                Button("Previous Panel") {
+                Button(L10n.tr("Previous Panel")) {
                     model.selectPreviousPanel()
                     showMainWindow()
                 }
@@ -130,13 +130,13 @@ struct SDImportApp: App {
             }
 
             CommandGroup(after: .help) {
-                Button("Diagnostics...") {
+                Button(L10n.tr("Diagnostics...")) {
                     openWindow(id: "diagnostics")
                 }
             }
         }
 
-        Window("Diagnostics", id: "diagnostics") {
+        Window(L10n.tr("Diagnostics"), id: "diagnostics") {
             DiagnosticsView()
                 .environmentObject(model)
                 .preferredColorScheme(model.themePreference.colorScheme)

@@ -13,7 +13,7 @@ struct HistoryView: View {
         AppPage(scrolls: false, maxContentWidth: .infinity) {
             historyLayout
         }
-        .navigationTitle("History")
+        .navigationTitle(L10n.tr("History"))
         .onAppear {
             let importJobs = model.jobs.filter(\.isImportHistoryEntry)
             let selectedJobIsVisible = model.selectedJobID.map { selectedJobID in
@@ -39,7 +39,7 @@ struct HistoryView: View {
     private var recentJobsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Label("Recent Imports", systemImage: "clock.arrow.circlepath")
+                Label(L10n.tr("Recent Imports"), systemImage: "clock.arrow.circlepath")
                     .font(.headline)
 
                 Spacer()
@@ -47,12 +47,12 @@ struct HistoryView: View {
                 Button {
                     model.refreshHistory()
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Label(L10n.tr("Refresh"), systemImage: "arrow.clockwise")
                 }
                 .labelStyle(.iconOnly)
                 .disabled(model.isHistoryLoading)
-                .help("Refresh history")
-                .accessibilityLabel("Refresh history")
+                .help(L10n.tr("Refresh history"))
+                .accessibilityLabel(L10n.tr("Refresh history"))
             }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
@@ -60,7 +60,7 @@ struct HistoryView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 10) {
-                Picker("Filter", selection: $filter) {
+                Picker(L10n.tr("Filter"), selection: $filter) {
                     ForEach(HistoryFilter.allCases) { filter in
                         Text(filter.title).tag(filter)
                     }
@@ -68,13 +68,13 @@ struct HistoryView: View {
                 .pickerStyle(.segmented)
 
                 if model.isHistoryLoading {
-                    ProgressView("Loading history...")
+                    ProgressView(L10n.tr("Loading history..."))
                         .controlSize(.small)
                 }
 
                 if filteredJobs.isEmpty {
                     ContentUnavailableView(
-                        model.isHistoryLoading ? "Loading History" : "No Import History",
+                        model.isHistoryLoading ? L10n.tr("Loading History") : L10n.tr("No Import History"),
                         systemImage: "clock.arrow.circlepath"
                     )
                     .frame(maxWidth: .infinity, minHeight: 220)
@@ -102,7 +102,7 @@ struct HistoryView: View {
     private var detailSection: some View {
         Group {
             if model.isHistoryDetailLoading {
-                ProgressView("Loading job...")
+                ProgressView(L10n.tr("Loading job..."))
                     .controlSize(.small)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -135,11 +135,11 @@ private enum HistoryFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all:
-            return "All"
+            return L10n.tr("All")
         case .success:
-            return "Success"
+            return L10n.tr("Success")
         case .failed:
-            return "Failed"
+            return L10n.tr("Failed")
         }
     }
 

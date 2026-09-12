@@ -23,7 +23,7 @@ struct HistoryDetailView: View {
                     filePage = 0
                 }
         } else {
-            ContentUnavailableView("No Job Selected", systemImage: "clock.arrow.circlepath")
+            ContentUnavailableView(L10n.tr("No Job Selected"), systemImage: "clock.arrow.circlepath")
                 .frame(maxWidth: .infinity, minHeight: 220)
         }
     }
@@ -36,13 +36,13 @@ struct HistoryDetailView: View {
             fileSection
         }
         .padding(.trailing, 8)
-        .alert("Forget imported files?", isPresented: $isShowingForgetConfirmation) {
-            Button("Forget Files", role: .destructive) {
+        .alert(L10n.tr("Forget imported files?"), isPresented: $isShowingForgetConfirmation) {
+            Button(L10n.tr("Forget Files"), role: .destructive) {
                 model.forgetImportedFiles(for: job)
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.tr("Cancel"), role: .cancel) {}
         } message: {
-            Text("\(AppDistribution.current.displayName) will keep the copied files and job history. Files first imported by this job can be imported again for another destination.")
+            Text(L10n.tr("\(AppDistribution.current.displayName) will keep the copied files and job history. Files first imported by this job can be imported again for another destination."))
         }
     }
 
@@ -78,7 +78,7 @@ struct HistoryDetailView: View {
             Button {
                 model.retrySelectedJob()
             } label: {
-                Label("Retry", systemImage: "arrow.counterclockwise")
+                Label(L10n.tr("Retry"), systemImage: "arrow.counterclockwise")
             }
             .disabled(model.isWorking || !job.canRetryImport)
 
@@ -90,11 +90,11 @@ struct HistoryDetailView: View {
                 Button(role: .destructive) {
                     isShowingForgetConfirmation = true
                 } label: {
-                    Label("Forget Files…", systemImage: "trash")
+                    Label(L10n.tr("Forget Files…"), systemImage: "trash")
                 }
                 .disabled(model.isWorking || (job.importedFiles == 0 && files.allSatisfy { $0.copyStatus != .copied }))
             } label: {
-                Label("More", systemImage: "ellipsis.circle")
+                Label(L10n.tr("More"), systemImage: "ellipsis.circle")
             }
         }
         .buttonStyle(.bordered)
@@ -106,17 +106,17 @@ struct HistoryDetailView: View {
             Button {
                 model.copySummary(for: job)
             } label: {
-                Label("Copy Summary", systemImage: "doc.on.doc")
+                Label(L10n.tr("Copy Summary"), systemImage: "doc.on.doc")
             }
             Button {
                 model.exportSummary(for: job)
             } label: {
-                Label("Export Summary", systemImage: "square.and.arrow.up")
+                Label(L10n.tr("Export Summary"), systemImage: "square.and.arrow.up")
             }
             Button {
                 model.viewReport(for: job)
             } label: {
-                Label("View Report", systemImage: "doc.text.magnifyingglass")
+                Label(L10n.tr("View Report"), systemImage: "doc.text.magnifyingglass")
             }
             .disabled(job.summaryMarkdownPath == nil && job.summaryJSONPath == nil)
         }
@@ -124,12 +124,12 @@ struct HistoryDetailView: View {
 
     private func metrics(_ job: ImportJob) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 10)], alignment: .leading, spacing: 10) {
-            MetricView(title: "Scanned", value: job.scannedFiles)
-            MetricView(title: "New", value: job.newFiles)
-            MetricView(title: "Known", value: job.knownFiles)
-            MetricView(title: "Conflicts", value: job.conflictFiles)
-            MetricView(title: "Imported", value: job.importedFiles)
-            MetricView(title: "Failed", value: job.failedFiles)
+            MetricView(title: L10n.tr("Scanned"), value: job.scannedFiles)
+            MetricView(title: L10n.tr("New"), value: job.newFiles)
+            MetricView(title: L10n.tr("Known"), value: job.knownFiles)
+            MetricView(title: L10n.tr("Conflicts"), value: job.conflictFiles)
+            MetricView(title: L10n.tr("Imported"), value: job.importedFiles)
+            MetricView(title: L10n.tr("Failed"), value: job.failedFiles)
         }
         .padding(12)
         .appCardSurface()
@@ -155,7 +155,7 @@ struct HistoryDetailView: View {
             }
 
             if files.isEmpty {
-                ContentUnavailableView("No Files", systemImage: "doc")
+                ContentUnavailableView(L10n.tr("No Files"), systemImage: "doc")
                     .frame(maxWidth: .infinity, minHeight: 140)
             } else {
                 List {
@@ -174,16 +174,16 @@ struct HistoryDetailView: View {
 
                 if files.count > Self.fileBatchSize {
                     HStack(spacing: 10) {
-                        Button("Previous") {
+                        Button(L10n.tr("Previous")) {
                             filePage = max(0, displayedPage - 1)
                         }
                         .disabled(displayedPage == 0)
 
-                        Text("Page \(displayedPage + 1) of \(lastPage + 1)")
+                        Text(L10n.tr("Page \(displayedPage + 1) of \(lastPage + 1)"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        Button("Next") {
+                        Button(L10n.tr("Next")) {
                             filePage = min(lastPage, displayedPage + 1)
                         }
                         .disabled(displayedPage == lastPage)
@@ -203,7 +203,7 @@ struct HistoryDetailView: View {
         totalCount: Int
     ) -> some View {
         HStack(spacing: 8) {
-            Text("Files")
+            Text(L10n.tr("Files"))
                 .font(.headline)
                 .foregroundStyle(.primary)
             Text(
@@ -220,7 +220,7 @@ struct HistoryDetailView: View {
     }
 
     private var fileFilterControl: some View {
-        Picker("File Filter", selection: fileFilterBinding) {
+        Picker(L10n.tr("File Filter"), selection: fileFilterBinding) {
             ForEach(HistoryFileFilter.allCases) { filter in
                 Text(filter.title).tag(filter)
             }
@@ -228,7 +228,7 @@ struct HistoryDetailView: View {
         .labelsHidden()
         .pickerStyle(.menu)
         .frame(width: 120)
-        .accessibilityLabel("File filter")
+        .accessibilityLabel(L10n.tr("File filter"))
     }
 
     private func fileCountText(
@@ -238,14 +238,15 @@ struct HistoryDetailView: View {
         totalCount: Int
     ) -> String {
         if filteredCount > Self.fileBatchSize {
-            let filteredSuffix = filteredCount == totalCount ? "" : " matching"
             let lastVisibleIndex = firstVisibleIndex + visibleCount - 1
-            return "Showing \(firstVisibleIndex)–\(lastVisibleIndex) of \(filteredCount)\(filteredSuffix)"
+            return filteredCount == totalCount
+                ? L10n.tr("Showing \(firstVisibleIndex)–\(lastVisibleIndex) of \(filteredCount)")
+                : L10n.tr("Showing \(firstVisibleIndex)–\(lastVisibleIndex) of \(filteredCount) matching files")
         }
         if filteredCount == totalCount {
-            return totalCount == 1 ? "1 file" : "\(totalCount) files"
+            return totalCount == 1 ? L10n.tr("1 file") : L10n.tr("\(totalCount) files")
         }
-        return "\(filteredCount) of \(totalCount)"
+        return L10n.tr("\(filteredCount) of \(totalCount)")
     }
 
     private var fileFilterBinding: Binding<HistoryFileFilter> {
@@ -269,13 +270,13 @@ private enum HistoryFileFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all:
-            return "All"
+            return L10n.tr("All")
         case .copied:
-            return "Copied"
+            return L10n.tr("Copied")
         case .skipped:
-            return "Skipped"
+            return L10n.tr("Skipped")
         case .failed:
-            return "Failed"
+            return L10n.tr("Failed")
         }
     }
 
@@ -346,7 +347,7 @@ private struct HistoryFileRow: View {
                 .help(file.relativePath ?? file.sourcePath)
 
                 if let error = file.error, !error.isEmpty {
-                    Text(error)
+                    Text(L10n.storedMessage(error))
                         .font(.caption)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
@@ -361,10 +362,10 @@ private struct HistoryFileRow: View {
                 Button {
                     revealAction(revealPath)
                 } label: {
-                    Label("Reveal", systemImage: "arrow.up.right.square")
+                    Label(L10n.tr("Reveal"), systemImage: "arrow.up.right.square")
                 }
                 .buttonStyle(.bordered)
-                .accessibilityLabel("Reveal \(file.filename)")
+                .accessibilityLabel(L10n.tr("Reveal \(file.filename)"))
             }
         }
         .padding(.vertical, 6)
@@ -397,13 +398,13 @@ private struct HistoryFileRow: View {
     private var statusTitle: String {
         switch file.copyStatus {
         case .pending:
-            return "Pending"
+            return L10n.tr("Pending")
         case .copied:
-            return "Copied"
+            return L10n.tr("Copied")
         case .skipped:
-            return file.knownSource?.skippedStatusTitle ?? "Skipped"
+            return file.knownSource?.skippedStatusTitle ?? L10n.tr("Skipped")
         case .failed:
-            return "Failed"
+            return L10n.tr("Failed")
         }
     }
 
@@ -422,7 +423,7 @@ private struct HistoryFileRow: View {
             parts.append(completedAt.formatted(date: .abbreviated, time: .shortened))
         }
         if let error = file.error, !error.isEmpty {
-            parts.append(error)
+            parts.append(L10n.storedMessage(error))
         }
         return parts.joined(separator: ", ")
     }

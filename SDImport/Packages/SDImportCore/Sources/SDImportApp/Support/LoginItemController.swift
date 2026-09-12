@@ -220,11 +220,11 @@ private enum LoginItemControllerError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingEmbeddedHelper:
-            return "The background helper is missing. Reinstall \(AppDistribution.current.displayName) in Applications."
+            return L10n.tr("The background helper is missing. Reinstall \(AppDistribution.current.displayName) in Applications.")
         case .installationRequired:
-            return "Move \(AppDistribution.current.displayName) to Applications before enabling background prompts."
+            return L10n.tr("Move \(AppDistribution.current.displayName) to Applications before enabling background prompts.")
         case .managedByAnotherCopy:
-            return "Background prompts are managed by the installed copy of \(AppDistribution.current.displayName)."
+            return L10n.tr("Background prompts are managed by the installed copy of \(AppDistribution.current.displayName).")
         }
     }
 }

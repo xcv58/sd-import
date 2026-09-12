@@ -32,6 +32,11 @@ https://github.com/xcv58/sd-import/releases/latest
 Full user instructions are in [docs/user-guide.md](docs/user-guide.md). Privacy
 details are in [docs/privacy.md](docs/privacy.md).
 
+Both native editions support English, Simplified Chinese, Traditional Chinese,
+Japanese, Korean, German, French, Spanish, Brazilian Portuguese, and Italian.
+The interface follows your macOS language preference, with English as the
+fallback. See [language support](docs/localization.md) for details.
+
 ## Support
 
 - Public support and bug reports: GitHub Issues.

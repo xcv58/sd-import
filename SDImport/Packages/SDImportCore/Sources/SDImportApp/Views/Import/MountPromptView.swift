@@ -49,22 +49,22 @@ struct MountPromptView: View {
         if AppDistribution.current == .macAppStore {
             if deviceGroup.isMultiVolume {
                 let names = ListFormatter.localizedString(byJoining: deviceGroup.volumes.map(\.name))
-                return "\(AppDistribution.current.displayName) detected \(deviceGroup.displayName), with \(deviceGroup.volumes.count) storage volumes: \(names). It has not scanned their contents. Allow a scan of \(volume.name)?"
+                return L10n.tr("\(AppDistribution.current.displayName) detected \(deviceGroup.displayName), with \(deviceGroup.volumes.count) storage volumes: \(names). It has not scanned their contents. Allow a scan of \(volume.name)?")
             }
-            return "\(AppDistribution.current.displayName) detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?"
+            return L10n.tr("\(AppDistribution.current.displayName) detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?")
         }
         if deviceGroup.isMultiVolume {
             let names = ListFormatter.localizedString(byJoining: deviceGroup.volumes.map(\.name))
-            return "\(deviceGroup.displayName) exposes \(deviceGroup.volumes.count) storage volumes: \(names). Scan \(volume.name) now; the source menu keeps all volumes available."
+            return L10n.tr("\(deviceGroup.displayName) exposes \(deviceGroup.volumes.count) storage volumes: \(names). Scan \(volume.name) now; the source menu keeps all volumes available.")
         }
-        return "\(AppDistribution.current.displayName) found supported media on this volume. Scan it now to preview what will be copied."
+        return L10n.tr("\(AppDistribution.current.displayName) found supported media on this volume. Scan it now to preview what will be copied.")
     }
 
     private var skipButtonTitle: String {
-        AppDistribution.current == .macAppStore ? "Don't Scan" : "Skip"
+        AppDistribution.current == .macAppStore ? L10n.tr("Don't Scan") : L10n.tr("Skip")
     }
 
     private var scanButtonTitle: String {
-        AppDistribution.current == .macAppStore ? "Allow Scan" : "Scan \(volume.name)"
+        AppDistribution.current == .macAppStore ? L10n.tr("Allow Scan") : L10n.tr("Scan \(volume.name)")
     }
 }

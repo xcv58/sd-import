@@ -4,7 +4,7 @@ set -euo pipefail
 MODE="${1:-run}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PACKAGE_DIR="$ROOT_DIR/SDImport/Packages/SDImportCore"
-DIST_DIR="$ROOT_DIR/dist"
+DIST_DIR="${SDIMPORT_DIST_DIR:-$ROOT_DIR/dist}"
 APP_NAME="SD Import"
 PROCESS_NAME="SDImportApp"
 AGENT_PROCESS_NAME="SDImportAgent"
@@ -76,14 +76,25 @@ stage_app() {
   local build_dir
   local sparkle_framework
   local sparkle_plist
+  local localization_bundle
+  local localization_regions
   build_dir="$(swift build --package-path "$PACKAGE_DIR" --configuration "$BUILD_CONFIGURATION" --show-bin-path)"
   build_binary="$build_dir/$PROCESS_NAME"
   sparkle_framework="$build_dir/Sparkle.framework"
+  localization_bundle="$build_dir/SDImportCore_SDImportCore.bundle"
+  test -d "$localization_bundle"
+  localization_regions="$(python3 - "$PACKAGE_DIR/Sources/SDImportCore/Resources" <<'PYCODE'
+import pathlib, sys
+for folder in sorted(pathlib.Path(sys.argv[1]).glob("*.lproj")):
+    print("    <string>" + folder.stem + "</string>")
+PYCODE
+)"
 
   rm -rf "$APP_BUNDLE"
   mkdir -p "$APP_MACOS"
   mkdir -p "$APP_FRAMEWORKS"
   mkdir -p "$APP_RESOURCES"
+  /usr/bin/ditto "$localization_bundle" "$APP_RESOURCES/SDImportCore_SDImportCore.bundle"
   cp "$build_binary" "$APP_BINARY"
   chmod +x "$APP_BINARY"
   if [[ -d "$sparkle_framework" ]]; then
@@ -110,6 +121,12 @@ PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+$localization_regions
+  </array>
   <key>CFBundleExecutable</key>
   <string>$PROCESS_NAME</string>
   <key>CFBundleIdentifier</key>
@@ -150,6 +167,8 @@ $sparkle_plist
 PLIST
 
   mkdir -p "$AGENT_MACOS"
+  mkdir -p "$AGENT_CONTENTS/Resources"
+  /usr/bin/ditto "$localization_bundle" "$AGENT_CONTENTS/Resources/SDImportCore_SDImportCore.bundle"
   cp "$build_dir/$AGENT_PROCESS_NAME" "$AGENT_BINARY"
   chmod +x "$AGENT_BINARY"
 
@@ -158,6 +177,12 @@ PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+$localization_regions
+  </array>
   <key>CFBundleExecutable</key>
   <string>$AGENT_PROCESS_NAME</string>
   <key>CFBundleIdentifier</key>
@@ -189,7 +214,9 @@ open_app() {
   /usr/bin/open -n "$APP_BUNDLE"
 }
 
-pkill -x "$PROCESS_NAME" >/dev/null 2>&1 || true
+if [[ "${SDIMPORT_SKIP_STOP:-0}" != "1" ]]; then
+  pkill -x "$PROCESS_NAME" >/dev/null 2>&1 || true
+fi
 
 case "$MODE" in
   run)
