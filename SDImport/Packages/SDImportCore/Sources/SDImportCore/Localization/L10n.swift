@@ -61,13 +61,23 @@ public enum L10n {
     /// Explicit selection supports deterministic tests and bundled-resource validation.
     /// Normal app presentation uses the system's preferred supported language.
     static func tr(_ value: String.LocalizationValue, language: String, locale: Locale? = nil) -> String {
-        let selected = Bundle.preferredLocalizations(
-            from: supportedLanguages, forPreferences: [language, "en"]
-        ).first ?? "en"
-        guard let url = resourceBundle.url(forResource: selected, withExtension: "lproj"),
-              let bundle = Bundle(url: url) else {
+        guard let bundle = localizationBundle(for: language) else {
             return String(localized: value, bundle: resourceBundle)
         }
         return String(localized: value, bundle: bundle, locale: locale ?? Locale(identifier: language))
+    }
+
+    static func localizationBundle(for language: String, in bundle: Bundle = resourceBundle) -> Bundle? {
+        let selected = Bundle.preferredLocalizations(
+            from: supportedLanguages, forPreferences: [language, "en"]
+        ).first ?? "en"
+        // SwiftPM versions differ in whether they preserve casing in lproj names.
+        // Bundle resource lookup needs the spelling actually present in the bundle.
+        guard let resourceLanguage = bundle.localizations.first(where: {
+            $0.caseInsensitiveCompare(selected) == .orderedSame
+        }), let url = bundle.url(forResource: resourceLanguage, withExtension: "lproj") else {
+            return nil
+        }
+        return Bundle(url: url)
     }
 }

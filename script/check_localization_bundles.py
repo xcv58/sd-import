@@ -87,12 +87,16 @@ def verify(app):
             assert set(info['CFBundleLocalizations']) == LANGUAGES, f'{target}: advertised languages'
             resource = target / 'Contents/Resources/SDImportCore_SDImportCore.bundle'
             assert resource.is_dir(), f'{target}: missing shared localization bundle'
-            folders = {p.stem for p in resource.rglob('*.lproj')}
-            assert folders == LANGUAGES, f'{target}: missing language resources: {LANGUAGES - folders}'
-            for folder in resource.rglob('*.lproj'):
+            # Stable SwiftPM lowercases region/script subtags in packaged folders.
+            source_languages = {language.casefold(): language for language in LANGUAGES}
+            folders = list(resource.rglob('*.lproj'))
+            packaged_languages = {folder.stem.casefold() for folder in folders}
+            assert packaged_languages == set(source_languages), f'{target}: unexpected language resources: {packaged_languages}'
+            assert len(folders) == len(LANGUAGES), f'{target}: duplicate language resources'
+            for folder in folders:
                 assert (folder / 'Localizable.strings').is_file()
                 assert (folder / 'Localizable.stringsdict').is_file()
-                source_folder = RESOURCES / folder.name
+                source_folder = RESOURCES / f'{source_languages[folder.stem.casefold()]}.lproj'
                 packaged_strings = json.loads(subprocess.check_output([
                     'plutil', '-convert', 'json', '-o', '-', str(folder / 'Localizable.strings'),
                 ]))
