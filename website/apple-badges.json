@@ -1,0 +1,72 @@
+{
+  "en": {
+    "url": "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/en-us",
+    "path": "docs/assets/badges/mac-app-store-en-20260912.svg",
+    "sha256": "15111cd04380b58d95307dcb07f0b6b06304dbc7504c57fd9cdbf0a2f78e3a92",
+    "width": "156.10054",
+    "height": "40"
+  },
+  "zh-Hans": {
+    "url": "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/zh-cn",
+    "path": "docs/assets/badges/mac-app-store-zh-Hans-20260912.svg",
+    "sha256": "41b614615f7ea665d538fe03513c4573765c04dd3b2611373e7280b2139cfb91",
+    "width": "140.18325",
+    "height": "40"
+  },
+  "zh-Hant": {
+    "url": "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/zh-hk",
+    "path": "docs/assets/badges/mac-app-store-zh-Hant-20260912.svg",
+    "sha256": "3333b5a5adeba2939b277d4c695b2fde2e012d6ae5d5e29bc7846f74f46d6db1",
+    "width": "140.18325",
+    "height": "40"
+  },
+  "ja": {
+    "url": "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/ja-jp",
+    "path": "docs/assets/badges/mac-app-store-ja-20260912.svg",
+    "sha256": "445f06e93bc7e4e3fbaf95d3667f17cd63304e7f404bc7911957ea3d96b3c42b",
+    "width": "140.18325",
+    "height": "40"
+  },
+  "ko": {
+    "url": "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/ko-kr",
+    "path": "docs/assets/badges/mac-app-store-ko-20260912.svg",
+    "sha256": "4de1f514253cb55cecd1b29c9143ccb19d97ca0a558540d28737b8050875bc8a",
+    "width": "161.01934",
+    "height": "40"
+  },
+  "de": {
+    "url": "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/de-de",
+    "path": "docs/assets/badges/mac-app-store-de-20260912.svg",
+    "sha256": "9847a40d54aed58c0a19ef87f262e9dde56da82960c1f09ada58a6ffb56dc33e",
+    "width": "156.10054",
+    "height": "40"
+  },
+  "fr": {
+    "url": "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/fr-fr",
+    "path": "docs/assets/badges/mac-app-store-fr-20260912.svg",
+    "sha256": "28c046d4b469e9a56547486fe9edb2a646279e45c361d80eb7c3cb0c34754976",
+    "width": "156.10054",
+    "height": "40"
+  },
+  "es": {
+    "url": "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/es-es",
+    "path": "docs/assets/badges/mac-app-store-es-20260912.svg",
+    "sha256": "b23ac028bb078cb5a75039ba1f57b1a4a6a668276c84a1764440880aa2ced929",
+    "width": "156.10054",
+    "height": "40"
+  },
+  "pt-BR": {
+    "url": "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/pt-br",
+    "path": "docs/assets/badges/mac-app-store-pt-BR-20260912.svg",
+    "sha256": "c647f96fb12dfbec8b5dd7660990690760b146620d2fda7f06d6afd37f4a8f1d",
+    "width": "156.10054",
+    "height": "40"
+  },
+  "it": {
+    "url": "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/it-it",
+    "path": "docs/assets/badges/mac-app-store-it-20260912.svg",
+    "sha256": "9d7bfb44ace53629ae11ab7412bbb9f7aaee82e7e7588c7ec2aea23f02bbd228",
+    "width": "156.10054",
+    "height": "40"
+  }
+}

@@ -99,9 +99,9 @@ private struct SourceDeviceEjectionError: LocalizedError {
 
     var errorDescription: String? {
         if ejectedVolumeNames.isEmpty {
-            return "\(failedVolumeName) remains mounted: \(message)"
+            return L10n.tr("\(failedVolumeName) remains mounted: \(message)")
         }
-        return "\(ejectedVolumeNames.joined(separator: ", ")) ejected, but \(failedVolumeName) remains mounted: \(message)"
+        return L10n.tr("\(ejectedVolumeNames.joined(separator: ", ")) ejected, but \(failedVolumeName) remains mounted: \(message)")
     }
 }
 
@@ -115,7 +115,7 @@ struct RecentPathSuggestion: Identifiable {
     var isAvailable: Bool { validation.isUsable }
 
     var menuTitle: String {
-        let usage = choice.useCount == 1 ? "used once" : "used \(choice.useCount) times"
+        let usage = choice.useCount == 1 ? L10n.tr("used once") : L10n.tr("used \(choice.useCount) times")
         return "\(displayName) · \(parentDisplayPath) · \(validation.message) · \(usage)"
     }
 
@@ -405,13 +405,13 @@ final class AppModel: ObservableObject {
                             + summary.jobFilesImported
                             + summary.nativeFingerprintsImported
                         legacyImportMessage = importedRecords > 0
-                            ? "Imported legacy SD Import history"
-                            : "Imported legacy SD Import settings"
+                            ? L10n.tr("Imported legacy SD Import history")
+                            : L10n.tr("Imported legacy SD Import settings")
                     } else {
                         legacyImportMessage = nil
                     }
                 } catch {
-                    legacyImportMessage = "Legacy import skipped: \(error)"
+                    legacyImportMessage = L10n.tr("Legacy import skipped: \(Self.errorMessage(for: error))")
                 }
             } else {
                 legacyImportMessage = nil
@@ -425,7 +425,7 @@ final class AppModel: ObservableObject {
                 hasCompletedOnboarding = preparedConfiguration.hasCompletedOnboarding
                 guard savePreferences(persistAutoPromptPreference: true) else {
                     throw SDImportError.invalidArgument(
-                        "Could not persist the background helper QA preparation state"
+                        L10n.tr("Could not persist the background helper QA preparation state")
                     )
                 }
             } else if BackgroundPromptRuntimeQA.consumesInjectedHandoff()
@@ -451,16 +451,16 @@ final class AppModel: ObservableObject {
                 try authorizeCurrentBackgroundPromptHelperIfNeeded()
             } catch {
                 recordBackgroundPromptError(
-                    "Could not authorize the background helper: \(Self.errorMessage(for: error))"
+                    L10n.tr("Could not authorize the background helper: \(Self.errorMessage(for: error))")
                 )
             }
             startMountObserver()
             reconcileBackgroundPromptRegistration()
             statusMessage = legacyImportMessage
-                ?? (recovery.recoveredJobs > 0 ? "Recovered interrupted import" : "Ready")
+                ?? (recovery.recoveredJobs > 0 ? L10n.tr("Recovered interrupted import") : L10n.tr("Ready"))
         } catch {
-            setupError = String(describing: error)
-            statusMessage = "Setup failed"
+            setupError = Self.errorMessage(for: error)
+            statusMessage = L10n.tr("Setup failed")
         }
     }
 
@@ -491,7 +491,7 @@ final class AppModel: ObservableObject {
                 )
             }
         } catch {
-            statusMessage = "Could not save settings: \(error)"
+            statusMessage = L10n.tr("Could not save settings: \(Self.errorMessage(for: error))")
             settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
             return false
         }
@@ -523,7 +523,7 @@ final class AppModel: ObservableObject {
                 try saveFolderBookmark(purpose, path: folderPath(for: purpose))
             }
         } catch {
-            statusMessage = "Settings saved, but folder access could not be refreshed: \(error)"
+            statusMessage = L10n.tr("Settings saved, but folder access could not be refreshed: \(Self.errorMessage(for: error))")
             settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
             return AppDistribution.current != .macAppStore
         }
@@ -532,7 +532,7 @@ final class AppModel: ObservableObject {
 
     func chooseCardFolder() {
         guard let url = FilePanelPresenter.chooseDirectoryURL(
-            title: "Choose SD Card or Source Folder",
+            title: L10n.tr("Choose SD Card or Source Folder"),
             initialPath: cardPath
         ), retainSelectedFolderAccess(.source, url: url, persistBookmark: true) else {
             return
@@ -545,7 +545,7 @@ final class AppModel: ObservableObject {
 
     func chooseOnboardingCardFolder() {
         guard let url = FilePanelPresenter.chooseDirectoryURL(
-            title: "Choose SD Card or Source Folder",
+            title: L10n.tr("Choose SD Card or Source Folder"),
             initialPath: cardPath
         ), retainSelectedFolderAccess(.source, url: url, persistBookmark: true) else {
             return
@@ -556,7 +556,7 @@ final class AppModel: ObservableObject {
 
     func chooseOnboardingPhotosFolder() {
         guard let url = FilePanelPresenter.chooseDirectoryURL(
-            title: "Choose Photo Destination",
+            title: L10n.tr("Choose Photo Destination"),
             initialPath: photosPath
         ), retainSelectedFolderAccess(.photos, url: url, persistBookmark: true) else {
             return
@@ -567,7 +567,7 @@ final class AppModel: ObservableObject {
 
     func chooseOnboardingVideosFolder() {
         guard let url = FilePanelPresenter.chooseDirectoryURL(
-            title: "Choose Video Destination",
+            title: L10n.tr("Choose Video Destination"),
             initialPath: videosPath
         ), retainSelectedFolderAccess(.videos, url: url, persistBookmark: true) else {
             return
@@ -578,7 +578,7 @@ final class AppModel: ObservableObject {
 
     func choosePhotosFolder() {
         guard let url = FilePanelPresenter.chooseDirectoryURL(
-            title: "Choose Photo Destination",
+            title: L10n.tr("Choose Photo Destination"),
             initialPath: photosPath
         ), retainSelectedFolderAccess(.photos, url: url, persistBookmark: false) else {
             return
@@ -590,7 +590,7 @@ final class AppModel: ObservableObject {
 
     func chooseVideosFolder() {
         guard let url = FilePanelPresenter.chooseDirectoryURL(
-            title: "Choose Video Destination",
+            title: L10n.tr("Choose Video Destination"),
             initialPath: videosPath
         ), retainSelectedFolderAccess(.videos, url: url, persistBookmark: false) else {
             return
@@ -602,7 +602,7 @@ final class AppModel: ObservableObject {
 
     func chooseDefaultPhotosFolder() {
         guard let url = FilePanelPresenter.chooseDirectoryURL(
-            title: "Choose Default Photo Destination",
+            title: L10n.tr("Choose Default Photo Destination"),
             initialPath: importDefaults.photosPath
         ), retainSelectedFolderAccess(.photos, url: url, persistBookmark: true) else {
             return
@@ -614,7 +614,7 @@ final class AppModel: ObservableObject {
 
     func chooseDefaultVideosFolder() {
         guard let url = FilePanelPresenter.chooseDirectoryURL(
-            title: "Choose Default Video Destination",
+            title: L10n.tr("Choose Default Video Destination"),
             initialPath: importDefaults.videosPath
         ), retainSelectedFolderAccess(.videos, url: url, persistBookmark: true) else {
             return
@@ -656,15 +656,15 @@ final class AppModel: ObservableObject {
 
     var selectedSourceEjectionButtonTitle: String {
         guard !isEjectingSource else {
-            return "Ejecting Source…"
+            return L10n.tr("Ejecting Source…")
         }
         guard let target = cachedSelectedSourceEjectionTarget else {
-            return "Eject Source"
+            return L10n.tr("Eject Source")
         }
         if target.volumeCount > 1 {
-            return "Eject \(target.displayName) — \(target.volumeCount) Volumes"
+            return L10n.tr("Eject \(target.displayName) — \(target.volumeCount) Volumes")
         }
-        return "Eject \(target.displayName)"
+        return L10n.tr("Eject \(target.displayName)")
     }
 
     func ejectSelectedSource() {
@@ -674,7 +674,7 @@ final class AppModel: ObservableObject {
             !isEjectingSource,
             let target = cachedSelectedSourceEjectionTarget
         else {
-            statusMessage = "Source cannot be ejected safely"
+            statusMessage = L10n.tr("Source cannot be ejected safely")
             return
         }
 
@@ -727,7 +727,7 @@ final class AppModel: ObservableObject {
         hiddenRecentPaths.insert(normalizedPath)
         rebuildRecentPathSuggestions()
         savePreferences()
-        statusMessage = "Recent folder forgotten"
+        statusMessage = L10n.tr("Recent folder forgotten")
     }
 
     func restoreForgottenRecentPaths() {
@@ -738,7 +738,7 @@ final class AppModel: ObservableObject {
         hiddenRecentPaths.removeAll()
         rebuildRecentPathSuggestions()
         savePreferences()
-        statusMessage = "Recent folders restored"
+        statusMessage = L10n.tr("Recent folders restored")
     }
 
     func selectPanel(_ item: SidebarItem) {
@@ -832,7 +832,7 @@ final class AppModel: ObservableObject {
             folderBookmarkPurposes: Set([.source] + requiredDestinationPurposes())
         ) {
             if settingsFeedback == nil {
-                statusMessage = "Import settings saved as defaults"
+                statusMessage = L10n.tr("Import settings saved as defaults")
             }
         } else {
             importDefaults = previousDefaults
@@ -912,16 +912,16 @@ final class AppModel: ObservableObject {
 
     var importReadinessMessage: String? {
         if previewTotals.copyFiles == 0 {
-            return "No files are selected for copying"
+            return L10n.tr("No files are selected for copying")
         }
         if !sourceValidation.isUsable {
             return sourceValidation.message
         }
         if !requiredDestinationPathsAreUsable() {
-            return "Choose usable destination folders"
+            return L10n.tr("Choose usable destination folders")
         }
         if let requirement = previewSpaceRequirements.first(where: { !$0.isKnown }) {
-            return "Available space couldn’t be checked for \(requirement.displayPath)"
+            return L10n.tr("Available space couldn’t be checked for \(requirement.displayPath)")
         }
         if let requirement = previewSpaceRequirements.first(where: { !$0.isSatisfied }) {
             let required = ByteCountFormatter.string(fromByteCount: requirement.requiredBytes, countStyle: .file)
@@ -929,7 +929,7 @@ final class AppModel: ObservableObject {
                 fromByteCount: requirement.availableBytes ?? 0,
                 countStyle: .file
             )
-            return "\(required) required; \(available) available"
+            return L10n.tr("\(required) required; \(available) available")
         }
         return nil
     }
@@ -944,14 +944,14 @@ final class AppModel: ObservableObject {
 
     func scan() {
         guard !isWorking, !isEjectingSource else {
-            statusMessage = "Finish the current scan or import first"
+            statusMessage = L10n.tr("Finish the current scan or import first")
             return
         }
         guard ensureSourceAccessForScan() else {
             return
         }
         guard let databaseURL else {
-            statusMessage = "Database is not ready"
+            statusMessage = L10n.tr("Database is not ready")
             return
         }
         validatePaths()
@@ -971,7 +971,7 @@ final class AppModel: ObservableObject {
         clearPreviewPlanCache()
         isWorking = true
         transitionImportWorkspace(.beginScan)
-        statusMessage = "Scanning..."
+        statusMessage = L10n.tr("Scanning...")
         importLogger.info("Scan started")
 
         let cardPath = resolvedPath(cardPath, validation: sourceValidation)
@@ -1033,11 +1033,11 @@ final class AppModel: ObservableObject {
                     self.rebuildPreviewSessions(files: files, defaultLabel: location)
                     self.rebuildPreviewPlanCache()
                     if let warning = summary.portableReceiptWarning {
-                        self.statusMessage = "Scan complete. \(warning)"
+                        self.statusMessage = L10n.tr("Scan complete. \(warning)")
                     } else if let portableKnownFiles = summary.portableKnownFiles, portableKnownFiles > 0 {
-                        self.statusMessage = "Scan complete. \(portableKnownFiles) files were imported on another Mac"
+                        self.statusMessage = L10n.tr("Scan complete. \(portableKnownFiles) files were imported on another Mac")
                     } else {
-                        self.statusMessage = "Scan complete"
+                        self.statusMessage = L10n.tr("Scan complete")
                     }
                     self.isWorking = false
                     self.transitionImportWorkspace(.scanSucceeded)
@@ -1053,7 +1053,7 @@ final class AppModel: ObservableObject {
                     self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
                     self.clearPreviewPlanCache()
-                    self.statusMessage = "Scan cancelled"
+                    self.statusMessage = L10n.tr("Scan cancelled")
                     self.isWorking = false
                     self.transitionImportWorkspace(.cancelled)
                     self.importTask = nil
@@ -1066,7 +1066,7 @@ final class AppModel: ObservableObject {
                     self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
                     self.clearPreviewPlanCache()
-                    self.statusMessage = "Scan cancelled"
+                    self.statusMessage = L10n.tr("Scan cancelled")
                     self.isWorking = false
                     self.transitionImportWorkspace(.cancelled)
                     self.importTask = nil
@@ -1079,7 +1079,7 @@ final class AppModel: ObservableObject {
                     self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
                     self.clearPreviewPlanCache()
-                    let message = "Scan failed: \(Self.errorMessage(for: error))"
+                    let message = L10n.tr("Scan failed: \(Self.errorMessage(for: error))")
                     self.statusMessage = message
                     self.isWorking = false
                     self.transitionImportWorkspace(.failed(operation: .scan, message: message))
@@ -1353,7 +1353,7 @@ final class AppModel: ObservableObject {
         let grouped = Dictionary(grouping: rows.filter(\.willCopy)) { row in
             row.destinationPath.map {
                 URL(fileURLWithPath: $0, isDirectory: false).deletingLastPathComponent().path
-            } ?? "Unknown"
+            } ?? L10n.tr("Unknown")
         }
 
         return grouped
@@ -1488,16 +1488,16 @@ final class AppModel: ObservableObject {
 
     func importCurrentJob() {
         guard !isWorking, !isEjectingSource else {
-            statusMessage = "Finish the current scan or import first"
+            statusMessage = L10n.tr("Finish the current scan or import first")
             return
         }
         guard purchaseManager.canStartImport else {
             purchaseManager.isShowingPurchase = true
-            statusMessage = "Unlock unlimited imports to continue"
+            statusMessage = L10n.tr("Unlock unlimited imports to continue")
             return
         }
         guard let currentSummary else {
-            statusMessage = "No scanned job selected"
+            statusMessage = L10n.tr("No scanned job selected")
             return
         }
         guard ensureRequiredDestinationAccessForImport() else {
@@ -1505,7 +1505,7 @@ final class AppModel: ObservableObject {
         }
         let jobID = currentSummary.jobID
         guard let databaseURL else {
-            statusMessage = "Database is not ready"
+            statusMessage = L10n.tr("Database is not ready")
             return
         }
         validatePaths()
@@ -1514,7 +1514,7 @@ final class AppModel: ObservableObject {
             return
         }
         guard requiredDestinationPathsAreUsable() else {
-            statusMessage = "Check destination folders"
+            statusMessage = L10n.tr("Check destination folders")
             return
         }
         if let dedupeRepository {
@@ -1526,8 +1526,8 @@ final class AppModel: ObservableObject {
         }
         if let failure = previewSpaceRequirements.first(where: { !$0.isSatisfied }) {
             statusMessage = failure.isKnown
-                ? "Not enough space in \(failure.displayPath)"
-                : "Could not check available space in \(failure.displayPath)"
+                ? L10n.tr("Not enough space in \(failure.displayPath)")
+                : L10n.tr("Could not check available space in \(failure.displayPath)")
             return
         }
 
@@ -1572,11 +1572,11 @@ final class AppModel: ObservableObject {
 
     func importPortableKnownFilesAnyway() {
         guard !isWorking, !isEjectingSource else {
-            statusMessage = "Finish the current scan or import first"
+            statusMessage = L10n.tr("Finish the current scan or import first")
             return
         }
         guard let jobID = currentSummary?.jobID, let databaseURL else {
-            statusMessage = "No scanned job selected"
+            statusMessage = L10n.tr("No scanned job selected")
             return
         }
 
@@ -1614,7 +1614,7 @@ final class AppModel: ObservableObject {
         activeImportRetryContext = .portableReceiptOverride
         failedImportRetryContext = nil
         transitionImportWorkspace(.beginPreparation(.portableReceiptOverride))
-        statusMessage = "Preparing files imported on another Mac..."
+        statusMessage = L10n.tr("Preparing files imported on another Mac...")
         importTask = Task.detached(priority: .userInitiated) {
             do {
                 try Task.checkCancellation()
@@ -1638,7 +1638,7 @@ final class AppModel: ObservableObject {
                     self.selectedJobFiles = files
                     self.jobs = jobs
                     self.rebuildPreviewPlanCache()
-                    self.statusMessage = "Portable receipt overridden for \(updates.count) files"
+                    self.statusMessage = L10n.tr("Portable receipt overridden for \(updates.count) files")
                     self.isWorking = false
                     self.activeImportRetryContext = nil
                     self.transitionImportWorkspace(.scanSucceeded)
@@ -1653,7 +1653,7 @@ final class AppModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    let message = "Could not override portable history: \(Self.errorMessage(for: error))"
+                    let message = L10n.tr("Could not override portable history: \(Self.errorMessage(for: error))")
                     self.statusMessage = message
                     self.isWorking = false
                     self.failedImportRetryContext = self.activeImportRetryContext
@@ -1683,7 +1683,7 @@ final class AppModel: ObservableObject {
         ejectedSourceJobID = nil
         ejectedSourceName = nil
         ejectedSourceVolumeCount = 0
-        statusMessage = "Preparing import..."
+        statusMessage = L10n.tr("Preparing import...")
         importLogger.info("Import started jobID=\(jobID, privacy: .private)")
         let portableImportReceiptsEnabled = portableImportReceiptsEnabled
             ?? self.portableImportReceiptsEnabled
@@ -1755,8 +1755,8 @@ final class AppModel: ObservableObject {
                         self.rebuildPreviewPlanCache()
                     }
                     self.statusMessage = result.portableReceiptWarning.map {
-                        "Import finished. \($0)"
-                    } ?? "Import finished"
+                        L10n.tr("Import finished. \($0)")
+                    } ?? L10n.tr("Import finished")
                     self.isWorking = false
                     self.activeImportRetryContext = nil
                     self.transitionImportWorkspace(.completed)
@@ -1783,7 +1783,7 @@ final class AppModel: ObservableObject {
                     }
                     self.currentResult = nil
                     self.importProgress = nil
-                    self.statusMessage = "Import cancelled"
+                    self.statusMessage = L10n.tr("Import cancelled")
                     self.isWorking = false
                     self.activeImportRetryContext = nil
                     self.transitionImportWorkspace(.cancelled)
@@ -1794,7 +1794,7 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     self.currentResult = nil
                     self.importProgress = nil
-                    let message = "Import failed: \(Self.errorMessage(for: error))"
+                    let message = L10n.tr("Import failed: \(Self.errorMessage(for: error))")
                     let failedOperation = self.activeImportOperation ?? .copy
                     self.statusMessage = message
                     self.isWorking = false
@@ -1814,7 +1814,7 @@ final class AppModel: ObservableObject {
         guard importTask != nil else {
             return
         }
-        statusMessage = "Cancelling..."
+        statusMessage = L10n.tr("Cancelling...")
         importTask?.cancel()
     }
 
@@ -1835,7 +1835,7 @@ final class AppModel: ObservableObject {
     func recoverImportWorkspace() {
         failedImportRetryContext = nil
         transitionImportWorkspace(.recover(hasScannedJob: currentSummary != nil))
-        statusMessage = currentSummary == nil ? "Ready" : "Review import"
+        statusMessage = currentSummary == nil ? L10n.tr("Ready") : L10n.tr("Review import")
     }
 
     func recoverImportReceipt() {
@@ -1845,7 +1845,7 @@ final class AppModel: ObservableObject {
         }
         failedImportRetryContext = nil
         transitionImportWorkspace(.recoverCompleted)
-        statusMessage = "Import finished"
+        statusMessage = L10n.tr("Import finished")
     }
 
     func retryFailedImportOperation() {
@@ -1859,7 +1859,7 @@ final class AppModel: ObservableObject {
             return
         case .existingJob(let jobID):
             guard let databaseURL else {
-                statusMessage = "Database is not ready"
+                statusMessage = L10n.tr("Database is not ready")
                 return
             }
             selectedJobID = jobID
@@ -1920,12 +1920,12 @@ final class AppModel: ObservableObject {
         failedImportRetryContext = nil
         resetImportDraftFromDefaults()
         transitionImportWorkspace(.recover(hasScannedJob: false))
-        statusMessage = "Ready for another card"
+        statusMessage = L10n.tr("Ready for another card")
     }
 
     func acceptMountedVolumePrompt() {
         guard !isWorking, !isEjectingSource else {
-            statusMessage = "Finish the current operation before scanning another card"
+            statusMessage = L10n.tr("Finish the current operation before scanning another card")
             return
         }
         guard let volume = pendingMountedVolume else {
@@ -1937,17 +1937,17 @@ final class AppModel: ObservableObject {
                 sourceURL = authorizedURL
             } else {
                 guard let selectedURL = FilePanelPresenter.chooseDirectoryURL(
-                    title: "Allow Access to \(volume.name)",
+                    title: L10n.tr("Allow Access to \(volume.name)"),
                     initialPath: volume.mountURL.path,
-                    prompt: "Allow Access",
-                    message: "\(AppDistribution.current.displayName) will scan this folder only after you allow access."
+                    prompt: L10n.tr("Allow Access"),
+                    message: L10n.tr("\(AppDistribution.current.displayName) will scan this folder only after you allow access.")
                 ) else {
                     pendingMountedVolume = nil
-                    statusMessage = "Card scan cancelled"
+                    statusMessage = L10n.tr("Card scan cancelled")
                     return
                 }
                 guard Self.isSameOrDescendant(selectedURL, of: volume.mountURL) else {
-                    statusMessage = "Choose \(volume.name) or a folder on that card"
+                    statusMessage = L10n.tr("Choose \(volume.name) or a folder on that card")
                     return
                 }
                 guard retainSelectedFolderAccess(
@@ -1978,7 +1978,7 @@ final class AppModel: ObservableObject {
 
     func skipMountedVolumePrompt() {
         pendingMountedVolume = nil
-        statusMessage = "Ready"
+        statusMessage = L10n.tr("Ready")
     }
 
     @discardableResult
@@ -2037,7 +2037,7 @@ final class AppModel: ObservableObject {
                 statusMessage = backgroundPromptStatusDetail
                 settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
             } else {
-                statusMessage = enabled ? "Background prompt enabled" : "Background prompt disabled"
+                statusMessage = enabled ? L10n.tr("Background prompt enabled") : L10n.tr("Background prompt disabled")
                 settingsFeedback = SettingsFeedback(message: statusMessage, role: .information)
             }
         } catch {
@@ -2048,7 +2048,7 @@ final class AppModel: ObservableObject {
                 || backgroundPromptServiceStatus == .notRegistered {
                 scheduleRegistrationRetry()
             }
-            statusMessage = "Could not update background prompt: \(error)"
+            statusMessage = L10n.tr("Could not update background prompt: \(Self.errorMessage(for: error))")
             settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
         }
     }
@@ -2095,56 +2095,56 @@ final class AppModel: ObservableObject {
     var backgroundPromptStatusTitle: String {
         guard backgroundPromptCanConfigure else {
             return backgroundPromptApplicationOwnership.authoritativeApplicationPath == nil
-                ? "Install required"
-                : "Managed by installed copy"
+                ? L10n.tr("Install required")
+                : L10n.tr("Managed by installed copy")
         }
         guard autoPromptEnabled else {
-            return "Off"
+            return L10n.tr("Off")
         }
         if backgroundPromptEffectiveError != nil {
-            return "Needs attention"
+            return L10n.tr("Needs attention")
         }
         switch backgroundPromptServiceStatus {
         case .enabled:
-            return backgroundPromptAgentMismatch ? "Helper update needed" : "Running"
+            return backgroundPromptAgentMismatch ? L10n.tr("Helper update needed") : L10n.tr("Running")
         case .notRegistered:
-            return "Not registered"
+            return L10n.tr("Not registered")
         case .requiresApproval:
-            return "Needs approval"
+            return L10n.tr("Needs approval")
         case .notFound:
-            return "Helper missing"
+            return L10n.tr("Helper missing")
         case .unknown:
-            return "Unavailable"
+            return L10n.tr("Unavailable")
         }
     }
 
     var backgroundPromptStatusDetail: String {
         guard backgroundPromptCanConfigure else {
             if let path = backgroundPromptApplicationOwnership.authoritativeApplicationPath {
-                return "Background prompts are managed by the installed copy at \(path). Open that copy to change this setting."
+                return L10n.tr("Background prompts are managed by the installed copy at \(path). Open that copy to change this setting.")
             }
-            return "Move \(AppDistribution.current.displayName) to /Applications or ~/Applications before enabling background prompts."
+            return L10n.tr("Move \(AppDistribution.current.displayName) to /Applications or ~/Applications before enabling background prompts.")
         }
         if let backgroundPromptEffectiveError {
             return backgroundPromptEffectiveError
         }
         guard autoPromptEnabled else {
-            return "The background helper is disabled."
+            return L10n.tr("The background helper is disabled.")
         }
         switch backgroundPromptServiceStatus {
         case .enabled:
             if backgroundPromptAgentMismatch {
-                return "The running helper does not match this app build. Repair it before relying on automatic prompts."
+                return L10n.tr("The running helper does not match this app build. Repair it before relying on automatic prompts.")
             }
-            return "The background helper is registered with macOS."
+            return L10n.tr("The background helper is registered with macOS.")
         case .notRegistered:
-            return "The saved setting is on, but the background helper is not registered."
+            return L10n.tr("The saved setting is on, but the background helper is not registered.")
         case .requiresApproval:
-            return "Allow \(AppDistribution.current.displayName) in System Settings → General → Login Items & Extensions."
+            return L10n.tr("Allow \(AppDistribution.current.displayName) in System Settings → General → Login Items & Extensions.")
         case .notFound:
-            return "The bundled background helper could not be found. Reinstall \(AppDistribution.current.displayName) in Applications."
+            return L10n.tr("The bundled background helper could not be found. Reinstall \(AppDistribution.current.displayName) in Applications.")
         case .unknown:
-            return "macOS returned an unrecognized background helper status."
+            return L10n.tr("macOS returned an unrecognized background helper status.")
         }
     }
 
@@ -2382,7 +2382,7 @@ final class AppModel: ObservableObject {
                 scheduleRegistrationRetry()
             }
             statusMessage = backgroundPromptServiceStatus == .enabled
-                ? "Background prompt repaired"
+                ? L10n.tr("Background prompt repaired")
                 : backgroundPromptStatusDetail
             settingsFeedback = SettingsFeedback(
                 message: statusMessage,
@@ -2395,7 +2395,7 @@ final class AppModel: ObservableObject {
                 || backgroundPromptServiceStatus == .notRegistered {
                 scheduleRegistrationRetry()
             }
-            statusMessage = "Could not repair background prompt: \(Self.errorMessage(for: error))"
+            statusMessage = L10n.tr("Could not repair background prompt: \(Self.errorMessage(for: error))")
             settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
         }
     }
@@ -2488,7 +2488,7 @@ final class AppModel: ObservableObject {
             } else {
                 cancelBackgroundPromptRetry(resetAttempts: false)
             }
-            statusMessage = "Could not update background prompt: \(Self.errorMessage(for: error))"
+            statusMessage = L10n.tr("Could not update background prompt: \(Self.errorMessage(for: error))")
             settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
         }
     }
@@ -2573,7 +2573,7 @@ final class AppModel: ObservableObject {
         } catch {
             backgroundPromptAgentState = nil
             if backgroundPromptLastError == nil {
-                recordBackgroundPromptError("Could not read background helper diagnostics")
+                recordBackgroundPromptError(L10n.tr("Could not read background helper diagnostics"))
             }
         }
         if currentlyOwnsBackgroundPromptRegistration() {
@@ -2642,7 +2642,7 @@ final class AppModel: ObservableObject {
 
     func refreshHistory() {
         guard let databaseURL else {
-            statusMessage = "Database is not ready"
+            statusMessage = L10n.tr("Database is not ready")
             return
         }
 
@@ -2680,7 +2680,7 @@ final class AppModel: ObservableObject {
                     self.isHistoryLoading = false
                     self.isHistoryDetailLoading = false
                     self.historyRefreshTask = nil
-                    self.statusMessage = "Could not load history: \(error)"
+                    self.statusMessage = L10n.tr("Could not load history: \(Self.errorMessage(for: error))")
                 }
             }
         }
@@ -2693,7 +2693,7 @@ final class AppModel: ObservableObject {
         selectedJobID = jobID
         selectedJobFiles = []
         guard let databaseURL else {
-            statusMessage = "Database is not ready"
+            statusMessage = L10n.tr("Database is not ready")
             return
         }
 
@@ -2726,7 +2726,7 @@ final class AppModel: ObservableObject {
                     self.selectedJobFiles = []
                     self.isHistoryDetailLoading = false
                     self.historyDetailTask = nil
-                    self.statusMessage = "Could not load job: \(error)"
+                    self.statusMessage = L10n.tr("Could not load job: \(Self.errorMessage(for: error))")
                 }
             }
         }
@@ -2737,23 +2737,23 @@ final class AppModel: ObservableObject {
             return
         }
         guard !isWorking, !isEjectingSource else {
-            statusMessage = "Finish the current scan or import first"
+            statusMessage = L10n.tr("Finish the current scan or import first")
             return
         }
         guard purchaseManager.canStartImport else {
             purchaseManager.isShowingPurchase = true
-            statusMessage = "Unlock unlimited imports to continue"
+            statusMessage = L10n.tr("Unlock unlimited imports to continue")
             return
         }
         guard let job = selectedJob(), job.canRetryImport else {
-            statusMessage = "Only failed, cancelled, or partial imports can be retried"
+            statusMessage = L10n.tr("Only failed, cancelled, or partial imports can be retried")
             return
         }
         guard ensureAccessForRetryingJob(job) else {
             return
         }
         guard let databaseURL else {
-            statusMessage = "Database is not ready"
+            statusMessage = L10n.tr("Database is not ready")
             return
         }
         selection = .import
@@ -2791,7 +2791,7 @@ final class AppModel: ObservableObject {
         }
         updateLoginItemRegistration()
         if settingsFeedback == nil {
-            statusMessage = "Ready"
+            statusMessage = L10n.tr("Ready")
         }
         schedulePendingMountHandoffRetry()
     }
@@ -2806,7 +2806,7 @@ final class AppModel: ObservableObject {
             return
         }
         updateLoginItemRegistration()
-        statusMessage = "Setup skipped. Defaults can be changed in Settings."
+        statusMessage = L10n.tr("Setup skipped. Defaults can be changed in Settings.")
         schedulePendingMountHandoffRetry()
     }
 
@@ -2826,7 +2826,7 @@ final class AppModel: ObservableObject {
         if let path = existingReportPath(for: job) {
             reveal(path: path)
         } else {
-            statusMessage = "No report file found"
+            statusMessage = L10n.tr("No report file found")
         }
     }
 
@@ -2836,7 +2836,7 @@ final class AppModel: ObservableObject {
                 job: job,
                 report: nil,
                 files: selectedJobID == job.id ? selectedJobFiles : [],
-                loadError: "Database is not ready"
+                loadError: L10n.tr("Database is not ready")
             )
             return
         }
@@ -2844,7 +2844,7 @@ final class AppModel: ObservableObject {
         reportTask?.cancel()
         let cachedFiles = selectedJobID == job.id ? selectedJobFiles : []
         let jsonPath = job.summaryJSONPath
-        statusMessage = "Loading report..."
+        statusMessage = L10n.tr("Loading report...")
 
         reportTask = Task.detached(priority: .userInitiated) {
             let reportLoader = ImportReportLoader()
@@ -2856,7 +2856,7 @@ final class AppModel: ObservableObject {
                 do {
                     report = try reportLoader.loadJSON(from: URL(fileURLWithPath: jsonPath))
                 } catch {
-                    loadErrors.append("JSON report: \(error)")
+                    loadErrors.append(L10n.tr("JSON report: \(Self.errorMessage(for: error))"))
                 }
             }
 
@@ -2864,7 +2864,7 @@ final class AppModel: ObservableObject {
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
                 files = try repositories.jobRepository.fetchJobFiles(jobID: job.id)
             } catch {
-                loadErrors.append("Job files: \(error)")
+                loadErrors.append(L10n.tr("Job files: \(Self.errorMessage(for: error))"))
                 files = cachedFiles.isEmpty ? (report?.files ?? []) : cachedFiles
             }
 
@@ -2879,7 +2879,7 @@ final class AppModel: ObservableObject {
                     files: files,
                     loadError: loadErrors.isEmpty ? nil : loadErrors.joined(separator: "\n")
                 )
-                self.statusMessage = loadErrors.isEmpty ? "Report ready" : "Report opened with warnings"
+                self.statusMessage = loadErrors.isEmpty ? L10n.tr("Report ready") : L10n.tr("Report opened with warnings")
                 self.reportTask = nil
             }
         }
@@ -2887,7 +2887,7 @@ final class AppModel: ObservableObject {
 
     func openReportFile(for job: ImportJob) {
         guard let path = existingReportPath(for: job) else {
-            statusMessage = "No report file found"
+            statusMessage = L10n.tr("No report file found")
             return
         }
 
@@ -2907,12 +2907,12 @@ final class AppModel: ObservableObject {
         let text = summaryText(for: job)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        statusMessage = "Summary copied"
+        statusMessage = L10n.tr("Summary copied")
     }
 
     func exportSummary(for job: ImportJob) {
         guard let url = FilePanelPresenter.chooseSaveURL(
-            title: "Export Summary",
+            title: L10n.tr("Export Summary"),
             suggestedName: "\(job.id)-summary.txt"
         ) else {
             return
@@ -2920,9 +2920,9 @@ final class AppModel: ObservableObject {
 
         do {
             try summaryText(for: job).write(to: url, atomically: true, encoding: .utf8)
-            statusMessage = "Summary exported"
+            statusMessage = L10n.tr("Summary exported")
         } catch {
-            statusMessage = "Could not export summary: \(error)"
+            statusMessage = L10n.tr("Could not export summary: \(Self.errorMessage(for: error))")
         }
     }
 
@@ -2931,12 +2931,12 @@ final class AppModel: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         diagnosticsLogger.notice("Diagnostics copied")
-        statusMessage = "Diagnostics copied"
+        statusMessage = L10n.tr("Diagnostics copied")
     }
 
     func exportDiagnostics() {
         guard let url = FilePanelPresenter.chooseSaveURL(
-            title: "Export Diagnostics",
+            title: L10n.tr("Export Diagnostics"),
             suggestedName: "sd-import-diagnostics.md"
         ) else {
             return
@@ -2945,42 +2945,42 @@ final class AppModel: ObservableObject {
         do {
             try diagnosticsText().write(to: url, atomically: true, encoding: .utf8)
             diagnosticsLogger.notice("Diagnostics exported")
-            statusMessage = "Diagnostics exported"
+            statusMessage = L10n.tr("Diagnostics exported")
         } catch {
             diagnosticsLogger.error("Diagnostics export failed errorType=\(String(describing: type(of: error)), privacy: .public)")
-            statusMessage = "Could not export diagnostics: \(error)"
+            statusMessage = L10n.tr("Could not export diagnostics: \(Self.errorMessage(for: error))")
         }
     }
 
     func revealCrashReportsFolder() {
         guard AppDistribution.current.canBrowseSystemCrashReports else {
-            statusMessage = "Crash reports remain available in macOS Console"
+            statusMessage = L10n.tr("Crash reports remain available in macOS Console")
             return
         }
         let directory = CrashReportLocator.defaultDirectory()
         guard FileManager.default.fileExists(atPath: directory.path) else {
-            statusMessage = "No crash report folder found"
+            statusMessage = L10n.tr("No crash report folder found")
             return
         }
 
         NSWorkspace.shared.open(directory)
         diagnosticsLogger.notice("Crash reports folder revealed")
-        statusMessage = "Crash reports folder opened"
+        statusMessage = L10n.tr("Crash reports folder opened")
     }
 
     func exportLatestCrashReport() {
         guard AppDistribution.current.canBrowseSystemCrashReports else {
-            statusMessage = "Crash reports remain available in macOS Console"
+            statusMessage = L10n.tr("Crash reports remain available in macOS Console")
             return
         }
         guard let report = CrashReportLocator.findReports(limit: 1).first else {
-            statusMessage = "No \(AppDistribution.current.displayName) crash reports found"
+            statusMessage = L10n.tr("No \(AppDistribution.current.displayName) crash reports found")
             return
         }
 
         let suggestedName = "sd-import-crash-report.\(report.url.pathExtension.lowercased())"
         guard let url = FilePanelPresenter.chooseSaveURL(
-            title: "Export Latest Crash Report",
+            title: L10n.tr("Export Latest Crash Report"),
             suggestedName: suggestedName
         ) else {
             return
@@ -2990,16 +2990,16 @@ final class AppModel: ObservableObject {
             let data = try Data(contentsOf: report.url)
             try data.write(to: url, options: .atomic)
             diagnosticsLogger.notice("Crash report exported")
-            statusMessage = "Crash report exported"
+            statusMessage = L10n.tr("Crash report exported")
         } catch {
             diagnosticsLogger.error("Crash report export failed errorType=\(String(describing: type(of: error)), privacy: .public)")
-            statusMessage = "Could not export crash report: \(error)"
+            statusMessage = L10n.tr("Could not export crash report: \(Self.errorMessage(for: error))")
         }
     }
 
     func pruneHistory(dryRun: Bool) {
         guard let databaseURL else {
-            statusMessage = "Database is not ready"
+            statusMessage = L10n.tr("Database is not ready")
             settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
             return
         }
@@ -3012,20 +3012,20 @@ final class AppModel: ObservableObject {
             )
             refreshHistory()
             if dryRun {
-                statusMessage = "\(summary.matchedJobs) old jobs would be deleted"
+                statusMessage = L10n.tr("\(summary.matchedJobs) old jobs would be deleted")
             } else {
-                statusMessage = "Deleted \(summary.deletedJobs) old jobs"
+                statusMessage = L10n.tr("Deleted \(summary.deletedJobs) old jobs")
             }
             settingsFeedback = SettingsFeedback(message: statusMessage, role: .information)
         } catch {
-            statusMessage = "Could not prune history: \(error)"
+            statusMessage = L10n.tr("Could not prune history: \(Self.errorMessage(for: error))")
             settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
         }
     }
 
     func forgetImportedFiles(for job: ImportJob) {
         guard let dedupeRepository else {
-            statusMessage = "Import history is not ready"
+            statusMessage = L10n.tr("Import history is not ready")
             return
         }
 
@@ -3036,10 +3036,10 @@ final class AppModel: ObservableObject {
                 loadJobDetail(jobID: job.id)
             }
             statusMessage = deleted == 1
-                ? "Forgot 1 imported file"
-                : "Forgot \(deleted) imported files"
+                ? L10n.tr("Forgot 1 imported file")
+                : L10n.tr("Forgot \(deleted) imported files")
         } catch {
-            statusMessage = "Could not forget imported files: \(error)"
+            statusMessage = L10n.tr("Could not forget imported files: \(Self.errorMessage(for: error))")
         }
     }
 
@@ -3087,7 +3087,7 @@ final class AppModel: ObservableObject {
             !isEjectingSource,
             let target = cachedResultSourceEjectionTargets[result.jobID]
         else {
-            statusMessage = "Source cannot be ejected safely"
+            statusMessage = L10n.tr("Source cannot be ejected safely")
             return
         }
 
@@ -3096,11 +3096,11 @@ final class AppModel: ObservableObject {
 
     private func ejectSource(jobID: String, target: SourceEjectionTarget) {
         guard AppDistribution.current.supportsSourceEjection else {
-            statusMessage = "Eject the source in Finder"
+            statusMessage = L10n.tr("Eject the source in Finder")
             return
         }
         guard !isWorking, !isEjectingSource else {
-            statusMessage = "Finish the current operation before ejecting"
+            statusMessage = L10n.tr("Finish the current operation before ejecting")
             return
         }
         isEjectingSource = true
@@ -3108,8 +3108,8 @@ final class AppModel: ObservableObject {
         failedImportRetryContext = nil
         transitionImportWorkspace(.beginAuxiliaryOperation(.eject))
         statusMessage = target.volumeCount > 1
-            ? "Ejecting \(target.displayName) storage..."
-            : "Ejecting source..."
+            ? L10n.tr("Ejecting \(target.displayName) storage...")
+            : L10n.tr("Ejecting source...")
         sourceEjectionTask?.cancel()
         sourceEjectionTask = Task { [weak self] in
             guard let self else {
@@ -3134,8 +3134,8 @@ final class AppModel: ObservableObject {
                 self.refreshAvailableSourceVolumes()
                 self.validatePaths()
                 self.statusMessage = target.volumeCount > 1
-                    ? "\(target.displayName) ejected safely"
-                    : "Source ejected safely"
+                    ? L10n.tr("\(target.displayName) ejected safely")
+                    : L10n.tr("Source ejected safely")
             } catch is CancellationError {
                 self.isEjectingSource = false
                 self.activeImportRetryContext = nil
@@ -3144,7 +3144,7 @@ final class AppModel: ObservableObject {
             } catch {
                 self.isEjectingSource = false
                 self.sourceEjectionTask = nil
-                let message = "Could not eject source: \(error.localizedDescription)"
+                let message = L10n.tr("Could not eject source: \(error.localizedDescription)")
                 self.statusMessage = message
                 self.failedImportRetryContext = self.activeImportRetryContext
                 self.activeImportRetryContext = nil
@@ -3557,7 +3557,7 @@ final class AppModel: ObservableObject {
             }
             defaults.set(configuration.autoPromptEnabled, forKey: DefaultsKeys.autoPromptEnabled)
         } catch {
-            statusMessage = "Could not refresh background prompt settings: \(Self.errorMessage(for: error))"
+            statusMessage = L10n.tr("Could not refresh background prompt settings: \(Self.errorMessage(for: error))")
         }
     }
 
@@ -3655,7 +3655,7 @@ final class AppModel: ObservableObject {
             return true
         } catch {
             folderAccesses[purpose] = priorAccess
-            statusMessage = "Could not retain folder access: \(Self.errorMessage(for: error))"
+            statusMessage = L10n.tr("Could not retain folder access: \(Self.errorMessage(for: error))")
             settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
             return false
         }
@@ -3670,12 +3670,12 @@ final class AppModel: ObservableObject {
             return true
         }
         guard let selectedURL = FilePanelPresenter.chooseDirectoryURL(
-            title: "Allow Access to Source",
+            title: L10n.tr("Allow Access to Source"),
             initialPath: sourcePath,
-            prompt: "Allow Access",
-            message: "Choose the card or source folder before \(AppDistribution.current.displayName) scans it."
+            prompt: L10n.tr("Allow Access"),
+            message: L10n.tr("Choose the card or source folder before \(AppDistribution.current.displayName) scans it.")
         ) else {
-            statusMessage = "Card scan cancelled"
+            statusMessage = L10n.tr("Card scan cancelled")
             return false
         }
         guard retainSelectedFolderAccess(.source, url: selectedURL, persistBookmark: true) else {
@@ -3698,14 +3698,14 @@ final class AppModel: ObservableObject {
             if hasActiveFolderAccess(covering: expandedPath) {
                 continue
             }
-            let displayName = purpose == .photos ? "Photo Destination" : "Video Destination"
+            let displayName = purpose == .photos ? L10n.tr("Photo Destination") : L10n.tr("Video Destination")
             guard let selectedURL = FilePanelPresenter.chooseDirectoryURL(
-                title: "Allow Access to \(displayName)",
+                title: L10n.tr("Allow Access to \(displayName)"),
                 initialPath: expandedPath,
-                prompt: "Allow Access",
-                message: "Choose the destination before \(AppDistribution.current.displayName) copies files to it."
+                prompt: L10n.tr("Allow Access"),
+                message: L10n.tr("Choose the destination before \(AppDistribution.current.displayName) copies files to it.")
             ) else {
-                statusMessage = "Import cancelled"
+                statusMessage = L10n.tr("Import cancelled")
                 return false
             }
             guard retainSelectedFolderAccess(purpose, url: selectedURL, persistBookmark: false) else {
@@ -3728,11 +3728,11 @@ final class AppModel: ObservableObject {
         }
         let destinationDirectories = selectedJobFiles.compactMap(\.destinationDirectory)
         var requests: [(purpose: BookmarkPurpose, path: String, title: String)] = [
-            (.source, job.mountPath, "Retry Source")
+            (.source, job.mountPath, L10n.tr("Retry Source"))
         ]
         let destinationRequests: [(purpose: BookmarkPurpose, path: String, title: String)] = [
-            (.photos, job.photosRoot, "Retry Photo Destination"),
-            (.videos, job.videosRoot, "Retry Video Destination")
+            (.photos, job.photosRoot, L10n.tr("Retry Photo Destination")),
+            (.videos, job.videosRoot, L10n.tr("Retry Video Destination"))
         ]
         requests.append(contentsOf: destinationRequests.filter { request in
             guard !destinationDirectories.isEmpty else {
@@ -3751,17 +3751,17 @@ final class AppModel: ObservableObject {
                 continue
             }
             guard let selectedURL = FilePanelPresenter.chooseDirectoryURL(
-                title: "Allow Access to \(request.title)",
+                title: L10n.tr("Allow Access to \(request.title)"),
                 initialPath: request.path,
-                prompt: "Allow Access",
-                message: "Choose this folder again so \(AppDistribution.current.displayName) can retry the existing job."
+                prompt: L10n.tr("Allow Access"),
+                message: L10n.tr("Choose this folder again so \(AppDistribution.current.displayName) can retry the existing job.")
             ) else {
-                statusMessage = "Retry cancelled"
+                statusMessage = L10n.tr("Retry cancelled")
                 return false
             }
             let requestedURL = URL(fileURLWithPath: request.path, isDirectory: true)
             guard Self.isSameOrDescendant(requestedURL, of: selectedURL) else {
-                statusMessage = "Choose \(request.path) or one of its parent folders"
+                statusMessage = L10n.tr("Choose \(request.path) or one of its parent folders")
                 return false
             }
             guard retainSelectedFolderAccess(
@@ -3883,7 +3883,7 @@ final class AppModel: ObservableObject {
                     return .deferred
                 }
                 self.pendingMountedVolume = volume
-                self.statusMessage = "Card detected"
+                self.statusMessage = L10n.tr("Card detected")
                 MainWindowPresenter.present()
                 self.refreshBackgroundPromptHealth()
                 return .accepted
@@ -3973,7 +3973,7 @@ final class AppModel: ObservableObject {
             }
             refreshBackgroundPromptHealth()
         } catch {
-            recordBackgroundPromptError("Could not update background helper diagnostics")
+            recordBackgroundPromptError(L10n.tr("Could not update background helper diagnostics"))
         }
     }
 
@@ -3997,11 +3997,11 @@ final class AppModel: ObservableObject {
     nonisolated private static func importStatusMessage(for progress: ImportProgress) -> String {
         switch progress.status {
         case "completed":
-            return "Import finished"
+            return L10n.tr("Import finished")
         case "completed_with_errors":
-            return "Import finished with errors"
+            return L10n.tr("Import finished with errors")
         case "idle":
-            return "Nothing to import"
+            return L10n.tr("Nothing to import")
         default:
             let percent = Int(progress.percent.rounded())
             if progress.throughputBytesPerSecond > 1 {
@@ -4009,9 +4009,9 @@ final class AppModel: ObservableObject {
                     fromByteCount: Int64(progress.throughputBytesPerSecond),
                     countStyle: .file
                 )
-                return "Importing \(percent)% at \(speed)/s"
+                return L10n.tr("Importing \(percent)% at \(speed)/s")
             }
-            return "Importing \(progress.doneFiles) of \(progress.totalFiles) files"
+            return L10n.tr("Importing \(progress.doneFiles) of \(progress.totalFiles) files")
         }
     }
 
@@ -4186,15 +4186,10 @@ final class AppModel: ObservableObject {
         if case let SDImportError.insufficientDestinationSpace(path, requiredBytes, availableBytes) = error {
             let required = ByteCountFormatter.string(fromByteCount: requiredBytes, countStyle: .file)
             let available = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
-            return "Not enough space in \(path). Need \(required), available \(available)."
+            return L10n.tr("Not enough space in \(path). Need \(required), available \(available).")
         }
 
-        if let localizedError = error as? LocalizedError,
-           let description = localizedError.errorDescription {
-            return description
-        }
-
-        return String(describing: error)
+        return L10n.errorMessage(for: error)
     }
 }
 
@@ -4227,11 +4222,11 @@ private struct FolderAccessAuthorizationError: LocalizedError {
     var errorDescription: String? {
         switch purpose {
         case .source:
-            "Select the source folder in the macOS access panel."
+            L10n.tr("Select the source folder in the macOS access panel.")
         case .photos:
-            "Select the photo destination in the macOS access panel."
+            L10n.tr("Select the photo destination in the macOS access panel.")
         case .videos:
-            "Select the video destination in the macOS access panel."
+            L10n.tr("Select the video destination in the macOS access panel.")
         }
     }
 }
@@ -4268,9 +4263,9 @@ private extension RetentionPolicy {
     var diagnosticsTitle: String {
         switch self {
         case .days(let days):
-            return "\(days) days"
+            return L10n.tr("\(days) days")
         case .forever:
-            return "Forever"
+            return L10n.tr("Forever")
         }
     }
 }

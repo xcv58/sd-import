@@ -1,0 +1,56 @@
+/* Loaded last so all seven page layouts share the same accessible controls. */
+body .site-header, body.home-page .site-header, body:not(.home-page) .site-header {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+  gap: 24px; position: relative; z-index: 20;
+}
+body .site-header .nav-links { justify-content: flex-end; gap: 20px; flex-wrap: wrap; }
+body .site-header .logo { white-space: nowrap; font-size: 18px; }
+.site-controls { display: flex; align-items: center; justify-self: end; gap: 8px; }
+.language-picker { position: relative; }
+.language-picker summary, .theme-toggle {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text-primary); padding: 8px 10px;
+  font: inherit; font-size: 13px; cursor: pointer; list-style: none;
+}
+.language-picker summary::-webkit-details-marker { display: none; }
+.site-controls svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; flex-shrink: 0; }
+.theme-toggle { width: 44px; padding: 8px; }
+.theme-toggle[hidden], [data-language-short], .theme-sun { display: none; }
+[data-resolved-theme="dark"] .theme-sun { display: block; }
+[data-resolved-theme="dark"] .theme-moon { display: none; }
+.language-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; width: 220px;
+  max-height: min(480px, 70vh); overflow-y: auto; display: flex; flex-direction: column;
+  padding: 8px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--bg-color); box-shadow: 0 12px 36px #0002;
+}
+.language-menu a { padding: 10px 12px; color: var(--text-primary); border-radius: 8px; text-decoration: none; font-size: 14px; }
+.language-menu a:hover, .language-menu a[aria-current] { background: var(--surface); }
+.site-controls :focus-visible, .mac-store-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.mac-store-badge { display: inline-flex; padding: 12px; margin: 0; flex-shrink: 0; }
+.mac-store-badge img { display: block; height: 48px; width: auto; max-width: none; }
+.intro-actions { flex-wrap: wrap; }
+body .intro-actions .action { white-space: normal; }
+body .logo span { letter-spacing: -.04em; }
+body .page-title, body .policy-box, body .step { overflow-wrap: anywhere; }
+body .gallery-choice span { white-space: normal; }
+@media (max-width: 1050px) {
+  body .site-header, body.home-page .site-header, body:not(.home-page) .site-header { grid-template-columns: 1fr auto; gap: 14px; }
+  body .site-header .nav-links { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; padding: 0; margin: 0; }
+  .site-controls { grid-column: 2; grid-row: 1; }
+}
+@media (max-width: 480px) {
+  body .site-header .logo { font-size: 16px; gap: 7px; }
+  body .site-header .logo img { width: 28px; height: 28px; }
+  body .site-header .nav-links { gap: 12px 18px; font-size: 12px; }
+  [data-language-name] { display: none; }
+  [data-language-short] { display: inline; }
+  .site-controls { gap: 5px; }
+  body .intro-actions { gap: 10px; }
+  body .intro-copy br { display: none; }
+}
+/* Long translated headings must fit even on a 320-pixel viewport. */
+body h1, body h2, body h3 { overflow-wrap: anywhere; hyphens: auto; }
+/* The new second header row leaves room for navigation on phones. */
+body.home-page .site-header .nav-links > a { display: inline-flex; }

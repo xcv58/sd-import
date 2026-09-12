@@ -1,3 +1,4 @@
+import SDImportCore
 import SDImportCommerce
 import SwiftUI
 
@@ -12,9 +13,9 @@ struct PurchaseView: View {
                 .foregroundStyle(.tint)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Unlock Unlimited Imports")
+                Text(L10n.tr("Unlock Unlimited Imports"))
                     .font(.title2.bold())
-                Text("Keep previewing every card for free. A one-time purchase unlocks unlimited completed imports.")
+                Text(L10n.tr("Keep previewing every card for free. A one-time purchase unlocks unlimited completed imports."))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -22,7 +23,7 @@ struct PurchaseView: View {
             Label(purchaseManager.allowanceSummary, systemImage: "checkmark.circle")
 
             if purchaseManager.isFamilyShareable {
-                Label("Shareable with Family Sharing", systemImage: "person.3")
+                Label(L10n.tr("Shareable with Family Sharing"), systemImage: "person.3")
             }
 
             if let status = purchaseManager.statusMessage {
@@ -32,13 +33,13 @@ struct PurchaseView: View {
             }
 
             HStack {
-                Button("Not Now") {
+                Button(L10n.tr("Not Now")) {
                     dismiss()
                 }
 
                 Spacer()
 
-                Button("Restore Purchases") {
+                Button(L10n.tr("Restore Purchases")) {
                     Task {
                         await purchaseManager.restorePurchases()
                         if purchaseManager.hasLifetimeUnlock {
@@ -70,8 +71,8 @@ struct PurchaseView: View {
 
     private var purchaseButtonTitle: String {
         if let price = purchaseManager.productDisplayPrice {
-            return "Buy for \(price)"
+            return L10n.tr("Buy for \(price)")
         }
-        return purchaseManager.isPerformingStoreOperation ? "Loading…" : "Try Again"
+        return purchaseManager.isPerformingStoreOperation ? L10n.tr("Loading…") : L10n.tr("Try Again")
     }
 }

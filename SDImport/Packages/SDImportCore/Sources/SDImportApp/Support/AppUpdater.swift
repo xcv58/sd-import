@@ -101,10 +101,10 @@ struct CheckForUpdatesView: View {
 
     var body: some View {
         if updater.isAvailable {
-            Button("Check for Updates...", action: updater.checkForUpdates)
+            Button(L10n.tr("Check for Updates..."), action: updater.checkForUpdates)
                 .disabled(!updater.canCheckForUpdates)
         } else {
-            Button("Check for Updates...") {}
+            Button(L10n.tr("Check for Updates...")) {}
                 .disabled(true)
         }
     }
@@ -123,20 +123,20 @@ struct UpdaterSettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             if appUpdater.isAvailable {
                 Toggle(
-                    "Automatically check for updates",
+                    L10n.tr("Automatically check for updates"),
                     isOn: $appUpdater.automaticallyChecksForUpdates
                 )
 
                 Toggle(
-                    "Automatically download updates",
+                    L10n.tr("Automatically download updates"),
                     isOn: $appUpdater.automaticallyDownloadsUpdates
                 )
                 .disabled(!appUpdater.automaticallyChecksForUpdates)
             } else {
                 Text(
                     AppDistribution.current == .macAppStore
-                        ? "Updates are delivered by the App Store."
-                        : "Updates are not configured for this build."
+                        ? L10n.tr("Updates are delivered by the App Store.")
+                        : L10n.tr("Updates are not configured for this build.")
                 )
                     .foregroundStyle(.secondary)
             }

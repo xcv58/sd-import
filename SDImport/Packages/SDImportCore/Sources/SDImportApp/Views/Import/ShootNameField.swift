@@ -14,7 +14,7 @@ struct ShootNameField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                TextField("Shoot name", text: $name)
+                TextField(L10n.tr("Shoot name"), text: $name)
                     .textFieldStyle(.roundedBorder)
                     .frame(
                         minWidth: ImportFormLayout.minimumControlWidth,
@@ -26,7 +26,7 @@ struct ShootNameField: View {
 
                 Menu {
                     if suggestions.isEmpty {
-                        Text("No recent shoot names")
+                        Text(L10n.tr("No recent shoot names"))
                     } else {
                         ForEach(suggestions) { suggestion in
                             Button {
@@ -40,8 +40,8 @@ struct ShootNameField: View {
                 } label: {
                     Image(systemName: "clock.arrow.circlepath")
                 }
-                .help("Choose recent shoot name")
-                .accessibilityLabel("Choose recent shoot name")
+                .help(L10n.tr("Choose recent shoot name"))
+                .accessibilityLabel(L10n.tr("Choose recent shoot name"))
                 .fixedSize()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -70,7 +70,7 @@ struct ShootNameField: View {
     }
 
     private func menuTitle(for suggestion: RecentShootNameChoice) -> String {
-        let usage = suggestion.useCount == 1 ? "used once" : "used \(suggestion.useCount) times"
+        let usage = suggestion.useCount == 1 ? L10n.tr("used once") : L10n.tr("used \(suggestion.useCount) times")
         return "\(suggestion.name) · \(usage)"
     }
 }

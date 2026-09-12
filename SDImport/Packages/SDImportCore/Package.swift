@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "SDImportCore",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14)
     ],
@@ -38,7 +39,8 @@ let package = Package(
             name: "SDImportCore",
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift")
-            ]
+            ],
+            resources: [.process("Resources")]
         ),
         .executableTarget(
             name: "sdimport",

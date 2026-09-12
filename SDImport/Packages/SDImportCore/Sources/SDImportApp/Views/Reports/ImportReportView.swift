@@ -65,8 +65,8 @@ struct ImportReportView: View {
             .buttonStyle(.borderless)
             .controlSize(.large)
             .keyboardShortcut(.cancelAction)
-            .help("Close")
-            .accessibilityLabel("Close report")
+            .help(L10n.tr("Close"))
+            .accessibilityLabel(L10n.tr("Close report"))
             .padding(18)
         }
         .frame(minWidth: 720, idealWidth: 960, minHeight: 560, idealHeight: 720)
@@ -75,7 +75,7 @@ struct ImportReportView: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Import Report")
+                Text(L10n.tr("Import Report"))
                     .font(.title2)
                     .fontWeight(.semibold)
                 Text(HistoryJobPresentation.title(for: job))
@@ -106,23 +106,23 @@ struct ImportReportView: View {
             Button {
                 model.copySummary(for: job)
             } label: {
-                Label("Copy Summary", systemImage: "doc.on.doc")
+                Label(L10n.tr("Copy Summary"), systemImage: "doc.on.doc")
             }
 
             Menu {
                 Button {
                     model.openReportFile(for: job)
                 } label: {
-                    Label("Open Markdown", systemImage: "doc.text")
+                    Label(L10n.tr("Open Markdown"), systemImage: "doc.text")
                 }
 
                 Button {
                     model.revealReport(for: job)
                 } label: {
-                    Label("Reveal in Finder", systemImage: "folder")
+                    Label(L10n.tr("Reveal in Finder"), systemImage: "folder")
                 }
             } label: {
-                Label("Original Report", systemImage: "doc.text")
+                Label(L10n.tr("Original Report"), systemImage: "doc.text")
             }
             .fixedSize(horizontal: true, vertical: false)
             .disabled(!model.reportFileExists(for: job))
@@ -131,12 +131,12 @@ struct ImportReportView: View {
 
     private var summaryGrid: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 10)], alignment: .leading, spacing: 10) {
-            MetricView(title: "Scanned", value: summary.scannedFiles)
-            MetricView(title: "New", value: summary.newFiles)
-            MetricView(title: "Known", value: summary.knownFiles)
-            MetricView(title: "Conflicts", value: summary.conflictFiles)
-            MetricView(title: "Copied", value: summary.copiedFiles)
-            MetricView(title: "Failed", value: summary.failedFiles)
+            MetricView(title: L10n.tr("Scanned"), value: summary.scannedFiles)
+            MetricView(title: L10n.tr("New"), value: summary.newFiles)
+            MetricView(title: L10n.tr("Known"), value: summary.knownFiles)
+            MetricView(title: L10n.tr("Conflicts"), value: summary.conflictFiles)
+            MetricView(title: L10n.tr("Copied"), value: summary.copiedFiles)
+            MetricView(title: L10n.tr("Failed"), value: summary.failedFiles)
         }
         .padding()
         .appCardSurface()
@@ -144,9 +144,9 @@ struct ImportReportView: View {
 
     private var pathDetails: some View {
         VStack(alignment: .leading, spacing: 8) {
-            reportPathRow(title: "Source", path: summary.mountPath)
-            reportPathRow(title: "Photos", path: job.photosRoot)
-            reportPathRow(title: "Videos", path: job.videosRoot)
+            reportPathRow(title: L10n.tr("Source"), path: summary.mountPath)
+            reportPathRow(title: L10n.tr("Photos"), path: job.photosRoot)
+            reportPathRow(title: L10n.tr("Videos"), path: job.videosRoot)
         }
         .font(.caption)
     }
@@ -169,7 +169,7 @@ struct ImportReportView: View {
             fileSectionHeader
 
             if filteredFiles.isEmpty {
-                ContentUnavailableView("No Files", systemImage: "doc")
+                ContentUnavailableView(L10n.tr("No Files"), systemImage: "doc")
                     .frame(maxWidth: .infinity, minHeight: 160)
             } else {
                 List(filteredFiles) { file in
@@ -202,7 +202,7 @@ struct ImportReportView: View {
 
     private var fileHeading: some View {
         HStack(spacing: 8) {
-            Text("Files")
+            Text(L10n.tr("Files"))
                 .font(.headline)
             Text(fileCountText)
                 .font(.caption)
@@ -212,10 +212,10 @@ struct ImportReportView: View {
 
     private var fileControls: some View {
         HStack(spacing: 8) {
-            Text("Show")
+            Text(L10n.tr("Show"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Picker("File Filter", selection: $filter) {
+            Picker(L10n.tr("File Filter"), selection: $filter) {
                 ForEach(ReportFileFilter.allCases) { filter in
                     Text(filter.title).tag(filter)
                 }
@@ -228,9 +228,9 @@ struct ImportReportView: View {
 
     private var fileCountText: String {
         if filteredFiles.count == files.count {
-            return files.count == 1 ? "1 file" : "\(files.count) files"
+            return files.count == 1 ? L10n.tr("1 file") : L10n.tr("\(files.count) files")
         }
-        return "\(filteredFiles.count) of \(files.count)"
+        return L10n.tr("\(filteredFiles.count) of \(files.count)")
     }
 
     private func fileSortPriority(_ file: JobFileRecord) -> Int {
@@ -256,7 +256,7 @@ struct ImportReportView: View {
                 .padding(.top, 4)
         } label: {
             AppStatusLabel(
-                title: "Report opened with warnings",
+                title: L10n.tr("Report opened with warnings"),
                 systemImage: "exclamationmark.triangle",
                 role: .warning
             )
@@ -297,15 +297,15 @@ private enum ReportFileFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all:
-            return "All"
+            return L10n.tr("All")
         case .copied:
-            return "Copied"
+            return L10n.tr("Copied")
         case .skipped:
-            return "Skipped"
+            return L10n.tr("Skipped")
         case .failed:
-            return "Failed"
+            return L10n.tr("Failed")
         case .conflicts:
-            return "Conflicts"
+            return L10n.tr("Conflicts")
         }
     }
 
@@ -374,7 +374,7 @@ private struct ReportFileRow: View {
                 .help(file.relativePath ?? file.sourcePath)
 
                 if let error = file.error, !error.isEmpty {
-                    Text(error)
+                    Text(L10n.storedMessage(error))
                         .font(.caption)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
@@ -387,10 +387,10 @@ private struct ReportFileRow: View {
                 Button {
                     model.reveal(path: revealPath)
                 } label: {
-                    Label("Reveal", systemImage: "arrow.up.right.square")
+                    Label(L10n.tr("Reveal"), systemImage: "arrow.up.right.square")
                 }
                 .buttonStyle(.bordered)
-                .accessibilityLabel("Reveal \(file.filename)")
+                .accessibilityLabel(L10n.tr("Reveal \(file.filename)"))
             }
         }
         .padding(.vertical, 6)
@@ -423,13 +423,13 @@ private struct ReportFileRow: View {
     private var statusTitle: String {
         switch file.copyStatus {
         case .pending:
-            return "Pending"
+            return L10n.tr("Pending")
         case .copied:
-            return "Copied"
+            return L10n.tr("Copied")
         case .skipped:
-            return file.knownSource?.skippedStatusTitle ?? "Skipped"
+            return file.knownSource?.skippedStatusTitle ?? L10n.tr("Skipped")
         case .failed:
-            return "Failed"
+            return L10n.tr("Failed")
         }
     }
 

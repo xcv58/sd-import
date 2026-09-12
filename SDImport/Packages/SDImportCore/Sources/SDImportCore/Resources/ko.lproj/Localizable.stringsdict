@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%lld copies</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>복사 %lld개</string>
+			<key>other</key>
+			<string>복사 %1$lld개</string>
+		</dict>
+	</dict>
+	<key>%lld days</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld일</string>
+			<key>other</key>
+			<string>%1$lld일</string>
+		</dict>
+	</dict>
+	<key>%lld destination folders</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>대상 폴더 %lld개</string>
+			<key>other</key>
+			<string>대상 폴더 %1$lld개</string>
+		</dict>
+	</dict>
+	<key>%lld destination issues</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>대상 문제 %lld개</string>
+			<key>other</key>
+			<string>대상 문제 %1$lld개</string>
+		</dict>
+	</dict>
+	<key>%lld files</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>파일 %lld개</string>
+			<key>other</key>
+			<string>파일 %1$lld개</string>
+		</dict>
+	</dict>
+	<key>%lld files ready</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>파일 %lld개 준비됨</string>
+			<key>other</key>
+			<string>파일 %1$lld개 준비됨</string>
+		</dict>
+	</dict>
+	<key>%lld files were imported on another Mac</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>파일 %lld개를 다른 Mac에서 가져왔습니다</string>
+			<key>other</key>
+			<string>파일 %1$lld개를 다른 Mac에서 가져왔습니다</string>
+		</dict>
+	</dict>
+	<key>%lld files were previously imported on another Mac</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>파일 %lld개를 이전에 다른 Mac에서 가져왔습니다</string>
+			<key>other</key>
+			<string>파일 %1$lld개를 이전에 다른 Mac에서 가져왔습니다</string>
+		</dict>
+	</dict>
+	<key>%lld folders</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>폴더 %lld개</string>
+			<key>other</key>
+			<string>폴더 %1$lld개</string>
+		</dict>
+	</dict>
+	<key>%lld old jobs would be deleted</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>이전 작업 %lld개가 삭제됩니다</string>
+			<key>other</key>
+			<string>이전 작업 %lld개가 삭제됩니다</string>
+		</dict>
+	</dict>
+	<key>%lld photos</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>사진 %lld장</string>
+			<key>other</key>
+			<string>사진 %1$lld장</string>
+		</dict>
+	</dict>
+	<key>%lld support files</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>보조 파일 %lld개</string>
+			<key>other</key>
+			<string>보조 파일 %1$lld개</string>
+		</dict>
+	</dict>
+	<key>%lld videos</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>동영상 %lld개</string>
+			<key>other</key>
+			<string>동영상 %1$lld개</string>
+		</dict>
+	</dict>
+	<key>Deleted %lld old jobs</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>이전 작업 %lld개 삭제됨</string>
+			<key>other</key>
+			<string>이전 작업 %lld개 삭제됨</string>
+		</dict>
+	</dict>
+	<key>Forgot %lld imported files</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>가져온 파일 %lld개의 기억을 지웠습니다</string>
+			<key>other</key>
+			<string>가져온 파일 %1$lld개의 기억을 지웠습니다</string>
+		</dict>
+	</dict>
+	<key>Ignored %lld invalid or corrupted portable import records</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>잘못되거나 손상된 이동식 가져오기 기록 %lld개를 무시했습니다</string>
+			<key>other</key>
+			<string>잘못되거나 손상된 이동식 가져오기 기록 %1$lld개를 무시했습니다</string>
+		</dict>
+	</dict>
+	<key>Import %lld Files</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>파일 %lld개 가져오기</string>
+			<key>other</key>
+			<string>파일 %1$lld개 가져오기</string>
+		</dict>
+	</dict>
+	<key>Portable receipt overridden for %lld files</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>파일 %lld개의 이동식 가져오기 기록을 무시하도록 설정했습니다</string>
+			<key>other</key>
+			<string>파일 %lld개의 이동식 가져오기 기록을 무시하도록 설정했습니다</string>
+		</dict>
+	</dict>
+	<key>Scan complete. %lld files were imported on another Mac</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>스캔 완료. 파일 %lld개를 다른 Mac에서 가져왔습니다</string>
+			<key>other</key>
+			<string>스캔 완료. 파일 %lld개를 다른 Mac에서 가져왔습니다</string>
+		</dict>
+	</dict>
+	<key>Video + %lld sidecars</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>동영상 및 사이드카 %lld개</string>
+			<key>other</key>
+			<string>동영상 및 사이드카 %lld개</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

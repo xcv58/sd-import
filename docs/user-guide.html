@@ -1,140 +1,121 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="system">
+<html lang="en" data-theme="system" data-page="user-guide">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"><script id="site-config" type="application/json">{"language": "en", "page": "user-guide", "messages": {"ui.themeDark": "Switch to dark theme", "ui.themeLight": "Switch to light theme", "ui.play": "Play screencast", "ui.pause": "Pause screencast", "ui.timeline": "{current} of {duration}", "ui.enlarge": "Enlarge screenshot: {title}"}}</script><script src="assets/site-settings-20260912.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
     <link rel="apple-touch-icon" href="assets/images/app-icon.png">
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
-    <script>try { const t = localStorage.getItem("theme"); if (["light", "dark", "system"].includes(t)) document.documentElement.dataset.theme = t; } catch {}</script>
-    <title>SD Import User Guide</title>
-    <meta name="description" content="First setup, card import, safety notes, keyboard shortcuts, and help for SD Import.">
-    <meta property="og:title" content="SD Import User Guide">
-    <meta property="og:description" content="First setup, card import, safety notes, keyboard shortcuts, and help for SD Import.">
+
+    <title data-i18n="m180">SD Card Import — User guide</title>
+    <meta name="description" content="First setup, card import, safety notes, keyboard shortcuts, and help for SD Import." data-i18n-attr-content="m181">
+    <meta property="og:title" content="SD Card Import — User guide" data-i18n-attr-content="m180">
+    <meta property="og:description" content="First setup, card import, safety notes, keyboard shortcuts, and help for SD Import." data-i18n-attr-content="m181">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sd.jenny.media/user-guide.html">
-    <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-import-social-20260905.png">
+    <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="SD Import User Guide">
-    <meta name="twitter:description" content="First setup, card import, safety notes, keyboard shortcuts, and help for SD Import.">
-    <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-import-social-20260905.png">
+    <meta name="twitter:title" content="SD Card Import — User guide" data-i18n-attr-content="m180">
+    <meta name="twitter:description" content="First setup, card import, safety notes, keyboard shortcuts, and help for SD Import." data-i18n-attr-content="m181">
+    <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
     <link rel="canonical" href="https://sd.jenny.media/user-guide.html">
     <link rel="stylesheet" href="assets/site-20260512.css?v=20260530c">
     <link rel="stylesheet" href="assets/redesign-20260906.css">
-</head>
+<link rel="stylesheet" href="assets/site-controls-20260912.css"><link rel="alternate" hreflang="en" href="https://sd.jenny.media/user-guide.html"><link rel="alternate" hreflang="zh-Hans" href="https://sd.jenny.media/zh-Hans/user-guide.html"><link rel="alternate" hreflang="zh-Hant" href="https://sd.jenny.media/zh-Hant/user-guide.html"><link rel="alternate" hreflang="ja" href="https://sd.jenny.media/ja/user-guide.html"><link rel="alternate" hreflang="ko" href="https://sd.jenny.media/ko/user-guide.html"><link rel="alternate" hreflang="de" href="https://sd.jenny.media/de/user-guide.html"><link rel="alternate" hreflang="fr" href="https://sd.jenny.media/fr/user-guide.html"><link rel="alternate" hreflang="es" href="https://sd.jenny.media/es/user-guide.html"><link rel="alternate" hreflang="pt-BR" href="https://sd.jenny.media/pt-BR/user-guide.html"><link rel="alternate" hreflang="it" href="https://sd.jenny.media/it/user-guide.html"><link rel="alternate" hreflang="x-default" href="https://sd.jenny.media/user-guide.html"></head>
 <body class="preload">
-    <a class="skip-link" href="#main">Skip to content</a>
+    <a class="skip-link" href="#main" data-i18n="m003">Skip to content</a>
     <div class="container">
-        <header class="site-header">
-            <a class="logo" href="index.html"><img src="assets/images/app-icon-72-20260512.webp" width="36" height="36" alt=""><span>SD Import</span></a>
-            <div class="nav-wrapper">
-                <nav class="nav-links" aria-label="Primary">
-                    <a href="install.html">Install</a>
-                    <a href="user-guide.html">Guide</a>
-                    <a href="updates.html">Updates</a>
-                    <a href="support.html">Support</a>
+        <header class="site-header"><a class="logo" href="index.html?lang=en" aria-label="SD Card Import home" data-i18n-attr-aria-label="m004"><img src="assets/images/app-icon-72-20260512.webp" width="36" height="36" alt=""><span>SD Card Import</span></a><nav class="nav-links" aria-label="Primary" data-i18n-attr-aria-label="m005">
+                    <a href="install.html?lang=en" data-i18n="m152">Install</a>
+                    <a href="user-guide.html?lang=en" data-i18n="m008">Guide</a>
+                    <a href="updates.html?lang=en" data-i18n="m153">Updates</a>
+                    <a href="support.html?lang=en" data-i18n="m144">Support</a>
                     <a href="https://github.com/xcv58/sd-import">GitHub</a>
-                </nav>
-                <div class="theme-switch" role="group" aria-label="Theme">
-                    <button class="theme-btn" type="button" data-theme-value="system" aria-label="System theme" title="System theme"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg><span>System</span></button>
-                    <button class="theme-btn" type="button" data-theme-value="light" aria-label="Light theme" title="Light theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg><span>Light</span></button>
-                    <button class="theme-btn" type="button" data-theme-value="dark" aria-label="Dark theme" title="Dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg><span>Dark</span></button>
-                </div>
-            </div>
-        </header>
+                </nav><div class="site-controls"><details class="language-picker"><summary aria-label="Choose language" data-i18n-attr-aria-label="m010"><svg viewbox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c-5 5-5 13 0 18M12 3c5 5 5 13 0 18"></path></svg><span data-language-name>English</span><span data-language-short>EN</span></summary><nav class="language-menu" data-language-menu aria-label="Languages" data-i18n-attr-aria-label="m306"><a href="user-guide.html?lang=en" lang="en" hreflang="en" aria-current="page">English</a><a href="zh-Hans/user-guide.html" lang="zh-Hans" hreflang="zh-Hans">简体中文</a><a href="zh-Hant/user-guide.html" lang="zh-Hant" hreflang="zh-Hant">繁體中文</a><a href="ja/user-guide.html" lang="ja" hreflang="ja">日本語</a><a href="ko/user-guide.html" lang="ko" hreflang="ko">한국어</a><a href="de/user-guide.html" lang="de" hreflang="de">Deutsch</a><a href="fr/user-guide.html" lang="fr" hreflang="fr">Français</a><a href="es/user-guide.html" lang="es" hreflang="es">Español</a><a href="pt-BR/user-guide.html" lang="pt-BR" hreflang="pt-BR">Português (Brasil)</a><a href="it/user-guide.html" lang="it" hreflang="it">Italiano</a></nav></details><button class="theme-toggle" type="button" data-theme-toggle hidden aria-label="Switch to dark theme" data-i18n-attr-aria-label="m011"><svg class="theme-moon" viewbox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path></svg><svg class="theme-sun" viewbox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"></path></svg></button></div></header>
     </div>
 
     <main id="main" class="container">
         <section class="page-title">
-            <h1>User Guide</h1>
-            <p>Set destinations once, preview each card before copying, and keep a clear record of what SD Import already imported.</p>
-            <p>The screenshots in this guide show SD Import, the direct edition. SD Card Import is the App Store edition; see <a href="install.html#app-store">availability and pricing</a> and <a href="support.html#purchases">purchase and restore help</a>.</p>
-        </section>
+            <h1 data-i18n="m182">User Guide</h1>
+            <p data-i18n="m183">Set destinations once, preview each card before copying, and keep a clear record of what SD Import already imported.</p>
+            <p data-i18n="m184">The screenshots in this guide show SD Import, the direct edition. SD Card Import is the App Store edition; see <a href="install.html?lang=en#app-store">availability and pricing</a> and <a href="support.html?lang=en#purchases">purchase and restore help</a>.</p>
+        <p data-i18n="m185">Using SD Card Import? <a href="install.html?lang=en#app-store">Install from the Mac App Store</a>, then choose your source and destination folders. The walkthrough below shows the direct edition, SD Import.</p></section>
 
         <section class="section section-divider">
             <div class="section-header">
-                <h2>Quick start.</h2>
-                <p>Most users only need to install once, set destinations once, and review the preview each time a card is inserted.</p>
+                <h2 data-i18n="m186">Quick start.</h2>
+                <p data-i18n="m187">Most users only need to install once, set destinations once, and review the preview each time a card is inserted.</p>
             </div>
             <div class="grid">
                 <article class="step">
                     <span class="step-number">1</span>
-                    <h3>Install</h3>
-                    <p>Download the signed DMG, open it, and drag <code>SD Import.app</code> into <code>Applications</code>.</p>
+                    <h3 data-i18n="m152">Install</h3>
+                    <p data-i18n="m188">Download the signed DMG, open it, and drag <code>SD Import.app</code> into <code>Applications</code>.</p>
                 </article>
                 <article class="step">
                     <span class="step-number">2</span>
-                    <h3>Set folders</h3>
-                    <p>Open Settings, choose photo and video destinations, and optionally enable automatic source ejection or portable import receipts. Portable receipts write a hidden <code>.sd-import</code> ledger on writable sources so other Macs can avoid duplicate imports.</p>
+                    <h3 data-i18n="m189">Set folders</h3>
+                    <p data-i18n="m190">Open Settings, choose photo and video destinations, and optionally enable automatic source ejection or portable import receipts. Portable receipts write a hidden <code>.sd-import</code> ledger on writable sources so other Macs can avoid duplicate imports.</p>
                 </article>
                 <article class="step">
                     <span class="step-number">3</span>
-                    <h3>Import</h3>
-                    <p>Insert a card, review the preview, then keep the card connected until copy progress finishes. Files recognized from portable history are labeled <code>Other Mac</code>; history is rechecked before copying, and <code>Import Anyway</code> remains active while the destination plan is rebuilt. Eject the source from the receipt when you are done.</p>
+                    <h3 data-i18n="m191">Import</h3>
+                    <p data-i18n="m192">Insert a card, review the preview, then keep the card connected until copy progress finishes. Files recognized from portable history are labeled <code>Other Mac</code>; history is rechecked before copying, and <code>Import Anyway</code> remains active while the destination plan is rebuilt. Eject the source from the receipt when you are done.</p>
                 </article>
             </div>
         </section>
 
         <section class="section section-divider two-column">
             <div class="section-header">
-                <h2>Import from a card.</h2>
-                <p>SD Import can appear automatically when a card mounts, or you can open the app and choose <code>Import From Card...</code>.</p>
+                <h2 data-i18n="m193">Import from a card.</h2>
+                <p data-i18n="m194">SD Import can appear automatically when a card mounts, or you can open the app and choose <code>Import From Card...</code>.</p>
             </div>
             <ol class="workflow-steps">
-                <li><span class="step-number">1</span><div><h3>Connect a card.</h3><p>Insert an SD card or connect a camera card reader.</p></div></li>
-                <li><span class="step-number">2</span><div><h3>Review the scan.</h3><p>Check what is new, already imported, unsupported, or conflicting.</p></div></li>
-                <li><span class="step-number">3</span><div><h3>Start the copy.</h3><p>Confirm the destinations and leave the source connected until the import completes.</p></div></li>
-                <li><span class="step-number">4</span><div><h3>Eject safely.</h3><p>Choose <code>Eject Source</code> on the receipt, or enable automatic ejection in Settings. Automatic ejection runs only after an error-free import.</p></div></li>
+                <li><span class="step-number">1</span><div><h3 data-i18n="m195">Connect a card.</h3><p data-i18n="m196">Insert an SD card or connect a camera card reader.</p></div></li>
+                <li><span class="step-number">2</span><div><h3 data-i18n="m197">Review the scan.</h3><p data-i18n="m198">Check what is new, already imported, unsupported, or conflicting.</p></div></li>
+                <li><span class="step-number">3</span><div><h3 data-i18n="m199">Start the copy.</h3><p data-i18n="m200">Confirm the destinations and leave the source connected until the import completes.</p></div></li>
+                <li><span class="step-number">4</span><div><h3 data-i18n="m201">Eject safely.</h3><p data-i18n="m202">Choose <code>Eject Source</code> on the receipt, or enable automatic ejection in Settings. Automatic ejection runs only after an error-free import.</p></div></li>
             </ol>
         </section>
 
         <section class="section section-divider two-column">
             <div class="policy-box">
-                <h2>Safety notes</h2>
+                <h2 data-i18n="m203">Safety notes</h2>
                 <ul>
-                    <li>SD Import copies files; it does not erase the card.</li>
-                    <li>When portable receipts are enabled, SD Import writes only its hidden <code>.sd-import</code> ledger on the source. Locked and read-only sources continue with a warning.</li>
-                    <li>Files already imported are skipped on future runs. <code>Import Anyway</code> is available only for files recognized from portable history. If a source file changes after scanning, SD Import requires a rescan instead of applying stale history.</li>
-                    <li>If a destination file already exists but is different, SD Import keeps both files by adding a suffix.</li>
-                    <li>Leave the app in <code>Applications</code> so updates can install correctly.</li>
+                    <li data-i18n="m204">SD Import copies files; it does not erase the card.</li>
+                    <li data-i18n="m205">When portable receipts are enabled, SD Import writes only its hidden <code>.sd-import</code> ledger on the source. Locked and read-only sources continue with a warning.</li>
+                    <li data-i18n="m206">Files already imported are skipped on future runs. <code>Import Anyway</code> is available only for files recognized from portable history. If a source file changes after scanning, SD Import requires a rescan instead of applying stale history.</li>
+                    <li data-i18n="m207">If a destination file already exists but is different, SD Import keeps both files by adding a suffix.</li>
+                    <li data-i18n="m208">Leave the app in <code>Applications</code> so updates can install correctly.</li>
                 </ul>
             </div>
             <div class="policy-box">
-                <h2>Keyboard shortcuts</h2>
+                <h2 data-i18n="m209">Keyboard shortcuts</h2>
                 <ul>
-                    <li><code>Command-I</code>: open Import.</li>
-                    <li><code>Command-1</code> through <code>Command-4</code>: Import, History, Settings, Diagnostics.</li>
-                    <li><code>Control-Tab</code>: next panel.</li>
-                    <li><code>Command-R</code>: refresh History.</li>
-                    <li><code>Command-,</code>: Settings.</li>
+                    <li data-i18n="m210"><code>Command-I</code>: open Import.</li>
+                    <li data-i18n="m211"><code>Command-1</code> through <code>Command-4</code>: Import, History, Settings, Diagnostics.</li>
+                    <li data-i18n="m212"><code>Control-Tab</code>: next panel.</li>
+                    <li data-i18n="m213"><code>Command-R</code>: refresh History.</li>
+                    <li data-i18n="m214"><code>Command-,</code>: Settings.</li>
                 </ul>
             </div>
         </section>
 
         <section class="section section-divider">
             <div class="section-header">
-                <h2>If import does not start automatically.</h2>
-                <p>Make sure <code>Prompt on card mount</code> is enabled in Settings, open SD Import manually, then choose <code>Import From Card...</code>. For persistent issues, export diagnostics and contact support.</p>
+                <h2 data-i18n="m215">If import does not start automatically.</h2>
+                <p data-i18n="m216">Make sure <code>Prompt on card mount</code> is enabled in Settings, open SD Import manually, then choose <code>Import From Card...</code>. For persistent issues, export diagnostics and contact support.</p>
             </div>
-            <div class="cta-group">
-                <a class="cta-button cta-primary" href="support.html">Get support</a>
-                <a class="cta-button cta-secondary" href="https://github.com/xcv58/sd-import/releases/latest">Release notes</a>
-            </div>
+            <div class="cta-group" data-i18n="m217"><a class="cta-button cta-primary" href="support.html?lang=en">Get support</a> <a class="cta-button cta-secondary" href="https://github.com/xcv58/sd-import/releases/latest">Release notes</a></div>
         </section>
     </main>
 
     <footer class="site-footer">
         <div class="container">
-            <div class="footer-links">
-                <a href="index.html">Home</a>
-                <a href="install.html">Install</a>
-                <a href="updates.html">Updates</a>
-                <a href="privacy.html">Privacy</a>
-                <a href="support.html">Support</a>
-            </div>
+            <div class="footer-links" data-i18n="m218"><a href="index.html?lang=en">Home</a> <a href="install.html?lang=en">Install</a> <a href="updates.html?lang=en">Updates</a> <a href="privacy.html?lang=en">Privacy</a> <a href="support.html?lang=en">Support</a></div>
         </div>
     </footer>
-    <script src="assets/site-20260512-theme-media.js?v=20260530c"></script>
+    <script src="assets/site-theme-media-20260912.js"></script>
 </body>
 </html>

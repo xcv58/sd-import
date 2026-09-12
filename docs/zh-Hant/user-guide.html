@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="system" data-page="user-guide">
+<head>
+    <meta charset="UTF-8"><script id="site-config" type="application/json">{"language": "zh-Hant", "page": "user-guide", "messages": {"ui.themeDark": "切換至深色外觀", "ui.themeLight": "切換至淺色外觀", "ui.play": "播放螢幕錄影", "ui.pause": "暫停螢幕錄影", "ui.timeline": "{current}，共 {duration}", "ui.enlarge": "放大截圖：{title}"}}</script><script src="../assets/site-settings-20260912.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/images/favicon-32.png">
+    <link rel="apple-touch-icon" href="../assets/images/app-icon.png">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
+
+    <title data-i18n="m180">SD Card Import — 使用指南</title>
+    <meta name="description" content="SD Import 的首次設定、記憶卡匯入、安全說明、鍵盤快速鍵和幫助。" data-i18n-attr-content="m181">
+    <meta property="og:title" content="SD Card Import — 使用指南" data-i18n-attr-content="m180">
+    <meta property="og:description" content="SD Import 的首次設定、記憶卡匯入、安全說明、鍵盤快速鍵和幫助。" data-i18n-attr-content="m181">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://sd.jenny.media/zh-Hant/user-guide.html">
+    <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SD Card Import — 使用指南" data-i18n-attr-content="m180">
+    <meta name="twitter:description" content="SD Import 的首次設定、記憶卡匯入、安全說明、鍵盤快速鍵和幫助。" data-i18n-attr-content="m181">
+    <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
+    <link rel="canonical" href="https://sd.jenny.media/zh-Hant/user-guide.html">
+    <link rel="stylesheet" href="../assets/site-20260512.css?v=20260530c">
+    <link rel="stylesheet" href="../assets/redesign-20260906.css">
+<link rel="stylesheet" href="../assets/site-controls-20260912.css"><link rel="alternate" hreflang="en" href="https://sd.jenny.media/user-guide.html"><link rel="alternate" hreflang="zh-Hans" href="https://sd.jenny.media/zh-Hans/user-guide.html"><link rel="alternate" hreflang="zh-Hant" href="https://sd.jenny.media/zh-Hant/user-guide.html"><link rel="alternate" hreflang="ja" href="https://sd.jenny.media/ja/user-guide.html"><link rel="alternate" hreflang="ko" href="https://sd.jenny.media/ko/user-guide.html"><link rel="alternate" hreflang="de" href="https://sd.jenny.media/de/user-guide.html"><link rel="alternate" hreflang="fr" href="https://sd.jenny.media/fr/user-guide.html"><link rel="alternate" hreflang="es" href="https://sd.jenny.media/es/user-guide.html"><link rel="alternate" hreflang="pt-BR" href="https://sd.jenny.media/pt-BR/user-guide.html"><link rel="alternate" hreflang="it" href="https://sd.jenny.media/it/user-guide.html"><link rel="alternate" hreflang="x-default" href="https://sd.jenny.media/user-guide.html"></head>
+<body class="preload">
+    <a class="skip-link" href="#main" data-i18n="m003">跳至正文</a>
+    <div class="container">
+        <header class="site-header"><a class="logo" href="index.html" aria-label="SD Card Import 首頁" data-i18n-attr-aria-label="m004"><img src="../assets/images/app-icon-72-20260512.webp" width="36" height="36" alt=""><span>SD Card Import</span></a><nav class="nav-links" aria-label="主導航" data-i18n-attr-aria-label="m005">
+                    <a href="install.html" data-i18n="m152">安裝</a>
+                    <a href="user-guide.html" data-i18n="m008">指南</a>
+                    <a href="updates.html" data-i18n="m153">更新</a>
+                    <a href="support.html" data-i18n="m144">支援</a>
+                    <a href="https://github.com/xcv58/sd-import">GitHub</a>
+                </nav><div class="site-controls"><details class="language-picker"><summary aria-label="選擇語言" data-i18n-attr-aria-label="m010"><svg viewbox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c-5 5-5 13 0 18M12 3c5 5 5 13 0 18"></path></svg><span data-language-name>繁體中文</span><span data-language-short>繁</span></summary><nav class="language-menu" data-language-menu aria-label="語言" data-i18n-attr-aria-label="m306"><a href="../user-guide.html?lang=en" lang="en" hreflang="en">English</a><a href="../zh-Hans/user-guide.html" lang="zh-Hans" hreflang="zh-Hans">简体中文</a><a href="../zh-Hant/user-guide.html" lang="zh-Hant" hreflang="zh-Hant" aria-current="page">繁體中文</a><a href="../ja/user-guide.html" lang="ja" hreflang="ja">日本語</a><a href="../ko/user-guide.html" lang="ko" hreflang="ko">한국어</a><a href="../de/user-guide.html" lang="de" hreflang="de">Deutsch</a><a href="../fr/user-guide.html" lang="fr" hreflang="fr">Français</a><a href="../es/user-guide.html" lang="es" hreflang="es">Español</a><a href="../pt-BR/user-guide.html" lang="pt-BR" hreflang="pt-BR">Português (Brasil)</a><a href="../it/user-guide.html" lang="it" hreflang="it">Italiano</a></nav></details><button class="theme-toggle" type="button" data-theme-toggle hidden aria-label="切換至深色外觀" data-i18n-attr-aria-label="m011"><svg class="theme-moon" viewbox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path></svg><svg class="theme-sun" viewbox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"></path></svg></button></div></header>
+    </div>
+
+    <main id="main" class="container">
+        <section class="page-title">
+            <h1 data-i18n="m182">使用指南</h1>
+            <p data-i18n="m183">設定一次目的位置，每次拷貝前預覽記憶卡，清楚記錄 SD Import 已匯入的內容。</p>
+            <p data-i18n="m184">本指南截圖展示直接下載版 SD Import。SD Card Import 是 App Store 版；請參閱<a href="install.html#app-store">獲取方式與價格</a>及<a href="support.html#purchases">購買與恢復幫助</a>。</p>
+        <p data-i18n="m185">使用 SD Card Import？<a href="install.html#app-store">從 Mac App Store 安裝</a>，然後選擇來源檔案夾和目標檔案夾。下方流程展示直接下載版 SD Import。</p></section>
+
+        <section class="section section-divider">
+            <div class="section-header">
+                <h2 data-i18n="m186">快速開始。</h2>
+                <p data-i18n="m187">大多數使用者只需安裝一次、設定一次目的位置，並在每次插卡時檢查預覽。</p>
+            </div>
+            <div class="grid">
+                <article class="step">
+                    <span class="step-number">1</span>
+                    <h3 data-i18n="m152">安裝</h3>
+                    <p data-i18n="m188">下載已簽名的 DMG，打開後將 <code>SD Import.app</code> 拖入 <code>Applications</code>。</p>
+                </article>
+                <article class="step">
+                    <span class="step-number">2</span>
+                    <h3 data-i18n="m189">設定檔案夾</h3>
+                    <p data-i18n="m190">打開“設定”，選擇照片和影片目的位置，還可啟用自動推出來源裝置或便攜匯入回執。便攜回執會在可寫來源上寫入隱藏的 <code>.sd-import</code> 台帳，讓其他 Mac 避免重複匯入。</p>
+                </article>
+                <article class="step">
+                    <span class="step-number">3</span>
+                    <h3 data-i18n="m191">匯入</h3>
+                    <p data-i18n="m192">插卡並檢查預覽，拷貝進度完成前保持連接。從便攜歷史識別的檔案會標記為 <code>另一台 Mac</code>；拷貝前會重新檢查歷史，重建目標計劃時 <code>仍然匯入</code> 保持啟用。完成後可從回執推出來源裝置。</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section section-divider two-column">
+            <div class="section-header">
+                <h2 data-i18n="m193">從記憶卡匯入。</h2>
+                <p data-i18n="m194">記憶卡掛載時 SD Import 可自動出現，也可以打開App並選擇 <code>從記憶卡匯入…</code>。</p>
+            </div>
+            <ol class="workflow-steps">
+                <li><span class="step-number">1</span><div><h3 data-i18n="m195">連接記憶卡。</h3><p data-i18n="m196">插入 SD 卡或連接相機讀卡器。</p></div></li>
+                <li><span class="step-number">2</span><div><h3 data-i18n="m197">檢查掃描結果。</h3><p data-i18n="m198">檢查新增、已匯入、不支援或存在衝突的檔案。</p></div></li>
+                <li><span class="step-number">3</span><div><h3 data-i18n="m199">開始拷貝。</h3><p data-i18n="m200">確認目的位置，保持來源裝置連接直到匯入完成。</p></div></li>
+                <li><span class="step-number">4</span><div><h3 data-i18n="m201">安全推出。</h3><p data-i18n="m202">在回執中選擇 <code>退出來源</code>，或在“設定”中啟用自動推出。只有匯入無錯誤時才會自動推出。</p></div></li>
+            </ol>
+        </section>
+
+        <section class="section section-divider two-column">
+            <div class="policy-box">
+                <h2 data-i18n="m203">安全說明</h2>
+                <ul>
+                    <li data-i18n="m204">SD Import 拷貝檔案，不會抹掉記憶卡。</li>
+                    <li data-i18n="m205">啟用便攜回執後，SD Import 僅在來源上寫入隱藏的 <code>.sd-import</code> 台帳。已鎖定和唯讀來源會繼續匯入，並顯示警告。</li>
+                    <li data-i18n="m206">已匯入檔案會在之後跳過。<code>仍然匯入</code> 僅適用於從便攜歷史識別的檔案。如果來源檔案在掃描後改變，SD Import 會要求重新掃描，不會使用過期歷史。</li>
+                    <li data-i18n="m207">如果目的位置已有不同內容的同名檔案，SD Import 會添加後綴，保留兩個檔案。</li>
+                    <li data-i18n="m208">將App保留在 <code>Applications</code> 中，以便正確安裝更新。</li>
+                </ul>
+            </div>
+            <div class="policy-box">
+                <h2 data-i18n="m209">鍵盤快速鍵</h2>
+                <ul>
+                    <li data-i18n="m210"><code>Command-I</code>：打開匯入。</li>
+                    <li data-i18n="m211"><code>Command-1</code> 至 <code>Command-4</code>：匯入、歷史、設定、診斷。</li>
+                    <li data-i18n="m212"><code>Control-Tab</code>：下一個面板。</li>
+                    <li data-i18n="m213"><code>Command-R</code>：重新整理歷史。</li>
+                    <li data-i18n="m214"><code>Command-,</code>：設定。</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section section-divider">
+            <div class="section-header">
+                <h2 data-i18n="m215">如果匯入沒有自動開始。</h2>
+                <p data-i18n="m216">確保已在“設定”中啟用 <code>記憶卡掛載時提示</code>，手動打開 SD Import，再選擇 <code>從記憶卡匯入…</code>。如果問題持續，請導出診斷並聯繫支援。</p>
+            </div>
+            <div class="cta-group" data-i18n="m217"><a class="cta-button cta-primary" href="support.html">獲取支援</a> <a class="cta-button cta-secondary" href="https://github.com/xcv58/sd-import/releases/latest">發行說明</a></div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-links" data-i18n="m218"><a href="index.html">首頁</a> <a href="install.html">安裝</a> <a href="updates.html">更新</a> <a href="privacy.html">隱私權</a> <a href="support.html">支援</a></div>
+        </div>
+    </footer>
+    <script src="../assets/site-theme-media-20260912.js"></script>
+</body>
+</html>

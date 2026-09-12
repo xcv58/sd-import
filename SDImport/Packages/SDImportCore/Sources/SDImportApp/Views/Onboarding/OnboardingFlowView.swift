@@ -15,10 +15,10 @@ struct OnboardingFlowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Set Up \(AppDistribution.current.displayName)")
+                Text(L10n.tr("Set Up \(AppDistribution.current.displayName)"))
                     .font(.title2)
                     .fontWeight(.semibold)
-                Text("Choose where cards are scanned and where copied media should land. \(AppDistribution.current.displayName) previews everything before copying.")
+                Text(L10n.tr("Choose where cards are scanned and where copied media should land. \(AppDistribution.current.displayName) previews everything before copying."))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -30,60 +30,60 @@ struct OnboardingFlowView: View {
                 spacing: 12
             ) {
                 OnboardingGuideItem(
-                    title: "Source",
+                    title: L10n.tr("Source"),
                     systemImage: "externaldrive",
-                    text: "Start with /Volumes or pick a specific mounted card or source folder."
+                    text: L10n.tr("Start with /Volumes or pick a specific mounted card or source folder.")
                 )
                 OnboardingGuideItem(
-                    title: "Destinations",
+                    title: L10n.tr("Destinations"),
                     systemImage: "folder",
-                    text: "Photos and videos can use different folders. The preview shows exact destination folders before copying."
+                    text: L10n.tr("Photos and videos can use different folders. The preview shows exact destination folders before copying.")
                 )
                 OnboardingGuideItem(
-                    title: "Known files",
+                    title: L10n.tr("Known files"),
                     systemImage: "checkmark.seal",
-                    text: "Files already imported are shown as known or skipped so reinserting a card does not duplicate originals."
+                    text: L10n.tr("Files already imported are shown as known or skipped so reinserting a card does not duplicate originals.")
                 )
                 OnboardingGuideItem(
-                    title: "Support files",
+                    title: L10n.tr("Support files"),
                     systemImage: "paperclip",
-                    text: "Camera support files stay skipped for photo imports and can be kept for footage backups when needed."
+                    text: L10n.tr("Camera support files stay skipped for photo imports and can be kept for footage backups when needed.")
                 )
             }
 
             VStack(alignment: .leading, spacing: 12) {
                 OnboardingFolderRow(
-                    title: "Card or source",
+                    title: L10n.tr("Card or source"),
                     path: $model.cardPath,
                     validation: model.sourceValidation,
                     action: model.chooseOnboardingCardFolder
                 )
                 OnboardingFolderRow(
-                    title: "Photos",
+                    title: L10n.tr("Photos"),
                     path: $model.photosPath,
                     validation: model.photosValidation,
                     isRequired: false,
                     action: model.chooseOnboardingPhotosFolder
                 )
                 OnboardingFolderRow(
-                    title: "Videos",
+                    title: L10n.tr("Videos"),
                     path: $model.videosPath,
                     validation: model.videosValidation,
                     isRequired: false,
                     action: model.chooseOnboardingVideosFolder
                 )
-                TextField("Shoot name", text: $model.location)
+                TextField(L10n.tr("Shoot name"), text: $model.location)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 260)
-                Text("Used in destination folder names, for example “Taiwan” or “Client Event”.")
+                Text(L10n.tr("Used in destination folder names, for example “Taiwan” or “Client Event”."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Toggle("Prompt on card mount", isOn: $model.autoPromptEnabled)
+                Toggle(L10n.tr("Prompt on card mount"), isOn: $model.autoPromptEnabled)
             }
 
             HStack {
-                Button("Use Defaults") {
+                Button(L10n.tr("Use Defaults")) {
                     model.skipOnboardingSetup()
                 }
 
@@ -92,7 +92,7 @@ struct OnboardingFlowView: View {
                 Button {
                     model.saveOnboardingSetup()
                 } label: {
-                    Text("Save and Continue")
+                    Text(L10n.tr("Save and Continue"))
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canComplete)
@@ -155,8 +155,8 @@ private struct OnboardingFolderRow: View {
                 } label: {
                     Image(systemName: "folder")
                 }
-                .help("Choose \(title.lowercased())")
-                .accessibilityLabel("Choose \(title.lowercased())")
+                .help(L10n.tr("Choose \(title)"))
+                .accessibilityLabel(L10n.tr("Choose \(title)"))
             }
 
             AppStatusLabel(
@@ -176,9 +176,9 @@ private struct OnboardingFolderRow: View {
 
         switch validation.status {
         case .empty:
-            return "Optional: choose before copying \(title.lowercased())"
+            return L10n.tr("Optional: choose before copying \(title)")
         case .missing:
-            return "Optional: set this folder later"
+            return L10n.tr("Optional: set this folder later")
         default:
             return validation.message
         }

@@ -1,92 +1,77 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="system">
+<html lang="en" data-theme="system" data-page="updates">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"><script id="site-config" type="application/json">{"language": "en", "page": "updates", "messages": {"ui.themeDark": "Switch to dark theme", "ui.themeLight": "Switch to light theme", "ui.play": "Play screencast", "ui.pause": "Pause screencast", "ui.timeline": "{current} of {duration}", "ui.enlarge": "Enlarge screenshot: {title}"}}</script><script src="assets/site-settings-20260912.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
     <link rel="apple-touch-icon" href="assets/images/app-icon.png">
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
-    <script>try { const t = localStorage.getItem("theme"); if (["light", "dark", "system"].includes(t)) document.documentElement.dataset.theme = t; } catch {}</script>
-    <title>SD Import Updates</title>
-    <meta name="description" content="How SD Import uses Sparkle and GitHub Releases for updates.">
-    <meta property="og:title" content="SD Import Updates">
-    <meta property="og:description" content="How SD Import uses Sparkle and GitHub Releases for signed app updates.">
+
+    <title data-i18n="m285">SD Card Import — Updates</title>
+    <meta name="description" content="Update SD Card Import through the App Store or SD Import through Sparkle and GitHub Releases." data-i18n-attr-content="m286">
+    <meta property="og:title" content="SD Card Import — Updates" data-i18n-attr-content="m285">
+    <meta property="og:description" content="Update SD Card Import through the App Store or SD Import through Sparkle and GitHub Releases." data-i18n-attr-content="m286">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sd.jenny.media/updates.html">
-    <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-import-social-20260905.png">
+    <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="SD Import Updates">
-    <meta name="twitter:description" content="How SD Import uses Sparkle and GitHub Releases for signed app updates.">
-    <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-import-social-20260905.png">
+    <meta name="twitter:title" content="SD Card Import — Updates" data-i18n-attr-content="m285">
+    <meta name="twitter:description" content="Update SD Card Import through the App Store or SD Import through Sparkle and GitHub Releases." data-i18n-attr-content="m286">
+    <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
     <link rel="canonical" href="https://sd.jenny.media/updates.html">
     <link rel="stylesheet" href="assets/site-20260512.css?v=20260530c">
     <link rel="stylesheet" href="assets/redesign-20260906.css">
-</head>
+<link rel="stylesheet" href="assets/site-controls-20260912.css"><link rel="alternate" hreflang="en" href="https://sd.jenny.media/updates.html"><link rel="alternate" hreflang="zh-Hans" href="https://sd.jenny.media/zh-Hans/updates.html"><link rel="alternate" hreflang="zh-Hant" href="https://sd.jenny.media/zh-Hant/updates.html"><link rel="alternate" hreflang="ja" href="https://sd.jenny.media/ja/updates.html"><link rel="alternate" hreflang="ko" href="https://sd.jenny.media/ko/updates.html"><link rel="alternate" hreflang="de" href="https://sd.jenny.media/de/updates.html"><link rel="alternate" hreflang="fr" href="https://sd.jenny.media/fr/updates.html"><link rel="alternate" hreflang="es" href="https://sd.jenny.media/es/updates.html"><link rel="alternate" hreflang="pt-BR" href="https://sd.jenny.media/pt-BR/updates.html"><link rel="alternate" hreflang="it" href="https://sd.jenny.media/it/updates.html"><link rel="alternate" hreflang="x-default" href="https://sd.jenny.media/updates.html"></head>
 <body class="preload">
-    <a class="skip-link" href="#main">Skip to content</a>
+    <a class="skip-link" href="#main" data-i18n="m003">Skip to content</a>
     <div class="container">
-        <header class="site-header">
-            <a class="logo" href="index.html"><img src="assets/images/app-icon-72-20260512.webp" width="36" height="36" alt=""><span>SD Import</span></a>
-            <div class="nav-wrapper">
-                <nav class="nav-links" aria-label="Primary">
-                    <a href="install.html">Install</a>
-                    <a href="user-guide.html">Guide</a>
-                    <a href="updates.html">Updates</a>
-                    <a href="support.html">Support</a>
+        <header class="site-header"><a class="logo" href="index.html?lang=en" aria-label="SD Card Import home" data-i18n-attr-aria-label="m004"><img src="assets/images/app-icon-72-20260512.webp" width="36" height="36" alt=""><span>SD Card Import</span></a><nav class="nav-links" aria-label="Primary" data-i18n-attr-aria-label="m005">
+                    <a href="install.html?lang=en" data-i18n="m152">Install</a>
+                    <a href="user-guide.html?lang=en" data-i18n="m008">Guide</a>
+                    <a href="updates.html?lang=en" data-i18n="m153">Updates</a>
+                    <a href="support.html?lang=en" data-i18n="m144">Support</a>
                     <a href="https://github.com/xcv58/sd-import">GitHub</a>
-                </nav>
-                <div class="theme-switch" role="group" aria-label="Theme">
-                    <button class="theme-btn" type="button" data-theme-value="system" aria-label="System theme" title="System theme"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg><span>System</span></button>
-                    <button class="theme-btn" type="button" data-theme-value="light" aria-label="Light theme" title="Light theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg><span>Light</span></button>
-                    <button class="theme-btn" type="button" data-theme-value="dark" aria-label="Dark theme" title="Dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg><span>Dark</span></button>
-                </div>
-            </div>
-        </header>
+                </nav><div class="site-controls"><details class="language-picker"><summary aria-label="Choose language" data-i18n-attr-aria-label="m010"><svg viewbox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c-5 5-5 13 0 18M12 3c5 5 5 13 0 18"></path></svg><span data-language-name>English</span><span data-language-short>EN</span></summary><nav class="language-menu" data-language-menu aria-label="Languages" data-i18n-attr-aria-label="m306"><a href="updates.html?lang=en" lang="en" hreflang="en" aria-current="page">English</a><a href="zh-Hans/updates.html" lang="zh-Hans" hreflang="zh-Hans">简体中文</a><a href="zh-Hant/updates.html" lang="zh-Hant" hreflang="zh-Hant">繁體中文</a><a href="ja/updates.html" lang="ja" hreflang="ja">日本語</a><a href="ko/updates.html" lang="ko" hreflang="ko">한국어</a><a href="de/updates.html" lang="de" hreflang="de">Deutsch</a><a href="fr/updates.html" lang="fr" hreflang="fr">Français</a><a href="es/updates.html" lang="es" hreflang="es">Español</a><a href="pt-BR/updates.html" lang="pt-BR" hreflang="pt-BR">Português (Brasil)</a><a href="it/updates.html" lang="it" hreflang="it">Italiano</a></nav></details><button class="theme-toggle" type="button" data-theme-toggle hidden aria-label="Switch to dark theme" data-i18n-attr-aria-label="m011"><svg class="theme-moon" viewbox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path></svg><svg class="theme-sun" viewbox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"></path></svg></button></div></header>
     </div>
     <main id="main" class="container">
         <section class="page-title">
-            <h1>Updates come from Sparkle.</h1>
-            <p>The app checks the GitHub Release-hosted appcast and installs signed updates through Sparkle.</p>
-            <p>These release notes and downloads are for SD Import, the direct edition. <a href="install.html#app-store">SD Card Import</a> is the upcoming App Store edition and will receive updates through Apple.</p>
+            <h1 data-i18n="m287">Keep your app up to date.</h1>
+            <p data-i18n="m288">SD Card Import receives updates through the App Store. Open the App Store and check Updates.</p>
+            <p data-i18n="m289">The instructions and downloads below are for SD Import, the direct edition, which uses Sparkle and GitHub Releases. <a href="install.html?lang=en#app-store">Get the App Store edition</a>.</p>
         </section>
 
         <section class="section section-divider two-column">
             <div class="policy-box">
-                <h2>Check manually</h2>
+                <h2 data-i18n="m290">Check manually</h2>
                 <ol>
-                    <li>Open SD Import from Applications.</li>
-                    <li>Choose <code>SD Import &gt; Check for Updates...</code>.</li>
-                    <li>If Sparkle says no update is available, the app is current for the public feed.</li>
+                    <li data-i18n="m291">Open SD Import from Applications.</li>
+                    <li data-i18n="m292">Choose <code>SD Import &gt; Check for Updates...</code>.</li>
+                    <li data-i18n="m293">If Sparkle says no update is available, the app is current for the public feed.</li>
                 </ol>
             </div>
             <div class="policy-box">
-                <h2>Verify on GitHub</h2>
-                <p>Compare the installed app version with the latest GitHub Release. Public releases include <code>SD-Import.dmg</code>, <code>SD-Import.zip</code>, <code>appcast.xml</code>, and release notes.</p>
-                <p><a class="cta-button cta-secondary" href="https://github.com/xcv58/sd-import/releases/latest">Latest GitHub Release</a></p>
+                <h2 data-i18n="m294">Verify on GitHub</h2>
+                <p data-i18n="m295">Compare the installed app version with the latest GitHub Release. Public releases include <code>SD-Import.dmg</code>, <code>SD-Import.zip</code>, <code>appcast.xml</code>, and release notes.</p>
+                <p data-i18n="m296"><a class="cta-button cta-secondary" href="https://github.com/xcv58/sd-import/releases/latest">Latest GitHub Release</a></p>
             </div>
         </section>
 
         <section class="section section-divider">
             <div class="section-header">
-                <h2>If an update looks wrong.</h2>
-                <p>Use the latest public release first, then share diagnostics if imports still do not behave as expected.</p>
+                <h2 data-i18n="m297">If an update looks wrong.</h2>
+                <p data-i18n="m298">Use the latest public release first, then share diagnostics if imports still do not behave as expected.</p>
             </div>
             <div class="callout">
-                <p>Check for updates again, compare your installed version with the latest GitHub Release, reinstall the latest DMG if needed, then contact support with the preview summary and diagnostics export.</p>
+                <p data-i18n="m299">Check for updates again, compare your installed version with the latest GitHub Release, reinstall the latest DMG if needed, then contact support with the preview summary and diagnostics export.</p>
             </div>
         </section>
     </main>
     <footer class="site-footer">
         <div class="container">
-            <div class="footer-links">
-                <a href="index.html">Home</a>
-                <a href="install.html">Install</a>
-                <a href="user-guide.html">Guide</a>
-                <a href="support.html">Support</a>
-            </div>
+            <div class="footer-links" data-i18n="m300"><a href="index.html?lang=en">Home</a> <a href="install.html?lang=en">Install</a> <a href="user-guide.html?lang=en">Guide</a> <a href="support.html?lang=en">Support</a></div>
         </div>
     </footer>
-    <script src="assets/site-20260512-theme-media.js?v=20260530c"></script>
+    <script src="assets/site-theme-media-20260912.js"></script>
 </body>
 </html>

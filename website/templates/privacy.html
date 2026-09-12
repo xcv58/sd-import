@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+    <meta charset="UTF-8"><script id="site-config" type="application/json">{}</script><script src="assets/site-settings-20260912.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
+    <link rel="apple-touch-icon" href="assets/images/app-icon.png">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
+
+    <title data-i18n="m251">SD Card Import — Privacy Policy</title>
+    <meta name="description" content="Privacy policy for SD Import and SD Card Import." data-i18n-attr-content="m252">
+    <meta property="og:title" content="SD Card Import — Privacy Policy" data-i18n-attr-content="m251">
+    <meta property="og:description" content="How SD Import and SD Card Import store data locally and handle diagnostics, updates, and purchases." data-i18n-attr-content="m253">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://sd.jenny.media/privacy.html">
+    <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SD Card Import — Privacy Policy" data-i18n-attr-content="m251">
+    <meta name="twitter:description" content="How SD Import and SD Card Import store data locally and handle diagnostics, updates, and purchases." data-i18n-attr-content="m253">
+    <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
+    <link rel="canonical" href="https://sd.jenny.media/privacy.html">
+    <link rel="stylesheet" href="assets/site-20260512.css?v=20260530c">
+    <link rel="stylesheet" href="assets/redesign-20260906.css">
+<link rel="stylesheet" href="assets/site-controls-20260912.css"></head>
+<body class="preload">
+    <a class="skip-link" href="#main" data-i18n="m003">Skip to content</a>
+    <div class="container">
+        <header class="site-header"><a class="logo" href="index.html" aria-label="SD Card Import home" data-i18n-attr-aria-label="m004"><img src="assets/images/app-icon-72-20260512.webp" width="36" height="36" alt=""><span>SD Card Import</span></a><nav class="nav-links" aria-label="Primary" data-i18n-attr-aria-label="m005">
+                    <a href="install.html" data-i18n="m152">Install</a>
+                    <a href="user-guide.html" data-i18n="m008">Guide</a>
+                    <a href="updates.html" data-i18n="m153">Updates</a>
+                    <a href="support.html" data-i18n="m144">Support</a>
+                    <a href="https://github.com/xcv58/sd-import">GitHub</a>
+                </nav><div class="site-controls"><details class="language-picker"><summary aria-label="Choose language" data-i18n-attr-aria-label="m010"><svg viewbox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c-5 5-5 13 0 18M12 3c5 5 5 13 0 18"></path></svg><span data-language-name>English</span><span data-language-short>EN</span></summary><nav class="language-menu" data-language-menu aria-label="Languages" data-i18n-attr-aria-label="m306"></nav></details><button class="theme-toggle" type="button" data-theme-toggle hidden aria-label="Switch to dark theme" data-i18n-attr-aria-label="m011"><svg class="theme-moon" viewbox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path></svg><svg class="theme-sun" viewbox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"></path></svg></button></div></header>
+    </div>
+    <main id="main" class="container">
+        <section class="page-title">
+            <h1 data-i18n="m254">Privacy Policy</h1>
+            <p data-i18n="m255">Last updated: 2026-09-10. This policy covers SD Import (direct download) and SD Card Import (App Store edition), local macOS utilities for copying photos and videos from SD cards or selected source folders.</p>
+        </section>
+        <section class="section section-divider">
+            <article class="policy-box">
+                <h2 data-i18n="m256">Data stored locally</h2>
+                <p data-i18n="m257">Both editions store app settings, folder permissions, import history, and records used to skip duplicate imports locally on your Mac. The direct edition uses <code>~/Library/Application Support/SD Import/state.sqlite</code>. SD Card Import uses a local App Group container shared with its card-detection helper. Both may also store ordinary preferences through macOS UserDefaults.</p>
+                <h2 data-i18n="m258">Optional portable import receipts</h2>
+                <p data-i18n="m259">If you enable portable import receipts, the app creates or appends <code>.sd-import/imported-v1.jsonl</code> on writable sources. The hidden ledger contains versioned file fingerprints, relative source paths, sizes, modification and import timestamps, and validation checksums so another Mac can avoid duplicate imports. It does not contain destination paths, usernames, or media contents. The option is disabled by default, read-only sources continue without writing portable history, and ledger access refuses symbolic-link redirection outside the selected source.</p>
+                <h2 data-i18n="m260">Network use</h2>
+                <p data-i18n="m261">The direct edition uses Sparkle for update checks when configured in the installed release. These checks contact the GitHub Release-hosted appcast for this repository. SD Card Import receives updates through the App Store and does not include Sparkle.</p>
+                <h2 data-i18n="m262">App Store purchases</h2>
+                <p data-i18n="m263">Apple processes purchases and restores for SD Card Import. The app uses StoreKit transaction and entitlement information to determine purchase access. It stores purchase-access state and free-import usage locally. We do not receive payment card details.</p>
+                <h2 data-i18n="m264">No automatic telemetry</h2>
+                <p data-i18n="m265">Neither edition sends analytics, telemetry, import history, media files, folder listings, or crash reports to the maintainer. Diagnostics export is opt-in and redacted. The direct edition can reveal the macOS crash-report folder or export the latest local app crash report. The App Store edition cannot browse system crash reports. Neither edition uploads crash reports automatically.</p>
+                <h2 data-i18n="m266">Support requests</h2>
+                <p data-i18n="m267">Public GitHub issues are visible to everyone. Do not attach private photos, videos, full card dumps, credentials, or unredacted logs to public issues.</p>
+                <h2 data-i18n="m223">Contact</h2>
+                <p data-i18n="m268">Email privacy and support questions to <a href="mailto:i@xcv58.com">i@xcv58.com</a>.</p>
+            </article>
+        </section>
+    </main>
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-links" data-i18n="m269">
+                <a href="index.html">Home</a>
+                <a href="user-guide.html">Guide</a>
+                <a href="support.html">Support</a>
+                <a href="eula.html">EULA</a>
+            </div>
+        </div>
+    </footer>
+    <script src="assets/site-theme-media-20260912.js"></script>
+</body>
+</html>

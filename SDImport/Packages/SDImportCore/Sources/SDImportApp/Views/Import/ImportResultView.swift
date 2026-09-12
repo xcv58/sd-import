@@ -22,7 +22,7 @@ struct ImportResultView: View {
         let grouped = Dictionary(grouping: copiedFiles) { file in
             file.finalDestinationPath.map {
                 URL(fileURLWithPath: $0, isDirectory: false).deletingLastPathComponent().path
-            } ?? file.destinationDirectory ?? "Unknown"
+            } ?? file.destinationDirectory ?? L10n.tr("Unknown")
         }
 
         return grouped
@@ -42,13 +42,13 @@ struct ImportResultView: View {
 
     private var copyStatusTitle: String {
         if copiedFiles.isEmpty {
-            return "No Copies"
+            return L10n.tr("No Copies")
         }
-        return totals.failedFiles == 0 ? "Copied" : "Copied with Errors"
+        return totals.failedFiles == 0 ? L10n.tr("Copied") : L10n.tr("Copied with Errors")
     }
 
     var body: some View {
-        AppSection("Copy Receipt", systemImage: "checkmark.seal") {
+        AppSection(L10n.tr("Copy Receipt"), systemImage: "checkmark.seal") {
             HStack(alignment: .firstTextBaseline) {
                 AppStatusLabel(
                     title: copyStatusTitle,
@@ -60,10 +60,10 @@ struct ImportResultView: View {
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], alignment: .leading, spacing: 12) {
-                ReceiptMetric(title: "Copied", value: "\(totals.copiedFiles)")
-                ReceiptMetric(title: "Size", value: Self.bytes(totals.copiedBytes))
-                ReceiptMetric(title: "Skipped", value: "\(totals.skippedFiles)")
-                ReceiptMetric(title: "Failed", value: "\(totals.failedFiles)")
+                ReceiptMetric(title: L10n.tr("Copied"), value: "\(totals.copiedFiles)")
+                ReceiptMetric(title: L10n.tr("Size"), value: Self.bytes(totals.copiedBytes))
+                ReceiptMetric(title: L10n.tr("Skipped"), value: "\(totals.skippedFiles)")
+                ReceiptMetric(title: L10n.tr("Failed"), value: "\(totals.failedFiles)")
             }
 
             if let warning = result.portableReceiptWarning {
@@ -77,7 +77,7 @@ struct ImportResultView: View {
 
             if !folderSummaries.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Destinations")
+                    Text(L10n.tr("Destinations"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -88,7 +88,7 @@ struct ImportResultView: View {
                                 .frame(width: 16)
                             Text(summary.title)
                                 .lineLimit(1)
-                            Text("\(summary.count) files")
+                            Text(L10n.tr("\(summary.count) files"))
                                 .foregroundStyle(.secondary)
                             Spacer(minLength: 0)
                         }
@@ -100,7 +100,7 @@ struct ImportResultView: View {
 
             if model.shouldOfferSourceEjection(for: result) {
                 SourceEjectionControl(
-                    sourceName: model.sourceEjectionDisplayName(for: result) ?? "Source Card",
+                    sourceName: model.sourceEjectionDisplayName(for: result) ?? L10n.tr("Source Card"),
                     volumeCount: model.sourceEjectionVolumeCount(for: result),
                     isEjected: model.ejectedSourceJobID == result.jobID,
                     isEjecting: model.isEjectingSource,
@@ -143,7 +143,7 @@ struct ImportResultView: View {
                     model.reveal(path: primaryDestinationPath)
                 }
             } label: {
-                Label("Reveal Destination", systemImage: "folder")
+                Label(L10n.tr("Reveal Destination"), systemImage: "folder")
             }
             .disabled(primaryDestinationPath == nil)
 
@@ -152,20 +152,20 @@ struct ImportResultView: View {
                     model.viewReport(for: job)
                 }
             } label: {
-                Label("View Report", systemImage: "doc.text.magnifyingglass")
+                Label(L10n.tr("View Report"), systemImage: "doc.text.magnifyingglass")
             }
             .disabled(job?.summaryMarkdownPath == nil && job?.summaryJSONPath == nil)
 
             Button {
                 model.selection = .history
             } label: {
-                Label("Open in History", systemImage: "list.bullet.rectangle")
+                Label(L10n.tr("Open in History"), systemImage: "list.bullet.rectangle")
             }
 
             Button {
                 model.importAnotherCard()
             } label: {
-                Label("Import Another Card", systemImage: "externaldrive.badge.plus")
+                Label(L10n.tr("Import Another Card"), systemImage: "externaldrive.badge.plus")
             }
         }
     }

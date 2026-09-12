@@ -1,3 +1,4 @@
+import SDImportCore
 import SwiftUI
 
 struct SourceEjectionControl: View {
@@ -11,7 +12,7 @@ struct SourceEjectionControl: View {
     var body: some View {
         if isEjected {
             AppStatusLabel(
-                title: "\(sourceName) Ejected — Safe to Remove",
+                title: L10n.tr("\(sourceName) Ejected — Safe to Remove"),
                 systemImage: "checkmark.circle.fill",
                 role: .success
             )
@@ -19,7 +20,7 @@ struct SourceEjectionControl: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
                 .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                .accessibilityLabel("\(sourceName) ejected. Safe to remove.")
+                .accessibilityLabel(L10n.tr("\(sourceName) ejected. Safe to remove."))
         } else {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
@@ -38,7 +39,7 @@ struct SourceEjectionControl: View {
     private var ejectButton: some View {
         Button(action: eject) {
             Label(
-                isEjecting ? "Ejecting \(sourceName)…" : ejectButtonTitle,
+                isEjecting ? L10n.tr("Ejecting \(sourceName)…") : ejectButtonTitle,
                 systemImage: "eject.fill"
             )
         }
@@ -47,16 +48,16 @@ struct SourceEjectionControl: View {
         .disabled(!canEject)
         .accessibilityHint(
             volumeCount > 1
-                ? "Safely unmounts all source volumes"
-                : "Safely unmounts the source volume"
+                ? L10n.tr("Safely unmounts all source volumes")
+                : L10n.tr("Safely unmounts the source volume")
         )
     }
 
     private var guidance: some View {
         Text(
             volumeCount > 1
-                ? "Unmounts all \(volumeCount) storage volumes before disconnecting the device."
-                : "Eject the card before removing it."
+                ? L10n.tr("Unmounts all \(volumeCount) storage volumes before disconnecting the device.")
+                : L10n.tr("Eject the card before removing it.")
         )
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -64,8 +65,8 @@ struct SourceEjectionControl: View {
 
     private var ejectButtonTitle: String {
         if volumeCount > 1 {
-            return "Eject \(sourceName) — \(volumeCount) Volumes"
+            return L10n.tr("Eject \(sourceName) — \(volumeCount) Volumes")
         }
-        return "Eject “\(sourceName)”"
+        return L10n.tr("Eject “\(sourceName)”")
     }
 }

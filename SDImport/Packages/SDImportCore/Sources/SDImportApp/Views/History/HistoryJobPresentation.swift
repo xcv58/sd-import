@@ -7,7 +7,7 @@ enum HistoryJobPresentation {
     }
 
     static func subtitle(for job: ImportJob) -> String {
-        "\(statusTitle(for: job)) · \(job.importedFiles) copied · \(job.skippedFiles) skipped · \(job.failedFiles) failed"
+        L10n.tr("\(statusTitle(for: job)) · \(job.importedFiles) copied · \(job.skippedFiles) skipped · \(job.failedFiles) failed")
     }
 
     static func timestamp(for job: ImportJob) -> String {
@@ -29,7 +29,7 @@ enum HistoryJobPresentation {
         if !isPlaceholderName(mountName) {
             return mountName
         }
-        return "Import Job"
+        return L10n.tr("Import Job")
     }
 
     private static func isPlaceholderName(_ value: String) -> Bool {
@@ -44,19 +44,19 @@ enum HistoryJobPresentation {
     private static func statusTitle(for job: ImportJob) -> String {
         switch job.status {
         case .scanned:
-            return "Scanned"
+            return L10n.tr("Scanned")
         case .importing:
-            return "Importing"
+            return L10n.tr("Importing")
         case .imported:
-            return "Imported"
+            return L10n.tr("Imported")
         case .importedWithErrors:
-            return "Imported with errors"
+            return L10n.tr("Imported with errors")
         case .skipped:
-            return "Skipped"
+            return L10n.tr("Skipped")
         case .cancelled:
-            return "Cancelled"
+            return L10n.tr("Cancelled")
         case .failed:
-            return "Failed"
+            return L10n.tr("Failed")
         }
     }
 }

@@ -3,7 +3,7 @@ import Foundation
 public enum BackgroundPromptHealth {
     public static let refreshDelayMilliseconds: [Int64] = [500, 1_000, 2_000, 4_000, 8_000]
     public static let missingLaunchError =
-        "The background helper is registered but has not reported a successful launch."
+        L10n.tr("The background helper is registered but has not reported a successful launch.")
 
     public static func effectiveError(
         appError: String?,
@@ -13,7 +13,7 @@ public enum BackgroundPromptHealth {
             return appError
         }
         if let agentError = agentState?.lastError, !agentError.isEmpty {
-            return agentError
+            return L10n.storedMessage(agentError)
         }
         return nil
     }
@@ -68,8 +68,8 @@ public enum BackgroundPromptHealth {
             liveAgentState: state
         )
         return matchingState
-            ? "The background helper did not become ready in time."
-            : "The registered background helper is still reporting from an older or different app copy."
+            ? L10n.tr("The background helper did not become ready in time.")
+            : L10n.tr("The registered background helper is still reporting from an older or different app copy.")
     }
 }
 

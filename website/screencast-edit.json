@@ -1,0 +1,42 @@
+{
+  "source": "docs/assets/media/sd-import-screencast-light-20260905-v2.mp4",
+  "source_sha256": "0d6b728a41d2ef935bc28264117077ab2162cc4752a7a6d5dcaa2a9ec3ecc3d1",
+  "output": "docs/assets/media/sd-import-screencast-light-20260912-20s.mp4",
+  "output_sha256": "60fa671445825d3ee4fc15b61a741f2672bd8b86ca3befea121e18d4410f31bd",
+  "fps": 60,
+  "duration_seconds": 20,
+  "frame_count": 1200,
+  "keep_ranges_frames": [
+    [
+      128,
+      230
+    ],
+    [
+      440,
+      668
+    ],
+    [
+      919,
+      1680
+    ]
+  ],
+  "range_convention": "Source frame numbers, zero-based, end exclusive; all retained frames at original speed.",
+  "additional_final_frame_hold": 109,
+  "filter_complex": "[0:v]split=3[a][b][c];[a]trim=start_frame=128:end_frame=230,setpts=PTS-STARTPTS[a0];[b]trim=start_frame=440:end_frame=668,setpts=PTS-STARTPTS[b0];[c]trim=start_frame=919:end_frame=1680,setpts=PTS-STARTPTS[c0];[a0][b0][c0]concat=n=3:v=1:a=0,fps=60,tpad=stop_mode=clone:stop=109[out]",
+  "encoder_arguments": [
+    "-map",
+    "[out]",
+    "-an",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "17",
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart"
+  ],
+  "description": "Shortens idle source, permission and preview holds. Preserves all recorded clicks, scan and copy progression. Holds the existing successful receipt for about two seconds; adds no eject action or new UI."
+}
