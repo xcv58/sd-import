@@ -136,7 +136,7 @@ struct ImportProgressPanel: View {
     }
 
     private static func bytes(_ value: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+        L10n.fileSize(value)
     }
 
     private static func duration(_ seconds: Double) -> String {
@@ -289,6 +289,6 @@ private struct ProgressFileEventRow: View {
     }
 
     private static func bytes(_ value: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+        L10n.fileSize(value)
     }
 }

@@ -295,6 +295,7 @@
 "Kind" = "類型";
 "Known" = "已知";
 "Known files" = "已知檔案";
+"Language" = "語言";
 "Legacy import skipped: %@" = "已跳過舊版匯入：%1$@";
 "Library" = "媒體庫";
 "Lifetime access unlocked" = "終身訪問已解鎖";
@@ -407,6 +408,7 @@
 "Purchase information is temporarily unavailable." = "購買信息暫時不可用。";
 "Purchase is pending approval." = "購買正在等待批准。";
 "Quick Look" = "快速查看";
+"Quit and reopen the app to apply the new language." = "結束並重新開啟 App 以套用新語言。";
 "RAW + JPEG · %lld files" = "RAW + JPEG · %1$lld 個檔案";
 "Reading media and checking previous imports." = "正在讀取媒體並檢查以往的匯入記錄。";
 "Ready" = "就緒";
@@ -514,6 +516,7 @@
 "Support" = "支持";
 "Support file" = "支持檔案";
 "Support files" = "支持檔案";
+"System Default (%@)" = "系統預設（%@）";
 "System" = "跟隨系統";
 "The App Store did not finish checking purchases. Try Restore Purchases." = "App Store 未能完成購買檢查。請嘗試“回復購買”。";
 "The App Store did not finish restoring purchases. Your purchase is safe; try again." = "App Store 未能完成回復購買。你的購買項目不會丟失，請再試一次。";

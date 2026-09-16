@@ -16,6 +16,7 @@ struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage("SDImport.selectedSettingsPane") private var selectedPane = SettingsPane.general
+    @AppStorage(L10n.languagePreferenceKey) private var selectedLanguageCode = AppLanguage.system.rawValue
     @State private var isShowingPruneConfirmation = false
     @State private var validatedDestinationInputs: DestinationPathInputs?
 
@@ -119,17 +120,38 @@ struct SettingsView: View {
                 }
 
                 SettingsGroup(L10n.tr("Appearance")) {
-                    LabeledContent(L10n.tr("Theme")) {
-                        Picker(L10n.tr("Theme"), selection: $model.themePreference) {
-                            ForEach(AppThemePreference.allCases) { theme in
-                                Text(theme.settingsTitle).tag(theme)
+                    VStack(alignment: .leading, spacing: 12) {
+                        LabeledContent(L10n.tr("Theme")) {
+                            Picker(L10n.tr("Theme"), selection: $model.themePreference) {
+                                ForEach(AppThemePreference.allCases) { theme in
+                                    Text(theme.settingsTitle).tag(theme)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(maxWidth: 420)
+                            .onChange(of: model.themePreference) {
+                                model.themePreferenceDidChange()
                             }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(maxWidth: 420)
-                        .onChange(of: model.themePreference) {
-                            model.themePreferenceDidChange()
+
+                        Divider()
+
+                        LabeledContent(L10n.tr("Language")) {
+                            Picker(L10n.tr("Language"), selection: selectedLanguage) {
+                                ForEach(AppLanguage.allCases) { language in
+                                    Text(verbatim: language.displayName).tag(language)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 520)
+                        }
+
+                        if selectedLanguage.wrappedValue != L10n.activeLanguage {
+                            Text(L10n.tr("Quit and reopen the app to apply the new language."))
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -339,6 +361,14 @@ struct SettingsView: View {
         }
     }
 
+    private var selectedLanguage: Binding<AppLanguage> {
+        Binding {
+            AppLanguage(rawValue: selectedLanguageCode) ?? .system
+        } set: { language in
+            selectedLanguageCode = language.rawValue
+        }
+    }
+
     private var canCleanHistory: Bool {
         !model.isWorking && model.historyRetention.dayCount != nil
     }
@@ -480,9 +510,9 @@ private struct FolderSettingRow: View {
             return
         }
 
-        let available = ByteCountFormatter.string(fromByteCount: capacity.availableBytes, countStyle: .file)
+        let available = L10n.fileSize(capacity.availableBytes)
         if let totalBytes = capacity.totalBytes {
-            let total = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+            let total = L10n.fileSize(totalBytes)
             capacityText = L10n.tr("\(available) available of \(total)")
         } else {
             capacityText = L10n.tr("\(available) available")

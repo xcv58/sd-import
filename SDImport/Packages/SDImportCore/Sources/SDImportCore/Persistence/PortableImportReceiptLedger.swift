@@ -100,9 +100,9 @@ public enum PortableImportReceiptLedgerError: LocalizedError, Sendable {
         case .sourceNotDirectory(let path):
             return L10n.tr("The source is not a directory at \(path)")
         case .ledgerTooLarge(let size):
-            return L10n.tr("The portable import ledger is too large (\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))")
+            return L10n.tr("The portable import ledger is too large (\(L10n.fileSize(size)))")
         case .recordTooLarge(let size):
-            return L10n.tr("The portable import receipt is too large (\(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)))")
+            return L10n.tr("The portable import receipt is too large (\(L10n.fileSize(Int64(size))))")
         case .invalidReceipt:
             return L10n.tr("The portable import receipt contains invalid or inconsistent file identity data")
         case .ledgerIsNotAFile(let path):

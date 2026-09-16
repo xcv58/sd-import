@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 
 from check_localizations import LANGUAGES, RESOURCES, ROOT, SOURCES, strings
 
@@ -35,6 +36,18 @@ extension Bundle {
 @main
 struct LocalizationProbe {
     static func main() throws {
+        if let index = CommandLine.arguments.firstIndex(of: "--save-language") {
+            guard index + 1 < CommandLine.arguments.count else { fatalError("Missing language") }
+            UserDefaults.standard.set(CommandLine.arguments[index + 1], forKey: L10n.languagePreferenceKey)
+            guard UserDefaults.standard.synchronize() else { fatalError("Could not save language") }
+            return
+        }
+        if CommandLine.arguments.contains("--clear-language") {
+            guard let bundleID = Bundle.main.bundleIdentifier else { fatalError("Missing bundle ID") }
+            UserDefaults.standard.removePersistentDomain(forName: bundleID)
+            guard UserDefaults.standard.synchronize() else { fatalError("Could not clear language") }
+            return
+        }
         let count = 1
         let path = "/synthetic/100% 写真 %@.jpg"
         let reason = "Sentinel 50%"
@@ -49,7 +62,10 @@ struct LocalizationProbe {
             from: Data(CommandLine.arguments[recordsIndex + 1].utf8)
         )
         let result: [String: Any] = [
+            "activeLanguage": L10n.activeLanguage.rawValue,
             "settings": L10n.tr("Settings"),
+            "list": L10n.list(["A", "B", "C"]),
+            "size": L10n.fileSize(1_000_000),
             "files": L10n.tr("\(count) files"),
             "scanStatus": L10n.tr("Scan complete. \(count) files were imported on another Mac"),
             "error": L10n.tr("Could not access \(path): \(reason)"),
@@ -111,7 +127,8 @@ def verify(app):
             shutil.copy2(binary, contents / 'MacOS/Probe')
             shutil.copytree(resource, contents / 'Resources' / resource.name)
             probe_info = {
-                'CFBundleExecutable': 'Probe', 'CFBundleIdentifier': f'example.localization.probe{index}',
+                'CFBundleExecutable': 'Probe',
+                'CFBundleIdentifier': f'example.localization.probe{index}.{uuid.uuid4().hex}',
                 'CFBundlePackageType': 'APPL', 'CFBundleDevelopmentRegion': info['CFBundleDevelopmentRegion'],
                 'CFBundleLocalizations': info['CFBundleLocalizations'],
             }
@@ -143,7 +160,39 @@ def verify(app):
                 if language == 'en':
                     assert value['files'] == '1 file', value
                     assert value['scanStatus'] == 'Scan complete. 1 file was imported on another Mac', value
-            print(f'{target.name}: 10 languages + 4 regional/fallback preferences, packaged lookup and formatting OK')
+            # A unique disposable app domain verifies genuine UserDefaults persistence
+            # across processes, then removes that domain even when an assertion fails.
+            try:
+                for selection, expected_language, expected_settings in [
+                    ('fr', 'fr', 'Réglages'),
+                    ('ja', 'ja', '設定'),
+                    ('zh-Hans', 'zh-Hans', '设置'),
+                    ('unsupported', '', 'Settings'),
+                ]:
+                    saved = subprocess.run([
+                        str(contents / 'MacOS/Probe'), '--save-language', selection,
+                    ], capture_output=True, text=True)
+                    assert saved.returncode == 0, (target.name, selection, saved.stderr)
+                    result = subprocess.run([
+                        str(contents / 'MacOS/Probe'), '-AppleLanguages', '("en")',
+                        '-AppleLocale', 'en_US',
+                        '--helper-records', json.dumps(AGENT_MESSAGES),
+                    ], check=True, capture_output=True, text=True)
+                    value = json.loads(result.stdout)
+                    assert value['activeLanguage'] == expected_language, (target.name, selection, value)
+                    assert value['settings'] == expected_settings, (target.name, selection, value)
+                    if selection == 'fr':
+                        assert value['list'] == 'A, B et C', value
+                        assert value['size'].endswith('Mo'), value
+            finally:
+                cleared = subprocess.run([
+                    str(contents / 'MacOS/Probe'), '--clear-language',
+                ], capture_output=True, text=True)
+                assert cleared.returncode == 0, (target.name, cleared.stderr)
+            assert subprocess.run([
+                'defaults', 'read', probe_info['CFBundleIdentifier'], 'SDImport.interfaceLanguage',
+            ], capture_output=True).returncode != 0, f'{target}: temporary preference remains'
+            print(f'{target.name}: 10 languages + 4 regional/fallback preferences, saved-choice relaunch, display formatting and packaged lookup OK')
 
 
 if __name__ == '__main__':

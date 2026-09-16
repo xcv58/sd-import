@@ -171,7 +171,7 @@ struct ImportResultView: View {
     }
 
     private static func bytes(_ value: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+        L10n.fileSize(value)
     }
 }
 

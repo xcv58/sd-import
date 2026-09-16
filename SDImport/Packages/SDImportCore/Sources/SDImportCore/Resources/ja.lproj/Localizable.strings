@@ -295,6 +295,7 @@
 "Kind" = "種類";
 "Known" = "既知";
 "Known files" = "既知のファイル";
+"Language" = "言語";
 "Legacy import skipped: %@" = "旧データの読み込みをスキップしました：%1$@";
 "Library" = "ライブラリ";
 "Lifetime access unlocked" = "無期限アクセスが有効です";
@@ -407,6 +408,7 @@
 "Purchase information is temporarily unavailable." = "購入情報は一時的に利用できません。";
 "Purchase is pending approval." = "購入は承認待ちです。";
 "Quick Look" = "クイックルック";
+"Quit and reopen the app to apply the new language." = "新しい言語を適用するには、アプリを終了して再度開いてください。";
 "RAW + JPEG · %lld files" = "RAW + JPEG · %1$lld ファイル";
 "Reading media and checking previous imports." = "メディアを読み取り、過去の読み込みを確認しています。";
 "Ready" = "準備完了";
@@ -514,6 +516,7 @@
 "Support" = "サポート";
 "Support file" = "補助ファイル";
 "Support files" = "補助ファイル";
+"System Default (%@)" = "システムのデフォルト（%@）";
 "System" = "システム";
 "The App Store did not finish checking purchases. Try Restore Purchases." = "App Store で購入の確認が完了しませんでした。「購入を復元」をお試しください。";
 "The App Store did not finish restoring purchases. Your purchase is safe; try again." = "App Store で購入の復元が完了しませんでした。購入は失われていません。再試行してください。";

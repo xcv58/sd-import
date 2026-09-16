@@ -924,11 +924,8 @@ final class AppModel: ObservableObject {
             return L10n.tr("Available space couldn’t be checked for \(requirement.displayPath)")
         }
         if let requirement = previewSpaceRequirements.first(where: { !$0.isSatisfied }) {
-            let required = ByteCountFormatter.string(fromByteCount: requirement.requiredBytes, countStyle: .file)
-            let available = ByteCountFormatter.string(
-                fromByteCount: requirement.availableBytes ?? 0,
-                countStyle: .file
-            )
+            let required = L10n.fileSize(requirement.requiredBytes)
+            let available = L10n.fileSize(requirement.availableBytes ?? 0)
             return L10n.tr("\(required) required; \(available) available")
         }
         return nil
@@ -4005,10 +4002,7 @@ final class AppModel: ObservableObject {
         default:
             let percent = Int(progress.percent.rounded())
             if progress.throughputBytesPerSecond > 1 {
-                let speed = ByteCountFormatter.string(
-                    fromByteCount: Int64(progress.throughputBytesPerSecond),
-                    countStyle: .file
-                )
+                let speed = L10n.fileSize(Int64(progress.throughputBytesPerSecond))
                 return L10n.tr("Importing \(percent)% at \(speed)/s")
             }
             return L10n.tr("Importing \(progress.doneFiles) of \(progress.totalFiles) files")
@@ -4184,8 +4178,8 @@ final class AppModel: ObservableObject {
 
     nonisolated private static func errorMessage(for error: Error) -> String {
         if case let SDImportError.insufficientDestinationSpace(path, requiredBytes, availableBytes) = error {
-            let required = ByteCountFormatter.string(fromByteCount: requiredBytes, countStyle: .file)
-            let available = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+            let required = L10n.fileSize(requiredBytes)
+            let available = L10n.fileSize(availableBytes)
             return L10n.tr("Not enough space in \(path). Need \(required), available \(available).")
         }
 

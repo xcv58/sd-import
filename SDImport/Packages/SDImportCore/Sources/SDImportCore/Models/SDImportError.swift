@@ -37,7 +37,7 @@ extension SDImportError: LocalizedError {
         case .missingDestinationDirectory:
             L10n.tr("The destination folder is unavailable.")
         case .insufficientDestinationSpace(let path, let required, let available):
-            L10n.tr("Not enough space in \(path). Need \(ByteCountFormatter.string(fromByteCount: required, countStyle: .file)), available \(ByteCountFormatter.string(fromByteCount: available, countStyle: .file)).")
+            L10n.tr("Not enough space in \(path). Need \(L10n.fileSize(required)), available \(L10n.fileSize(available)).")
         case .copySizeMismatch(let expected, let actual):
             L10n.tr("Copy verification failed: expected \(expected) bytes, found \(actual) bytes.")
         case .jobNotFound(let id):

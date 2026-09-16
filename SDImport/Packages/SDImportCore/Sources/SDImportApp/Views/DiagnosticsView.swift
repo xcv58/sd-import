@@ -47,7 +47,7 @@ struct DiagnosticsView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let state = model.backgroundPromptAgentState {
-                    Text(L10n.tr("Helper build \(state.agentBuild) · last started \(state.launchedAt.formatted(date: .abbreviated, time: .standard))"))
+                    Text(L10n.tr("Helper build \(state.agentBuild) · last started \(state.launchedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .standard).locale(L10n.presentationLocale)))"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)

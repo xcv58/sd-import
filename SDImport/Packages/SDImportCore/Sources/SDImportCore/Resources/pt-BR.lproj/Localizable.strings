@@ -295,6 +295,7 @@
 "Kind" = "Tipo";
 "Known" = "Conhecido";
 "Known files" = "Arquivos conhecidos";
+"Language" = "Idioma";
 "Legacy import skipped: %@" = "Importação de dados anteriores ignorada: %1$@";
 "Library" = "Biblioteca";
 "Lifetime access unlocked" = "Acesso vitalício liberado";
@@ -407,6 +408,7 @@
 "Purchase information is temporarily unavailable." = "As informações de compra estão temporariamente indisponíveis.";
 "Purchase is pending approval." = "A compra está aguardando aprovação.";
 "Quick Look" = "Visualização Rápida";
+"Quit and reopen the app to apply the new language." = "Feche e abra o app novamente para aplicar o novo idioma.";
 "RAW + JPEG · %lld files" = "RAW + JPEG · %1$lld arquivos";
 "Reading media and checking previous imports." = "Lendo mídia e verificando importações anteriores.";
 "Ready" = "Pronto";
@@ -514,6 +516,7 @@
 "Support" = "Suporte";
 "Support file" = "Arquivo auxiliar";
 "Support files" = "Arquivos auxiliares";
+"System Default (%@)" = "Padrão do sistema (%@)";
 "System" = "Sistema";
 "The App Store did not finish checking purchases. Try Restore Purchases." = "A App Store não concluiu a verificação das compras. Tente Restaurar compras.";
 "The App Store did not finish restoring purchases. Your purchase is safe; try again." = "A App Store não concluiu a restauração. Sua compra está segura; tente novamente.";

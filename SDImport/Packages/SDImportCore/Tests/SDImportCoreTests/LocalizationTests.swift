@@ -9,6 +9,51 @@ struct LocalizationTests {
         "fr": "Réglages", "es": "Ajustes", "pt-BR": "Ajustes", "it": "Impostazioni"
     ]
 
+    @Test
+    func languagePickerOptionsMatchShippedLanguages() {
+        let choices = AppLanguage.allCases.filter { $0 != .system }
+        #expect(Set(choices.map(\.rawValue)) == Set(L10n.supportedLanguages))
+        #expect(choices.allSatisfy { !$0.displayName.isEmpty })
+        #expect(AppLanguage(rawValue: "unsupported") == nil)
+    }
+
+    @Test
+    func savedLanguageDefaultsAndInvalidValuesUseSystem() throws {
+        let suite = "SDImport.LanguageTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        #expect(AppLanguage.saved(in: defaults) == .system)
+        defaults.set(AppLanguage.japanese.rawValue, forKey: L10n.languagePreferenceKey)
+        #expect(AppLanguage.saved(in: defaults) == .japanese)
+        defaults.set("unsupported", forKey: L10n.languagePreferenceKey)
+        #expect(AppLanguage.saved(in: defaults) == .system)
+    }
+
+    @Test
+    func datePresentationUsesSelectedLanguageAndRegion() {
+        let us = Locale(identifier: "en_US")
+        #expect(L10n.presentationLocale(for: .system, systemLocale: us).identifier == us.identifier)
+        let japanese = L10n.presentationLocale(for: .japanese, systemLocale: us)
+        #expect(japanese.language.languageCode?.identifier == "ja")
+        #expect(japanese.region?.identifier == "US")
+        let portuguese = L10n.presentationLocale(for: .brazilianPortuguese, systemLocale: us)
+        #expect(portuguese.language.languageCode?.identifier == "pt")
+        #expect(portuguese.region?.identifier == "BR")
+    }
+
+    @Test(arguments: [
+        (["de-DE", "en-US"], AppLanguage.german),
+        (["fr-CA", "en-US"], AppLanguage.french),
+        (["zh-HK", "en-US"], AppLanguage.traditionalChinese),
+        (["zh-CN", "en-US"], AppLanguage.simplifiedChinese),
+        (["pt-BR", "en-US"], AppLanguage.brazilianPortuguese),
+        (["nl-NL"], AppLanguage.english)
+    ])
+    func systemDefaultResolvesSupportedLanguage(preferences: [String], expected: AppLanguage) {
+        #expect(AppLanguage.systemDefault(preferences: preferences) == expected)
+    }
+
     @Test(arguments: L10n.supportedLanguages)
     func languageResources(language: String) throws {
         #expect(L10n.tr("Settings", language: language) == Self.settings[language])

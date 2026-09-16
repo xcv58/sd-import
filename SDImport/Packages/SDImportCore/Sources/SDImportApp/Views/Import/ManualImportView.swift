@@ -645,10 +645,10 @@ private extension MountedVolume {
             return nil
         }
 
-        let available = ByteCountFormatter.string(fromByteCount: availableCapacityBytes, countStyle: .file)
+        let available = L10n.fileSize(availableCapacityBytes)
         if let usedCapacityBytes, let totalCapacityBytes {
-            let used = ByteCountFormatter.string(fromByteCount: usedCapacityBytes, countStyle: .file)
-            let total = ByteCountFormatter.string(fromByteCount: totalCapacityBytes, countStyle: .file)
+            let used = L10n.fileSize(usedCapacityBytes)
+            let total = L10n.fileSize(totalCapacityBytes)
             return L10n.tr("\(available) free, \(used) used of \(total)")
         }
 
