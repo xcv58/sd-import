@@ -78,6 +78,7 @@ struct SettingsView: View {
             .accessibilityLabel(L10n.tr("Settings section"))
 
             selectedForm
+                .id(selectedLanguageCode)
         }
     }
 
