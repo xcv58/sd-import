@@ -113,6 +113,17 @@ public enum PortableImportReceiptLedgerError: LocalizedError, Sendable {
     }
 }
 
+extension PortableReceiptSizeWarning {
+    public init?(error: Error) {
+        guard let ledgerError = error as? PortableImportReceiptLedgerError else { return nil }
+        switch ledgerError {
+        case .ledgerTooLarge(let bytes): self = .ledgerTooLarge(bytes)
+        case .recordTooLarge(let bytes): self = .receiptTooLarge(Int64(bytes))
+        default: return nil
+        }
+    }
+}
+
 typealias PortableFileLockOperation = @Sendable (
     Int32,
     Int32,

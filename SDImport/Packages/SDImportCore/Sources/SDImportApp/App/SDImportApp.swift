@@ -11,6 +11,11 @@ struct SDImportApp: App {
     @StateObject private var model: AppModel
     @StateObject private var appUpdater = AppUpdater()
     @StateObject private var purchaseManager: PurchaseManager
+    @AppStorage(L10n.languagePreferenceKey) private var selectedLanguageCode = AppLanguage.system.rawValue
+
+    private var selectedLocale: Locale {
+        L10n.presentationLocale(for: AppLanguage(rawValue: selectedLanguageCode) ?? .system)
+    }
 
     init() {
         let purchaseManager = PurchaseManager()
@@ -54,6 +59,7 @@ struct SDImportApp: App {
             RootView(appUpdater: appUpdater)
                 .environmentObject(model)
                 .environmentObject(purchaseManager)
+                .environment(\.locale, selectedLocale)
                 .preferredColorScheme(model.themePreference.colorScheme)
                 .frame(minWidth: 760, minHeight: 560)
                 .background(MainWindowIdentifierView())
@@ -139,6 +145,7 @@ struct SDImportApp: App {
         Window(L10n.tr("Diagnostics"), id: "diagnostics") {
             DiagnosticsView()
                 .environmentObject(model)
+                .environment(\.locale, selectedLocale)
                 .preferredColorScheme(model.themePreference.colorScheme)
                 .frame(minWidth: 620, minHeight: 420)
         }

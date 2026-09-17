@@ -19,8 +19,8 @@ In Settings > General > Appearance, the Language picker offers System Default
 (showing the language currently chosen by macOS) and all ten shipped languages
 with English and native names. System Default follows the preferred supported
 language configured in macOS, including its per-app language preference. An
-explicit choice is saved for this app and takes effect after quitting and
-reopening it. English is the development language and fallback. Regional matching
+explicit choice is saved for this app and updates the interface immediately.
+English is the development language and fallback. Regional matching
 follows macOS: for example, Mexican Spanish uses Spanish, and Hong Kong Chinese
 uses Traditional Chinese. Portuguese is currently the Brazilian variant only.
 

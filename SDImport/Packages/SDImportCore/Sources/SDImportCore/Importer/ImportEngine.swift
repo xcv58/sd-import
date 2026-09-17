@@ -64,6 +64,7 @@ public struct ImportEngine {
         var portableFingerprints: Set<String> = []
         var portableLedgerRevision: PortableImportReceiptLedgerRevision?
         var portableReceiptWarning: String?
+        var portableReceiptSizeWarning: PortableReceiptSizeWarning?
         var portableWritesAvailable = portableReceiptsEnabled
 
         func refreshPortableFingerprints() {
@@ -80,10 +81,12 @@ public struct ImportEngine {
                 portableLedgerRevision = snapshot.revision
                 if let warning = snapshot.warning {
                     portableReceiptWarning = warning
+                    portableReceiptSizeWarning = nil
                 }
             } catch {
                 portableFingerprints.removeAll()
                 portableWritesAvailable = false
+                portableReceiptSizeWarning = PortableReceiptSizeWarning(error: error)
                 portableReceiptWarning = L10n.tr("Portable import history is unavailable: \(error.localizedDescription)")
             }
         }
@@ -108,6 +111,7 @@ public struct ImportEngine {
                 return
             }
             guard validatedPortableIdentity(for: file) == identity else {
+                portableReceiptSizeWarning = nil
                 portableReceiptWarning = L10n.tr("Portable import history was not updated because the source changed during import")
                 return
             }
@@ -123,6 +127,7 @@ public struct ImportEngine {
                 )
                 if let warning = appendResult.warning {
                     portableReceiptWarning = warning
+                    portableReceiptSizeWarning = nil
                 }
                 if appendResult.previousRevision == portableLedgerRevision {
                     portableLedgerRevision = appendResult.revision
@@ -133,10 +138,12 @@ public struct ImportEngine {
                     portableLedgerRevision = snapshot.revision
                     if let warning = snapshot.warning {
                         portableReceiptWarning = warning
+                        portableReceiptSizeWarning = nil
                     }
                 }
             } catch {
                 portableWritesAvailable = false
+                portableReceiptSizeWarning = PortableReceiptSizeWarning(error: error)
                 portableReceiptWarning = L10n.tr("Portable import history could not be updated: \(error.localizedDescription)")
             }
         }
@@ -486,7 +493,8 @@ public struct ImportEngine {
             skippedFiles: skippedFiles,
             failedFiles: failedFiles,
             progressPath: nil,
-            portableReceiptWarning: portableReceiptWarning
+            portableReceiptWarning: portableReceiptWarning,
+            portableReceiptSizeWarning: portableReceiptSizeWarning
         )
     }
 

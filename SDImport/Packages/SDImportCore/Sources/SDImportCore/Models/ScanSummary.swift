@@ -13,6 +13,15 @@ public struct ScanSummary: Hashable, Codable, Sendable {
     public let conflictFiles: Int
     public let portableKnownFiles: Int?
     public let portableReceiptWarning: String?
+    public var portableReceiptSizeWarning: PortableReceiptSizeWarning? = nil
+
+    // Keep the existing scan-summary encoding unchanged. This extra value is
+    // only needed while the current process presents a completed scan.
+    private enum CodingKeys: String, CodingKey {
+        case jobID, mountPath, volumeName, volumeUUID, location, scannedFiles
+        case newFiles, knownFiles, unsupportedFiles, conflictFiles
+        case portableKnownFiles, portableReceiptWarning
+    }
 
     public init(
         jobID: String,
@@ -26,7 +35,8 @@ public struct ScanSummary: Hashable, Codable, Sendable {
         unsupportedFiles: Int,
         conflictFiles: Int,
         portableKnownFiles: Int? = nil,
-        portableReceiptWarning: String? = nil
+        portableReceiptWarning: String? = nil,
+        portableReceiptSizeWarning: PortableReceiptSizeWarning? = nil
     ) {
         self.jobID = jobID
         self.mountPath = mountPath
@@ -40,5 +50,6 @@ public struct ScanSummary: Hashable, Codable, Sendable {
         self.conflictFiles = conflictFiles
         self.portableKnownFiles = portableKnownFiles
         self.portableReceiptWarning = portableReceiptWarning
+        self.portableReceiptSizeWarning = portableReceiptSizeWarning
     }
 }

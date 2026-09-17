@@ -2,6 +2,7 @@ import SDImportCore
 import SwiftUI
 
 struct OnboardingFlowView: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
 
     private var canComplete: Bool {
@@ -116,6 +117,7 @@ struct OnboardingFlowView: View {
 }
 
 private struct OnboardingGuideItem: View {
+    @Environment(\.locale) private var locale
     let title: String
     let systemImage: String
     let text: String
@@ -134,6 +136,7 @@ private struct OnboardingGuideItem: View {
 }
 
 private struct OnboardingFolderRow: View {
+    @Environment(\.locale) private var locale
     let title: String
     @Binding var path: String
     let validation: PathValidationResult

@@ -2,6 +2,7 @@ import SDImportCore
 import SwiftUI
 
 struct ImportResultView: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
 
     let result: ImportResult
@@ -48,6 +49,7 @@ struct ImportResultView: View {
     }
 
     var body: some View {
+        let _ = locale
         AppSection(L10n.tr("Copy Receipt"), systemImage: "checkmark.seal") {
             HStack(alignment: .firstTextBaseline) {
                 AppStatusLabel(
@@ -68,7 +70,9 @@ struct ImportResultView: View {
 
             if let warning = result.portableReceiptWarning {
                 AppStatusLabel(
-                    title: warning,
+                    title: L10n.portableReceiptWarning(
+                        warning, sizeWarning: result.portableReceiptSizeWarning
+                    ),
                     systemImage: "exclamationmark.triangle",
                     role: .warning
                 )

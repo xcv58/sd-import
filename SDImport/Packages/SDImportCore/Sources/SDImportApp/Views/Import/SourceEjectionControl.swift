@@ -2,6 +2,7 @@ import SDImportCore
 import SwiftUI
 
 struct SourceEjectionControl: View {
+    @Environment(\.locale) private var locale
     let sourceName: String
     let volumeCount: Int
     let isEjected: Bool
@@ -10,6 +11,7 @@ struct SourceEjectionControl: View {
     let eject: () -> Void
 
     var body: some View {
+        let _ = locale
         if isEjected {
             AppStatusLabel(
                 title: L10n.tr("\(sourceName) Ejected — Safe to Remove"),

@@ -94,6 +94,7 @@ final class AppUpdater: ObservableObject {
 
 struct CheckForUpdatesView: View {
     @ObservedObject private var updater: AppUpdater
+    @Environment(\.locale) private var locale
 
     init(updater: AppUpdater) {
         self.updater = updater
@@ -112,6 +113,7 @@ struct CheckForUpdatesView: View {
 
 struct UpdaterSettingsView: View {
     @ObservedObject private var appUpdater: AppUpdater
+    @Environment(\.locale) private var locale
     private let leadingInset: CGFloat
 
     init(appUpdater: AppUpdater, leadingInset: CGFloat = 0) {

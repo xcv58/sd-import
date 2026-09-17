@@ -5,6 +5,7 @@ import SwiftUI
 
 struct ImportPreviewView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.locale) private var locale
     @AppStorage("SDImport.importPreviewMode") private var previewMode = ImportPreviewMode.grid
     @State private var selectedFileFilter: ImportPreviewFileFilter?
     @State private var filePage = 0
@@ -1074,6 +1075,7 @@ struct ImportPreviewView: View {
 }
 
 private struct ImportReviewPrimaryAction: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var purchaseManager: PurchaseManager
 
@@ -1106,6 +1108,7 @@ private struct ImportReviewPrimaryAction: View {
 }
 
 private struct ImportReviewFooter: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
@@ -1205,6 +1208,7 @@ private enum ImportPreviewFileFilter: String, CaseIterable, Identifiable {
 }
 
 private struct PreviewStatusBadge: View {
+    @Environment(\.locale) private var locale
     let row: ImportPreviewRow
 
     var body: some View {
@@ -1243,6 +1247,7 @@ private struct PreviewStatusBadge: View {
 }
 
 private struct ImportPreviewListRow: View {
+    @Environment(\.locale) private var locale
     let row: ImportPreviewRow
     let destinationText: String
     let isSelected: Bool
@@ -1292,6 +1297,7 @@ private struct ImportPreviewListRow: View {
 }
 
 private struct DestinationTreeRow: View {
+    @Environment(\.locale) private var locale
     let destination: ImportPreviewDestination
     let rootTitle: String
 
@@ -1373,6 +1379,7 @@ private struct ImportPreviewVisualItem: Identifiable {
 }
 
 private struct ImportPreviewGridCell: View {
+    @Environment(\.locale) private var locale
     let item: ImportPreviewVisualItem
     let isSelected: Bool
     let thumbnailProvider: ImportThumbnailProvider
@@ -1515,6 +1522,7 @@ private struct ImportPreviewGridCell: View {
 }
 
 private struct ImportFileInspector: View {
+    @Environment(\.locale) private var locale
     let row: ImportPreviewRow
     let quickLookAction: () -> Void
 

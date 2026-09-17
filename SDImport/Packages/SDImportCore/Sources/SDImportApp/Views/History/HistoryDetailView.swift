@@ -2,6 +2,7 @@ import SDImportCore
 import SwiftUI
 
 struct HistoryDetailView: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
     @State private var isShowingForgetConfirmation = false
     @State private var fileFilter: HistoryFileFilter = .all
@@ -17,6 +18,7 @@ struct HistoryDetailView: View {
     }
 
     var body: some View {
+        let _ = locale
         if let job {
             detail(job)
                 .onChange(of: job.id) {

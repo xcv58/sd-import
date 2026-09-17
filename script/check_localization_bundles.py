@@ -48,6 +48,33 @@ struct LocalizationProbe {
             guard UserDefaults.standard.synchronize() else { fatalError("Could not clear language") }
             return
         }
+        if CommandLine.arguments.contains("--live-language-switch") {
+            let key = L10n.languagePreferenceKey
+            let spaceError: Error = SDImportError.insufficientDestinationSpace(
+                path: "/synthetic/Photos", requiredBytes: 1_000_000, availableBytes: 500_000
+            )
+            let initial = L10n.tr("Settings")
+            let initialFailure = spaceError.localizedDescription
+            UserDefaults.standard.set("fr", forKey: key)
+            let french = L10n.tr("Settings")
+            let frenchSize = L10n.fileSize(1_000_000)
+            let frenchFailure = spaceError.localizedDescription
+            UserDefaults.standard.set("zh-Hans", forKey: key)
+            let chinese = L10n.tr("Settings")
+            let chineseFailure = spaceError.localizedDescription
+            UserDefaults.standard.set("", forKey: key)
+            let restored = L10n.tr("Settings")
+            let result = [
+                "initial": initial, "french": french, "frenchSize": frenchSize,
+                "chinese": chinese, "restored": restored,
+                "initialFailure": initialFailure, "frenchFailure": frenchFailure,
+                "chineseFailure": chineseFailure,
+                "activeLanguage": L10n.activeLanguage.rawValue,
+            ]
+            let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
         let count = 1
         let path = "/synthetic/100% 写真 %@.jpg"
         let reason = "Sentinel 50%"
@@ -184,6 +211,24 @@ def verify(app):
                     if selection == 'fr':
                         assert value['list'] == 'A, B et C', value
                         assert value['size'].endswith('Mo'), value
+                for system_language, system_locale, expected_settings in [
+                    ('en', 'en_US', 'Settings'),
+                    ('zh-Hans', 'zh_CN', '设置'),
+                ]:
+                    live = subprocess.run([
+                        str(contents / 'MacOS/Probe'), '-AppleLanguages', f'("{system_language}")',
+                        '-AppleLocale', system_locale, '--live-language-switch',
+                    ], check=True, capture_output=True, text=True)
+                    switched = json.loads(live.stdout)
+                    assert switched['initial'] == expected_settings, (target.name, switched)
+                    assert switched['french'] == 'Réglages', (target.name, switched)
+                    assert switched['chinese'] == '设置', (target.name, switched)
+                    assert switched['restored'] == expected_settings, (target.name, switched)
+                    assert switched['activeLanguage'] == '', (target.name, switched)
+                    assert switched['frenchSize'].endswith('Mo'), (target.name, switched)
+                    assert switched['frenchSize'] in switched['frenchFailure'], (target.name, switched)
+                    assert switched['initialFailure'] != switched['frenchFailure'], (target.name, switched)
+                    assert switched['chineseFailure'] != switched['frenchFailure'], (target.name, switched)
             finally:
                 cleared = subprocess.run([
                     str(contents / 'MacOS/Probe'), '--clear-language',
@@ -192,7 +237,7 @@ def verify(app):
             assert subprocess.run([
                 'defaults', 'read', probe_info['CFBundleIdentifier'], 'SDImport.interfaceLanguage',
             ], capture_output=True).returncode != 0, f'{target}: temporary preference remains'
-            print(f'{target.name}: 10 languages + 4 regional/fallback preferences, saved-choice relaunch, display formatting and packaged lookup OK')
+            print(f'{target.name}: 10 languages + 4 regional/fallback preferences, saved-choice relaunch, live switch, display formatting and packaged lookup OK')
 
 
 if __name__ == '__main__':

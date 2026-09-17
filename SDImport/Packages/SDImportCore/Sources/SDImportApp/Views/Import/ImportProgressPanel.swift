@@ -2,6 +2,7 @@ import SDImportCore
 import SwiftUI
 
 struct ImportProgressPanel: View {
+    @Environment(\.locale) private var locale
     let progress: ImportProgress
     let cancelAction: () -> Void
 
@@ -14,6 +15,7 @@ struct ImportProgressPanel: View {
     }
 
     var body: some View {
+        let _ = locale
         AppSection(L10n.tr("Copy Monitor"), systemImage: "speedometer") {
             HStack(alignment: .firstTextBaseline) {
                 Text(percentText)

@@ -2,6 +2,7 @@ import SDImportCore
 import SwiftUI
 
 struct ImportReportView: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var filter: ReportFileFilter = .all
@@ -42,6 +43,7 @@ struct ImportReportView: View {
     }
 
     var body: some View {
+        let _ = locale
         VStack(alignment: .leading, spacing: 16) {
             header
             summaryGrid
@@ -326,6 +328,7 @@ private enum ReportFileFilter: String, CaseIterable, Identifiable {
 }
 
 private struct ReportFileRow: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
 
     let file: JobFileRecord

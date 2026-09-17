@@ -148,11 +148,6 @@ struct SettingsView: View {
                             .frame(maxWidth: 520)
                         }
 
-                        if selectedLanguage.wrappedValue != L10n.activeLanguage {
-                            Text(L10n.tr("Quit and reopen the app to apply the new language."))
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
                     }
                 }
 
@@ -365,7 +360,10 @@ struct SettingsView: View {
         Binding {
             AppLanguage(rawValue: selectedLanguageCode) ?? .system
         } set: { language in
+            let previousLanguage = AppLanguage(rawValue: selectedLanguageCode) ?? .system
             selectedLanguageCode = language.rawValue
+            model.interfaceLanguageDidChange(from: previousLanguage, to: language)
+            purchaseManager.interfaceLanguageDidChange(from: previousLanguage, to: language)
         }
     }
 
@@ -439,16 +437,18 @@ private struct SettingsFeedbackRow: View {
 }
 
 private struct FolderSettingRow: View {
+    @Environment(\.locale) private var locale
     let title: String
     @Binding var path: String
     let validation: PathValidationResult
     let chooseAction: () -> Void
     let revealAction: () -> Void
 
-    @State private var capacityText: String?
+    @State private var capacity: VolumeCapacity?
     @State private var isLoadingCapacity = false
 
     var body: some View {
+        let _ = locale
         LabeledContent(title) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
@@ -488,8 +488,17 @@ private struct FolderSettingRow: View {
         "\(validation.expandedPath)|\(validation.isUsable)"
     }
 
+    private var capacityText: String? {
+        guard let capacity else { return nil }
+        let available = L10n.fileSize(capacity.availableBytes)
+        if let totalBytes = capacity.totalBytes {
+            return L10n.tr("\(available) available of \(L10n.fileSize(totalBytes))")
+        }
+        return L10n.tr("\(available) available")
+    }
+
     private func loadCapacity() async {
-        capacityText = nil
+        capacity = nil
         guard validation.isUsable else {
             isLoadingCapacity = false
             return
@@ -497,7 +506,7 @@ private struct FolderSettingRow: View {
 
         isLoadingCapacity = true
         let path = validation.expandedPath
-        let capacity = await Task.detached(priority: .utility) {
+        let updatedCapacity = await Task.detached(priority: .utility) {
             try? DestinationSpaceChecker.fileSystemCapacity(for: path)
         }.value
 
@@ -506,27 +515,19 @@ private struct FolderSettingRow: View {
         }
 
         isLoadingCapacity = false
-        guard let capacity else {
-            return
-        }
-
-        let available = L10n.fileSize(capacity.availableBytes)
-        if let totalBytes = capacity.totalBytes {
-            let total = L10n.fileSize(totalBytes)
-            capacityText = L10n.tr("\(available) available of \(total)")
-        } else {
-            capacityText = L10n.tr("\(available) available")
-        }
+        capacity = updatedCapacity
     }
 }
 
 private struct FolderActionButtons: View {
+    @Environment(\.locale) private var locale
     let title: String
     let canReveal: Bool
     let chooseAction: () -> Void
     let revealAction: () -> Void
 
     var body: some View {
+        let _ = locale
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
                 Button(action: chooseAction) {
@@ -564,6 +565,7 @@ private struct FolderActionButtons: View {
 }
 
 private struct DestinationStatusLine: View {
+    @Environment(\.locale) private var locale
     let result: PathValidationResult
 
     var body: some View {

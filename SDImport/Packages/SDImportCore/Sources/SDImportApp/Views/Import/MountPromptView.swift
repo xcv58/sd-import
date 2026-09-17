@@ -2,12 +2,14 @@ import SDImportCore
 import SwiftUI
 
 struct MountPromptView: View {
+    @Environment(\.locale) private var locale
     let volume: MountedVolume
     let deviceGroup: MountedDeviceGroup
     let continueAction: () -> Void
     let skipAction: () -> Void
 
     var body: some View {
+        let _ = locale
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
                 Image(systemName: "externaldrive")

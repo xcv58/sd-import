@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ManualImportView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.locale) private var locale
     @AccessibilityFocusState private var phaseHeadingIsFocused: Bool
 
     var body: some View {
@@ -243,6 +244,7 @@ struct ManualImportView: View {
 
 struct ImportSourceSummaryView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.locale) private var locale
     @State private var isConfirmingSourceChange = false
 
     var allowsChange = true
@@ -381,6 +383,7 @@ enum ImportFormLayout {
 }
 
 struct ImportDestinationFields: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
@@ -480,6 +483,7 @@ struct ImportDestinationFields: View {
 }
 
 private struct SourceField: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
     @State private var isManagingRecentSources = false
 
@@ -657,6 +661,7 @@ private extension MountedVolume {
 }
 
 private struct FolderField: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
     @State private var isManagingRecentFolders = false
 
@@ -745,6 +750,7 @@ private struct FolderField: View {
 }
 
 private struct RecentPathManagementSheet: View {
+    @Environment(\.locale) private var locale
     @Environment(\.dismiss) private var dismiss
 
     let title: String
@@ -803,6 +809,7 @@ private struct RecentPathManagementSheet: View {
 }
 
 private struct RecentPathManagementRow: View {
+    @Environment(\.locale) private var locale
     let suggestion: RecentPathSuggestion
     let selectRecentPath: () -> Void
     let forgetRecentPath: () -> Void
@@ -856,6 +863,7 @@ private struct RecentPathManagementRow: View {
 }
 
 private struct ValidationStatusView: View {
+    @Environment(\.locale) private var locale
     let result: PathValidationResult
 
     var body: some View {

@@ -79,6 +79,7 @@ public struct MediaScanner {
         var portableFingerprints: Set<String> = []
         var portableIdentitiesToBackfill: [PortableFileIdentity] = []
         var portableReceiptWarning: String?
+        var portableReceiptSizeWarning: PortableReceiptSizeWarning?
         var portableWritesAvailable = request.portableReceiptsEnabled
         let portableLedger = PortableImportReceiptLedger(sourceRootURL: request.mountURL)
 
@@ -89,6 +90,7 @@ public struct MediaScanner {
                 portableReceiptWarning = snapshot.warning
             } catch {
                 portableWritesAvailable = false
+                portableReceiptSizeWarning = PortableReceiptSizeWarning(error: error)
                 portableReceiptWarning = L10n.tr("Portable import history is unavailable: \(error.localizedDescription)")
             }
         }
@@ -262,6 +264,7 @@ public struct MediaScanner {
                         .joined(separator: ". ")
                 }
             } catch {
+                portableReceiptSizeWarning = PortableReceiptSizeWarning(error: error)
                 portableReceiptWarning = L10n.tr("Portable import history could not be updated: \(error.localizedDescription)")
             }
         }
@@ -278,7 +281,8 @@ public struct MediaScanner {
             unsupportedFiles: unsupportedFiles,
             conflictFiles: conflictFiles,
             portableKnownFiles: portableKnownFiles,
-            portableReceiptWarning: portableReceiptWarning
+            portableReceiptWarning: portableReceiptWarning,
+            portableReceiptSizeWarning: portableReceiptSizeWarning
         )
 
         let reportBaseURL = request.reportsDirectoryURL?.appendingPathComponent(request.jobID, isDirectory: false)
