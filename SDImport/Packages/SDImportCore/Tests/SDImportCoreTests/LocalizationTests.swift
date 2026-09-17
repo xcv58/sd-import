@@ -12,13 +12,41 @@ struct LocalizationTests {
     @Test(arguments: L10n.supportedLanguages)
     func languageResources(language: String) throws {
         #expect(L10n.tr("Settings", language: language) == Self.settings[language])
-        let englishURL = try #require(L10n.resourceBundle.url(forResource: "en", withExtension: "lproj"))
-        let localeURL = try #require(L10n.resourceBundle.url(forResource: language, withExtension: "lproj"))
+        let englishURL = try #require(L10n.localizationBundle(for: "en")).bundleURL
+        let localeURL = try #require(L10n.localizationBundle(for: language)).bundleURL
         let english = try strings(at: englishURL)
         let translated = try strings(at: localeURL)
         #expect(!english.isEmpty)
         #expect(Set(english.keys) == Set(translated.keys))
         #expect(translated.values.allSatisfy { !$0.isEmpty })
+    }
+
+    @Test(arguments: [false, true])
+    func localizationFolderCasing(lowercase: Bool) throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let contents = directory.appendingPathComponent("Fixture.bundle/Contents")
+        let resources = contents.appendingPathComponent("Resources")
+        try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+        let info = ["CFBundleDevelopmentRegion": "en", "CFBundleIdentifier": "example.localization.\(UUID().uuidString)"]
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            .write(to: contents.appendingPathComponent("Info.plist"))
+        for language in ["en", "zh-Hans", "zh-Hant", "pt-BR"] {
+            let name = lowercase ? language.lowercased() : language
+            let folder = resources.appendingPathComponent("\(name).lproj")
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let translations = ["Settings": try #require(Self.settings[language])]
+            try PropertyListSerialization.data(fromPropertyList: translations, format: .xml, options: 0)
+                .write(to: folder.appendingPathComponent("Localizable.strings"))
+        }
+        let fixture = try #require(Bundle(url: contents.deletingLastPathComponent()))
+        for (preference, expected) in [
+            ("zh-Hans", "设置"), ("zh-CN", "设置"), ("zh-Hant", "設定"),
+            ("zh-HK", "設定"), ("pt-BR", "Ajustes"), ("nl-NL", "Settings")
+        ] {
+            let selected = try #require(L10n.localizationBundle(for: preference, in: fixture))
+            #expect(String(localized: "Settings", bundle: selected) == expected)
+        }
     }
 
     @Test(arguments: [
