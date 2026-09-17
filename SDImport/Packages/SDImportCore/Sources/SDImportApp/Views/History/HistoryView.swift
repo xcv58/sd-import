@@ -3,6 +3,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.locale) private var locale
     @State private var filter: HistoryFilter = .all
 
     private var filteredJobs: [ImportJob] {
@@ -159,6 +160,7 @@ private enum HistoryFilter: String, CaseIterable, Identifiable {
 }
 
 private struct HistoryRow: View {
+    @Environment(\.locale) private var locale
     let job: ImportJob
 
     var body: some View {

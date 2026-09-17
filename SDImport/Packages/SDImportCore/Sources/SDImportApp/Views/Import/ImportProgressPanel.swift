@@ -2,6 +2,7 @@ import SDImportCore
 import SwiftUI
 
 struct ImportProgressPanel: View {
+    @Environment(\.locale) private var locale
     let progress: ImportProgress
     let cancelAction: () -> Void
 
@@ -14,6 +15,7 @@ struct ImportProgressPanel: View {
     }
 
     var body: some View {
+        let _ = locale
         AppSection(L10n.tr("Copy Monitor"), systemImage: "speedometer") {
             HStack(alignment: .firstTextBaseline) {
                 Text(percentText)
@@ -136,7 +138,7 @@ struct ImportProgressPanel: View {
     }
 
     private static func bytes(_ value: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+        L10n.fileSize(value)
     }
 
     private static func duration(_ seconds: Double) -> String {
@@ -289,6 +291,6 @@ private struct ProgressFileEventRow: View {
     }
 
     private static func bytes(_ value: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+        L10n.fileSize(value)
     }
 }

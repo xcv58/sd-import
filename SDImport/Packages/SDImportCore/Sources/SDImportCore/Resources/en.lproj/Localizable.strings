@@ -295,6 +295,7 @@
 "Kind" = "Kind";
 "Known" = "Known";
 "Known files" = "Known files";
+"Language" = "Language";
 "Legacy import skipped: %@" = "Legacy import skipped: %@";
 "Library" = "Library";
 "Lifetime access unlocked" = "Lifetime access unlocked";
@@ -514,6 +515,7 @@
 "Support" = "Support";
 "Support file" = "Support file";
 "Support files" = "Support files";
+"System Default (%@)" = "System Default (%@)";
 "System" = "System";
 "The App Store did not finish checking purchases. Try Restore Purchases." = "The App Store did not finish checking purchases. Try Restore Purchases.";
 "The App Store did not finish restoring purchases. Your purchase is safe; try again." = "The App Store did not finish restoring purchases. Your purchase is safe; try again.";

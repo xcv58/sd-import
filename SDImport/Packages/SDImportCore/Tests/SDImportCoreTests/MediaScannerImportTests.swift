@@ -589,6 +589,32 @@ struct MediaScannerImportTests {
         #expect(summary.portableReceiptWarning?.contains("unavailable") == true)
     }
 
+    @Test("oversized portable ledger retains raw size for live language changes")
+    func oversizedPortableLedgerRetainsWarningSize() throws {
+        let fixture = try Fixture()
+        let source = fixture.mountURL.appendingPathComponent("IMG_OVERSIZED.JPG")
+        try fixture.writeFile(source, bytes: Data("synthetic-image-bytes".utf8))
+        let ledger = PortableImportReceiptLedger(sourceRootURL: fixture.mountURL)
+        try FileManager.default.createDirectory(
+            at: ledger.ledgerURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        #expect(FileManager.default.createFile(atPath: ledger.ledgerURL.path, contents: nil))
+        let oversizedBytes: Int64 = 64 * 1_024 * 1_024 + 1
+        let handle = try FileHandle(forWritingTo: ledger.ledgerURL)
+        try handle.truncate(atOffset: UInt64(oversizedBytes))
+        try handle.close()
+
+        let summary = try fixture.scanner.scan(
+            ScanRequest(
+                mountURL: fixture.mountURL, volumeName: "CARD", location: "TEST",
+                roots: DestinationRoots(photosURL: fixture.photosURL, videosURL: fixture.videosURL),
+                jobID: "job-oversized-portable-ledger", portableReceiptsEnabled: true
+            )
+        )
+        #expect(summary.newFiles == 1)
+        #expect(summary.portableReceiptSizeWarning == .ledgerTooLarge(oversizedBytes))
+    }
+
     @Test(
         "read-only source imports successfully with a portable history warning",
         .enabled(if: geteuid() != 0, "root bypasses POSIX write permissions")

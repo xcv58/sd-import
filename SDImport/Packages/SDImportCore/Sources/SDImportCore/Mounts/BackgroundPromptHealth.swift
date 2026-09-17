@@ -1,9 +1,14 @@
 import Foundation
 
+public enum BackgroundPromptAppErrorReason: Equatable, Sendable {
+    case missingLaunch
+}
+
 public enum BackgroundPromptHealth {
     public static let refreshDelayMilliseconds: [Int64] = [500, 1_000, 2_000, 4_000, 8_000]
-    public static let missingLaunchError =
+    public static var missingLaunchError: String {
         L10n.tr("The background helper is registered but has not reported a successful launch.")
+    }
 
     public static func effectiveError(
         appError: String?,
@@ -20,9 +25,10 @@ public enum BackgroundPromptHealth {
 
     public static func appErrorAfterRefresh(
         existingError: String?,
+        reason: BackgroundPromptAppErrorReason?,
         agentState: BackgroundPromptAgentState?
     ) -> String? {
-        if existingError == missingLaunchError, agentState != nil {
+        if reason == .missingLaunch, agentState != nil {
             return nil
         }
         return existingError

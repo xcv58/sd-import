@@ -1,8 +1,10 @@
+import AppKit
 import SDImportCore
 import SwiftUI
 
 struct DiagnosticsView: View {
     @EnvironmentObject private var model: AppModel
+    @AppStorage(L10n.languagePreferenceKey) private var selectedLanguageCode = AppLanguage.system.rawValue
 
     var body: some View {
         ScrollView {
@@ -29,6 +31,10 @@ struct DiagnosticsView: View {
             .frame(maxWidth: .infinity, alignment: .top)
         }
         .background(AppSurfacePalette.contentBackground)
+        .background(LocalizedWindowTitleView(title: L10n.tr("Diagnostics")))
+        .environment(\.locale, L10n.presentationLocale(
+            for: AppLanguage(rawValue: selectedLanguageCode) ?? .system
+        ))
     }
 
     private var backgroundPromptSection: some View {
@@ -47,7 +53,7 @@ struct DiagnosticsView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let state = model.backgroundPromptAgentState {
-                    Text(L10n.tr("Helper build \(state.agentBuild) · last started \(state.launchedAt.formatted(date: .abbreviated, time: .standard))"))
+                    Text(L10n.tr("Helper build \(state.agentBuild) · last started \(state.launchedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .standard).locale(L10n.presentationLocale)))"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -185,5 +191,20 @@ struct DiagnosticsView: View {
             return nil
         }
         return model.statusMessage
+    }
+}
+
+private struct LocalizedWindowTitleView: NSViewRepresentable {
+    let title: String
+
+    func makeNSView(context: Context) -> NSView {
+        NSView()
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        let title = title
+        DispatchQueue.main.async {
+            view.window?.title = title
+        }
     }
 }

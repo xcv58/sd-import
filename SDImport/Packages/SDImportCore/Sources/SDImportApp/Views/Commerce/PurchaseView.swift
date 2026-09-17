@@ -3,6 +3,7 @@ import SDImportCommerce
 import SwiftUI
 
 struct PurchaseView: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @Environment(\.dismiss) private var dismiss
 

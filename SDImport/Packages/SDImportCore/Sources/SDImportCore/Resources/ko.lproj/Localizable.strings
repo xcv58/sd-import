@@ -295,6 +295,7 @@
 "Kind" = "종류";
 "Known" = "알려짐";
 "Known files" = "알려진 파일";
+"Language" = "언어";
 "Legacy import skipped: %@" = "이전 데이터 가져오기 건너뜀: %1$@";
 "Library" = "보관함";
 "Lifetime access unlocked" = "평생 이용 잠금 해제됨";
@@ -514,6 +515,7 @@
 "Support" = "지원";
 "Support file" = "보조 파일";
 "Support files" = "보조 파일";
+"System Default (%@)" = "시스템 기본값(%@)";
 "System" = "시스템";
 "The App Store did not finish checking purchases. Try Restore Purchases." = "App Store가 구입 확인을 완료하지 못했습니다. 구입 항목 복원을 시도하세요.";
 "The App Store did not finish restoring purchases. Your purchase is safe; try again." = "App Store가 구입 복원을 완료하지 못했습니다. 구입 내역은 안전합니다. 다시 시도하세요.";

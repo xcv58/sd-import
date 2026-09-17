@@ -5,6 +5,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var purchaseManager: PurchaseManager
+    @AppStorage(L10n.languagePreferenceKey) private var selectedLanguageCode = AppLanguage.system.rawValue
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     let appUpdater: AppUpdater
@@ -60,6 +61,9 @@ struct RootView: View {
             PurchaseView()
                 .environmentObject(purchaseManager)
         }
+        .environment(\.locale, L10n.presentationLocale(
+            for: AppLanguage(rawValue: selectedLanguageCode) ?? .system
+        ))
     }
 
     private var onboardingBinding: Binding<Bool> {
@@ -92,6 +96,7 @@ private struct DetailTitleBarBacking: View {
 }
 
 private struct SidebarRow: View {
+    @Environment(\.locale) private var locale
     let item: SidebarItem
 
     var body: some View {

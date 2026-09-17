@@ -2,6 +2,7 @@ import SDImportCore
 import SwiftUI
 
 struct ShootNameField: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
 
     @Binding var name: String
@@ -12,6 +13,7 @@ struct ShootNameField: View {
     }
 
     var body: some View {
+        let _ = locale
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 TextField(L10n.tr("Shoot name"), text: $name)

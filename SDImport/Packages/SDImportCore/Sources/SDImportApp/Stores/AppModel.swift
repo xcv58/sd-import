@@ -26,7 +26,7 @@ struct ImportPreviewRow: Identifiable, Hashable {
     let disposition: ImportPlanDisposition
     let visualGroupID: String?
     let visualGroupKind: ImportPreviewGroupKind?
-    let status: String
+    var status: String { disposition.title }
     let willCopy: Bool
     let size: Int64
 }
@@ -156,7 +156,25 @@ struct ImportReportPresentation: Identifiable, Hashable {
     let job: ImportJob
     let report: ImportReport?
     let files: [JobFileRecord]
-    let loadError: String?
+    let loadErrors: [ReportLoadError]
+
+    var loadError: String? {
+        loadErrors.isEmpty ? nil : loadErrors.map(\.message).joined(separator: "\n")
+    }
+}
+
+enum ReportLoadError: Hashable, Sendable {
+    case databaseNotReady
+    case jsonReport(String)
+    case jobFiles(String)
+
+    var message: String {
+        switch self {
+        case .databaseNotReady: L10n.tr("Database is not ready")
+        case .jsonReport(let detail): L10n.tr("JSON report: \(detail)")
+        case .jobFiles(let detail): L10n.tr("Job files: \(detail)")
+        }
+    }
 }
 
 struct SettingsFeedback: Equatable {
@@ -165,8 +183,54 @@ struct SettingsFeedback: Equatable {
         case error
     }
 
-    let message: String
+    var message: String { localizedMessage.text }
     let role: Role
+    private let localizedMessage: RelocalizableMessage
+    private let currentValue: LivePresentation<(message: String, role: Role)>?
+
+    init(message: String, role: Role, render: (() -> String)? = nil) {
+        self.localizedMessage = RelocalizableMessage(message, render: render)
+        self.role = role
+        self.currentValue = nil
+    }
+
+    private init(localizedMessage: RelocalizableMessage, role: Role) {
+        self.localizedMessage = localizedMessage
+        self.role = role
+        self.currentValue = nil
+    }
+
+    @MainActor
+    init(currentValue: @escaping @MainActor () -> (message: String, role: Role)) {
+        self.init(liveValue: LivePresentation(currentValue))
+    }
+
+    @MainActor
+    private init(liveValue: LivePresentation<(message: String, role: Role)>) {
+        self.localizedMessage = RelocalizableMessage(liveValue.value.message)
+        self.role = liveValue.value.role
+        self.currentValue = liveValue
+    }
+
+    @MainActor
+    func relocalized(from previous: AppLanguage, to selected: AppLanguage) -> SettingsFeedback {
+        if let currentValue {
+            return SettingsFeedback(liveValue: currentValue.refreshed())
+        }
+        return SettingsFeedback(
+            localizedMessage: localizedMessage.relocalized(from: previous, to: selected),
+            role: role
+        )
+    }
+
+    @MainActor
+    func refreshedForStateChange() -> SettingsFeedback? {
+        currentValue.map { SettingsFeedback(liveValue: $0.refreshed()) }
+    }
+
+    static func == (lhs: SettingsFeedback, rhs: SettingsFeedback) -> Bool {
+        lhs.message == rhs.message && lhs.role == rhs.role
+    }
 }
 
 @MainActor
@@ -188,7 +252,15 @@ final class AppModel: ObservableObject {
     @Published var autoPromptEnabled: Bool
     @Published private(set) var backgroundPromptServiceStatus: BackgroundPromptServiceStatus = .notRegistered
     @Published private(set) var backgroundPromptAgentState: BackgroundPromptAgentState?
-    @Published private(set) var backgroundPromptLastError: String?
+    @Published private(set) var backgroundPromptLastError: String? {
+        didSet {
+            if backgroundPromptLastError == nil {
+                backgroundPromptLastErrorContent = nil
+            }
+        }
+    }
+    private var backgroundPromptLastErrorContent: RelocalizableMessage?
+    private var backgroundPromptLastErrorReason: BackgroundPromptAppErrorReason?
     private var backgroundPromptLastErrorSequence: UInt64?
     @Published private(set) var backgroundPromptApplicationOwnership = LoginItemController.applicationOwnership
     @Published var ejectAfterSuccessfulImport: Bool
@@ -247,8 +319,77 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var reportPresentation: ImportReportPresentation?
-    @Published var statusMessage = ""
+    @Published var statusMessage = "" {
+        didSet { statusMessageRenderer = nil }
+    }
     @Published private(set) var settingsFeedback: SettingsFeedback?
+    private var statusMessageRenderer: (() -> String)?
+    private var importFailureRenderer: (() -> String)?
+
+    private func setLocalizedStatusMessage(_ render: @escaping () -> String) {
+        statusMessage = render()
+        statusMessageRenderer = render
+    }
+
+    private func setSettingsFeedbackFromStatus(role: SettingsFeedback.Role) {
+        settingsFeedback = SettingsFeedback(message: statusMessage, role: role, render: statusMessageRenderer)
+    }
+
+    private func setBackgroundPromptSettingsFeedback(
+        message: (@MainActor () -> String)? = nil
+    ) {
+        settingsFeedback = SettingsFeedback(currentValue: { [weak self] in
+            guard let self else { return ("", .error) }
+            return (
+                message?() ?? self.backgroundPromptStatusDetail,
+                self.backgroundPromptNeedsAttention ? .error : .information
+            )
+        })
+    }
+
+    private func refreshBackgroundPromptSettingsFeedbackIfNeeded() {
+        if let refreshed = settingsFeedback?.refreshedForStateChange() {
+            settingsFeedback = refreshed
+        }
+    }
+
+    func interfaceLanguageDidChange(from previous: AppLanguage, to selected: AppLanguage) {
+        let previousStatus = statusMessage
+        if let content = setupErrorContent {
+            let localized = content.relocalized(from: previous, to: selected)
+            setupErrorContent = localized
+            setupError = localized.text
+        }
+        if let error = backgroundPromptLastError {
+            if backgroundPromptLastErrorReason == .missingLaunch {
+                backgroundPromptLastError = BackgroundPromptHealth.missingLaunchError
+            } else if let content = backgroundPromptLastErrorContent {
+                let localized = content.relocalized(from: previous, to: selected)
+                backgroundPromptLastError = localized.text
+                backgroundPromptLastErrorContent = localized
+            } else {
+                backgroundPromptLastError = L10n.relocalizedStaticMessage(error, from: previous, to: selected)
+            }
+        }
+        if let render = statusMessageRenderer {
+            statusMessage = render()
+            statusMessageRenderer = render
+        } else {
+            statusMessage = L10n.relocalizedStaticMessage(statusMessage, from: previous, to: selected)
+        }
+        if let feedback = settingsFeedback {
+            settingsFeedback = feedback.relocalized(from: previous, to: selected)
+        }
+        if let failure = importFailure {
+            importFailure = ImportFailureState(
+                operation: failure.operation,
+                message: importFailureRenderer?()
+                    ?? (failure.message == previousStatus
+                        ? statusMessage
+                        : L10n.relocalizedStaticMessage(failure.message, from: previous, to: selected))
+            )
+        }
+    }
     @Published var isWorking = false {
         didSet {
             if oldValue, !isWorking {
@@ -266,7 +407,14 @@ final class AppModel: ObservableObject {
     @Published private(set) var ejectedSourceJobID: String?
     @Published private(set) var ejectedSourceName: String?
     @Published private(set) var ejectedSourceVolumeCount = 0
-    @Published var setupError: String?
+    @Published var setupError: String? {
+        didSet {
+            if setupError == nil {
+                setupErrorContent = nil
+            }
+        }
+    }
+    private var setupErrorContent: RelocalizableMessage?
 
     private let defaults = UserDefaults.standard
     private let purchaseManager: PurchaseManager
@@ -450,16 +598,18 @@ final class AppModel: ObservableObject {
             do {
                 try authorizeCurrentBackgroundPromptHelperIfNeeded()
             } catch {
-                recordBackgroundPromptError(
-                    L10n.tr("Could not authorize the background helper: \(Self.errorMessage(for: error))")
-                )
+                let render = { L10n.tr("Could not authorize the background helper: \(Self.errorMessage(for: error))") }
+                recordBackgroundPromptError(render(), render: render)
             }
             startMountObserver()
             reconcileBackgroundPromptRegistration()
             statusMessage = legacyImportMessage
                 ?? (recovery.recoveredJobs > 0 ? L10n.tr("Recovered interrupted import") : L10n.tr("Ready"))
         } catch {
-            setupError = Self.errorMessage(for: error)
+            let render = { Self.errorMessage(for: error) }
+            let content = RelocalizableMessage(render(), render: render)
+            setupErrorContent = content
+            setupError = content.text
             statusMessage = L10n.tr("Setup failed")
         }
     }
@@ -477,8 +627,8 @@ final class AppModel: ObservableObject {
         if AppDistribution.current == .macAppStore {
             for purpose in bookmarkPurposes where !hasActiveFolderAccess(covering: folderPath(for: purpose)) {
                 let error = FolderAccessAuthorizationError(purpose: purpose)
-                statusMessage = Self.errorMessage(for: error)
-                settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+                setLocalizedStatusMessage { Self.errorMessage(for: error) }
+                setSettingsFeedbackFromStatus(role: .error)
                 return false
             }
         }
@@ -491,8 +641,8 @@ final class AppModel: ObservableObject {
                 )
             }
         } catch {
-            statusMessage = L10n.tr("Could not save settings: \(Self.errorMessage(for: error))")
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            setLocalizedStatusMessage { L10n.tr("Could not save settings: \(Self.errorMessage(for: error))") }
+            setSettingsFeedbackFromStatus(role: .error)
             return false
         }
 
@@ -523,8 +673,10 @@ final class AppModel: ObservableObject {
                 try saveFolderBookmark(purpose, path: folderPath(for: purpose))
             }
         } catch {
-            statusMessage = L10n.tr("Settings saved, but folder access could not be refreshed: \(Self.errorMessage(for: error))")
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            setLocalizedStatusMessage {
+                L10n.tr("Settings saved, but folder access could not be refreshed: \(Self.errorMessage(for: error))")
+            }
+            setSettingsFeedbackFromStatus(role: .error)
             return AppDistribution.current != .macAppStore
         }
         return true
@@ -924,11 +1076,8 @@ final class AppModel: ObservableObject {
             return L10n.tr("Available space couldn’t be checked for \(requirement.displayPath)")
         }
         if let requirement = previewSpaceRequirements.first(where: { !$0.isSatisfied }) {
-            let required = ByteCountFormatter.string(fromByteCount: requirement.requiredBytes, countStyle: .file)
-            let available = ByteCountFormatter.string(
-                fromByteCount: requirement.availableBytes ?? 0,
-                countStyle: .file
-            )
+            let required = L10n.fileSize(requirement.requiredBytes)
+            let available = L10n.fileSize(requirement.availableBytes ?? 0)
             return L10n.tr("\(required) required; \(available) available")
         }
         return nil
@@ -956,7 +1105,8 @@ final class AppModel: ObservableObject {
         }
         validatePaths()
         guard sourceValidation.isUsable else {
-            statusMessage = sourceValidation.message
+            let validation = sourceValidation
+            setLocalizedStatusMessage { validation.message }
             return
         }
 
@@ -1033,9 +1183,14 @@ final class AppModel: ObservableObject {
                     self.rebuildPreviewSessions(files: files, defaultLabel: location)
                     self.rebuildPreviewPlanCache()
                     if let warning = summary.portableReceiptWarning {
-                        self.statusMessage = L10n.tr("Scan complete. \(warning)")
+                        self.setLocalizedStatusMessage {
+                            let localizedWarning = L10n.portableReceiptWarning(
+                                warning, sizeWarning: summary.portableReceiptSizeWarning
+                            )
+                            return L10n.tr("Scan complete. \(localizedWarning)")
+                        }
                     } else if let portableKnownFiles = summary.portableKnownFiles, portableKnownFiles > 0 {
-                        self.statusMessage = L10n.tr("Scan complete. \(portableKnownFiles) files were imported on another Mac")
+                        self.setLocalizedStatusMessage { L10n.tr("Scan complete. \(portableKnownFiles) files were imported on another Mac") }
                     } else {
                         self.statusMessage = L10n.tr("Scan complete")
                     }
@@ -1079,10 +1234,11 @@ final class AppModel: ObservableObject {
                     self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
                     self.clearPreviewPlanCache()
-                    let message = L10n.tr("Scan failed: \(Self.errorMessage(for: error))")
-                    self.statusMessage = message
+                    let render: () -> String = { L10n.tr("Scan failed: \(Self.errorMessage(for: error))") }
+                    self.setLocalizedStatusMessage(render)
+                    let message = self.statusMessage
                     self.isWorking = false
-                    self.transitionImportWorkspace(.failed(operation: .scan, message: message))
+                    self.transitionImportWorkspace(.failed(operation: .scan, message: message), failureRenderer: render)
                     self.importTask = nil
                 }
                 importLogger.error("Scan failed errorType=\(String(describing: type(of: error)), privacy: .public)")
@@ -1309,7 +1465,6 @@ final class AppModel: ObservableObject {
                 disposition: plan.disposition,
                 visualGroupID: visualGroups[id]?.id,
                 visualGroupKind: visualGroups[id]?.kind,
-                status: plan.status,
                 willCopy: plan.willCopy,
                 size: file.size
             )
@@ -1510,7 +1665,8 @@ final class AppModel: ObservableObject {
         }
         validatePaths()
         guard sourceValidation.isUsable else {
-            statusMessage = sourceValidation.message
+            let validation = sourceValidation
+            setLocalizedStatusMessage { validation.message }
             return
         }
         guard requiredDestinationPathsAreUsable() else {
@@ -1525,9 +1681,12 @@ final class AppModel: ObservableObject {
             rebuildPreviewPlanCache()
         }
         if let failure = previewSpaceRequirements.first(where: { !$0.isSatisfied }) {
-            statusMessage = failure.isKnown
-                ? L10n.tr("Not enough space in \(failure.displayPath)")
-                : L10n.tr("Could not check available space in \(failure.displayPath)")
+            let path = failure.displayPath
+            if failure.isKnown {
+                setLocalizedStatusMessage { L10n.tr("Not enough space in \(path)") }
+            } else {
+                setLocalizedStatusMessage { L10n.tr("Could not check available space in \(path)") }
+            }
             return
         }
 
@@ -1638,7 +1797,8 @@ final class AppModel: ObservableObject {
                     self.selectedJobFiles = files
                     self.jobs = jobs
                     self.rebuildPreviewPlanCache()
-                    self.statusMessage = L10n.tr("Portable receipt overridden for \(updates.count) files")
+                    let count = updates.count
+                    self.setLocalizedStatusMessage { L10n.tr("Portable receipt overridden for \(count) files") }
                     self.isWorking = false
                     self.activeImportRetryContext = nil
                     self.transitionImportWorkspace(.scanSucceeded)
@@ -1653,13 +1813,17 @@ final class AppModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    let message = L10n.tr("Could not override portable history: \(Self.errorMessage(for: error))")
-                    self.statusMessage = message
+                    let render: () -> String = {
+                        L10n.tr("Could not override portable history: \(Self.errorMessage(for: error))")
+                    }
+                    self.setLocalizedStatusMessage(render)
+                    let message = self.statusMessage
                     self.isWorking = false
                     self.failedImportRetryContext = self.activeImportRetryContext
                     self.activeImportRetryContext = nil
                     self.transitionImportWorkspace(
-                        .failed(operation: .portableReceiptOverride, message: message)
+                        .failed(operation: .portableReceiptOverride, message: message),
+                        failureRenderer: render
                     )
                     self.importTask = nil
                 }
@@ -1729,7 +1893,7 @@ final class AppModel: ObservableObject {
                         Task { @MainActor in
                             self.importProgress = progress
                             self.transitionImportWorkspace(.beginCopy)
-                            self.statusMessage = Self.importStatusMessage(for: progress)
+                            self.setLocalizedStatusMessage { Self.importStatusMessage(for: progress) }
                         }
                     },
                     shouldCancel: {
@@ -1754,9 +1918,16 @@ final class AppModel: ObservableObject {
                     } else {
                         self.rebuildPreviewPlanCache()
                     }
-                    self.statusMessage = result.portableReceiptWarning.map {
-                        L10n.tr("Import finished. \($0)")
-                    } ?? L10n.tr("Import finished")
+                    if let warning = result.portableReceiptWarning {
+                        self.setLocalizedStatusMessage {
+                            let localizedWarning = L10n.portableReceiptWarning(
+                                warning, sizeWarning: result.portableReceiptSizeWarning
+                            )
+                            return L10n.tr("Import finished. \(localizedWarning)")
+                        }
+                    } else {
+                        self.statusMessage = L10n.tr("Import finished")
+                    }
                     self.isWorking = false
                     self.activeImportRetryContext = nil
                     self.transitionImportWorkspace(.completed)
@@ -1794,14 +1965,16 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     self.currentResult = nil
                     self.importProgress = nil
-                    let message = L10n.tr("Import failed: \(Self.errorMessage(for: error))")
                     let failedOperation = self.activeImportOperation ?? .copy
-                    self.statusMessage = message
+                    let render: () -> String = { L10n.tr("Import failed: \(Self.errorMessage(for: error))") }
+                    self.setLocalizedStatusMessage(render)
+                    let message = self.statusMessage
                     self.isWorking = false
                     self.failedImportRetryContext = self.activeImportRetryContext
                     self.activeImportRetryContext = nil
                     self.transitionImportWorkspace(
-                        .failed(operation: failedOperation, message: message)
+                        .failed(operation: failedOperation, message: message),
+                        failureRenderer: render
                     )
                     self.importTask = nil
                 }
@@ -1818,7 +1991,10 @@ final class AppModel: ObservableObject {
         importTask?.cancel()
     }
 
-    private func transitionImportWorkspace(_ event: ImportWorkspaceEvent) {
+    private func transitionImportWorkspace(
+        _ event: ImportWorkspaceEvent,
+        failureRenderer: (() -> String)? = nil
+    ) {
         let next = ImportWorkspaceTransition.applying(
             event,
             to: ImportWorkspaceSnapshot(
@@ -1829,6 +2005,9 @@ final class AppModel: ObservableObject {
         )
         importUIPhase = next.phase
         activeImportOperation = next.activeOperation
+        if next.failure != importFailure || failureRenderer != nil {
+            importFailureRenderer = failureRenderer
+        }
         importFailure = next.failure
     }
 
@@ -1947,7 +2126,8 @@ final class AppModel: ObservableObject {
                     return
                 }
                 guard Self.isSameOrDescendant(selectedURL, of: volume.mountURL) else {
-                    statusMessage = L10n.tr("Choose \(volume.name) or a folder on that card")
+                    let name = volume.name
+                    setLocalizedStatusMessage { L10n.tr("Choose \(name) or a folder on that card") }
                     return
                 }
                 guard retainSelectedFolderAccess(
@@ -1985,8 +2165,8 @@ final class AppModel: ObservableObject {
     func setAutoPromptEnabled(_ enabled: Bool) -> Bool {
         refreshBackgroundPromptHealth()
         guard backgroundPromptCanConfigure else {
-            statusMessage = backgroundPromptStatusDetail
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            setLocalizedStatusMessage { [weak self] in self?.backgroundPromptStatusDetail ?? "" }
+            setBackgroundPromptSettingsFeedback()
             return false
         }
         let previousValue = autoPromptEnabled
@@ -2008,6 +2188,7 @@ final class AppModel: ObservableObject {
         invalidateBackgroundPromptHealthRefresh()
         LoginItemController.invalidateApplicationOwnershipCache()
         backgroundPromptLastError = nil
+        backgroundPromptLastErrorReason = nil
         backgroundPromptLastErrorSequence = nil
         do {
             try authorizeCurrentBackgroundPromptHelperIfNeeded()
@@ -2034,22 +2215,22 @@ final class AppModel: ObservableObject {
                 scheduleRegistrationRetry()
             }
             if enabled, backgroundPromptNeedsAttention {
-                statusMessage = backgroundPromptStatusDetail
-                settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+                setLocalizedStatusMessage { [weak self] in self?.backgroundPromptStatusDetail ?? "" }
+                setBackgroundPromptSettingsFeedback()
             } else {
                 statusMessage = enabled ? L10n.tr("Background prompt enabled") : L10n.tr("Background prompt disabled")
-                settingsFeedback = SettingsFeedback(message: statusMessage, role: .information)
+                setSettingsFeedbackFromStatus(role: .information)
             }
         } catch {
             refreshBackgroundPromptHealth()
-            recordBackgroundPromptError(Self.errorMessage(for: error))
+            recordBackgroundPromptError(error)
             if enabled,
                backgroundPromptServiceStatus == .notFound
                 || backgroundPromptServiceStatus == .notRegistered {
                 scheduleRegistrationRetry()
             }
-            statusMessage = L10n.tr("Could not update background prompt: \(Self.errorMessage(for: error))")
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            setLocalizedStatusMessage { L10n.tr("Could not update background prompt: \(Self.errorMessage(for: error))") }
+            setSettingsFeedbackFromStatus(role: .error)
         }
     }
 
@@ -2345,11 +2526,12 @@ final class AppModel: ObservableObject {
         refreshBackgroundPromptHealth()
         guard backgroundPromptCanConfigure else {
             cancelBackgroundPromptRetry(resetAttempts: true)
-            statusMessage = backgroundPromptStatusDetail
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            setLocalizedStatusMessage { [weak self] in self?.backgroundPromptStatusDetail ?? "" }
+            setBackgroundPromptSettingsFeedback()
             return
         }
         backgroundPromptLastError = nil
+        backgroundPromptLastErrorReason = nil
         backgroundPromptLastErrorSequence = nil
         do {
             try authorizeCurrentBackgroundPromptHelperIfNeeded()
@@ -2381,22 +2563,27 @@ final class AppModel: ObservableObject {
                 || backgroundPromptServiceStatus == .notRegistered {
                 scheduleRegistrationRetry()
             }
-            statusMessage = backgroundPromptServiceStatus == .enabled
-                ? L10n.tr("Background prompt repaired")
-                : backgroundPromptStatusDetail
-            settingsFeedback = SettingsFeedback(
-                message: statusMessage,
-                role: backgroundPromptServiceStatus == .enabled ? .information : .error
-            )
+            setLocalizedStatusMessage { [weak self] in
+                guard let self else { return "" }
+                return !self.backgroundPromptNeedsAttention
+                    ? L10n.tr("Background prompt repaired")
+                    : self.backgroundPromptStatusDetail
+            }
+            setBackgroundPromptSettingsFeedback(message: { [weak self] in
+                guard let self else { return "" }
+                return !self.backgroundPromptNeedsAttention
+                    ? L10n.tr("Background prompt repaired")
+                    : self.backgroundPromptStatusDetail
+            })
         } catch {
-            recordBackgroundPromptError(Self.errorMessage(for: error))
+            recordBackgroundPromptError(error)
             refreshBackgroundPromptHealth()
             if backgroundPromptServiceStatus == .notFound
                 || backgroundPromptServiceStatus == .notRegistered {
                 scheduleRegistrationRetry()
             }
-            statusMessage = L10n.tr("Could not repair background prompt: \(Self.errorMessage(for: error))")
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            setLocalizedStatusMessage { L10n.tr("Could not repair background prompt: \(Self.errorMessage(for: error))") }
+            setSettingsFeedbackFromStatus(role: .error)
         }
     }
 
@@ -2410,8 +2597,8 @@ final class AppModel: ObservableObject {
         guard backgroundPromptCanConfigure else {
             cancelBackgroundPromptRetry(resetAttempts: true)
             if showFeedback {
-                statusMessage = backgroundPromptStatusDetail
-                settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+                setLocalizedStatusMessage { [weak self] in self?.backgroundPromptStatusDetail ?? "" }
+                setBackgroundPromptSettingsFeedback()
             }
             return
         }
@@ -2473,23 +2660,20 @@ final class AppModel: ObservableObject {
             }
 
             if showFeedback {
-                statusMessage = backgroundPromptStatusDetail
-                settingsFeedback = SettingsFeedback(
-                    message: statusMessage,
-                    role: backgroundPromptNeedsAttention ? .error : .information
-                )
+                setLocalizedStatusMessage { [weak self] in self?.backgroundPromptStatusDetail ?? "" }
+                setBackgroundPromptSettingsFeedback()
             }
         } catch {
             backgroundPromptServiceStatus = LoginItemController.status
-            recordBackgroundPromptError(Self.errorMessage(for: error))
+            recordBackgroundPromptError(error)
             if backgroundPromptServiceStatus == .notFound
                 || backgroundPromptServiceStatus == .notRegistered {
                 scheduleRegistrationRetry()
             } else {
                 cancelBackgroundPromptRetry(resetAttempts: false)
             }
-            statusMessage = L10n.tr("Could not update background prompt: \(Self.errorMessage(for: error))")
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            setLocalizedStatusMessage { L10n.tr("Could not update background prompt: \(Self.errorMessage(for: error))") }
+            setSettingsFeedbackFromStatus(role: .error)
         }
     }
 
@@ -2520,6 +2704,8 @@ final class AppModel: ObservableObject {
 
     private func recordBackgroundPromptError(
         _ message: String,
+        render: (() -> String)? = nil,
+        reason: BackgroundPromptAppErrorReason? = nil,
         eventSequence: UInt64? = nil
     ) {
         invalidateBackgroundPromptHealthRefresh()
@@ -2548,7 +2734,15 @@ final class AppModel: ObservableObject {
             return
         }
         backgroundPromptLastError = message
+        backgroundPromptLastErrorContent = RelocalizableMessage(message, render: render)
+        backgroundPromptLastErrorReason = reason
         backgroundPromptLastErrorSequence = sequence
+        refreshBackgroundPromptSettingsFeedbackIfNeeded()
+    }
+
+    private func recordBackgroundPromptError(_ error: Error) {
+        let render = { Self.errorMessage(for: error) }
+        recordBackgroundPromptError(render(), render: render)
     }
 
     private func refreshBackgroundPromptHealth() {
@@ -2561,13 +2755,16 @@ final class AppModel: ObservableObject {
                 agentErrorSequence: backgroundPromptAgentState?.lastErrorSequence
             ) {
                 backgroundPromptLastError = nil
+                backgroundPromptLastErrorReason = nil
                 backgroundPromptLastErrorSequence = nil
             }
             backgroundPromptLastError = BackgroundPromptHealth.appErrorAfterRefresh(
                 existingError: backgroundPromptLastError,
+                reason: backgroundPromptLastErrorReason,
                 agentState: backgroundPromptAgentState
             )
             if backgroundPromptLastError == nil {
+                backgroundPromptLastErrorReason = nil
                 backgroundPromptLastErrorSequence = nil
             }
         } catch {
@@ -2582,6 +2779,7 @@ final class AppModel: ObservableObject {
         } else if !backgroundPromptCanConfigure || !autoPromptEnabled {
             cancelBackgroundPromptRetry(resetAttempts: true)
         }
+        refreshBackgroundPromptSettingsFeedbackIfNeeded()
     }
 
     private func authorizeCurrentBackgroundPromptHelperIfNeeded() throws {
@@ -2628,7 +2826,8 @@ final class AppModel: ObservableObject {
                 BackgroundPromptHealth.ownershipTimeoutError(
                     state: self.backgroundPromptAgentState,
                     expectedIdentity: self.currentRepairIdentity
-                )
+                ),
+                reason: self.backgroundPromptAgentState == nil ? .missingLaunch : nil
             )
             self.scheduleMissingHelperHealthRepair()
         }
@@ -2680,7 +2879,8 @@ final class AppModel: ObservableObject {
                     self.isHistoryLoading = false
                     self.isHistoryDetailLoading = false
                     self.historyRefreshTask = nil
-                    self.statusMessage = L10n.tr("Could not load history: \(Self.errorMessage(for: error))")
+                    let detail = Self.errorMessage(for: error)
+                    self.setLocalizedStatusMessage { L10n.tr("Could not load history: \(detail)") }
                 }
             }
         }
@@ -2726,7 +2926,8 @@ final class AppModel: ObservableObject {
                     self.selectedJobFiles = []
                     self.isHistoryDetailLoading = false
                     self.historyDetailTask = nil
-                    self.statusMessage = L10n.tr("Could not load job: \(Self.errorMessage(for: error))")
+                    let detail = Self.errorMessage(for: error)
+                    self.setLocalizedStatusMessage { L10n.tr("Could not load job: \(detail)") }
                 }
             }
         }
@@ -2836,7 +3037,7 @@ final class AppModel: ObservableObject {
                 job: job,
                 report: nil,
                 files: selectedJobID == job.id ? selectedJobFiles : [],
-                loadError: L10n.tr("Database is not ready")
+                loadErrors: [.databaseNotReady]
             )
             return
         }
@@ -2850,13 +3051,13 @@ final class AppModel: ObservableObject {
             let reportLoader = ImportReportLoader()
             var report: ImportReport?
             var files: [JobFileRecord] = []
-            var loadErrors: [String] = []
+            var loadErrors: [ReportLoadError] = []
 
             if let jsonPath {
                 do {
                     report = try reportLoader.loadJSON(from: URL(fileURLWithPath: jsonPath))
                 } catch {
-                    loadErrors.append(L10n.tr("JSON report: \(Self.errorMessage(for: error))"))
+                    loadErrors.append(.jsonReport(Self.errorMessage(for: error)))
                 }
             }
 
@@ -2864,7 +3065,7 @@ final class AppModel: ObservableObject {
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
                 files = try repositories.jobRepository.fetchJobFiles(jobID: job.id)
             } catch {
-                loadErrors.append(L10n.tr("Job files: \(Self.errorMessage(for: error))"))
+                loadErrors.append(.jobFiles(Self.errorMessage(for: error)))
                 files = cachedFiles.isEmpty ? (report?.files ?? []) : cachedFiles
             }
 
@@ -2877,7 +3078,7 @@ final class AppModel: ObservableObject {
                     job: job,
                     report: report,
                     files: files,
-                    loadError: loadErrors.isEmpty ? nil : loadErrors.joined(separator: "\n")
+                    loadErrors: loadErrors
                 )
                 self.statusMessage = loadErrors.isEmpty ? L10n.tr("Report ready") : L10n.tr("Report opened with warnings")
                 self.reportTask = nil
@@ -2922,7 +3123,8 @@ final class AppModel: ObservableObject {
             try summaryText(for: job).write(to: url, atomically: true, encoding: .utf8)
             statusMessage = L10n.tr("Summary exported")
         } catch {
-            statusMessage = L10n.tr("Could not export summary: \(Self.errorMessage(for: error))")
+            let detail = Self.errorMessage(for: error)
+            setLocalizedStatusMessage { L10n.tr("Could not export summary: \(detail)") }
         }
     }
 
@@ -2948,7 +3150,8 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Diagnostics exported")
         } catch {
             diagnosticsLogger.error("Diagnostics export failed errorType=\(String(describing: type(of: error)), privacy: .public)")
-            statusMessage = L10n.tr("Could not export diagnostics: \(Self.errorMessage(for: error))")
+            let detail = Self.errorMessage(for: error)
+            setLocalizedStatusMessage { L10n.tr("Could not export diagnostics: \(detail)") }
         }
     }
 
@@ -2974,7 +3177,7 @@ final class AppModel: ObservableObject {
             return
         }
         guard let report = CrashReportLocator.findReports(limit: 1).first else {
-            statusMessage = L10n.tr("No \(AppDistribution.current.displayName) crash reports found")
+            setLocalizedStatusMessage { L10n.tr("No \(AppDistribution.current.displayName) crash reports found") }
             return
         }
 
@@ -2993,14 +3196,15 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Crash report exported")
         } catch {
             diagnosticsLogger.error("Crash report export failed errorType=\(String(describing: type(of: error)), privacy: .public)")
-            statusMessage = L10n.tr("Could not export crash report: \(Self.errorMessage(for: error))")
+            let detail = Self.errorMessage(for: error)
+            setLocalizedStatusMessage { L10n.tr("Could not export crash report: \(detail)") }
         }
     }
 
     func pruneHistory(dryRun: Bool) {
         guard let databaseURL else {
             statusMessage = L10n.tr("Database is not ready")
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            setSettingsFeedbackFromStatus(role: .error)
             return
         }
 
@@ -3012,14 +3216,16 @@ final class AppModel: ObservableObject {
             )
             refreshHistory()
             if dryRun {
-                statusMessage = L10n.tr("\(summary.matchedJobs) old jobs would be deleted")
+                let count = summary.matchedJobs
+                setLocalizedStatusMessage { L10n.tr("\(count) old jobs would be deleted") }
             } else {
-                statusMessage = L10n.tr("Deleted \(summary.deletedJobs) old jobs")
+                let count = summary.deletedJobs
+                setLocalizedStatusMessage { L10n.tr("Deleted \(count) old jobs") }
             }
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .information)
+            setSettingsFeedbackFromStatus(role: .information)
         } catch {
-            statusMessage = L10n.tr("Could not prune history: \(Self.errorMessage(for: error))")
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            setLocalizedStatusMessage { L10n.tr("Could not prune history: \(Self.errorMessage(for: error))") }
+            setSettingsFeedbackFromStatus(role: .error)
         }
     }
 
@@ -3035,11 +3241,14 @@ final class AppModel: ObservableObject {
             if selectedJobID == job.id {
                 loadJobDetail(jobID: job.id)
             }
-            statusMessage = deleted == 1
-                ? L10n.tr("Forgot 1 imported file")
-                : L10n.tr("Forgot \(deleted) imported files")
+            if deleted == 1 {
+                statusMessage = L10n.tr("Forgot 1 imported file")
+            } else {
+                setLocalizedStatusMessage { L10n.tr("Forgot \(deleted) imported files") }
+            }
         } catch {
-            statusMessage = L10n.tr("Could not forget imported files: \(Self.errorMessage(for: error))")
+            let detail = Self.errorMessage(for: error)
+            setLocalizedStatusMessage { L10n.tr("Could not forget imported files: \(detail)") }
         }
     }
 
@@ -3107,9 +3316,12 @@ final class AppModel: ObservableObject {
         activeImportRetryContext = .eject(jobID: jobID, target: target)
         failedImportRetryContext = nil
         transitionImportWorkspace(.beginAuxiliaryOperation(.eject))
-        statusMessage = target.volumeCount > 1
-            ? L10n.tr("Ejecting \(target.displayName) storage...")
-            : L10n.tr("Ejecting source...")
+        if target.volumeCount > 1 {
+            let name = target.displayName
+            setLocalizedStatusMessage { L10n.tr("Ejecting \(name) storage...") }
+        } else {
+            statusMessage = L10n.tr("Ejecting source...")
+        }
         sourceEjectionTask?.cancel()
         sourceEjectionTask = Task { [weak self] in
             guard let self else {
@@ -3133,9 +3345,12 @@ final class AppModel: ObservableObject {
                 self.sourceEjectionTask = nil
                 self.refreshAvailableSourceVolumes()
                 self.validatePaths()
-                self.statusMessage = target.volumeCount > 1
-                    ? L10n.tr("\(target.displayName) ejected safely")
-                    : L10n.tr("Source ejected safely")
+                if target.volumeCount > 1 {
+                    let name = target.displayName
+                    self.setLocalizedStatusMessage { L10n.tr("\(name) ejected safely") }
+                } else {
+                    self.statusMessage = L10n.tr("Source ejected safely")
+                }
             } catch is CancellationError {
                 self.isEjectingSource = false
                 self.activeImportRetryContext = nil
@@ -3144,11 +3359,12 @@ final class AppModel: ObservableObject {
             } catch {
                 self.isEjectingSource = false
                 self.sourceEjectionTask = nil
-                let message = L10n.tr("Could not eject source: \(error.localizedDescription)")
-                self.statusMessage = message
+                let render: () -> String = { L10n.tr("Could not eject source: \(error.localizedDescription)") }
+                self.setLocalizedStatusMessage(render)
+                let message = self.statusMessage
                 self.failedImportRetryContext = self.activeImportRetryContext
                 self.activeImportRetryContext = nil
-                self.transitionImportWorkspace(.failed(operation: .eject, message: message))
+                self.transitionImportWorkspace(.failed(operation: .eject, message: message), failureRenderer: render)
             }
         }
     }
@@ -3557,7 +3773,8 @@ final class AppModel: ObservableObject {
             }
             defaults.set(configuration.autoPromptEnabled, forKey: DefaultsKeys.autoPromptEnabled)
         } catch {
-            statusMessage = L10n.tr("Could not refresh background prompt settings: \(Self.errorMessage(for: error))")
+            let detail = Self.errorMessage(for: error)
+            setLocalizedStatusMessage { L10n.tr("Could not refresh background prompt settings: \(detail)") }
         }
     }
 
@@ -3655,8 +3872,8 @@ final class AppModel: ObservableObject {
             return true
         } catch {
             folderAccesses[purpose] = priorAccess
-            statusMessage = L10n.tr("Could not retain folder access: \(Self.errorMessage(for: error))")
-            settingsFeedback = SettingsFeedback(message: statusMessage, role: .error)
+            setLocalizedStatusMessage { L10n.tr("Could not retain folder access: \(Self.errorMessage(for: error))") }
+            setSettingsFeedbackFromStatus(role: .error)
             return false
         }
     }
@@ -3761,7 +3978,8 @@ final class AppModel: ObservableObject {
             }
             let requestedURL = URL(fileURLWithPath: request.path, isDirectory: true)
             guard Self.isSameOrDescendant(requestedURL, of: selectedURL) else {
-                statusMessage = L10n.tr("Choose \(request.path) or one of its parent folders")
+                let path = request.path
+                setLocalizedStatusMessage { L10n.tr("Choose \(path) or one of its parent folders") }
                 return false
             }
             guard retainSelectedFolderAccess(
@@ -3969,6 +4187,7 @@ final class AppModel: ObservableObject {
                 successfulSequence: event.agentSequence
             ) {
                 backgroundPromptLastError = nil
+                backgroundPromptLastErrorReason = nil
                 backgroundPromptLastErrorSequence = nil
             }
             refreshBackgroundPromptHealth()
@@ -4005,10 +4224,7 @@ final class AppModel: ObservableObject {
         default:
             let percent = Int(progress.percent.rounded())
             if progress.throughputBytesPerSecond > 1 {
-                let speed = ByteCountFormatter.string(
-                    fromByteCount: Int64(progress.throughputBytesPerSecond),
-                    countStyle: .file
-                )
+                let speed = L10n.fileSize(Int64(progress.throughputBytesPerSecond))
                 return L10n.tr("Importing \(percent)% at \(speed)/s")
             }
             return L10n.tr("Importing \(progress.doneFiles) of \(progress.totalFiles) files")
@@ -4184,8 +4400,8 @@ final class AppModel: ObservableObject {
 
     nonisolated private static func errorMessage(for error: Error) -> String {
         if case let SDImportError.insufficientDestinationSpace(path, requiredBytes, availableBytes) = error {
-            let required = ByteCountFormatter.string(fromByteCount: requiredBytes, countStyle: .file)
-            let available = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+            let required = L10n.fileSize(requiredBytes)
+            let available = L10n.fileSize(availableBytes)
             return L10n.tr("Not enough space in \(path). Need \(required), available \(available).")
         }
 

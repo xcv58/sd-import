@@ -295,6 +295,7 @@
 "Kind" = "Tipo";
 "Known" = "Conhecido";
 "Known files" = "Arquivos conhecidos";
+"Language" = "Idioma";
 "Legacy import skipped: %@" = "Importação de dados anteriores ignorada: %1$@";
 "Library" = "Biblioteca";
 "Lifetime access unlocked" = "Acesso vitalício liberado";
@@ -514,6 +515,7 @@
 "Support" = "Suporte";
 "Support file" = "Arquivo auxiliar";
 "Support files" = "Arquivos auxiliares";
+"System Default (%@)" = "Padrão do sistema (%@)";
 "System" = "Sistema";
 "The App Store did not finish checking purchases. Try Restore Purchases." = "A App Store não concluiu a verificação das compras. Tente Restaurar compras.";
 "The App Store did not finish restoring purchases. Your purchase is safe; try again." = "A App Store não concluiu a restauração. Sua compra está segura; tente novamente.";

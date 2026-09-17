@@ -2,9 +2,11 @@ import SDImportCore
 import SwiftUI
 
 struct ScanSummaryView: View {
+    @Environment(\.locale) private var locale
     let summary: ScanSummary
 
     var body: some View {
+        let _ = locale
         AppSection(L10n.tr("Scan Summary"), systemImage: "checklist") {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], alignment: .leading, spacing: 12) {
                 MetricView(title: L10n.tr("Scanned"), value: summary.scannedFiles)
@@ -24,7 +26,9 @@ struct ScanSummaryView: View {
 
             if let warning = summary.portableReceiptWarning {
                 AppStatusLabel(
-                    title: warning,
+                    title: L10n.portableReceiptWarning(
+                        warning, sizeWarning: summary.portableReceiptSizeWarning
+                    ),
                     systemImage: "exclamationmark.triangle",
                     role: .warning
                 )

@@ -295,6 +295,7 @@
 "Kind" = "Typ";
 "Known" = "Bekannt";
 "Known files" = "Bekannte Dateien";
+"Language" = "Sprache";
 "Legacy import skipped: %@" = "Übernahme bisheriger Daten übersprungen: %1$@";
 "Library" = "Mediathek";
 "Lifetime access unlocked" = "Dauerhafter Zugriff freigeschaltet";
@@ -514,6 +515,7 @@
 "Support" = "Support";
 "Support file" = "Begleitdatei";
 "Support files" = "Begleitdateien";
+"System Default (%@)" = "Systemstandard (%@)";
 "System" = "System";
 "The App Store did not finish checking purchases. Try Restore Purchases." = "Der App Store hat die Kaufprüfung nicht abgeschlossen. Versuchen Sie „Käufe wiederherstellen“.";
 "The App Store did not finish restoring purchases. Your purchase is safe; try again." = "Der App Store hat die Wiederherstellung nicht abgeschlossen. Ihr Kauf bleibt erhalten; versuchen Sie es erneut.";

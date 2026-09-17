@@ -16,6 +16,7 @@ struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage("SDImport.selectedSettingsPane") private var selectedPane = SettingsPane.general
+    @AppStorage(L10n.languagePreferenceKey) private var selectedLanguageCode = AppLanguage.system.rawValue
     @State private var isShowingPruneConfirmation = false
     @State private var validatedDestinationInputs: DestinationPathInputs?
 
@@ -77,6 +78,7 @@ struct SettingsView: View {
             .accessibilityLabel(L10n.tr("Settings section"))
 
             selectedForm
+                .id(selectedLanguageCode)
         }
     }
 
@@ -119,18 +121,34 @@ struct SettingsView: View {
                 }
 
                 SettingsGroup(L10n.tr("Appearance")) {
-                    LabeledContent(L10n.tr("Theme")) {
-                        Picker(L10n.tr("Theme"), selection: $model.themePreference) {
-                            ForEach(AppThemePreference.allCases) { theme in
-                                Text(theme.settingsTitle).tag(theme)
+                    VStack(alignment: .leading, spacing: 12) {
+                        LabeledContent(L10n.tr("Theme")) {
+                            Picker(L10n.tr("Theme"), selection: $model.themePreference) {
+                                ForEach(AppThemePreference.allCases) { theme in
+                                    Text(theme.settingsTitle).tag(theme)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(maxWidth: 420)
+                            .onChange(of: model.themePreference) {
+                                model.themePreferenceDidChange()
                             }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(maxWidth: 420)
-                        .onChange(of: model.themePreference) {
-                            model.themePreferenceDidChange()
+
+                        Divider()
+
+                        LabeledContent(L10n.tr("Language")) {
+                            Picker(L10n.tr("Language"), selection: selectedLanguage) {
+                                ForEach(AppLanguage.allCases) { language in
+                                    Text(verbatim: language.displayName).tag(language)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 520)
                         }
+
                     }
                 }
 
@@ -339,6 +357,17 @@ struct SettingsView: View {
         }
     }
 
+    private var selectedLanguage: Binding<AppLanguage> {
+        Binding {
+            AppLanguage(rawValue: selectedLanguageCode) ?? .system
+        } set: { language in
+            let previousLanguage = AppLanguage(rawValue: selectedLanguageCode) ?? .system
+            selectedLanguageCode = language.rawValue
+            model.interfaceLanguageDidChange(from: previousLanguage, to: language)
+            purchaseManager.interfaceLanguageDidChange(from: previousLanguage, to: language)
+        }
+    }
+
     private var canCleanHistory: Bool {
         !model.isWorking && model.historyRetention.dayCount != nil
     }
@@ -409,16 +438,18 @@ private struct SettingsFeedbackRow: View {
 }
 
 private struct FolderSettingRow: View {
+    @Environment(\.locale) private var locale
     let title: String
     @Binding var path: String
     let validation: PathValidationResult
     let chooseAction: () -> Void
     let revealAction: () -> Void
 
-    @State private var capacityText: String?
+    @State private var capacity: VolumeCapacity?
     @State private var isLoadingCapacity = false
 
     var body: some View {
+        let _ = locale
         LabeledContent(title) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
@@ -458,8 +489,17 @@ private struct FolderSettingRow: View {
         "\(validation.expandedPath)|\(validation.isUsable)"
     }
 
+    private var capacityText: String? {
+        guard let capacity else { return nil }
+        let available = L10n.fileSize(capacity.availableBytes)
+        if let totalBytes = capacity.totalBytes {
+            return L10n.tr("\(available) available of \(L10n.fileSize(totalBytes))")
+        }
+        return L10n.tr("\(available) available")
+    }
+
     private func loadCapacity() async {
-        capacityText = nil
+        capacity = nil
         guard validation.isUsable else {
             isLoadingCapacity = false
             return
@@ -467,7 +507,7 @@ private struct FolderSettingRow: View {
 
         isLoadingCapacity = true
         let path = validation.expandedPath
-        let capacity = await Task.detached(priority: .utility) {
+        let updatedCapacity = await Task.detached(priority: .utility) {
             try? DestinationSpaceChecker.fileSystemCapacity(for: path)
         }.value
 
@@ -476,27 +516,19 @@ private struct FolderSettingRow: View {
         }
 
         isLoadingCapacity = false
-        guard let capacity else {
-            return
-        }
-
-        let available = ByteCountFormatter.string(fromByteCount: capacity.availableBytes, countStyle: .file)
-        if let totalBytes = capacity.totalBytes {
-            let total = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
-            capacityText = L10n.tr("\(available) available of \(total)")
-        } else {
-            capacityText = L10n.tr("\(available) available")
-        }
+        capacity = updatedCapacity
     }
 }
 
 private struct FolderActionButtons: View {
+    @Environment(\.locale) private var locale
     let title: String
     let canReveal: Bool
     let chooseAction: () -> Void
     let revealAction: () -> Void
 
     var body: some View {
+        let _ = locale
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
                 Button(action: chooseAction) {
@@ -534,6 +566,7 @@ private struct FolderActionButtons: View {
 }
 
 private struct DestinationStatusLine: View {
+    @Environment(\.locale) private var locale
     let result: PathValidationResult
 
     var body: some View {

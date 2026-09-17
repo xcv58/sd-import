@@ -5,6 +5,7 @@ import SwiftUI
 
 struct ImportPreviewView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.locale) private var locale
     @AppStorage("SDImport.importPreviewMode") private var previewMode = ImportPreviewMode.grid
     @State private var selectedFileFilter: ImportPreviewFileFilter?
     @State private var filePage = 0
@@ -190,7 +191,7 @@ struct ImportPreviewView: View {
             role: .success
         )
         InfoPill(
-            title: ByteCountFormatter.string(fromByteCount: model.previewTotals.copyBytes, countStyle: .file),
+            title: L10n.fileSize(model.previewTotals.copyBytes),
             systemImage: "externaldrive"
         )
         if let summary, summary.knownFiles > 0 {
@@ -1006,11 +1007,11 @@ struct ImportPreviewView: View {
     }
 
     private func spaceText(for requirement: ImportPreviewSpaceRequirement) -> String {
-        let required = ByteCountFormatter.string(fromByteCount: requirement.requiredBytes, countStyle: .file)
+        let required = L10n.fileSize(requirement.requiredBytes)
         guard let availableBytes = requirement.availableBytes else {
             return L10n.tr("Couldn’t check available space · \(required) planned")
         }
-        let available = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+        let available = L10n.fileSize(availableBytes)
         return requirement.isSatisfied
             ? L10n.tr("\(required) needed · \(available) available")
             : L10n.tr("Not enough space: \(required) needed · \(available) available")
@@ -1074,6 +1075,7 @@ struct ImportPreviewView: View {
 }
 
 private struct ImportReviewPrimaryAction: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var purchaseManager: PurchaseManager
 
@@ -1106,6 +1108,7 @@ private struct ImportReviewPrimaryAction: View {
 }
 
 private struct ImportReviewFooter: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
@@ -1139,7 +1142,7 @@ private struct ImportReviewFooter: View {
     }
 
     private var summary: String {
-        let bytes = ByteCountFormatter.string(fromByteCount: model.previewTotals.copyBytes, countStyle: .file)
+        let bytes = L10n.fileSize(model.previewTotals.copyBytes)
         let files = model.previewTotals.copyFiles == 1
             ? L10n.tr("1 file")
             : L10n.tr("\(model.previewTotals.copyFiles) files")
@@ -1205,6 +1208,7 @@ private enum ImportPreviewFileFilter: String, CaseIterable, Identifiable {
 }
 
 private struct PreviewStatusBadge: View {
+    @Environment(\.locale) private var locale
     let row: ImportPreviewRow
 
     var body: some View {
@@ -1243,6 +1247,7 @@ private struct PreviewStatusBadge: View {
 }
 
 private struct ImportPreviewListRow: View {
+    @Environment(\.locale) private var locale
     let row: ImportPreviewRow
     let destinationText: String
     let isSelected: Bool
@@ -1261,7 +1266,7 @@ private struct ImportPreviewListRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 72, alignment: .leading)
 
-            Text(ByteCountFormatter.string(fromByteCount: row.size, countStyle: .file))
+            Text(L10n.fileSize(row.size))
                 .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .trailing)
 
@@ -1286,12 +1291,13 @@ private struct ImportPreviewListRow: View {
     }
 
     private var accessibilityLabel: String {
-        let size = ByteCountFormatter.string(fromByteCount: row.size, countStyle: .file)
+        let size = L10n.fileSize(row.size)
         return "\(row.filename), \(row.status), \(row.mediaKind.displayTitle), \(size), \(destinationText)"
     }
 }
 
 private struct DestinationTreeRow: View {
+    @Environment(\.locale) private var locale
     let destination: ImportPreviewDestination
     let rootTitle: String
 
@@ -1320,7 +1326,7 @@ private struct DestinationTreeRow: View {
     }
 
     private var bytes: String {
-        ByteCountFormatter.string(fromByteCount: destination.byteCount, countStyle: .file)
+        L10n.fileSize(destination.byteCount)
     }
 }
 
@@ -1373,6 +1379,7 @@ private struct ImportPreviewVisualItem: Identifiable {
 }
 
 private struct ImportPreviewGridCell: View {
+    @Environment(\.locale) private var locale
     let item: ImportPreviewVisualItem
     let isSelected: Bool
     let thumbnailProvider: ImportThumbnailProvider
@@ -1515,6 +1522,7 @@ private struct ImportPreviewGridCell: View {
 }
 
 private struct ImportFileInspector: View {
+    @Environment(\.locale) private var locale
     let row: ImportPreviewRow
     let quickLookAction: () -> Void
 
@@ -1530,7 +1538,7 @@ private struct ImportFileInspector: View {
                 inspectorField(L10n.tr("Capture Date"), value: L10n.storedMessage(row.date))
                 inspectorField(
                     L10n.tr("Size"),
-                    value: ByteCountFormatter.string(fromByteCount: row.size, countStyle: .file)
+                    value: L10n.fileSize(row.size)
                 )
                 inspectorField(L10n.tr("Source"), value: row.sourcePath)
                 inspectorField(L10n.tr("Destination"), value: row.destinationPath ?? L10n.tr("No destination"))

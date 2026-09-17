@@ -295,6 +295,7 @@
 "Kind" = "種類";
 "Known" = "既知";
 "Known files" = "既知のファイル";
+"Language" = "言語";
 "Legacy import skipped: %@" = "旧データの読み込みをスキップしました：%1$@";
 "Library" = "ライブラリ";
 "Lifetime access unlocked" = "無期限アクセスが有効です";
@@ -514,6 +515,7 @@
 "Support" = "サポート";
 "Support file" = "補助ファイル";
 "Support files" = "補助ファイル";
+"System Default (%@)" = "システムのデフォルト（%@）";
 "System" = "システム";
 "The App Store did not finish checking purchases. Try Restore Purchases." = "App Store で購入の確認が完了しませんでした。「購入を復元」をお試しください。";
 "The App Store did not finish restoring purchases. Your purchase is safe; try again." = "App Store で購入の復元が完了しませんでした。購入は失われていません。再試行してください。";

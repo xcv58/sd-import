@@ -2,12 +2,14 @@ import SDImportCore
 import SwiftUI
 
 struct MountPromptView: View {
+    @Environment(\.locale) private var locale
     let volume: MountedVolume
     let deviceGroup: MountedDeviceGroup
     let continueAction: () -> Void
     let skipAction: () -> Void
 
     var body: some View {
+        let _ = locale
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
                 Image(systemName: "externaldrive")
@@ -48,13 +50,13 @@ struct MountPromptView: View {
     private var promptMessage: String {
         if AppDistribution.current == .macAppStore {
             if deviceGroup.isMultiVolume {
-                let names = ListFormatter.localizedString(byJoining: deviceGroup.volumes.map(\.name))
+                let names = L10n.list(deviceGroup.volumes.map(\.name))
                 return L10n.tr("\(AppDistribution.current.displayName) detected \(deviceGroup.displayName), with \(deviceGroup.volumes.count) storage volumes: \(names). It has not scanned their contents. Allow a scan of \(volume.name)?")
             }
             return L10n.tr("\(AppDistribution.current.displayName) detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?")
         }
         if deviceGroup.isMultiVolume {
-            let names = ListFormatter.localizedString(byJoining: deviceGroup.volumes.map(\.name))
+            let names = L10n.list(deviceGroup.volumes.map(\.name))
             return L10n.tr("\(deviceGroup.displayName) exposes \(deviceGroup.volumes.count) storage volumes: \(names). Scan \(volume.name) now; the source menu keeps all volumes available.")
         }
         return L10n.tr("\(AppDistribution.current.displayName) found supported media on this volume. Scan it now to preview what will be copied.")

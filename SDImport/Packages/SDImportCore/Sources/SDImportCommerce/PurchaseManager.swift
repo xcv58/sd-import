@@ -183,6 +183,14 @@ public final class PurchaseManager: ObservableObject {
         }
     }
 
+    public func interfaceLanguageDidChange(from previous: AppLanguage, to selected: AppLanguage) {
+        guard case .failed(let message) = accessState.purchaseStatus else { return }
+        let localized = L10n.relocalizedStaticMessage(message, from: previous, to: selected)
+        if localized != message {
+            accessState.apply(.failed(localized))
+        }
+    }
+
     public func recordSuccessfulImport(_ result: ImportResult) {
         guard
             distribution == .macAppStore,

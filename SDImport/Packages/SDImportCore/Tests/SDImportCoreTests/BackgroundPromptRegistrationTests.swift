@@ -353,6 +353,14 @@ struct BackgroundPromptRegistrationTests {
         #expect(
             BackgroundPromptHealth.appErrorAfterRefresh(
                 existingError: BackgroundPromptHealth.missingLaunchError,
+                reason: .missingLaunch,
+                agentState: failedState
+            ) == nil
+        )
+        #expect(
+            BackgroundPromptHealth.appErrorAfterRefresh(
+                existingError: "Localized missing-launch message in another language",
+                reason: .missingLaunch,
                 agentState: failedState
             ) == nil
         )
@@ -395,6 +403,7 @@ struct BackgroundPromptRegistrationTests {
         #expect(
             BackgroundPromptHealth.appErrorAfterRefresh(
                 existingError: newerError,
+                reason: nil,
                 agentState: nil
             ) == newerError
         )

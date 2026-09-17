@@ -12,7 +12,7 @@ enum HistoryJobPresentation {
 
     static func timestamp(for job: ImportJob) -> String {
         let date = job.completedAt ?? job.startedAt ?? job.createdAt
-        return date.formatted(date: .abbreviated, time: .shortened)
+        return date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(L10n.presentationLocale))
     }
 
     static func displayName(for job: ImportJob) -> String {

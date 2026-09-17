@@ -2,6 +2,7 @@ import SDImportCore
 import SwiftUI
 
 struct HistoryDetailView: View {
+    @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
     @State private var isShowingForgetConfirmation = false
     @State private var fileFilter: HistoryFileFilter = .all
@@ -17,6 +18,7 @@ struct HistoryDetailView: View {
     }
 
     var body: some View {
+        let _ = locale
         if let job {
             detail(job)
                 .onChange(of: job.id) {
@@ -339,7 +341,7 @@ private struct HistoryFileRow: View {
                     Spacer(minLength: 8)
                     Text(Self.bytes(file.size))
                     if let completedAt = file.completedAt {
-                        Text(completedAt.formatted(date: .abbreviated, time: .shortened))
+                        Text(completedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(L10n.presentationLocale)))
                     }
                 }
                 .font(.caption2)
@@ -409,7 +411,7 @@ private struct HistoryFileRow: View {
     }
 
     private static func bytes(_ value: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+        L10n.fileSize(value)
     }
 
     private var accessibilityLabel: String {
@@ -420,7 +422,7 @@ private struct HistoryFileRow: View {
             detailPath
         ]
         if let completedAt = file.completedAt {
-            parts.append(completedAt.formatted(date: .abbreviated, time: .shortened))
+            parts.append(completedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(L10n.presentationLocale)))
         }
         if let error = file.error, !error.isEmpty {
             parts.append(L10n.storedMessage(error))

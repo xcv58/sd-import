@@ -34,8 +34,9 @@ details are in [docs/privacy.md](docs/privacy.md).
 
 Both native editions support English, Simplified Chinese, Traditional Chinese,
 Japanese, Korean, German, French, Spanish, Brazilian Portuguese, and Italian.
-The interface follows your macOS language preference, with English as the
-fallback. See [language support](docs/localization.md) for details.
+Choose a language in Settings > General > Appearance, or follow your macOS
+language preference. English is the fallback. See
+[language support](docs/localization.md) for details.
 
 ## Support
 
