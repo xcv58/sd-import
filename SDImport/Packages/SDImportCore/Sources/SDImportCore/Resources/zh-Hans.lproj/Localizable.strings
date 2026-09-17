@@ -515,7 +515,7 @@
 "Support" = "支持";
 "Support file" = "支持文件";
 "Support files" = "支持文件";
-"System Default (%@)" = "系统默认（%@）";
+"Follow Mac Language (currently %@)" = "跟随 Mac 语言（当前：%@）";
 "System" = "跟随系统";
 "The App Store did not finish checking purchases. Try Restore Purchases." = "App Store 未能完成购买检查。请尝试“恢复购买”。";
 "The App Store did not finish restoring purchases. Your purchase is safe; try again." = "App Store 未能完成恢复购买。你的购买项目不会丢失，请重试。";

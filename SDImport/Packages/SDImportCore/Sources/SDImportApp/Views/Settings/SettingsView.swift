@@ -140,7 +140,9 @@ struct SettingsView: View {
 
                         LabeledContent(L10n.tr("Language")) {
                             Picker(L10n.tr("Language"), selection: selectedLanguage) {
-                                ForEach(AppLanguage.allCases) { language in
+                                Text(verbatim: AppLanguage.system.displayName).tag(AppLanguage.system)
+                                Divider()
+                                ForEach(AppLanguage.allCases.filter { $0 != .system }) { language in
                                     Text(verbatim: language.displayName).tag(language)
                                 }
                             }

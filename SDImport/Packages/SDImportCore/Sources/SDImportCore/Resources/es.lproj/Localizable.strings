@@ -515,7 +515,7 @@
 "Support" = "Soporte";
 "Support file" = "Archivo auxiliar";
 "Support files" = "Archivos auxiliares";
-"System Default (%@)" = "Predeterminado del sistema (%@)";
+"Follow Mac Language (currently %@)" = "Seguir el idioma del Mac (actualmente %@)";
 "System" = "Sistema";
 "The App Store did not finish checking purchases. Try Restore Purchases." = "El App Store no terminó de comprobar las compras. Pruebe «Restaurar compras».";
 "The App Store did not finish restoring purchases. Your purchase is safe; try again." = "El App Store no terminó de restaurar las compras. Su compra está a salvo; vuelva a intentarlo.";

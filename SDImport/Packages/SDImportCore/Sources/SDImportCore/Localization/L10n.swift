@@ -20,7 +20,7 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .system:
             let name = Self.systemDefault().displayName
-            return L10n.tr("System Default (\(name))")
+            return L10n.tr("Follow Mac Language (currently \(name))")
         case .english: return "English"
         case .german: return "German / Deutsch"
         case .french: return "French / Français"
