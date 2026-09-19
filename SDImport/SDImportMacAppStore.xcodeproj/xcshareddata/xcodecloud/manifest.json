@@ -1,0 +1,9 @@
+{
+  "id" : "04ce1181-c316-430e-afbb-6e85b4eda61f",
+  "targets" : [
+    {
+      "id" : "7f1837d3-dbc5-45ba-9e7f-e42aa3c40668",
+      "name" : "SDImportForMac"
+    }
+  ]
+}
