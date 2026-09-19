@@ -38,6 +38,7 @@ public struct ReportWriter {
     }
 
     private func markdown(summary: ScanSummary, files: [JobFileRecord]) -> String {
+        let receiptTotals = ImportReceiptTotals(files: files)
         var lines: [String] = [
             "# SD Import Report \(summary.jobID)",
             "",
@@ -49,28 +50,46 @@ public struct ReportWriter {
             "- known: `\(summary.knownFiles)`",
             "- unsupported: `\(summary.unsupportedFiles)`",
             "- conflicts: `\(summary.conflictFiles)`",
-            "- copied: `\(files.filter { $0.copyStatus == .copied }.count)`",
-            "- skipped: `\(files.filter { $0.copyStatus == .skipped }.count)`",
-            "- failed: `\(files.filter { $0.copyStatus == .failed }.count)`",
+            "- copied: `\(receiptTotals.copiedFiles)`",
+            "- skipped: `\(receiptTotals.skippedFiles)`",
+            "- failed: `\(receiptTotals.failedFiles)`",
             "",
             "## New Files",
             ""
         ]
 
-        for file in files where file.decision == .new {
-            lines.append("- `\(file.sourcePath)` -> `\(file.finalDestinationPath ?? file.plannedDestinationPath ?? file.destinationDirectory ?? "")` (\(file.copyStatus.databaseValue))")
+        for unit in reportUnits(files: files) where unit.contains(where: { $0.decision == .new }) {
+            if unit.count == 1, let file = unit.first {
+                lines.append("- `\(file.sourcePath)` -> `\(file.finalDestinationPath ?? file.plannedDestinationPath ?? file.destinationDirectory ?? "")` (\(file.copyStatus.databaseValue))")
+            } else {
+                lines.append("- Insta360 recording (\(unit.count) companion files)")
+                for file in unit {
+                    lines.append("  - `\(file.filename)` -> `\(file.finalDestinationPath ?? file.plannedDestinationPath ?? file.destinationDirectory ?? "")` (\(file.copyStatus.databaseValue))")
+                }
+            }
         }
 
         lines.append("")
         lines.append("## Copied Files")
         lines.append("")
 
-        let copiedFiles = files.filter { $0.copyStatus == .copied }
-        if copiedFiles.isEmpty {
+        let copiedUnits = reportUnits(files: files).filter {
+            $0.contains(where: { $0.copyStatus == .copied })
+        }
+        if copiedUnits.isEmpty {
             lines.append("- none")
         } else {
-            for file in copiedFiles {
-                lines.append("- `\(file.filename)` -> `\(file.finalDestinationPath ?? file.plannedDestinationPath ?? "")` (Copied, \(Self.bytes(file.size)))")
+            for unit in copiedUnits {
+                let copiedMembers = unit.filter { $0.copyStatus == .copied }
+                if unit.count == 1, let file = copiedMembers.first {
+                    lines.append("- `\(file.filename)` -> `\(file.finalDestinationPath ?? file.plannedDestinationPath ?? "")` (Copied, \(Self.bytes(file.size)))")
+                } else {
+                    let copiedBytes = copiedMembers.reduce(Int64(0)) { $0 + $1.size }
+                    lines.append("- Insta360 recording (Copied, \(Self.bytes(copiedBytes)))")
+                    for file in copiedMembers {
+                        lines.append("  - `\(file.filename)` -> `\(file.finalDestinationPath ?? file.plannedDestinationPath ?? "")`")
+                    }
+                }
             }
         }
 
@@ -78,16 +97,31 @@ public struct ReportWriter {
         lines.append("## Conflicts")
         lines.append("")
 
-        let conflicts = files.filter { $0.decision == .conflict }
-        if conflicts.isEmpty {
+        let conflictUnits = reportUnits(files: files).filter {
+            $0.contains(where: { $0.decision == .conflict })
+        }
+        if conflictUnits.isEmpty {
             lines.append("- none")
         } else {
-            for file in conflicts {
-                lines.append("- `\(file.sourcePath)` (\(file.error ?? "conflict"))")
+            for unit in conflictUnits {
+                if unit.count == 1, let file = unit.first {
+                    lines.append("- `\(file.sourcePath)` (\(file.error ?? "conflict"))")
+                } else {
+                    lines.append("- Insta360 recording (Conflict)")
+                    for file in unit {
+                        let detail = file.error
+                            ?? (file.decision == .conflict ? "conflict" : file.copyStatus.databaseValue)
+                        lines.append("  - `\(file.filename)` (\(detail))")
+                    }
+                }
             }
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    private func reportUnits(files: [JobFileRecord]) -> [[JobFileRecord]] {
+        RecordingPresentation.units(files: files).map(\.files)
     }
 
     private static func bytes(_ value: Int64) -> String {

@@ -3,6 +3,7 @@ import Foundation
 public enum ConflictResolution: Equatable, Sendable {
     case copy(to: URL)
     case skip(reason: String)
+    case blocked(reason: String)
 }
 
 public struct ConflictResolver {
@@ -14,7 +15,8 @@ public struct ConflictResolver {
 
     public func resolveDestination(
         candidate: URL,
-        expectedFingerprint: FileFingerprint
+        expectedFingerprint: FileFingerprint,
+        allowsRename: Bool = true
     ) -> ConflictResolution {
         if !fileManager.fileExists(atPath: candidate.path) {
             return .copy(to: candidate)
@@ -22,6 +24,10 @@ public struct ConflictResolver {
 
         if existingFileMatches(candidate, expectedFingerprint: expectedFingerprint) {
             return .skip(reason: "already_exists_same_fingerprint")
+        }
+
+        guard allowsRename else {
+            return .blocked(reason: "destination_filename_conflict")
         }
 
         let directory = candidate.deletingLastPathComponent()

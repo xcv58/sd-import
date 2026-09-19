@@ -222,7 +222,11 @@ private struct ProgressFileEventRow: View {
                 .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(event.filename)
+                Text(
+                    event.memberCount == 1
+                        ? event.filename
+                        : L10n.tr("\(event.filename) · \(event.memberCount) files")
+                )
                     .font(.caption)
                     .lineLimit(1)
                     .truncationMode(.middle)

@@ -7,6 +7,11 @@ public struct ImportProgressFileEvent: Hashable, Codable, Identifiable, Sendable
     public let detail: String?
     public let destinationPath: String?
     public let size: Int64
+    public let memberCount: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case id, filename, status, detail, destinationPath, size, memberCount
+    }
 
     public init(
         id: String,
@@ -14,7 +19,8 @@ public struct ImportProgressFileEvent: Hashable, Codable, Identifiable, Sendable
         status: CopyStatus,
         detail: String?,
         destinationPath: String?,
-        size: Int64
+        size: Int64,
+        memberCount: Int = 1
     ) {
         self.id = id
         self.filename = filename
@@ -22,6 +28,18 @@ public struct ImportProgressFileEvent: Hashable, Codable, Identifiable, Sendable
         self.detail = detail
         self.destinationPath = destinationPath
         self.size = size
+        self.memberCount = memberCount
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        filename = try values.decode(String.self, forKey: .filename)
+        status = try values.decode(CopyStatus.self, forKey: .status)
+        detail = try values.decodeIfPresent(String.self, forKey: .detail)
+        destinationPath = try values.decodeIfPresent(String.self, forKey: .destinationPath)
+        size = try values.decode(Int64.self, forKey: .size)
+        memberCount = try values.decodeIfPresent(Int.self, forKey: .memberCount) ?? 1
     }
 }
 

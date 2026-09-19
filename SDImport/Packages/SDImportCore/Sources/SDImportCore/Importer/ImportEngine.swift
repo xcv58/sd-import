@@ -42,14 +42,23 @@ public struct ImportEngine {
             throw SDImportError.jobNotFound(jobID)
         }
 
+        let allFilesAtStart = try jobRepository.fetchJobFiles(jobID: jobID)
         let files = try jobRepository.pendingFilesForImport(jobID: jobID)
-        let totalFiles = files.count
+        let progressUnitIDBySourcePath = Insta360ClipDetector()
+            .unitIDBySourcePath(files: allFilesAtStart)
+        let progressUnitMembers = Dictionary(grouping: files) {
+            progressUnitIDBySourcePath[$0.sourcePath] ?? "file:\($0.sourcePath)"
+        }
+        let totalFiles = progressUnitMembers.count
         let totalBytes = files.reduce(Int64(0)) { $0 + $1.size }
         let startedAt = Date()
         var importedFiles = 0
         var skippedFiles = 0
         var failedFiles = 0
         var doneFiles = 0
+        var completedStatusBySourcePath: [String: CopyStatus] = [:]
+        var completedDetailBySourcePath: [String: String] = [:]
+        var completedDestinationBySourcePath: [String: String] = [:]
         var processedBytes: Int64 = 0
         var copiedBytes: Int64 = 0
         var activeFileBytes: Int64 = 0
@@ -66,6 +75,21 @@ public struct ImportEngine {
         var portableReceiptWarning: String?
         var portableReceiptSizeWarning: PortableReceiptSizeWarning?
         var portableWritesAvailable = portableReceiptsEnabled
+
+        func markDone(_ file: JobFileRecord, status: CopyStatus) {
+            completedStatusBySourcePath[file.sourcePath] = status
+            let completedUnits = progressUnitMembers.values.compactMap { members -> CopyStatus? in
+                let statuses = members.compactMap { completedStatusBySourcePath[$0.sourcePath] }
+                guard statuses.count == members.count else { return nil }
+                if statuses.contains(.failed) { return .failed }
+                if statuses.contains(.copied) { return .copied }
+                return .skipped
+            }
+            doneFiles = completedUnits.count
+            importedFiles = completedUnits.filter { $0 == .copied }.count
+            skippedFiles = completedUnits.filter { $0 == .skipped }.count
+            failedFiles = completedUnits.filter { $0 == .failed }.count
+        }
 
         func refreshPortableFingerprints() {
             guard portableReceiptsEnabled else {
@@ -150,6 +174,33 @@ public struct ImportEngine {
 
         refreshPortableFingerprints()
 
+        let pendingSourcePaths = Set(files.map(\.sourcePath))
+        for group in Insta360ClipDetector().groups(files: allFilesAtStart) {
+            let pendingMembers = group.files.filter { pendingSourcePaths.contains($0.sourcePath) }
+            guard !pendingMembers.isEmpty else { continue }
+            var destinationPaths: Set<String> = []
+            for member in pendingMembers {
+                guard let plannedDestinationPath = member.plannedDestinationPath else { continue }
+                let candidate = URL(fileURLWithPath: plannedDestinationPath, isDirectory: false)
+                let destinationKey = candidate.standardizedFileURL.path
+                    .precomposedStringWithCanonicalMapping
+                guard destinationPaths.insert(destinationKey).inserted else {
+                    throw SDImportError.destinationFilenameConflict(candidate.path)
+                }
+                let portableIdentity = portableReceiptsEnabled
+                    ? validatedPortableIdentity(for: member)
+                    : nil
+                let memberFingerprint = fingerprint(for: member, currentIdentity: portableIdentity)
+                if case .blocked = conflictResolver.resolveDestination(
+                    candidate: candidate,
+                    expectedFingerprint: memberFingerprint,
+                    allowsRename: false
+                ) {
+                    throw SDImportError.destinationFilenameConflict(candidate.path)
+                }
+            }
+        }
+
         let filesNeedingDestinationSpace = try files.filter { file in
             let portableIdentity: PortableFileIdentity?
             if portableReceiptsEnabled {
@@ -170,11 +221,17 @@ public struct ImportEngine {
                 return true
             }
             let candidate = URL(fileURLWithPath: plannedDestinationPath, isDirectory: false)
-            switch conflictResolver.resolveDestination(candidate: candidate, expectedFingerprint: fingerprint) {
+            switch conflictResolver.resolveDestination(
+                candidate: candidate,
+                expectedFingerprint: fingerprint,
+                allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file)
+            ) {
             case .skip:
                 return false
             case .copy:
                 return true
+            case .blocked:
+                throw SDImportError.destinationFilenameConflict(candidate.path)
             }
         }
 
@@ -203,6 +260,15 @@ public struct ImportEngine {
             } else {
                 percent = 100.0
             }
+            let currentProgressFilename: String?
+            if let currentFile,
+               let unitID = progressUnitIDBySourcePath[currentFile.sourcePath],
+               unitID.hasPrefix("insta360:") {
+                let memberCount = progressUnitMembers[unitID]?.count ?? 1
+                currentProgressFilename = "Insta360 · \(L10n.tr("\(memberCount) files"))"
+            } else {
+                currentProgressFilename = currentFile?.filename
+            }
 
             onProgress?(
                 ImportProgress(
@@ -222,7 +288,7 @@ public struct ImportEngine {
                     throughputBytesPerSecond: throughput,
                     etaSeconds: eta,
                     percent: percent,
-                    currentFilename: currentFile?.filename,
+                    currentFilename: currentProgressFilename,
                     currentSourcePath: currentFile?.sourcePath,
                     currentDestinationPath: currentDestinationPath,
                     destinationDirectories: destinationDirectories,
@@ -234,19 +300,42 @@ public struct ImportEngine {
 
         func recordFileEvent(
             file: JobFileRecord,
-            status: CopyStatus,
+            status _: CopyStatus,
             detail: String?,
             destinationPath: String?
         ) {
+            if let detail {
+                completedDetailBySourcePath[file.sourcePath] = detail
+            }
+            if let destinationPath {
+                completedDestinationBySourcePath[file.sourcePath] = destinationPath
+            }
+            let unitID = progressUnitIDBySourcePath[file.sourcePath] ?? "file:\(file.sourcePath)"
+            let members = progressUnitMembers[unitID] ?? [file]
+            let completedStatuses = members.compactMap { completedStatusBySourcePath[$0.sourcePath] }
+            guard completedStatuses.count == members.count else { return }
+            let unitStatus: CopyStatus
+            if completedStatuses.contains(.failed) {
+                unitStatus = .failed
+            } else if completedStatuses.contains(.copied) {
+                unitStatus = .copied
+            } else {
+                unitStatus = .skipped
+            }
+            let representative = members.first {
+                completedStatusBySourcePath[$0.sourcePath] == unitStatus
+            } ?? file
             progressEventSequence += 1
             recentFiles.insert(
                 ImportProgressFileEvent(
-                    id: "\(file.id ?? -1)-\(progressEventSequence)",
-                    filename: file.filename,
-                    status: status,
-                    detail: detail,
-                    destinationPath: destinationPath,
-                    size: file.size
+                    id: "\(unitID)-\(progressEventSequence)",
+                    filename: unitID.hasPrefix("insta360:") ? "Insta360" : file.filename,
+                    status: unitStatus,
+                    detail: completedDetailBySourcePath[representative.sourcePath] ?? detail,
+                    destinationPath: completedDestinationBySourcePath[representative.sourcePath]
+                        ?? destinationPath,
+                    size: members.reduce(Int64(0)) { $0 + $1.size },
+                    memberCount: members.count
                 ),
                 at: 0
             )
@@ -290,8 +379,7 @@ public struct ImportEngine {
 
             let sourceURL = URL(fileURLWithPath: file.sourcePath)
             guard fileManager.fileExists(atPath: sourceURL.path) else {
-                failedFiles += 1
-                doneFiles += 1
+                markDone(file, status: .failed)
                 processedBytes += file.size
                 try jobRepository.updateFileCopyStatus(
                     id: fileID,
@@ -301,7 +389,12 @@ public struct ImportEngine {
                 currentFile = nil
                 currentDestinationPath = nil
                 activeFileBytes = 0
-                recordFileEvent(file: file, status: .failed, detail: "source file missing", destinationPath: nil)
+                recordFileEvent(
+                    file: file,
+                    status: .failed,
+                    detail: "source file missing",
+                    destinationPath: file.plannedDestinationPath
+                )
                 emit(status: "copying")
                 continue
             }
@@ -309,8 +402,7 @@ public struct ImportEngine {
             let portableIdentity: PortableFileIdentity?
             if portableReceiptsEnabled {
                 guard let validatedIdentity = validatedPortableIdentity(for: file) else {
-                    failedFiles += 1
-                    doneFiles += 1
+                    markDone(file, status: .failed)
                     processedBytes += file.size
                     let detail = "source changed since scan; rescan required"
                     try jobRepository.updateFileCopyStatus(
@@ -321,7 +413,12 @@ public struct ImportEngine {
                     currentFile = nil
                     currentDestinationPath = nil
                     activeFileBytes = 0
-                    recordFileEvent(file: file, status: .failed, detail: detail, destinationPath: nil)
+                    recordFileEvent(
+                        file: file,
+                        status: .failed,
+                        detail: detail,
+                        destinationPath: file.plannedDestinationPath
+                    )
                     emit(status: "copying")
                     continue
                 }
@@ -333,8 +430,7 @@ public struct ImportEngine {
             refreshPortableFingerprints()
 
             if try dedupeRepository.contains(fingerprint) {
-                skippedFiles += 1
-                doneFiles += 1
+                markDone(file, status: .skipped)
                 processedBytes += file.size
                 try jobRepository.updateFileCopyStatus(
                     id: fileID,
@@ -357,8 +453,7 @@ public struct ImportEngine {
             }
 
             if hasPortableReceipt(portableIdentity, file: file) {
-                skippedFiles += 1
-                doneFiles += 1
+                markDone(file, status: .skipped)
                 processedBytes += file.size
                 try jobRepository.updateFileCopyStatus(
                     id: fileID,
@@ -389,10 +484,13 @@ public struct ImportEngine {
             } ?? URL(fileURLWithPath: destinationDirectory, isDirectory: true)
                 .appendingPathComponent(file.filename, isDirectory: false)
 
-            switch conflictResolver.resolveDestination(candidate: candidate, expectedFingerprint: fingerprint) {
+            switch conflictResolver.resolveDestination(
+                candidate: candidate,
+                expectedFingerprint: fingerprint,
+                allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file)
+            ) {
             case .skip(let reason):
-                skippedFiles += 1
-                doneFiles += 1
+                markDone(file, status: .skipped)
                 processedBytes += file.size
                 try jobRepository.updateFileCopyStatus(
                     id: fileID,
@@ -413,6 +511,8 @@ public struct ImportEngine {
                     detail: reason,
                     destinationPath: candidate.path
                 )
+            case .blocked:
+                throw SDImportError.destinationFilenameConflict(candidate.path)
             case .copy(let destinationURL):
                 do {
                     currentDestinationPath = destinationURL.path
@@ -428,8 +528,7 @@ public struct ImportEngine {
                         },
                         shouldCancel: shouldCancel
                     )
-                    importedFiles += 1
-                    doneFiles += 1
+                    markDone(file, status: .copied)
                     processedBytes += file.size
                     copiedBytes += file.size
                     try jobRepository.updateFileCopyStatus(
@@ -453,8 +552,7 @@ public struct ImportEngine {
                 } catch SDImportError.cancelled {
                     try cancelImport(currentFileID: fileID)
                 } catch {
-                    failedFiles += 1
-                    doneFiles += 1
+                    markDone(file, status: .failed)
                     processedBytes += file.size
                     let detail = L10n.errorMessage(for: error)
                     try jobRepository.updateFileCopyStatus(
@@ -487,11 +585,23 @@ public struct ImportEngine {
         rewriteReportIfPossible(jobID: jobID)
         emit(status: terminalStatus, forceProcessedBytes: totalBytes)
 
+        let finalFiles = try jobRepository.fetchJobFiles(jobID: jobID)
+        let finalUnitIDBySourcePath = Insta360ClipDetector()
+            .unitIDBySourcePath(files: finalFiles)
+        let touchedUnitIDs = Set(files.map { file in
+            finalUnitIDBySourcePath[file.sourcePath] ?? "file:\(file.sourcePath)"
+        })
+        let processedContextFiles = finalFiles.filter { file in
+            touchedUnitIDs.contains(
+                finalUnitIDBySourcePath[file.sourcePath] ?? "file:\(file.sourcePath)"
+            )
+        }
+        let presentationTotals = ImportReceiptTotals(files: processedContextFiles)
         return ImportResult(
             jobID: jobID,
-            importedFiles: importedFiles,
-            skippedFiles: skippedFiles,
-            failedFiles: failedFiles,
+            importedFiles: presentationTotals.copiedFiles,
+            skippedFiles: presentationTotals.skippedFiles,
+            failedFiles: presentationTotals.failedFiles,
             progressPath: nil,
             portableReceiptWarning: portableReceiptWarning,
             portableReceiptSizeWarning: portableReceiptSizeWarning

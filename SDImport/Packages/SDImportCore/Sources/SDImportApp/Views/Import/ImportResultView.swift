@@ -20,6 +20,8 @@ struct ImportResultView: View {
     }
 
     private var folderSummaries: [ReceiptFolderSummary] {
+        let unitIDBySourcePath = Insta360ClipDetector()
+            .unitIDBySourcePath(files: model.selectedJobFiles)
         let grouped = Dictionary(grouping: copiedFiles) { file in
             file.finalDestinationPath.map {
                 URL(fileURLWithPath: $0, isDirectory: false).deletingLastPathComponent().path
@@ -31,7 +33,9 @@ struct ImportResultView: View {
                 ReceiptFolderSummary(
                     path: path,
                     title: URL(fileURLWithPath: path, isDirectory: true).lastPathComponent,
-                    count: files.count
+                    count: Set(files.map { file in
+                        unitIDBySourcePath[file.sourcePath] ?? "file:\(file.sourcePath)"
+                    }).count
                 )
             }
             .sorted { $0.path < $1.path }

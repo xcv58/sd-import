@@ -192,6 +192,18 @@ struct MountDetectionTests {
         #expect(VolumeDetector().containsImportableMedia(at: directory))
     }
 
+    @Test("volume detector recognizes an Insta360 master")
+    func detectorFindsInsta360Master() throws {
+        let directory = try temporaryDirectory()
+        try Data([1, 2, 3]).write(
+            to: directory.appendingPathComponent("VID_20260919_120000_00_001.insv")
+        )
+
+        #expect(MediaClassifier().classify(extension: ".INSV") == .video)
+        #expect(MediaClassifier().classify(extension: ".lrv") == .unsupported)
+        #expect(VolumeDetector().containsImportableMedia(at: directory))
+    }
+
     @Test("volume detector does not stop at early sidecar files")
     func detectorDoesNotStopAtEarlySidecarFiles() throws {
         let directory = try temporaryDirectory()
@@ -250,6 +262,26 @@ struct MountDetectionTests {
 
         #expect(debouncer.hasRecentlyAccepted(volume, now: start.addingTimeInterval(4)))
         #expect(debouncer.hasRecentlyAccepted(volume, now: start.addingTimeInterval(14)) == false)
+    }
+
+    @Test("unmount clears legacy acceptance for an immediate remount")
+    func debouncerForgetsUnmountedVolume() {
+        var debouncer = MountDebouncer(interval: 10)
+        let volume = MountedVolume(
+            id: "card",
+            name: "CARD",
+            mountURL: URL(fileURLWithPath: "/Volumes/CARD", isDirectory: true),
+            volumeUUID: "card",
+            isRemovable: true,
+            wholeDiskIdentifier: "disk4",
+            deviceGroupIdentifier: "camera"
+        )
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        debouncer.recordAccepted(volume, now: start)
+
+        debouncer.forget(mountURL: volume.mountURL)
+
+        #expect(debouncer.hasRecentlyAccepted(volume, now: start.addingTimeInterval(1)) == false)
     }
 
     @Test("mount debouncer coalesces sibling volumes from one device")

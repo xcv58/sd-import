@@ -64,6 +64,63 @@ struct ImportWorkflowRecommenderTests {
         #expect(profile.sidecarCount == 0)
     }
 
+    @Test("counts a current Insta360 master and proxy as one video")
+    func countsCurrentInsta360RecordingOnce() {
+        let profile = ImportWorkflowRecommender().recommend(
+            files: [
+                file(filename: "VID_20181001_210458_00_002.insv", ext: ".insv", size: 400_000_000, mediaKind: .video),
+                file(filename: "LRV_20181001_210458_01_002.lrv", ext: ".lrv", size: 30_000_000, mediaKind: .unsupported)
+            ]
+        )
+
+        #expect(profile.videoCount == 1)
+        #expect(profile.sidecarCount == 0)
+        #expect(profile.unsupportedCount == 0)
+        #expect(profile.recommendedWorkflow == .footageBackup)
+    }
+
+    @Test("counts an older dual-master Insta360 set as one video")
+    func countsDualMasterInsta360RecordingOnce() {
+        let profile = ImportWorkflowRecommender().recommend(
+            files: [
+                file(filename: "VID_20181001_210458_00_007.insv", ext: ".insv", size: 400_000_000, mediaKind: .video),
+                file(filename: "VID_20181001_210458_10_007.insv", ext: ".insv", size: 400_000_000, mediaKind: .video),
+                file(filename: "LRV_20181001_210458_01_007.lrv", ext: ".lrv", size: 30_000_000, mediaKind: .unsupported),
+                file(filename: "LRV_20181001_210458_11_007.lrv", ext: ".lrv", size: 30_000_000, mediaKind: .unsupported)
+            ]
+        )
+
+        #expect(profile.videoCount == 1)
+        #expect(profile.sidecarCount == 0)
+        #expect(profile.unsupportedCount == 0)
+    }
+
+    @Test("a pending Insta360 proxy retains the known recording count")
+    func countsPendingProxyWithKnownMaster() {
+        let profile = ImportWorkflowRecommender().recommend(
+            files: [
+                file(filename: "VID_20181001_210458_00_002.insv", ext: ".insv", size: 400_000_000, mediaKind: .video, decision: .known),
+                file(filename: "LRV_20181001_210458_01_002.lrv", ext: ".lrv", size: 30_000_000, mediaKind: .unsupported, decision: .unsupported)
+            ]
+        )
+
+        #expect(profile.videoCount == 1)
+        #expect(profile.sidecarCount == 0)
+    }
+
+    @Test("leaves an orphan Insta360 proxy unsupported")
+    func orphanInsta360ProxyRemainsUnsupported() {
+        let profile = ImportWorkflowRecommender().recommend(
+            files: [
+                file(filename: "LRV_20181001_210458_01_002.lrv", ext: ".lrv", size: 30_000_000, mediaKind: .unsupported)
+            ]
+        )
+
+        #expect(profile.videoCount == 0)
+        #expect(profile.sidecarCount == 1)
+        #expect(profile.unsupportedCount == 1)
+    }
+
     @Test("keeps mixed cards on mixed workflow even when one media type dominates")
     func keepsMixedCardsOnMixedWorkflowEvenWhenOneMediaTypeDominates() {
         let profile = ImportWorkflowRecommender().recommend(
@@ -136,7 +193,8 @@ struct ImportWorkflowRecommenderTests {
         filename: String,
         ext: String,
         size: Int64,
-        mediaKind: MediaKind
+        mediaKind: MediaKind,
+        decision: FileDecision = .new
     ) -> JobFileRecord {
         JobFileRecord(
             jobID: "job-1",
@@ -149,7 +207,7 @@ struct ImportWorkflowRecommenderTests {
             mediaKind: mediaKind,
             fingerprint: "v2:\(filename)",
             captureDate: "2026-05-09",
-            decision: .new,
+            decision: decision,
             destinationDirectory: nil,
             plannedDestinationPath: nil,
             copyStatus: .pending

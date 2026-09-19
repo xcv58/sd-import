@@ -19,7 +19,8 @@ public struct MediaClassifier: Sendable {
         ".mp4",
         ".mov",
         ".avi",
-        ".mkv"
+        ".mkv",
+        ".insv"
     ]
 
     public static let ignoredCameraIndexFilenames: Set<String> = [

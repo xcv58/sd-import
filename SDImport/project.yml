@@ -46,9 +46,7 @@ targets:
           CODE_SIGN_STYLE: Manual
           PROVISIONING_PROFILE_SPECIFIER: SD Import Agent Development
         Release:
-          CODE_SIGN_IDENTITY: Apple Distribution
-          CODE_SIGN_STYLE: Manual
-          PROVISIONING_PROFILE_SPECIFIER: SD Import Agent App Store
+          CODE_SIGN_STYLE: Automatic
     postBuildScripts:
       - name: Embed Privacy Manifest
         script: |
@@ -95,9 +93,7 @@ targets:
           CODE_SIGN_STYLE: Manual
           PROVISIONING_PROFILE_SPECIFIER: SD Import for Mac Development
         Release:
-          CODE_SIGN_IDENTITY: Apple Distribution
-          CODE_SIGN_STYLE: Manual
-          PROVISIONING_PROFILE_SPECIFIER: SD Import for Mac App Store
+          CODE_SIGN_STYLE: Automatic
     postBuildScripts:
       - name: Generate App Icon
         script: |

@@ -49,58 +49,90 @@ public enum MountHandoffProbeCompletionValidator {
     }
 }
 
-/// Coalesces only positively correlated foreground/helper observations of the
-/// same mounted volume. Events from the same origin are always distinct.
+/// Suppresses repeated deliveries for an accepted, continuously mounted volume.
+/// The accepted identity remains active until the observer receives an unmount.
 public struct MountHandoffDeduplicator: Sendable {
     private struct AcceptedEvent: Sendable {
-        let origin: MountHandoffOrigin
-        let createdAt: Date
-        let volumeUUID: String
+        let mountPath: String
+        let volumeUUID: String?
     }
 
-    private let correlationInterval: TimeInterval
     private let capacity: Int
     private var acceptedEvents: [AcceptedEvent] = []
 
     public init(correlationInterval: TimeInterval = 10, capacity: Int = 128) {
-        self.correlationInterval = correlationInterval
+        _ = correlationInterval
         self.capacity = max(1, capacity)
     }
 
-    public mutating func consumeCorrelatedDuplicate(_ event: MountHandoffEvent) -> Bool {
-        guard let volumeUUID = normalizedVolumeUUID(for: event) else {
-            return false
+    public func consumeCorrelatedDuplicate(_ event: MountHandoffEvent) -> Bool {
+        let identity = acceptedIdentity(for: event)
+        return contains(identity)
+    }
+
+    public func consumeCorrelatedDuplicate(_ volume: MountedVolume) -> Bool {
+        contains(acceptedIdentity(for: volume))
+    }
+
+    private func contains(_ identity: AcceptedEvent) -> Bool {
+        return acceptedEvents.contains { accepted in
+            if let acceptedUUID = accepted.volumeUUID, let eventUUID = identity.volumeUUID {
+                return acceptedUUID == eventUUID
+            }
+            return accepted.mountPath == identity.mountPath
         }
-        guard let index = acceptedEvents.firstIndex(where: {
-            $0.origin != event.origin
-                && $0.volumeUUID == volumeUUID
-                && abs($0.createdAt.timeIntervalSince(event.createdAt)) <= correlationInterval
-        }) else {
-            return false
-        }
-        acceptedEvents.remove(at: index)
-        return true
     }
 
     public mutating func recordAccepted(_ event: MountHandoffEvent) {
-        guard let volumeUUID = normalizedVolumeUUID(for: event) else {
+        let identity = acceptedIdentity(for: event)
+        recordAccepted(identity)
+    }
+
+    public mutating func recordAccepted(_ volume: MountedVolume) {
+        recordAccepted(acceptedIdentity(for: volume))
+    }
+
+    private mutating func recordAccepted(_ identity: AcceptedEvent) {
+        guard !acceptedEvents.contains(where: { accepted in
+            if let acceptedUUID = accepted.volumeUUID, let eventUUID = identity.volumeUUID {
+                return acceptedUUID == eventUUID
+            }
+            return accepted.mountPath == identity.mountPath
+        }) else {
             return
         }
-        acceptedEvents.append(
-            AcceptedEvent(
-                origin: event.origin,
-                createdAt: event.createdAt,
-                volumeUUID: volumeUUID
-            )
-        )
+        acceptedEvents.append(identity)
         if acceptedEvents.count > capacity {
             acceptedEvents.removeFirst(acceptedEvents.count - capacity)
         }
     }
 
+    public mutating func forget(mountURL: URL) {
+        let mountPath = mountURL.standardizedFileURL.path
+        acceptedEvents.removeAll { $0.mountPath == mountPath }
+    }
+
+    private func acceptedIdentity(for event: MountHandoffEvent) -> AcceptedEvent {
+        AcceptedEvent(
+            mountPath: URL(fileURLWithPath: event.mountPath, isDirectory: true).standardizedFileURL.path,
+            volumeUUID: normalizedVolumeUUID(for: event)
+        )
+    }
+
+    private func acceptedIdentity(for volume: MountedVolume) -> AcceptedEvent {
+        AcceptedEvent(
+            mountPath: volume.mountURL.standardizedFileURL.path,
+            volumeUUID: normalizedVolumeUUID(volume.volumeUUID)
+        )
+    }
+
     private func normalizedVolumeUUID(for event: MountHandoffEvent) -> String? {
-        guard let value = event.mountedVolume?.volumeUUID?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !value.isEmpty else {
+        normalizedVolumeUUID(event.mountedVolume?.volumeUUID)
+    }
+
+    private func normalizedVolumeUUID(_ volumeUUID: String?) -> String? {
+        guard let value = volumeUUID?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !value.isEmpty else {
             return nil
         }
         return value.lowercased()
@@ -125,13 +157,25 @@ public final class MountHandoffDeliveryController {
         volume: MountedVolume,
         handler: (MountedVolume) -> MountEventHandlingDisposition
     ) -> MountEventHandlingDisposition {
-        guard !deduplicator.consumeCorrelatedDuplicate(event) else {
+        _ = event
+        return evaluate(volume: volume, handler: handler)
+    }
+
+    public func evaluate(
+        volume: MountedVolume,
+        handler: (MountedVolume) -> MountEventHandlingDisposition
+    ) -> MountEventHandlingDisposition {
+        guard !deduplicator.consumeCorrelatedDuplicate(volume) else {
             return .accepted
         }
         let disposition = handler(volume)
         if disposition == .accepted {
-            deduplicator.recordAccepted(event)
+            deduplicator.recordAccepted(volume)
         }
         return disposition
+    }
+
+    public func forget(mountURL: URL) {
+        deduplicator.forget(mountURL: mountURL)
     }
 }

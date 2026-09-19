@@ -6,8 +6,8 @@ import SDImportCore
 final class MountEventObserver {
     private let detector = VolumeDetector()
     private let mountPrivacyPolicy: MountPrivacyPolicy
-    private var debouncer = MountDebouncer()
     private var token: NSObjectProtocol?
+    private var unmountToken: NSObjectProtocol?
     private var distributedToken: NSObjectProtocol?
     private let handler: (MountedVolume) -> MountEventHandlingDisposition
     private let errorHandler: (String, UInt64?) -> Void
@@ -58,6 +58,19 @@ final class MountEventObserver {
             }
         }
 
+        unmountToken = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didUnmountNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let mountURL = notification.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL else {
+                return
+            }
+            Task { @MainActor in
+                self?.deliveryController.forget(mountURL: mountURL)
+            }
+        }
+
         if mountPrivacyPolicy.usesDistributedNotificationHandoff {
             distributedToken = DistributedNotificationCenter.default().addObserver(
                 forName: Notification.Name(MountHandoff.notificationName),
@@ -92,7 +105,11 @@ final class MountEventObserver {
         if let distributedToken {
             DistributedNotificationCenter.default().removeObserver(distributedToken)
         }
+        if let unmountToken {
+            NSWorkspace.shared.notificationCenter.removeObserver(unmountToken)
+        }
         token = nil
+        unmountToken = nil
         distributedToken = nil
     }
 
@@ -301,14 +318,7 @@ final class MountEventObserver {
         if let event {
             return deliveryController.evaluate(event: event, volume: volume, handler: handler)
         } else {
-            guard !debouncer.hasRecentlyAccepted(volume) else {
-                return .accepted
-            }
+            return deliveryController.evaluate(volume: volume, handler: handler)
         }
-        let disposition = handler(volume)
-        if disposition == .accepted {
-            debouncer.recordAccepted(volume)
-        }
-        return disposition
     }
 }

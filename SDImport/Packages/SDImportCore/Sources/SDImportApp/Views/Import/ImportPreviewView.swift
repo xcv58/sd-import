@@ -21,25 +21,31 @@ struct ImportPreviewView: View {
         selectedFileFilter ?? (model.previewTotals.copyFiles == 0 ? .skipped : .copy)
     }
 
-    private var filteredRows: [ImportPreviewRow] {
-        sortedRows(model.previewRows.filter(fileFilter.includes))
+    private var allItems: [ImportPreviewVisualItem] {
+        visualItems(from: model.previewRows)
+    }
+
+    private var filteredItems: [ImportPreviewVisualItem] {
+        sortedItems(allItems.filter { item in
+            item.rows.contains(where: fileFilter.includes)
+        })
     }
 
     private var filePageCount: Int {
-        max(1, Int(ceil(Double(filteredRows.count) / Double(filePageSize))))
+        max(1, Int(ceil(Double(filteredItems.count) / Double(filePageSize))))
     }
 
     private var currentFilePage: Int {
         min(filePage, filePageCount - 1)
     }
 
-    private var pagedRows: [ImportPreviewRow] {
+    private var pagedItems: [ImportPreviewVisualItem] {
         let start = currentFilePage * filePageSize
-        let end = min(start + filePageSize, filteredRows.count)
+        let end = min(start + filePageSize, filteredItems.count)
         guard start < end else {
             return []
         }
-        return Array(filteredRows[start..<end])
+        return Array(filteredItems[start..<end])
     }
 
     private var selectedRow: ImportPreviewRow? {
@@ -550,7 +556,7 @@ struct ImportPreviewView: View {
     private var fileBrowserBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             Group {
-                if filteredRows.isEmpty {
+                if filteredItems.isEmpty {
                     ContentUnavailableView(
                         L10n.tr("No Matching Files"),
                         systemImage: "line.3.horizontal.decrease.circle"
@@ -610,7 +616,7 @@ struct ImportPreviewView: View {
     }
 
     private var fileBrowserSubtitle: String {
-        let count = L10n.tr("\(filteredRows.count) of \(model.previewRows.count)")
+        let count = L10n.tr("\(filteredItems.count) of \(allItems.count)")
         return model.previewTotals.copyFiles == 0
             ? L10n.tr("\(count) · Nothing selected")
             : count
@@ -657,29 +663,24 @@ struct ImportPreviewView: View {
         LazyVStack(spacing: 0) {
             fileListHeader
 
-            ForEach(pagedRows) { row in
-                Button {
-                    selectedRowID = row.id
-                } label: {
-                    ImportPreviewListRow(
-                        row: row,
-                        destinationText: destinationText(for: row),
-                        isSelected: selectedRowID == row.id
-                    )
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .simultaneousGesture(TapGesture(count: 2).onEnded {
-                    selectedRowID = row.id
-                    presentQuickLook(for: row)
-                })
-                .contextMenu {
-                    Button(L10n.tr("Quick Look")) {
-                        selectedRowID = row.id
-                        presentQuickLook(for: row)
+            ForEach(pagedItems) { item in
+                if item.rows.count == 1 {
+                    previewListButton(row: item.primaryRow)
+                } else {
+                    DisclosureGroup {
+                        ForEach(item.rows) { row in
+                            previewListButton(row: row)
+                                .padding(.leading, 8)
+                        }
+                    } label: {
+                        ImportPreviewListGroupLabel(
+                            item: item,
+                            destinationText: destinationText(for: item.primaryRow)
+                        )
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 2)
                 }
-                .accessibilityHint(L10n.tr("Press Space for Quick Look"))
             }
         }
         .onKeyPress(.space) {
@@ -716,7 +717,7 @@ struct ImportPreviewView: View {
             alignment: .leading,
             spacing: 10
         ) {
-            ForEach(visualItems(from: pagedRows)) { item in
+            ForEach(pagedItems) { item in
                 Button {
                     selectedRowID = item.primaryRow.id
                 } label: {
@@ -785,8 +786,8 @@ struct ImportPreviewView: View {
 
     private var filePageRangeText: String {
         let start = currentFilePage * filePageSize + 1
-        let end = min(start + filePageSize - 1, filteredRows.count)
-        return L10n.tr("Showing \(start)\u{2013}\(end) of \(filteredRows.count)")
+        let end = min(start + filePageSize - 1, filteredItems.count)
+        return L10n.tr("Showing \(start)\u{2013}\(end) of \(filteredItems.count)")
     }
 
     private var fileFilterBinding: Binding<ImportPreviewFileFilter> {
@@ -967,23 +968,53 @@ struct ImportPreviewView: View {
     }
 
     private func filterTitle(_ filter: ImportPreviewFileFilter) -> String {
-        "\(filter.title) \(model.previewRows.filter(filter.includes).count)"
+        let count = allItems.filter { item in
+            item.rows.contains(where: filter.includes)
+        }.count
+        return "\(filter.title) \(count)"
     }
 
-    private func sortedRows(_ rows: [ImportPreviewRow]) -> [ImportPreviewRow] {
-        rows.enumerated()
+    private func sortedItems(_ items: [ImportPreviewVisualItem]) -> [ImportPreviewVisualItem] {
+        items.enumerated()
             .sorted { lhs, rhs in
-                let leftPriority = lhs.element.disposition.attention.rawValue
-                let rightPriority = rhs.element.disposition.attention.rawValue
+                let leftPriority = lhs.element.rows.map(\.disposition.attention.rawValue).max() ?? 0
+                let rightPriority = rhs.element.rows.map(\.disposition.attention.rawValue).max() ?? 0
                 if leftPriority != rightPriority {
                     return leftPriority > rightPriority
                 }
-                if lhs.element.willCopy != rhs.element.willCopy {
-                    return lhs.element.willCopy
+                let leftWillCopy = lhs.element.rows.contains(where: \.willCopy)
+                let rightWillCopy = rhs.element.rows.contains(where: \.willCopy)
+                if leftWillCopy != rightWillCopy {
+                    return leftWillCopy
                 }
                 return lhs.offset < rhs.offset
             }
             .map(\.element)
+    }
+
+    private func previewListButton(row: ImportPreviewRow) -> some View {
+        Button {
+            selectedRowID = row.id
+        } label: {
+            ImportPreviewListRow(
+                row: row,
+                destinationText: destinationText(for: row),
+                isSelected: selectedRowID == row.id
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture(count: 2).onEnded {
+            selectedRowID = row.id
+            presentQuickLook(for: row)
+        })
+        .contextMenu {
+            Button(L10n.tr("Quick Look")) {
+                selectedRowID = row.id
+                presentQuickLook(for: row)
+            }
+        }
+        .accessibilityHint(L10n.tr("Press Space for Quick Look"))
     }
 
     private func destinationText(for row: ImportPreviewRow) -> String {
@@ -1246,6 +1277,47 @@ private struct PreviewStatusBadge: View {
     }
 }
 
+private struct ImportPreviewListGroupLabel: View {
+    let item: ImportPreviewVisualItem
+    let destinationText: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Label(item.status, systemImage: "rectangle.stack")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: 112, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.rows.first?.visualGroupKind == .insta360Clip ? "Insta360" : item.title)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(item.subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(minWidth: 150, maxWidth: 240, alignment: .leading)
+
+            Text(item.primaryRow.mediaKind.displayTitle)
+                .foregroundStyle(.secondary)
+                .frame(width: 72, alignment: .leading)
+
+            Text(L10n.fileSize(item.rows.reduce(Int64(0)) { $0 + $1.size }))
+                .foregroundStyle(.secondary)
+                .frame(width: 80, alignment: .trailing)
+
+            Text(destinationText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
+        }
+        .font(.caption)
+    }
+}
+
 private struct ImportPreviewListRow: View {
     @Environment(\.locale) private var locale
     let row: ImportPreviewRow
@@ -1340,8 +1412,11 @@ private struct ImportPreviewVisualItem: Identifiable {
             return rows.first(where: { ["jpg", "jpeg"].contains(URL(fileURLWithPath: $0.filename).pathExtension.lowercased()) })
                 ?? rows[0]
         }
-        if rows.first?.visualGroupKind == .videoSidecars {
-            return rows.first(where: { $0.mediaKind == .video }) ?? rows[0]
+        if rows.first?.visualGroupKind == .videoSidecars
+            || rows.first?.visualGroupKind == .insta360Clip {
+            return rows.first(where: {
+                URL(fileURLWithPath: $0.filename).pathExtension.lowercased() == "insv"
+            }) ?? rows.first(where: { $0.mediaKind == .video }) ?? rows[0]
         }
         return rows[0]
     }
@@ -1363,6 +1438,8 @@ private struct ImportPreviewVisualItem: Identifiable {
             if rows.count == totalGroupCount {
                 return L10n.tr("Video + \(max(0, rows.count - 1)) sidecars")
             }
+            return L10n.tr("\(primaryRow.mediaKind.displayTitle) · \(rows.count) of \(totalGroupCount) grouped files")
+        case .insta360Clip:
             return L10n.tr("\(primaryRow.mediaKind.displayTitle) · \(rows.count) of \(totalGroupCount) grouped files")
         case nil:
             return primaryRow.mediaKind.displayTitle

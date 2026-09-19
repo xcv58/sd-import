@@ -431,13 +431,315 @@ struct ImportPlanBuilderTests {
         #expect(plan.disposition == .excluded)
     }
 
+    @Test("Insta360 proxies follow their master in every folder layout")
+    func insta360ProxyFollowsMaster() {
+        let master = jobFile(
+            id: 1,
+            filename: "VID_20181001_210458_00_002.insv",
+            relativePath: "DCIM/Camera01/VID_20181001_210458_00_002.insv",
+            mediaKind: .video,
+            captureDate: "2026-05-06"
+        )
+        let proxy = jobFile(
+            id: 2,
+            filename: "LRV_20181001_210458_01_002.lrv",
+            relativePath: "DCIM/Camera01/LRV_20181001_210458_01_002.lrv",
+            mediaKind: .unsupported,
+            captureDate: "2026-05-07"
+        )
+        let sessions = [session(date: "2026-05-06", label: "Singapore Trip", photoCount: 0, videoCount: 1)]
+        let roots = DestinationRoots(
+            photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+            videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+        )
+
+        let classicPlans = ImportPlanBuilder(
+            sessions: sessions,
+            organizationPreset: .classicDatedFolders,
+            roots: roots,
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        ).plans(files: [master, proxy])
+        let sessionPlans = ImportPlanBuilder(
+            sessions: sessions,
+            organizationPreset: .shootSessionsByDate,
+            roots: roots,
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        ).plans(files: [master, proxy])
+
+        #expect(classicPlans.map(\.willCopy) == [true, true])
+        #expect(classicPlans[1].disposition == .supportFile)
+        #expect(classicPlans[1].destinationPath == "/Footage/2026-05-06 Singapore Trip/LRV_20181001_210458_01_002.lrv")
+        #expect(sessionPlans.map(\.willCopy) == [true, true])
+        #expect(sessionPlans[1].destinationPath == "/Library/2026-05-06 Singapore Trip/Video/LRV_20181001_210458_01_002.lrv")
+    }
+
+    @Test("orphan Insta360 proxies remain unsupported")
+    func orphanInsta360ProxyRemainsUnsupported() {
+        let proxy = jobFile(
+            id: 1,
+            filename: "LRV_20181001_210458_01_002.lrv",
+            relativePath: "DCIM/Camera01/LRV_20181001_210458_01_002.lrv",
+            mediaKind: .unsupported,
+            captureDate: "2026-05-06"
+        )
+        let builder = ImportPlanBuilder(
+            sessions: [session(date: "2026-05-06", photoCount: 0, videoCount: 0, unsupportedCount: 1)],
+            organizationPreset: .classicDatedFolders,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        )
+
+        let plan = builder.plans(files: [proxy])[0]
+
+        #expect(!plan.willCopy)
+        #expect(plan.disposition == .unsupported)
+    }
+
+    @Test("unmatched Insta360 proxies stay unsupported when footage sidecars are enabled")
+    func unmatchedInsta360ProxiesAreNeverGenericSidecars() {
+        let files = [
+            jobFile(
+                id: 1,
+                filename: "VID_20181001_210458_00_002.insv",
+                relativePath: "DCIM/Camera01/VID_20181001_210458_00_002.insv",
+                mediaKind: .video,
+                captureDate: "2026-05-06"
+            ),
+            jobFile(
+                id: 2,
+                filename: "LRV_20181001_210458_11_002.lrv",
+                relativePath: "DCIM/Camera01/LRV_20181001_210458_11_002.lrv",
+                mediaKind: .unsupported,
+                captureDate: "2026-05-06"
+            ),
+            jobFile(
+                id: 3,
+                filename: "LRV_20181001_210458_01_003.lrv",
+                relativePath: "DCIM/Camera01/LRV_20181001_210458_01_003.lrv",
+                mediaKind: .unsupported,
+                captureDate: "2026-05-06"
+            ),
+            jobFile(
+                id: 4,
+                filename: "preview.lrv",
+                relativePath: "DCIM/Camera01/preview.lrv",
+                mediaKind: .unsupported,
+                captureDate: "2026-05-06"
+            )
+        ]
+        let builder = ImportPlanBuilder(
+            sessions: [
+                session(
+                    date: "2026-05-06",
+                    photoCount: 0,
+                    videoCount: 1,
+                    unsupportedCount: 3,
+                    includeSidecars: true
+                )
+            ],
+            organizationPreset: .footageBackup,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        )
+
+        let plans = builder.plans(files: files)
+
+        #expect(plans[0].willCopy)
+        #expect(plans.dropFirst().allSatisfy { !$0.willCopy })
+        #expect(plans.dropFirst().allSatisfy { $0.disposition == .unsupported })
+    }
+
+    @Test("excluding videos excludes Insta360 masters and proxies together")
+    func excludingVideosExcludesInsta360Recording() {
+        let master = jobFile(
+            id: 1,
+            filename: "VID_20181001_210458_00_002.insv",
+            relativePath: "DCIM/Camera01/VID_20181001_210458_00_002.insv",
+            mediaKind: .video,
+            captureDate: "2026-05-06"
+        )
+        let proxy = jobFile(
+            id: 2,
+            filename: "LRV_20181001_210458_01_002.lrv",
+            relativePath: "DCIM/Camera01/LRV_20181001_210458_01_002.lrv",
+            mediaKind: .unsupported,
+            captureDate: "2026-05-06"
+        )
+        let builder = ImportPlanBuilder(
+            sessions: [session(date: "2026-05-06", photoCount: 0, videoCount: 1)],
+            mediaSelection: .photosOnly,
+            organizationPreset: .classicDatedFolders,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        )
+
+        let plans = builder.plans(files: [master, proxy])
+
+        #expect(plans.map(\.disposition) == [.excluded, .excluded])
+    }
+
+    @Test("dual-channel recordings use one canonical session")
+    func dualChannelRecordingUsesCanonicalSession() {
+        let master00 = jobFile(
+            id: 1,
+            filename: "VID_20181001_210458_00_007.insv",
+            relativePath: "DCIM/Camera01/VID_20181001_210458_00_007.insv",
+            mediaKind: .video,
+            captureDate: "2026-05-05"
+        )
+        let master10 = jobFile(
+            id: 2,
+            filename: "VID_20181001_210458_10_007.insv",
+            relativePath: "DCIM/Camera01/VID_20181001_210458_10_007.insv",
+            mediaKind: .video,
+            captureDate: "2026-05-06"
+        )
+        let proxy11 = jobFile(
+            id: 3,
+            filename: "LRV_20181001_210458_11_007.lrv",
+            relativePath: "DCIM/Camera01/LRV_20181001_210458_11_007.lrv",
+            mediaKind: .unsupported,
+            captureDate: "2026-05-06"
+        )
+        let roots = DestinationRoots(
+            photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+            videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+        )
+        let excludedPlans = ImportPlanBuilder(
+            sessions: [
+                session(date: "2026-05-05", label: "Singapore Trip", photoCount: 0, videoCount: 1, includeVideos: false),
+                session(date: "2026-05-06", label: "Singapore Trip", photoCount: 0, videoCount: 1, includeVideos: true)
+            ],
+            organizationPreset: .classicDatedFolders,
+            roots: roots,
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        ).plans(files: [master00, master10, proxy11])
+
+        #expect(excludedPlans.map(\.disposition) == [.excluded, .excluded, .excluded])
+
+        let includedPlans = ImportPlanBuilder(
+            sessions: [
+                session(date: "2026-05-05", label: "Singapore Trip", photoCount: 0, videoCount: 1, includeVideos: true),
+                session(date: "2026-05-06", label: "Singapore Trip", photoCount: 0, videoCount: 1, includeVideos: false)
+            ],
+            organizationPreset: .classicDatedFolders,
+            roots: roots,
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        ).plans(files: [master00, master10, proxy11])
+
+        #expect(includedPlans.allSatisfy { $0.willCopy })
+        #expect(includedPlans.allSatisfy { $0.destinationPath?.contains("/2026-05-05 Singapore Trip/") == true })
+    }
+
+    @Test("proprietary filename conflicts block the complete recording without renaming")
+    func proprietaryConflictBlocksCompleteRecording() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let destinationDirectory = root.appendingPathComponent("2026-05-06 Singapore Trip-Video", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
+        let existingMaster = destinationDirectory
+            .appendingPathComponent("VID_20181001_210458_00_002.insv")
+        try Data("different content".utf8).write(to: existingMaster)
+
+        let master = jobFile(
+            id: 1,
+            filename: "VID_20181001_210458_00_002.insv",
+            relativePath: "DCIM/Camera01/VID_20181001_210458_00_002.insv",
+            mediaKind: .video,
+            captureDate: "2026-05-06"
+        )
+        let proxy = jobFile(
+            id: 2,
+            filename: "LRV_20181001_210458_01_002.lrv",
+            relativePath: "DCIM/Camera01/LRV_20181001_210458_01_002.lrv",
+            mediaKind: .unsupported,
+            captureDate: "2026-05-06"
+        )
+        let plans = ImportPlanBuilder(
+            sessions: [session(date: "2026-05-06", label: "Singapore Trip", photoCount: 0, videoCount: 1)],
+            organizationPreset: .classicDatedFolders,
+            roots: DestinationRoots(photosURL: root, videosURL: root),
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        ).plans(files: [master, proxy])
+
+        #expect(plans.map(\.willCopy) == [false, false])
+        #expect(plans.allSatisfy {
+            if case .filenameConflict = $0.disposition { return true }
+            return false
+        })
+        #expect(plans[0].destinationPath == existingMaster.path)
+        #expect(plans.allSatisfy { $0.destinationPath?.contains("-copy-") == false })
+    }
+
+    @Test("known recording members present the canonical session and destination")
+    func knownRecordingUsesCanonicalPresentation() {
+        let master = jobFile(
+            id: 1,
+            filename: "VID_20181001_210458_00_012.insv",
+            relativePath: "DCIM/Camera01/VID_20181001_210458_00_012.insv",
+            mediaKind: .video,
+            captureDate: "2026-05-05",
+            decision: .known,
+            knownSource: .localLedger
+        )
+        let proxy = jobFile(
+            id: 2,
+            filename: "LRV_20181001_210458_01_012.lrv",
+            relativePath: "DCIM/Camera01/LRV_20181001_210458_01_012.lrv",
+            mediaKind: .unsupported,
+            captureDate: "2026-05-06",
+            decision: .known,
+            knownSource: .localLedger
+        )
+        let plans = ImportPlanBuilder(
+            sessions: [
+                session(date: "2026-05-05", label: "Singapore Trip", photoCount: 0, videoCount: 1)
+            ],
+            organizationPreset: .classicDatedFolders,
+            roots: DestinationRoots(
+                photosURL: URL(fileURLWithPath: "/Library", isDirectory: true),
+                videosURL: URL(fileURLWithPath: "/Footage", isDirectory: true)
+            ),
+            fallbackLocation: "Singapore Trip",
+            volumeName: "CARD"
+        ).plans(files: [master, proxy])
+
+        #expect(plans.map(\.willCopy) == [false, false])
+        #expect(plans.allSatisfy {
+            if case .known(.localLedger) = $0.disposition { return true }
+            return false
+        })
+        #expect(plans.allSatisfy {
+            $0.destinationPath?.contains("/2026-05-05 Singapore Trip/") == true
+        })
+    }
+
     private func session(
         date: String,
         label: String = "Ignored Per-Day Label",
         photoCount: Int,
         videoCount: Int,
         unsupportedCount: Int = 0,
-        includeSidecars: Bool = false
+        includeSidecars: Bool = false,
+        includeVideos: Bool = true
     ) -> ImportPlanSession {
         ImportPlanSession(
             date: date,
@@ -446,7 +748,7 @@ struct ImportPlanBuilderTests {
             videoCount: videoCount,
             unsupportedCount: unsupportedCount,
             includePhotos: true,
-            includeVideos: true,
+            includeVideos: includeVideos,
             includeSidecars: includeSidecars
         )
     }
@@ -457,7 +759,9 @@ struct ImportPlanBuilderTests {
         relativePath: String,
         mediaKind: MediaKind,
         captureDate: String,
-        copyStatus: CopyStatus = .pending
+        copyStatus: CopyStatus = .pending,
+        decision: FileDecision = .new,
+        knownSource: KnownFileSource? = nil
     ) -> JobFileRecord {
         JobFileRecord(
             id: id,
@@ -471,7 +775,8 @@ struct ImportPlanBuilderTests {
             mediaKind: mediaKind,
             fingerprint: "v2:\(id)",
             captureDate: captureDate,
-            decision: .new,
+            decision: decision,
+            knownSource: knownSource,
             destinationDirectory: nil,
             plannedDestinationPath: nil,
             copyStatus: copyStatus

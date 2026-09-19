@@ -50,6 +50,7 @@ public enum ImportPlanDisposition: Hashable, Sendable {
     case excluded
     case known(KnownFileSource?)
     case noDestination
+    case filenameConflict(destinationPath: String)
     case alreadyExists
     case rename(originalPath: String, destinationPath: String, reason: String?)
     case supportFile
@@ -69,6 +70,8 @@ public enum ImportPlanDisposition: Hashable, Sendable {
             return source == .portableLedger ? L10n.tr("Other Mac") : L10n.tr("Known")
         case .noDestination:
             return L10n.tr("No destination")
+        case .filenameConflict:
+            return L10n.tr("Conflicts")
         case .alreadyExists:
             return L10n.tr("Already exists")
         case .rename:
@@ -82,7 +85,7 @@ public enum ImportPlanDisposition: Hashable, Sendable {
 
     public var attention: ImportPlanAttention {
         switch self {
-        case .notReady, .noDestination:
+        case .notReady, .noDestination, .filenameConflict:
             return .blocking
         case .rename, .known(.portableLedger):
             return .attention
@@ -147,19 +150,56 @@ public struct ImportPlanBuilder: Sendable {
     }
 
     public func plans(files: [JobFileRecord]) -> [ImportFilePlan] {
-        var reservedDestinationPaths: Set<String> = []
-        return files.map {
-            plan(file: $0, reservedDestinationPaths: &reservedDestinationPaths)
+        let groups = Insta360ClipDetector().groups(files: files)
+        var recordingMasterBySourcePath: [String: JobFileRecord] = [:]
+        var recordingIDBySourcePath: [String: String] = [:]
+        for group in groups {
+            guard let master = group.masterFiles.first else {
+                continue
+            }
+            for file in group.files {
+                recordingMasterBySourcePath[file.sourcePath] = master
+                recordingIDBySourcePath[file.sourcePath] = group.id
+            }
         }
+        var reservedDestinationPaths: Set<String> = []
+        var plans = files.map {
+            plan(
+                file: $0,
+                insta360RecordingMaster: recordingMasterBySourcePath[$0.sourcePath],
+                reservedDestinationPaths: &reservedDestinationPaths
+            )
+        }
+
+        let blockedRecordingIDs: Set<String> = Set(zip(files, plans).compactMap { file, plan -> String? in
+            guard case .filenameConflict = plan.disposition else { return nil }
+            return recordingIDBySourcePath[file.sourcePath]
+        })
+        for index in plans.indices where plans[index].willCopy {
+            guard let recordingID = recordingIDBySourcePath[files[index].sourcePath],
+                  blockedRecordingIDs.contains(recordingID) else {
+                continue
+            }
+            plans[index] = filenameConflictPlan(
+                file: files[index],
+                destinationPath: plans[index].destinationPath
+            )
+        }
+        return plans
     }
 
     public func plan(file: JobFileRecord) -> ImportFilePlan {
         var reservedDestinationPaths: Set<String> = []
-        return plan(file: file, reservedDestinationPaths: &reservedDestinationPaths)
+        return plan(
+            file: file,
+            insta360RecordingMaster: nil,
+            reservedDestinationPaths: &reservedDestinationPaths
+        )
     }
 
     private func plan(
         file: JobFileRecord,
+        insta360RecordingMaster: JobFileRecord?,
         reservedDestinationPaths: inout Set<String>
     ) -> ImportFilePlan {
         guard let id = file.id else {
@@ -180,12 +220,19 @@ public struct ImportPlanBuilder: Sendable {
             )
         }
 
-        let date = Self.sessionDate(for: file)
+        let isInsta360RecordingFile = insta360RecordingMaster != nil
+        let isInsta360Proxy = isInsta360RecordingFile
+            && file.ext.trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased() == "lrv"
+        let isUnmatchedInsta360Proxy = !isInsta360RecordingFile
+            && file.ext.trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased() == "lrv"
+        let date = Self.sessionDate(for: insta360RecordingMaster ?? file)
         let session = sessions.first { $0.date == date }
         let label = folderLabel(for: session)
         let folderDate = folderDate(for: date)
 
         let isFootageSupportFile = organizationPreset == .footageBackup
+            && !isInsta360RecordingFile
+            && !isUnmatchedInsta360Proxy
             && (file.mediaKind == .unsupported || MediaFileHeuristics.isLikelyVideoPreviewJPEG(file))
             && mediaSelection.includes(.video)
             && (session?.includeSidecars ?? false)
@@ -193,7 +240,7 @@ public struct ImportPlanBuilder: Sendable {
             || file.decision == .unsupported
             || (organizationPreset == .footageBackup && MediaFileHeuristics.isLikelyVideoPreviewJPEG(file))
 
-        if shouldTreatAsUnsupported && !isFootageSupportFile {
+        if shouldTreatAsUnsupported && !isFootageSupportFile && !isInsta360RecordingFile {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
                     id: id,
@@ -210,7 +257,9 @@ public struct ImportPlanBuilder: Sendable {
         }
 
         let included: Bool
-        if isFootageSupportFile {
+        if isInsta360RecordingFile {
+            included = mediaSelection.includes(.video) && (session?.includeVideos ?? true)
+        } else if isFootageSupportFile {
             included = true
         } else {
             switch file.mediaKind {
@@ -239,7 +288,7 @@ public struct ImportPlanBuilder: Sendable {
             )
         }
 
-        if file.decision == .known {
+        if file.decision == .known && !isInsta360RecordingFile {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
                     id: id,
@@ -256,7 +305,12 @@ public struct ImportPlanBuilder: Sendable {
         }
 
         let planner = DestinationPlanner()
-        let destinationMediaKind: MediaKind = isFootageSupportFile ? .unsupported : file.mediaKind
+        let destinationMediaKind: MediaKind
+        if isInsta360RecordingFile {
+            destinationMediaKind = .video
+        } else {
+            destinationMediaKind = isFootageSupportFile ? .unsupported : file.mediaKind
+        }
         guard let destinationURL = planner.destinationURL(
             filename: file.filename,
             mediaKind: destinationMediaKind,
@@ -283,13 +337,35 @@ public struct ImportPlanBuilder: Sendable {
             )
         }
 
+        if file.decision == .known {
+            return ImportFilePlan(
+                update: JobFilePlanUpdate(
+                    id: id,
+                    decision: .known,
+                    destinationDirectory: destinationURL.deletingLastPathComponent().path,
+                    plannedDestinationPath: destinationURL.path,
+                    copyStatus: .skipped,
+                    error: nil
+                ),
+                willCopy: false,
+                disposition: .known(file.knownSource),
+                destinationPath: destinationURL.path
+            )
+        }
+
         let fingerprint = FileFingerprint.compute(
             size: file.size,
             modificationDateString: file.modificationDateString,
             identityHint: file.relativePath ?? file.filename
         )
         let resolver = ConflictResolver()
-        switch resolver.resolveDestination(candidate: destinationURL, expectedFingerprint: fingerprint) {
+        let preservesProprietaryFilename = isInsta360RecordingFile
+            || Insta360ClipDetector.isProprietaryRecordingFile(file)
+        switch resolver.resolveDestination(
+            candidate: destinationURL,
+            expectedFingerprint: fingerprint,
+            allowsRename: !preservesProprietaryFilename
+        ) {
         case .skip(let reason):
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
@@ -304,11 +380,23 @@ public struct ImportPlanBuilder: Sendable {
                 disposition: .alreadyExists,
                 destinationPath: destinationURL.path
             )
+        case .blocked:
+            return filenameConflictPlan(file: file, destinationPath: destinationURL.path)
         case .copy(let resolvedURL):
-            let batchResolution = reserveUniqueBatchDestination(
-                resolvedURL,
-                reservedDestinationPaths: &reservedDestinationPaths
-            )
+            let batchResolution: (url: URL, reason: String?)
+            if preservesProprietaryFilename {
+                let key = reservedKey(for: resolvedURL)
+                guard !reservedDestinationPaths.contains(key) else {
+                    return filenameConflictPlan(file: file, destinationPath: destinationURL.path)
+                }
+                reservedDestinationPaths.insert(key)
+                batchResolution = (resolvedURL, nil)
+            } else {
+                batchResolution = reserveUniqueBatchDestination(
+                    resolvedURL,
+                    reservedDestinationPaths: &reservedDestinationPaths
+                )
+            }
             let resolvedURL = batchResolution.url
             let isConflict = resolvedURL != destinationURL
             let disposition: ImportPlanDisposition
@@ -318,7 +406,7 @@ public struct ImportPlanBuilder: Sendable {
                     destinationPath: resolvedURL.path,
                     reason: batchResolution.reason ?? "destination file exists with different content"
                 )
-            } else if isFootageSupportFile {
+            } else if isFootageSupportFile || isInsta360Proxy {
                 disposition = .supportFile
             } else {
                 disposition = .copy
@@ -337,6 +425,28 @@ public struct ImportPlanBuilder: Sendable {
                 destinationPath: resolvedURL.path
             )
         }
+    }
+
+    private func filenameConflictPlan(
+        file: JobFileRecord,
+        destinationPath: String?
+    ) -> ImportFilePlan {
+        let destinationURL = destinationPath.map { URL(fileURLWithPath: $0, isDirectory: false) }
+        return ImportFilePlan(
+            update: file.id.map {
+                JobFilePlanUpdate(
+                    id: $0,
+                    decision: .conflict,
+                    destinationDirectory: destinationURL?.deletingLastPathComponent().path,
+                    plannedDestinationPath: destinationPath,
+                    copyStatus: .skipped,
+                    error: "destination_filename_conflict"
+                )
+            },
+            willCopy: false,
+            disposition: .filenameConflict(destinationPath: destinationPath ?? ""),
+            destinationPath: destinationPath
+        )
     }
 
     private func folderLabel(for session: ImportPlanSession?) -> String {

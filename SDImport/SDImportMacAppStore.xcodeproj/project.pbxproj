@@ -389,11 +389,9 @@
 					};
 					D73854480BE34E4A73182CE5 = {
 						DevelopmentTeam = 5736QK4NZX;
-						ProvisioningStyle = Manual;
 					};
 					FA810620E11FA4822661411A = {
 						DevelopmentTeam = 5736QK4NZX;
-						ProvisioningStyle = Manual;
 					};
 				};
 			};
@@ -604,8 +602,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Packaging/MacAppStore/SDImportAgent.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 11;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -618,7 +615,6 @@
 				OTHER_SWIFT_FLAGS = "$(inherited) -parse-as-library";
 				PRODUCT_BUNDLE_IDENTIFIER = media.jenny.sdimport.agent;
 				PRODUCT_NAME = SDImportAgent;
-				PROVISIONING_PROFILE_SPECIFIER = "SD Import Agent App Store";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 			};
@@ -647,8 +643,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Packaging/MacAppStore/SDImport.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 11;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -658,7 +653,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = media.jenny.sdimport;
 				PRODUCT_MODULE_NAME = SDImportForMac;
 				PRODUCT_NAME = "SD Card Import";
-				PROVISIONING_PROFILE_SPECIFIER = "SD Import for Mac App Store";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) SDIMPORT_MAC_APP_STORE";
 			};
