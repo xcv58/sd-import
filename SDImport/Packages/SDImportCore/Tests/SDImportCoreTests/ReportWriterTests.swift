@@ -63,4 +63,53 @@ struct ReportWriterTests {
         let loadedMarkdown = try ImportReportLoader().loadMarkdown(from: paths.markdownURL)
         #expect(loadedMarkdown.contains("# SD Import Report job-1"))
     }
+
+    @Test("groups Insta360 conflicts once and retains member filenames")
+    func groupsInsta360Conflicts() throws {
+        let directory = try temporaryDirectory()
+        let baseURL = directory.appendingPathComponent("reports/job-conflict")
+        let summary = ScanSummary(
+            jobID: "job-conflict",
+            mountPath: "/Volumes/CARD",
+            volumeName: "CARD",
+            volumeUUID: nil,
+            location: "TEST",
+            scannedFiles: 1,
+            newFiles: 0,
+            knownFiles: 0,
+            unsupportedFiles: 0,
+            conflictFiles: 1
+        )
+        let names = [
+            "VID_20181001_210458_00_012.insv",
+            "LRV_20181001_210458_01_012.lrv"
+        ]
+        let files = names.enumerated().map { offset, filename in
+            JobFileRecord(
+                id: Int64(offset + 1),
+                jobID: "job-conflict",
+                sourcePath: "/Volumes/CARD/DCIM/Camera01/\(filename)",
+                relativePath: "DCIM/Camera01/\(filename)",
+                filename: filename,
+                ext: ".\(URL(fileURLWithPath: filename).pathExtension.lowercased())",
+                size: 17,
+                modificationDateString: "2023-11-14T22:13:20",
+                mediaKind: offset == 0 ? .video : .unsupported,
+                fingerprint: "v2:\(offset)",
+                captureDate: "2024-07-15",
+                decision: .conflict,
+                destinationDirectory: "/tmp/videos",
+                plannedDestinationPath: "/tmp/videos/\(filename)",
+                copyStatus: .skipped,
+                error: "destination_filename_conflict"
+            )
+        }
+
+        let paths = try ReportWriter().writeReport(summary: summary, files: files, baseURL: baseURL)
+        let markdown = try String(contentsOf: paths.markdownURL)
+
+        #expect(markdown.components(separatedBy: "- Insta360 recording (Conflict)").count - 1 == 1)
+        #expect(markdown.contains(names[0]))
+        #expect(markdown.contains(names[1]))
+    }
 }

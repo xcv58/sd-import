@@ -42,8 +42,35 @@ public struct ImportPreviewSessionFilter: Sendable {
         organizationPreset: ImportOrganizationPreset
     ) -> [String: SessionCounts] {
         var countsByDate: [String: SessionCounts] = [:]
+        let plansBySourcePath = Dictionary(
+            uniqueKeysWithValues: zip(files, plans).map { ($0.sourcePath, $1) }
+        )
+        let insta360Groups = Insta360ClipDetector().groups(files: files)
+        let groupedSourcePaths = Set(insta360Groups.flatMap { $0.files.map(\.sourcePath) })
+
+        for group in insta360Groups {
+            guard let master = group.masterFiles.first,
+                  group.files.contains(where: { file in
+                      guard let plan = plansBySourcePath[file.sourcePath] else {
+                          return false
+                      }
+                      return isVisibleInSessionEditor(
+                          file: file,
+                          plan: plan,
+                          importMediaSelection: importMediaSelection,
+                          organizationPreset: organizationPreset
+                      )
+                  }) else {
+                continue
+            }
+            let date = ImportPlanBuilder.sessionDate(for: master)
+            countsByDate[date, default: SessionCounts()].videoCount += 1
+        }
 
         for (file, plan) in zip(files, plans) {
+            guard !groupedSourcePaths.contains(file.sourcePath) else {
+                continue
+            }
             guard isVisibleInSessionEditor(
                 file: file,
                 plan: plan,

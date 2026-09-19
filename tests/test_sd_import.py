@@ -8,6 +8,7 @@ import json
 import io
 import argparse
 import plistlib
+import subprocess
 from unittest import mock
 
 
@@ -41,6 +42,40 @@ class MountFilterTests(unittest.TestCase):
             (root / "notes.txt").write_text("not media")
 
             self.assertFalse(db_mod.mount_contains_importable_media(str(root)))
+
+
+class ManualCardQACaptureTests(unittest.TestCase):
+    def test_insta360_masters_are_video_like_and_proxies_are_sidecars(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "VID_20181001_210458_00_002.insv").write_bytes(b"master")
+            (root / "LRV_20181001_210458_01_002.lrv").write_bytes(b"proxy")
+            (root / "LRV_20181001_210458_11_002.lrv").write_bytes(b"orphan-proxy")
+            (root / "preview.lrv").write_bytes(b"malformed-proxy")
+            (root / "LRV_20181001_210458_00_002.lrv").write_bytes(b"wrong-channel")
+
+            result = subprocess.run(
+                [
+                    "/bin/bash",
+                    str(ROOT / "script" / "capture_manual_card_qa.sh"),
+                    "--volume",
+                    str(root),
+                    "--scenario",
+                    "Insta360 fixture",
+                ],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertIn("- video-like files: 1", result.stdout)
+        self.assertIn("- sidecar/index-like files: 4", result.stdout)
+        self.assertIn("- Insta360 recordings: 1", result.stdout)
+        self.assertIn("- matched Insta360 proxy files: 1", result.stdout)
+        self.assertIn("- orphan Insta360 proxy files: 3", result.stdout)
+        self.assertIn("| .insv | 1 |", result.stdout)
+        self.assertIn("| .lrv | 4 |", result.stdout)
 
 
 class PruneHistoryTests(unittest.TestCase):

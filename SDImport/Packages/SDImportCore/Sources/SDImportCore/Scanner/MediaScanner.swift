@@ -70,14 +70,8 @@ public struct MediaScanner {
         shouldCancel: () -> Bool = { false }
     ) throws -> ScanSummary {
         var files: [JobFileRecord] = []
-        var scannedFiles = 0
-        var newFiles = 0
-        var knownFiles = 0
-        var unsupportedFiles = 0
-        var conflictFiles = 0
-        var portableKnownFiles = 0
         var portableFingerprints: Set<String> = []
-        var portableIdentitiesToBackfill: [PortableFileIdentity] = []
+        var portableIdentitiesToBackfill: [(sourcePath: String, identity: PortableFileIdentity)] = []
         var portableReceiptWarning: String?
         var portableReceiptSizeWarning: PortableReceiptSizeWarning?
         var portableWritesAvailable = request.portableReceiptsEnabled
@@ -102,7 +96,6 @@ public struct MediaScanner {
             if classifier.shouldIgnore(filename: fileURL.lastPathComponent) {
                 continue
             }
-            scannedFiles += 1
             let attributes = try attributes(for: fileURL)
             let ext = fileURL.pathExtension.isEmpty ? "" : ".\(fileURL.pathExtension.lowercased())"
             let mediaKind = classifier.classify(extension: ext)
@@ -142,20 +135,14 @@ public struct MediaScanner {
                 knownSource = .localLedger
             } else if portablyImported {
                 knownSource = .portableLedger
-                portableKnownFiles += 1
             }
 
             if exactlyImportedFromThisSource {
-                portableIdentitiesToBackfill.append(portableIdentity)
+                portableIdentitiesToBackfill.append((fileURL.path, portableIdentity))
                 portableFingerprints.insert(portableFingerprint)
             }
 
             guard mediaKind != .unsupported else {
-                if alreadyImported {
-                    knownFiles += 1
-                } else {
-                    unsupportedFiles += 1
-                }
                 files.append(
                     JobFileRecord(
                         jobID: request.jobID,
@@ -200,7 +187,8 @@ public struct MediaScanner {
             if decision == .new, let destinationURL, fileManager.fileExists(atPath: destinationURL.path) {
                 switch conflictResolver.resolveDestination(
                     candidate: destinationURL,
-                    expectedFingerprint: fingerprint
+                    expectedFingerprint: fingerprint,
+                    allowsRename: ![".insv", ".lrv"].contains(ext.lowercased())
                 ) {
                 case .skip:
                     decision = .known
@@ -212,18 +200,11 @@ public struct MediaScanner {
                         copyStatus = .pending
                         error = "destination file exists with different content"
                     }
+                case .blocked(let reason):
+                    decision = .conflict
+                    copyStatus = .skipped
+                    error = reason
                 }
-            }
-
-            switch decision {
-            case .new:
-                newFiles += 1
-            case .known:
-                knownFiles += 1
-            case .conflict:
-                conflictFiles += 1
-            case .unsupported:
-                unsupportedFiles += 1
             }
 
             files.append(
@@ -253,15 +234,57 @@ public struct MediaScanner {
             throw SDImportError.cancelled
         }
 
+        let matchedProxyPaths = Set(
+            Insta360ClipDetector().groups(files: files)
+                .flatMap(\.proxyFiles)
+                .map(\.sourcePath)
+        )
+        let unmatchedProxyPaths = Set(
+            files.lazy
+                .filter { Self.isInsta360ProxyFile($0) && !matchedProxyPaths.contains($0.sourcePath) }
+                .map(\.sourcePath)
+        )
+        files = files.map { file in
+            guard unmatchedProxyPaths.contains(file.sourcePath) else { return file }
+            return JobFileRecord(
+                id: file.id,
+                jobID: file.jobID,
+                sourcePath: file.sourcePath,
+                relativePath: file.relativePath,
+                filename: file.filename,
+                ext: file.ext,
+                size: file.size,
+                modificationDateString: file.modificationDateString,
+                modificationTimeEpochSeconds: file.modificationTimeEpochSeconds,
+                mediaKind: .unsupported,
+                fingerprint: file.fingerprint,
+                captureDate: file.captureDate,
+                decision: .unsupported,
+                knownSource: nil,
+                destinationDirectory: nil,
+                plannedDestinationPath: nil,
+                finalDestinationPath: nil,
+                copyStatus: .skipped,
+                error: nil,
+                portableReceiptOverride: file.portableReceiptOverride,
+                completedAt: file.completedAt
+            )
+        }
+
         if portableWritesAvailable, !portableIdentitiesToBackfill.isEmpty {
             do {
-                let appendResult = try portableLedger.appendReturningRevision(
-                    identities: portableIdentitiesToBackfill
-                )
-                if let warning = appendResult.warning, portableReceiptWarning != warning {
-                    portableReceiptWarning = [portableReceiptWarning, warning]
-                        .compactMap { $0 }
-                        .joined(separator: ". ")
+                let identities = portableIdentitiesToBackfill
+                    .filter { !unmatchedProxyPaths.contains($0.sourcePath) }
+                    .map(\.identity)
+                if !identities.isEmpty {
+                    let appendResult = try portableLedger.appendReturningRevision(
+                        identities: identities
+                    )
+                    if let warning = appendResult.warning, portableReceiptWarning != warning {
+                        portableReceiptWarning = [portableReceiptWarning, warning]
+                            .compactMap { $0 }
+                            .joined(separator: ". ")
+                    }
                 }
             } catch {
                 portableReceiptSizeWarning = PortableReceiptSizeWarning(error: error)
@@ -269,18 +292,33 @@ public struct MediaScanner {
             }
         }
 
+        return try persist(
+            request: request,
+            files: files,
+            portableReceiptWarning: portableReceiptWarning,
+            portableReceiptSizeWarning: portableReceiptSizeWarning
+        )
+    }
+
+    private func persist(
+        request: ScanRequest,
+        files: [JobFileRecord],
+        portableReceiptWarning: String?,
+        portableReceiptSizeWarning: PortableReceiptSizeWarning?
+    ) throws -> ScanSummary {
+        let recordingCounts = RecordingAwareScanSummary.counts(files: files)
         let summary = ScanSummary(
             jobID: request.jobID,
             mountPath: request.mountURL.path,
             volumeName: request.volumeName ?? request.mountURL.lastPathComponent,
             volumeUUID: request.volumeUUID,
             location: request.location,
-            scannedFiles: scannedFiles,
-            newFiles: newFiles,
-            knownFiles: knownFiles,
-            unsupportedFiles: unsupportedFiles,
-            conflictFiles: conflictFiles,
-            portableKnownFiles: portableKnownFiles,
+            scannedFiles: recordingCounts.scannedFiles,
+            newFiles: recordingCounts.newFiles,
+            knownFiles: recordingCounts.knownFiles,
+            unsupportedFiles: recordingCounts.unsupportedFiles,
+            conflictFiles: recordingCounts.conflictFiles,
+            portableKnownFiles: recordingCounts.portableKnownFiles,
             portableReceiptWarning: portableReceiptWarning,
             portableReceiptSizeWarning: portableReceiptSizeWarning
         )
@@ -296,11 +334,11 @@ public struct MediaScanner {
             photosRoot: request.roots.photosURL.path,
             videosRoot: request.roots.videosURL.path,
             status: .scanned,
-            scannedFiles: scannedFiles,
-            newFiles: newFiles,
-            knownFiles: knownFiles,
-            unsupportedFiles: unsupportedFiles,
-            conflictFiles: conflictFiles,
+            scannedFiles: recordingCounts.scannedFiles,
+            newFiles: recordingCounts.newFiles,
+            knownFiles: recordingCounts.knownFiles,
+            unsupportedFiles: recordingCounts.unsupportedFiles,
+            conflictFiles: recordingCounts.conflictFiles,
             summaryJSONPath: reportBaseURL?.appendingPathExtension("json").path,
             summaryMarkdownPath: reportBaseURL?.appendingPathExtension("md").path
         )
@@ -312,6 +350,11 @@ public struct MediaScanner {
         }
 
         return summary
+    }
+
+    private static func isInsta360ProxyFile(_ file: JobFileRecord) -> Bool {
+        file.ext.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            .lowercased(with: Locale(identifier: "en_US_POSIX")) == "lrv"
     }
 
     private func attributes(for fileURL: URL) throws -> FileAttributes {

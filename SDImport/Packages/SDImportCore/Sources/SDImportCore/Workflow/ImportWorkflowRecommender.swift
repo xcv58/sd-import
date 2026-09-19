@@ -73,12 +73,15 @@ public struct ImportWorkflowRecommender: Sendable {
         rememberedProfile: ImportWorkflowProfile? = nil,
         fallbackProfile: ImportWorkflowProfile = .mixedShootSession
     ) -> MediaContentProfile {
-        let videoCount = files.filter { $0.mediaKind == .video }.count
+        let insta360Groups = Insta360ClipDetector().groups(files: files)
+        let groupedSourcePaths = Set(insta360Groups.flatMap { $0.files.map(\.sourcePath) })
+        let ungroupedFiles = files.filter { !groupedSourcePaths.contains($0.sourcePath) }
+        let videoCount = insta360Groups.count + ungroupedFiles.filter { $0.mediaKind == .video }.count
         let likelyVideoPreviewJPEGCount = videoCount > 0
-            ? files.filter(MediaFileHeuristics.isLikelyVideoPreviewJPEG).count
+            ? ungroupedFiles.filter(MediaFileHeuristics.isLikelyVideoPreviewJPEG).count
             : 0
-        let photoCount = files.filter { $0.mediaKind == .photo }.count - likelyVideoPreviewJPEGCount
-        let unsupportedCount = files.filter { $0.mediaKind == .unsupported }.count
+        let photoCount = ungroupedFiles.filter { $0.mediaKind == .photo }.count - likelyVideoPreviewJPEGCount
+        let unsupportedCount = ungroupedFiles.filter { $0.mediaKind == .unsupported }.count
         return recommend(
             photoCount: photoCount,
             videoCount: videoCount,

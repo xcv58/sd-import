@@ -13,8 +13,18 @@ struct HistoryDetailView: View {
 
     private static let fileBatchSize = 100
 
-    private var filteredFiles: [JobFileRecord] {
-        files.filter(fileFilter.includes)
+    private var presentationUnits: [RecordingPresentationUnit] {
+        RecordingPresentation.units(files: files)
+    }
+
+    private var filteredUnits: [RecordingPresentationUnit] {
+        presentationUnits.filter { unit in
+            unit.files.contains(where: fileFilter.includes)
+        }
+    }
+
+    private func logicalScannedFiles(for job: ImportJob) -> Int {
+        files.isEmpty ? job.scannedFiles : presentationUnits.count
     }
 
     var body: some View {
@@ -126,7 +136,7 @@ struct HistoryDetailView: View {
 
     private func metrics(_ job: ImportJob) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 10)], alignment: .leading, spacing: 10) {
-            MetricView(title: L10n.tr("Scanned"), value: job.scannedFiles)
+            MetricView(title: L10n.tr("Scanned"), value: logicalScannedFiles(for: job))
             MetricView(title: L10n.tr("New"), value: job.newFiles)
             MetricView(title: L10n.tr("Known"), value: job.knownFiles)
             MetricView(title: L10n.tr("Conflicts"), value: job.conflictFiles)
@@ -138,31 +148,31 @@ struct HistoryDetailView: View {
     }
 
     private var fileSection: some View {
-        let files = filteredFiles
-        let lastPage = max(0, (files.count - 1) / Self.fileBatchSize)
+        let units = filteredUnits
+        let lastPage = max(0, (units.count - 1) / Self.fileBatchSize)
         let displayedPage = min(filePage, lastPage)
         let pageStart = displayedPage * Self.fileBatchSize
-        let visibleFiles = Array(files.dropFirst(pageStart).prefix(Self.fileBatchSize))
-        let totalCount = self.files.count
+        let visibleUnits = Array(units.dropFirst(pageStart).prefix(Self.fileBatchSize))
+        let totalCount = presentationUnits.count
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 fileHeading(
-                    filteredCount: files.count,
-                    visibleCount: visibleFiles.count,
-                    firstVisibleIndex: files.isEmpty ? 0 : pageStart + 1,
+                    filteredCount: units.count,
+                    visibleCount: visibleUnits.count,
+                    firstVisibleIndex: units.isEmpty ? 0 : pageStart + 1,
                     totalCount: totalCount
                 )
                 Spacer()
                 fileFilterControl
             }
 
-            if files.isEmpty {
+            if units.isEmpty {
                 ContentUnavailableView(L10n.tr("No Files"), systemImage: "doc")
                     .frame(maxWidth: .infinity, minHeight: 140)
             } else {
                 List {
-                    ForEach(visibleFiles) { file in
-                        HistoryFileRow(file: file) { path in
+                    ForEach(visibleUnits) { unit in
+                        HistoryFileUnitRow(unit: unit) { path in
                             model.reveal(path: path)
                         }
                             .listRowInsets(EdgeInsets(top: 3, leading: 10, bottom: 3, trailing: 10))
@@ -174,7 +184,7 @@ struct HistoryDetailView: View {
                 .environment(\.defaultMinListRowHeight, 1)
                 .frame(minHeight: 180, maxHeight: .infinity)
 
-                if files.count > Self.fileBatchSize {
+                if units.count > Self.fileBatchSize {
                     HStack(spacing: 10) {
                         Button(L10n.tr("Previous")) {
                             filePage = max(0, displayedPage - 1)
@@ -257,6 +267,38 @@ struct HistoryDetailView: View {
         } set: { filter in
             filePage = 0
             fileFilter = filter
+        }
+    }
+}
+
+private struct HistoryFileUnitRow: View {
+    let unit: RecordingPresentationUnit
+    let revealAction: (String) -> Void
+
+    @ViewBuilder
+    var body: some View {
+        if unit.isInsta360Recording {
+            DisclosureGroup {
+                ForEach(unit.files, id: \.sourcePath) { file in
+                    HistoryFileRow(file: file, revealAction: revealAction)
+                        .padding(.leading, 8)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "video.badge.ellipsis")
+                        .foregroundStyle(.secondary)
+                    Text(verbatim: "Insta360")
+                    Text(L10n.tr("\(unit.files.count) files"))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Text(L10n.fileSize(unit.totalSize))
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                .padding(.vertical, 6)
+            }
+        } else {
+            HistoryFileRow(file: unit.primaryFile, revealAction: revealAction)
         }
     }
 }

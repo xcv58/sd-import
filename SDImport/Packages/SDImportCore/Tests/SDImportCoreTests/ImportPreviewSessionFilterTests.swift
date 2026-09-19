@@ -103,6 +103,53 @@ struct ImportPreviewSessionFilterTests {
         #expect(visibleSessions.isEmpty)
     }
 
+    @Test("counts an Insta360 master set as one video and hides its proxies")
+    func countsInsta360RecordingOnce() {
+        let files = [
+            jobFile(id: 1, filename: "VID_20181001_210458_00_007.insv", mediaKind: .video, captureDate: "2026-05-10", decision: .new),
+            jobFile(id: 2, filename: "VID_20181001_210458_10_007.insv", mediaKind: .video, captureDate: "2026-05-10", decision: .new),
+            jobFile(id: 3, filename: "LRV_20181001_210458_01_007.lrv", mediaKind: .unsupported, captureDate: "2026-05-10", decision: .unsupported)
+        ]
+        let sessions = [session(date: "2026-05-10", videoCount: 2)]
+        let filePlans = plans(files: files, sessions: sessions)
+
+        let visibleSessions = ImportPreviewSessionFilter().visibleSessions(
+            files: files,
+            plans: filePlans,
+            sessions: sessions,
+            importMediaSelection: .photosAndVideos,
+            organizationPreset: .classicDatedFolders
+        )
+
+        #expect(visibleSessions.first?.videoCount == 1)
+        #expect(visibleSessions.first?.unsupportedCount == 0)
+        #expect(filePlans.map(\.willCopy) == [true, true, true])
+    }
+
+    @Test("keeps an Insta360 recording visible when only its new proxy will copy")
+    func countsPendingProxyForKnownMaster() {
+        let files = [
+            jobFile(id: 1, filename: "VID_20181001_210458_00_007.insv", mediaKind: .video, captureDate: "2026-05-10", decision: .known),
+            jobFile(id: 2, filename: "LRV_20181001_210458_01_007.lrv", mediaKind: .unsupported, captureDate: "2026-05-10", decision: .unsupported)
+        ]
+        let sessions = [session(date: "2026-05-10", videoCount: 1)]
+        let filePlans = plans(files: files, sessions: sessions)
+
+        let visibleSessions = ImportPreviewSessionFilter().visibleSessions(
+            files: files,
+            plans: filePlans,
+            sessions: sessions,
+            importMediaSelection: .photosAndVideos,
+            organizationPreset: .classicDatedFolders
+        )
+
+        #expect(filePlans[0].disposition == .known(nil))
+        #expect(filePlans[1].willCopy)
+        #expect(visibleSessions.count == 1)
+        #expect(visibleSessions.first?.videoCount == 1)
+        #expect(visibleSessions.first?.unsupportedCount == 0)
+    }
+
     private func plans(
         files: [JobFileRecord],
         sessions: [ImportPlanSession],

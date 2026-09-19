@@ -17,19 +17,26 @@ struct ImportReportView: View {
         presentation.files
     }
 
-    private var filteredFiles: [JobFileRecord] {
-        displayedFiles.filter(filter.includes)
+    private var presentationUnits: [RecordingPresentationUnit] {
+        RecordingPresentation.units(files: files)
     }
 
-    private var displayedFiles: [JobFileRecord] {
+    private var filteredUnits: [RecordingPresentationUnit] {
+        displayedUnits.filter { unit in
+            unit.files.contains(where: filter.includes)
+        }
+    }
+
+    private var displayedUnits: [RecordingPresentationUnit] {
+        let units = presentationUnits
         guard filter == .all else {
-            return files
+            return units
         }
 
-        return files.enumerated()
+        return units.enumerated()
             .sorted { lhs, rhs in
-                let lhsPriority = fileSortPriority(lhs.element)
-                let rhsPriority = fileSortPriority(rhs.element)
+                let lhsPriority = lhs.element.files.map(fileSortPriority).min() ?? 3
+                let rhsPriority = rhs.element.files.map(fileSortPriority).min() ?? 3
                 if lhsPriority != rhsPriority {
                     return lhsPriority < rhsPriority
                 }
@@ -170,12 +177,12 @@ struct ImportReportView: View {
         VStack(alignment: .leading, spacing: 8) {
             fileSectionHeader
 
-            if filteredFiles.isEmpty {
+            if filteredUnits.isEmpty {
                 ContentUnavailableView(L10n.tr("No Files"), systemImage: "doc")
                     .frame(maxWidth: .infinity, minHeight: 160)
             } else {
-                List(filteredFiles) { file in
-                    ReportFileRow(file: file)
+                List(filteredUnits) { unit in
+                    ReportFileUnitRow(unit: unit)
                         .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
                         .listRowSeparator(.visible)
                 }
@@ -229,10 +236,12 @@ struct ImportReportView: View {
     }
 
     private var fileCountText: String {
-        if filteredFiles.count == files.count {
-            return files.count == 1 ? L10n.tr("1 file") : L10n.tr("\(files.count) files")
+        if filteredUnits.count == presentationUnits.count {
+            return presentationUnits.count == 1
+                ? L10n.tr("1 file")
+                : L10n.tr("\(presentationUnits.count) files")
         }
-        return L10n.tr("\(filteredFiles.count) of \(files.count)")
+        return L10n.tr("\(filteredUnits.count) of \(presentationUnits.count)")
     }
 
     private func fileSortPriority(_ file: JobFileRecord) -> Int {
@@ -278,12 +287,45 @@ private struct ReportSummary {
 
     init(job: ImportJob, files: [JobFileRecord]) {
         self.mountPath = job.mountPath
-        self.scannedFiles = job.scannedFiles
+        self.scannedFiles = files.isEmpty
+            ? job.scannedFiles
+            : RecordingPresentation.units(files: files).count
         self.newFiles = job.newFiles
         self.knownFiles = job.knownFiles
         self.conflictFiles = job.conflictFiles
-        self.copiedFiles = job.importedFiles > 0 ? job.importedFiles : files.filter { $0.copyStatus == .copied }.count
-        self.failedFiles = job.failedFiles > 0 ? job.failedFiles : files.filter { $0.copyStatus == .failed }.count
+        self.copiedFiles = job.importedFiles
+        self.failedFiles = job.failedFiles
+    }
+}
+
+private struct ReportFileUnitRow: View {
+    let unit: RecordingPresentationUnit
+
+    @ViewBuilder
+    var body: some View {
+        if unit.isInsta360Recording {
+            DisclosureGroup {
+                ForEach(unit.files, id: \.sourcePath) { file in
+                    ReportFileRow(file: file)
+                        .padding(.leading, 8)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "video.badge.ellipsis")
+                        .foregroundStyle(.secondary)
+                    Text(verbatim: "Insta360")
+                    Text(L10n.tr("\(unit.files.count) files"))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Text(L10n.fileSize(unit.totalSize))
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                .padding(.vertical, 6)
+            }
+        } else {
+            ReportFileRow(file: unit.primaryFile)
+        }
     }
 }
 

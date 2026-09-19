@@ -13,6 +13,7 @@ typealias ImportPreviewSession = ImportPlanSession
 enum ImportPreviewGroupKind: Hashable {
     case rawJPEG
     case videoSidecars
+    case insta360Clip
 }
 
 struct ImportPreviewRow: Identifiable, Hashable {
@@ -1057,12 +1058,19 @@ final class AppModel: ObservableObject {
             && !isEjectingSource
             && currentSummary != nil
             && previewTotals.copyFiles > 0
+            && !previewRows.contains { $0.disposition.attention == .blocking }
             && sourceValidation.isUsable
             && requiredDestinationPathsAreUsable()
             && previewSpaceRequirements.allSatisfy(\.isSatisfied)
     }
 
     var importReadinessMessage: String? {
+        if previewRows.contains(where: {
+            if case .filenameConflict = $0.disposition { return true }
+            return false
+        }) {
+            return L10n.tr("Conflicts")
+        }
         if previewTotals.copyFiles == 0 {
             return L10n.tr("No files are selected for copying")
         }
@@ -1084,7 +1092,12 @@ final class AppModel: ObservableObject {
     }
 
     var previewAttentionCount: Int {
-        previewRows.filter { $0.disposition.attention >= .attention }.count
+        Dictionary(grouping: previewRows, by: previewUnitKey(for:))
+            .values
+            .filter { rows in
+                rows.contains { $0.disposition.attention >= .attention }
+            }
+            .count
     }
 
     var previewDestinationIssueCount: Int {
@@ -1434,6 +1447,7 @@ final class AppModel: ObservableObject {
         plans: [ImportFilePlan]
     ) -> [ImportPreviewRow] {
         var visualGroups: [Int64: (id: String, kind: ImportPreviewGroupKind)] = [:]
+        var canonicalInsta360DateByID: [Int64: String] = [:]
         for group in PhotoPairDetector().groups(files: files) where group.isPair {
             for file in group.rawFiles + group.jpegFiles {
                 if let id = file.id {
@@ -1448,6 +1462,17 @@ final class AppModel: ObservableObject {
                 }
             }
         }
+        for group in Insta360ClipDetector().groups(files: files) {
+            let canonicalDate = group.masterFiles.first.map { ImportPlanBuilder.sessionDate(for: $0) }
+            for file in group.files {
+                if let id = file.id {
+                    visualGroups[id] = (group.id, .insta360Clip)
+                    if let canonicalDate {
+                        canonicalInsta360DateByID[id] = canonicalDate
+                    }
+                }
+            }
+        }
 
         return zip(files, plans).compactMap { pair -> ImportPreviewRow? in
             let (file, plan) = pair
@@ -1457,7 +1482,7 @@ final class AppModel: ObservableObject {
             return ImportPreviewRow(
                 id: id,
                 filename: file.filename,
-                date: ImportPlanBuilder.sessionDate(for: file),
+                date: canonicalInsta360DateByID[id] ?? ImportPlanBuilder.sessionDate(for: file),
                 modificationDateString: file.modificationDateString,
                 mediaKind: file.mediaKind,
                 sourcePath: file.sourcePath,
@@ -1495,13 +1520,21 @@ final class AppModel: ObservableObject {
     }
 
     private func buildPreviewTotals(rows: [ImportPreviewRow]) -> ImportPreviewTotals {
+        let units = Dictionary(grouping: rows, by: previewUnitKey(for:))
         return ImportPreviewTotals(
-            copyFiles: rows.filter(\.willCopy).count,
-            skippedFiles: rows.filter { !$0.willCopy }.count,
+            copyFiles: units.values.filter { $0.contains(where: \.willCopy) }.count,
+            skippedFiles: units.values.filter { !$0.contains(where: \.willCopy) }.count,
             copyBytes: rows.reduce(Int64(0)) { total, row in
                 row.willCopy ? total + row.size : total
             }
         )
+    }
+
+    private func previewUnitKey(for row: ImportPreviewRow) -> String {
+        if row.visualGroupKind == .insta360Clip, let groupID = row.visualGroupID {
+            return "insta360:\(groupID)"
+        }
+        return "file:\(row.id)"
     }
 
     private func buildPreviewDestinationDirectories(rows: [ImportPreviewRow]) -> [ImportPreviewDestination] {
@@ -1518,7 +1551,7 @@ final class AppModel: ObservableObject {
                     path: path,
                     root: rootAndRelativePath.root,
                     relativePath: rootAndRelativePath.relativePath,
-                    fileCount: rows.count,
+                    fileCount: Set(rows.map(previewUnitKey(for:))).count,
                     byteCount: rows.reduce(Int64(0)) { $0 + $1.size }
                 )
             }
@@ -1544,7 +1577,9 @@ final class AppModel: ObservableObject {
         }
         if photosRoot == videosRoot, isDescendant(destination, of: photosRoot) {
             let containsFootage = rows.contains {
-                $0.mediaKind == .video || $0.visualGroupKind == .videoSidecars
+                $0.mediaKind == .video
+                    || $0.visualGroupKind == .videoSidecars
+                    || $0.visualGroupKind == .insta360Clip
             }
             return (
                 containsFootage ? .videos : .photos,

@@ -163,8 +163,8 @@ BEGIN {
   @photo = qw(.jpg .jpeg .jpe .heic .heif .tif .tiff .dng .arw .cr2 .cr3 .nef .raf .rw2 .orf .srw .pef .rwl .3fr .fff .iiq);
   @raw = qw(.dng .arw .cr2 .cr3 .nef .raf .rw2 .orf .srw .pef .rwl .3fr .fff .iiq);
   @jpeg = qw(.jpg .jpeg .jpe);
-  @video = qw(.mov .mp4 .m4v .mts .m2ts .avi .mpg .mpeg .wmv);
-  @sidecar = qw(.xml .xmp .bin .thm .lrv .srt .aae .dat .bup .insv);
+  @video = qw(.mov .mp4 .m4v .mts .m2ts .avi .mpg .mpeg .wmv .insv);
+  @sidecar = qw(.xml .xmp .bin .thm .lrv .srt .aae .dat .bup);
   %photo = map { $_ => 1 } @photo;
   %raw = map { $_ => 1 } @raw;
   %jpeg = map { $_ => 1 } @jpeg;
@@ -191,8 +191,20 @@ $raw_count++ if $raw{$ext};
 $jpeg_count++ if $jpeg{$ext};
 $video_count++ if $video{$ext};
 $sidecar_count++ if $sidecar{$ext};
+$insta_lrv_count++ if $ext eq ".lrv";
 $sony_media_pro++ if $base eq "mediapro.xml";
 $sony_database++ if $base eq "database.bin";
+
+if (($ext eq ".insv" || $ext eq ".lrv")
+    && $stem =~ /(?:^|_)(\d{8})_(\d{6})_(\d{2})_(\d+)$/) {
+  my ($date, $time, $channel, $sequence) = ($1, $2, $3, $4);
+  my $recording_key = join("\0", $dir, $date, $time, $sequence);
+  if ($ext eq ".insv" && $channel =~ /0$/) {
+    $insta_master{$recording_key}{$channel} = 1;
+  } elsif ($ext eq ".lrv" && $channel =~ /1$/) {
+    $insta_proxy{$recording_key}{$channel}++;
+  }
+}
 
 my $pair_key = $dir . "\0" . $stem;
 $pair{$pair_key}{raw} = 1 if $raw{$ext};
@@ -205,6 +217,20 @@ END {
   for my $key (keys %pair) {
     $raw_jpeg_pairs++ if $pair{$key}{raw} && $pair{$key}{jpeg};
   }
+  for my $key (keys %insta_master) {
+    $insta_recordings++;
+  }
+  for my $key (keys %insta_proxy) {
+    for my $proxy_channel (keys %{$insta_proxy{$key}}) {
+      my $master_channel = substr($proxy_channel, 0, 1) . "0";
+      if ($insta_master{$key}{$master_channel}) {
+        $insta_matched_proxies += $insta_proxy{$key}{$proxy_channel};
+      } else {
+        $insta_orphan_proxies += $insta_proxy{$key}{$proxy_channel};
+      }
+    }
+  }
+  $insta_orphan_proxies = ($insta_lrv_count || 0) - ($insta_matched_proxies || 0);
 
   print "## Card Content Summary\n\n";
   printf "- total files scanned: %d\n", $total_files || 0;
@@ -218,6 +244,9 @@ END {
   printf "- raw+jpeg basename pairs: %d\n", $raw_jpeg_pairs || 0;
   printf "- Sony MEDIAPRO.XML count: %d\n", $sony_media_pro || 0;
   printf "- Sony DATABASE.BIN count: %d\n", $sony_database || 0;
+  printf "- Insta360 recordings: %d\n", $insta_recordings || 0;
+  printf "- matched Insta360 proxy files: %d\n", $insta_matched_proxies || 0;
+  printf "- orphan Insta360 proxy files: %d\n", $insta_orphan_proxies || 0;
   print "\n## Extension Counts\n\n";
   print "| Extension | Count |\n";
   print "| --- | ---: |\n";

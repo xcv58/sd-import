@@ -3,6 +3,7 @@ import Foundation
 public struct MountDebouncer: Sendable {
     private let interval: TimeInterval
     private var lastSeenBySource: [String: Date] = [:]
+    private var sourceKeyByMountPath: [String: String] = [:]
 
     public init(interval: TimeInterval = 5) {
         self.interval = interval
@@ -26,7 +27,18 @@ public struct MountDebouncer: Sendable {
     }
 
     public mutating func recordAccepted(_ volume: MountedVolume, now: Date = Date()) {
-        lastSeenBySource[sourceKey(for: volume)] = now
+        let key = sourceKey(for: volume)
+        lastSeenBySource[key] = now
+        sourceKeyByMountPath[volume.mountURL.standardizedFileURL.path] = key
+    }
+
+    public mutating func forget(mountURL: URL) {
+        let mountPath = mountURL.standardizedFileURL.path
+        if let key = sourceKeyByMountPath.removeValue(forKey: mountPath) {
+            if !sourceKeyByMountPath.values.contains(key) {
+                lastSeenBySource.removeValue(forKey: key)
+            }
+        }
     }
 
     private func sourceKey(for volume: MountedVolume) -> String {

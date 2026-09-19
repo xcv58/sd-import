@@ -310,8 +310,8 @@ struct MountHandoffStoreTests {
         #expect(afterSwap == nil)
     }
 
-    @Test("deduplication requires a cross-origin matching volume occurrence")
-    func deduplicationRequiresPositiveCrossOriginCorrelation() {
+    @Test("accepted mount stays suppressed until unmount")
+    func acceptedMountStaysSuppressedUntilUnmount() {
         let volume = MountedVolume(
             id: "card",
             name: "CARD",
@@ -347,25 +347,30 @@ struct MountHandoffStoreTests {
             origin: .backgroundAgent,
             mountedVolume: volume
         )
-        let secondAgent = MountHandoffEvent(
-            createdAt: start.addingTimeInterval(2),
-            mountPath: volume.mountURL.path,
-            volumeName: volume.name,
+        let replacementVolume = MountedVolume(
+            id: "replacement",
+            name: "REPLACEMENT",
+            mountURL: volume.mountURL,
+            volumeUUID: "replacement-uuid",
+            isRemovable: true
+        )
+        let replacement = MountHandoffEvent(
+            createdAt: start.addingTimeInterval(20),
+            mountPath: replacementVolume.mountURL.path,
+            volumeName: replacementVolume.name,
             agentBuild: "44",
             targetApplicationPath: targetApplicationPath,
             origin: .backgroundAgent,
-            mountedVolume: volume
+            mountedVolume: replacementVolume
         )
         var deduplicator = MountHandoffDeduplicator(correlationInterval: 10)
 
         deduplicator.recordAccepted(foreground)
-        let sameOriginWasDuplicate = deduplicator.consumeCorrelatedDuplicate(sameOrigin)
-        let firstAgentWasDuplicate = deduplicator.consumeCorrelatedDuplicate(agent)
-        let secondAgentWasDuplicate = deduplicator.consumeCorrelatedDuplicate(secondAgent)
-
-        #expect(!sameOriginWasDuplicate)
-        #expect(firstAgentWasDuplicate)
-        #expect(!secondAgentWasDuplicate)
+        #expect(deduplicator.consumeCorrelatedDuplicate(sameOrigin))
+        #expect(deduplicator.consumeCorrelatedDuplicate(agent))
+        #expect(!deduplicator.consumeCorrelatedDuplicate(replacement))
+        deduplicator.forget(mountURL: volume.mountURL)
+        #expect(!deduplicator.consumeCorrelatedDuplicate(sameOrigin))
 
         let controller = MountHandoffDeliveryController(
             deduplicator: MountHandoffDeduplicator(correlationInterval: 10)
@@ -381,7 +386,7 @@ struct MountHandoffStoreTests {
             controller.evaluate(event: sameOrigin, volume: volume) { _ in
                 handlerCallCount += 1
                 return .deferred
-            } == .deferred
+            } == .accepted
         )
         #expect(
             controller.evaluate(event: agent, volume: volume) { _ in
@@ -390,12 +395,20 @@ struct MountHandoffStoreTests {
             } == .accepted
         )
         #expect(
-            controller.evaluate(event: secondAgent, volume: volume) { _ in
+            controller.evaluate(volume: volume) { _ in
                 handlerCallCount += 1
                 return .deferred
-            } == .deferred
+            } == .accepted
         )
-        #expect(handlerCallCount == 3)
+        #expect(handlerCallCount == 1)
+        controller.forget(mountURL: volume.mountURL)
+        #expect(
+            controller.evaluate(volume: volume) { _ in
+                handlerCallCount += 1
+                return .accepted
+            } == .accepted
+        )
+        #expect(handlerCallCount == 2)
     }
 
     @Test("delivery controller permits a handler to consume another handoff")

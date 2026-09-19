@@ -166,56 +166,29 @@ public struct JobRepository {
         completedAt: Date? = Date()
     ) throws {
         try pool.write { db in
+            let totals = try recordingAwareTotals(jobID: jobID, db: db)
             try db.execute(
                 sql: """
                 UPDATE jobs
-                SET imported_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND copy_status = ?
-                    ),
-                    skipped_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND copy_status = ?
-                    ),
-                    failed_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND copy_status = ?
-                    ),
-                    new_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND decision = ?
-                    ),
-                    known_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND decision = ?
-                    ),
-                    unsupported_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND decision = ?
-                    ),
-                    conflict_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND decision = ?
-                    ),
+                SET imported_files = ?,
+                    skipped_files = ?,
+                    failed_files = ?,
+                    new_files = ?,
+                    known_files = ?,
+                    unsupported_files = ?,
+                    conflict_files = ?,
                     status = ?,
                     completed_at = ?
                 WHERE job_id = ?
                 """,
                 arguments: [
-                    jobID,
-                    CopyStatus.copied.databaseValue,
-                    jobID,
-                    CopyStatus.skipped.databaseValue,
-                    jobID,
-                    CopyStatus.failed.databaseValue,
-                    jobID,
-                    FileDecision.new.databaseValue,
-                    jobID,
-                    FileDecision.known.databaseValue,
-                    jobID,
-                    FileDecision.unsupported.databaseValue,
-                    jobID,
-                    FileDecision.conflict.databaseValue,
+                    totals.importedFiles,
+                    totals.skippedFiles,
+                    totals.failedFiles,
+                    totals.newFiles,
+                    totals.knownFiles,
+                    totals.unsupportedFiles,
+                    totals.conflictFiles,
                     finalStatus.databaseValue,
                     DateCoding.optionalString(from: completedAt),
                     jobID
@@ -338,40 +311,37 @@ public struct JobRepository {
                 )
             }
 
+            let totals = try recordingAwareTotals(jobID: jobID, db: db)
             try db.execute(
                 sql: """
                 UPDATE jobs
-                SET new_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND decision = ?
-                    ),
-                    known_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND decision = ?
-                    ),
-                    unsupported_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND decision = ?
-                    ),
-                    conflict_files = (
-                        SELECT COUNT(*) FROM job_files
-                        WHERE job_id = ? AND decision = ?
-                    )
+                SET new_files = ?,
+                    known_files = ?,
+                    unsupported_files = ?,
+                    conflict_files = ?
                 WHERE job_id = ?
                 """,
                 arguments: [
-                    jobID,
-                    FileDecision.new.databaseValue,
-                    jobID,
-                    FileDecision.known.databaseValue,
-                    jobID,
-                    FileDecision.unsupported.databaseValue,
-                    jobID,
-                    FileDecision.conflict.databaseValue,
+                    totals.newFiles,
+                    totals.knownFiles,
+                    totals.unsupportedFiles,
+                    totals.conflictFiles,
                     jobID
                 ]
             )
         }
+    }
+
+    private func recordingAwareTotals(
+        jobID: String,
+        db: Database
+    ) throws -> RecordingAwareScanCounts {
+        let rows = try Row.fetchAll(
+            db,
+            sql: "SELECT * FROM job_files WHERE job_id = ? ORDER BY id",
+            arguments: [jobID]
+        )
+        return RecordingAwareScanSummary.counts(files: try rows.map(decodeJobFile))
     }
 
     private func insertJob(_ job: ImportJob, db: Database) throws {

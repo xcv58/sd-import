@@ -41,6 +41,293 @@ struct MediaScannerImportTests {
         #expect(summary2.knownFiles == 1)
     }
 
+    @Test("scan and persisted history count an Insta360 recording once")
+    func scanCountsInsta360RecordingOnce() throws {
+        let fixture = try Fixture()
+        let directory = fixture.mountURL.appendingPathComponent("DCIM/Camera01", isDirectory: true)
+        for filename in [
+            "VID_20181001_210458_00_007.insv",
+            "VID_20181001_210458_10_007.insv",
+            "LRV_20181001_210458_01_007.lrv",
+            "LRV_20181001_210458_11_007.lrv"
+        ] {
+            try fixture.writeFile(
+                directory.appendingPathComponent(filename),
+                bytes: Data(filename.utf8)
+            )
+        }
+
+        let summary = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-insta360-count")
+        )
+        let maybeJob = try fixture.jobRepository.fetchJob(id: "job-insta360-count")
+        let job = try #require(maybeJob)
+
+        #expect(summary.scannedFiles == 1)
+        #expect(summary.newFiles == 1)
+        #expect(summary.knownFiles == 0)
+        #expect(summary.unsupportedFiles == 0)
+        #expect(job.scannedFiles == 1)
+        #expect(job.newFiles == 1)
+        #expect(job.unsupportedFiles == 0)
+
+        let scannedFiles = try fixture.jobRepository.fetchJobFiles(jobID: "job-insta360-count")
+        let builder = ImportPlanBuilder(
+            sessions: [
+                ImportPlanSession(
+                    date: "2024-07-15",
+                    label: "TEST",
+                    photoCount: 0,
+                    videoCount: 1,
+                    unsupportedCount: 0,
+                    includePhotos: false,
+                    includeVideos: true,
+                    includeSidecars: false
+                )
+            ],
+            organizationPreset: .classicDatedFolders,
+            roots: DestinationRoots(photosURL: fixture.photosURL, videosURL: fixture.videosURL),
+            fallbackLocation: "TEST",
+            volumeName: "CARD"
+        )
+        try fixture.jobRepository.updateJobImportPlan(
+            jobID: "job-insta360-count",
+            destinationRoots: nil,
+            updates: builder.updates(files: scannedFiles)
+        )
+        let maybePlannedJob = try fixture.jobRepository.fetchJob(id: "job-insta360-count")
+        let plannedJob = try #require(maybePlannedJob)
+        #expect(plannedJob.newFiles == 1)
+        #expect(plannedJob.unsupportedFiles == 0)
+
+        var finalProgress: ImportProgress?
+        let result = try fixture.importEngine.importFiles(
+            jobID: "job-insta360-count",
+            onProgress: { finalProgress = $0 }
+        )
+        #expect(result.importedFiles == 1)
+        #expect(result.skippedFiles == 0)
+        #expect(result.failedFiles == 0)
+        #expect(finalProgress?.totalFiles == 1)
+        #expect(finalProgress?.doneFiles == 1)
+        #expect(finalProgress?.importedFiles == 1)
+        #expect(finalProgress?.recentFiles.count == 1)
+        #expect(finalProgress?.recentFiles.first?.filename == "Insta360")
+        #expect(finalProgress?.recentFiles.first?.memberCount == 4)
+        let maybeImportedJob = try fixture.jobRepository.fetchJob(id: "job-insta360-count")
+        let importedJob = try #require(maybeImportedJob)
+        #expect(importedJob.newFiles == 1)
+        #expect(importedJob.unsupportedFiles == 0)
+        #expect(importedJob.importedFiles == 1)
+        #expect(importedJob.skippedFiles == 0)
+        #expect(importedJob.failedFiles == 0)
+
+        let importedFiles = try fixture.jobRepository.fetchJobFiles(jobID: "job-insta360-count")
+        let receiptTotals = ImportReceiptTotals(files: importedFiles)
+        #expect(receiptTotals.copiedFiles == 1)
+        #expect(receiptTotals.copiedBytes == importedFiles.reduce(Int64(0)) { $0 + $1.size })
+
+        let reportURL = fixture.reportsURL
+            .appendingPathComponent("job-insta360-count")
+            .appendingPathExtension("json")
+        let report = try ImportReportLoader().loadJSON(from: reportURL)
+        #expect(report.summary.scannedFiles == 1)
+        #expect(report.summary.newFiles == 1)
+        #expect(report.summary.unsupportedFiles == 0)
+        let markdown = try String(
+            contentsOf: fixture.reportsURL
+                .appendingPathComponent("job-insta360-count")
+                .appendingPathExtension("md"),
+            encoding: .utf8
+        )
+        #expect(markdown.contains("- copied: `1`"))
+        #expect(markdown.components(separatedBy: "- Insta360 recording (Copied").count - 1 == 1)
+    }
+
+    @Test("orphan Insta360 proxies stay unsupported when present in local history")
+    func localHistoryDoesNotMakeOrphanInsta360ProxyKnown() throws {
+        let fixture = try Fixture()
+        let source = fixture.mountURL.appendingPathComponent(
+            "DCIM/Camera01/LRV_20181001_210458_01_007.lrv"
+        )
+        try fixture.writeFile(source, bytes: Data("orphan-proxy".utf8))
+
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: "job-orphan-baseline"))
+        let baseline = try #require(
+            fixture.jobRepository.fetchJobFiles(jobID: "job-orphan-baseline").first
+        )
+        let fingerprint = FileFingerprint(
+            size: baseline.size,
+            modificationDate: Date(
+                timeIntervalSince1970: TimeInterval(try #require(baseline.modificationTimeEpochSeconds))
+            ),
+            modificationDateString: baseline.modificationDateString,
+            identityHint: baseline.relativePath,
+            value: try #require(baseline.fingerprint)
+        )
+        try fixture.dedupeRepository.recordImported(
+            fingerprint,
+            jobID: "previous-import",
+            sourcePath: source.path
+        )
+
+        let summary = try fixture.scanner.scan(
+            ScanRequest(
+                mountURL: fixture.mountURL,
+                volumeName: "CARD",
+                location: "TEST",
+                roots: DestinationRoots(
+                    photosURL: fixture.photosURL,
+                    videosURL: fixture.videosURL
+                ),
+                reportsDirectoryURL: fixture.reportsURL,
+                jobID: "job-orphan-local-history",
+                portableReceiptsEnabled: true
+            )
+        )
+        let scanned = try #require(
+            fixture.jobRepository.fetchJobFiles(jobID: "job-orphan-local-history").first
+        )
+        let identity = PortableFileIdentity(
+            size: scanned.size,
+            modificationTimeEpochSeconds: try #require(scanned.modificationTimeEpochSeconds),
+            relativePath: try #require(scanned.relativePath)
+        )
+        let portableSnapshot = try PortableImportReceiptLedger(
+            sourceRootURL: fixture.mountURL
+        ).load()
+
+        #expect(summary.knownFiles == 0)
+        #expect(summary.portableKnownFiles == 0)
+        #expect(summary.unsupportedFiles == 1)
+        #expect(scanned.decision == .unsupported)
+        #expect(scanned.knownSource == nil)
+        #expect(scanned.plannedDestinationPath == nil)
+        #expect(scanned.copyStatus == .skipped)
+        #expect(
+            portableSnapshot.fingerprints.contains(
+                PortableImportReceiptLedger.portableFingerprint(for: identity)
+            ) == false
+        )
+    }
+
+    @Test("malformed Insta360 proxies stay unsupported when present in portable history")
+    func portableHistoryDoesNotMakeMalformedInsta360ProxyKnown() throws {
+        let fixture = try Fixture()
+        let bytes = Data("malformed-proxy".utf8)
+        let relativePath = "DCIM/Camera01/preview.lrv"
+        let source = fixture.mountURL.appendingPathComponent(relativePath)
+        try fixture.writeFile(source, bytes: bytes)
+        let identity = PortableFileIdentity(
+            size: Int64(bytes.count),
+            modificationTimeEpochSeconds: 1_700_000_000,
+            relativePath: relativePath
+        )
+        try PortableImportReceiptLedger(sourceRootURL: fixture.mountURL).append(identity: identity)
+
+        let summary = try fixture.scanner.scan(
+            ScanRequest(
+                mountURL: fixture.mountURL,
+                volumeName: "CARD",
+                location: "TEST",
+                roots: DestinationRoots(
+                    photosURL: fixture.photosURL,
+                    videosURL: fixture.videosURL
+                ),
+                reportsDirectoryURL: fixture.reportsURL,
+                jobID: "job-malformed-portable-history",
+                portableReceiptsEnabled: true
+            )
+        )
+        let scanned = try #require(
+            fixture.jobRepository.fetchJobFiles(jobID: "job-malformed-portable-history")
+                .first(where: { $0.filename == "preview.lrv" })
+        )
+
+        #expect(summary.knownFiles == 0)
+        #expect(summary.portableKnownFiles == 0)
+        #expect(summary.unsupportedFiles == 1)
+        #expect(scanned.decision == .unsupported)
+        #expect(scanned.knownSource == nil)
+        #expect(scanned.plannedDestinationPath == nil)
+        #expect(scanned.copyStatus == .skipped)
+    }
+
+    @Test("partial-known Insta360 recording stays one recording after import")
+    func partialKnownInsta360RecordingStaysAggregated() throws {
+        let fixture = try Fixture()
+        let masterNames = [
+            "VID_20181001_210458_00_009.insv",
+            "VID_20181001_210458_10_009.insv"
+        ]
+        for masterName in masterNames {
+            let master = fixture.mountURL.appendingPathComponent("DCIM/Camera01/\(masterName)")
+            try fixture.writeFile(master, bytes: Data(masterName.utf8))
+        }
+
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: "job-insta360-master"))
+        _ = try fixture.importEngine.importFiles(jobID: "job-insta360-master")
+
+        let proxyNames = [
+            "LRV_20181001_210458_01_009.lrv",
+            "LRV_20181001_210458_11_009.lrv"
+        ]
+        for proxyName in proxyNames {
+            let proxy = fixture.mountURL.appendingPathComponent("DCIM/Camera01/\(proxyName)")
+            try fixture.writeFile(proxy, bytes: Data(proxyName.utf8))
+        }
+        let summary = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-insta360-partial")
+        )
+        #expect(summary.newFiles == 1)
+        #expect(summary.knownFiles == 0)
+        #expect(summary.unsupportedFiles == 0)
+
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: "job-insta360-partial")
+        let builder = ImportPlanBuilder(
+            sessions: [
+                ImportPlanSession(
+                    date: "2024-07-15",
+                    label: "TEST",
+                    photoCount: 0,
+                    videoCount: 1,
+                    unsupportedCount: 0,
+                    includePhotos: false,
+                    includeVideos: true,
+                    includeSidecars: false
+                )
+            ],
+            organizationPreset: .classicDatedFolders,
+            roots: DestinationRoots(photosURL: fixture.photosURL, videosURL: fixture.videosURL),
+            fallbackLocation: "TEST",
+            volumeName: "CARD"
+        )
+        try fixture.jobRepository.updateJobImportPlan(
+            jobID: "job-insta360-partial",
+            destinationRoots: nil,
+            updates: builder.updates(files: files)
+        )
+        var finalProgress: ImportProgress?
+        let result = try fixture.importEngine.importFiles(
+            jobID: "job-insta360-partial",
+            onProgress: { finalProgress = $0 }
+        )
+        #expect(result.importedFiles == 1)
+        #expect(result.skippedFiles == 0)
+        #expect(finalProgress?.totalFiles == 1)
+        #expect(finalProgress?.doneFiles == 1)
+        #expect(finalProgress?.importedFiles == 1)
+
+        let maybeJob = try fixture.jobRepository.fetchJob(id: "job-insta360-partial")
+        let job = try #require(maybeJob)
+        #expect(job.newFiles == 1)
+        #expect(job.knownFiles == 0)
+        #expect(job.unsupportedFiles == 0)
+        #expect(job.importedFiles == 1)
+        #expect(job.skippedFiles == 0)
+        #expect(job.failedFiles == 0)
+    }
+
     @Test("portable receipts prevent duplicate imports on another Mac")
     func portableReceiptsWorkAcrossLocalDatabases() throws {
         let first = try Fixture()
@@ -772,6 +1059,154 @@ struct MediaScannerImportTests {
                     .path
             )
         )
+    }
+
+    @Test("Insta360 destination conflicts never create renamed proprietary files")
+    func insta360ConflictBlocksImportWithoutRename() throws {
+        let fixture = try Fixture()
+        let filename = "VID_20181001_210458_00_007.insv"
+        let source = fixture.mountURL.appendingPathComponent("DCIM/Camera01/\(filename)")
+        try fixture.writeFile(source, bytes: Data("new-insta360-video".utf8))
+
+        let destinationDirectory = fixture.videosURL
+            .appendingPathComponent("2024-07-15 TEST", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
+        let existingDestination = destinationDirectory.appendingPathComponent(filename)
+        try Data("different-existing-video".utf8).write(to: existingDestination)
+
+        let summary = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: "job-insta360-conflict")
+        )
+        let scanned = try #require(
+            fixture.jobRepository.fetchJobFiles(jobID: "job-insta360-conflict").first
+        )
+
+        #expect(summary.conflictFiles == 1)
+        #expect(scanned.copyStatus == .skipped)
+        #expect(scanned.error == "destination_filename_conflict")
+
+        let fileID = try #require(scanned.id)
+        try fixture.jobRepository.updateJobFileImportPlan(
+            jobID: "job-insta360-conflict",
+            updates: [
+                JobFilePlanUpdate(
+                    id: fileID,
+                    decision: .conflict,
+                    destinationDirectory: destinationDirectory.path,
+                    plannedDestinationPath: existingDestination.path,
+                    copyStatus: .pending,
+                    error: nil
+                )
+            ]
+        )
+
+        #expect(throws: SDImportError.destinationFilenameConflict(existingDestination.path)) {
+            try fixture.importEngine.importFiles(jobID: "job-insta360-conflict")
+        }
+        #expect(
+            FileManager.default.fileExists(
+                atPath: destinationDirectory
+                    .appendingPathComponent("VID_20181001_210458_00_007-copy-1.insv")
+                    .path
+            ) == false
+        )
+    }
+
+    @Test("Insta360 runtime preflight blocks duplicate member destinations before copying")
+    func insta360RuntimePreflightBlocksWholeRecording() throws {
+        let fixture = try Fixture()
+        let directory = fixture.mountURL.appendingPathComponent("DCIM/Camera01", isDirectory: true)
+        for filename in [
+            "VID_20181001_210458_00_012.insv",
+            "LRV_20181001_210458_01_012.lrv"
+        ] {
+            try fixture.writeFile(
+                directory.appendingPathComponent(filename),
+                bytes: Data(filename.utf8)
+            )
+        }
+
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: "job-insta360-runtime-preflight"))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: "job-insta360-runtime-preflight")
+        let duplicateDestination = fixture.videosURL
+            .appendingPathComponent("2024-07-15 TEST", isDirectory: true)
+            .appendingPathComponent("recording.insv", isDirectory: false)
+        let updates = try files.map { file in
+            JobFilePlanUpdate(
+                id: try #require(file.id),
+                decision: .new,
+                destinationDirectory: duplicateDestination.deletingLastPathComponent().path,
+                plannedDestinationPath: duplicateDestination.path,
+                copyStatus: .pending,
+                error: nil
+            )
+        }
+        try fixture.jobRepository.updateJobImportPlan(
+            jobID: "job-insta360-runtime-preflight",
+            destinationRoots: nil,
+            updates: updates
+        )
+
+        #expect(throws: SDImportError.destinationFilenameConflict(duplicateDestination.path)) {
+            try fixture.importEngine.importFiles(jobID: "job-insta360-runtime-preflight")
+        }
+        #expect(FileManager.default.fileExists(atPath: duplicateDestination.path) == false)
+        let finalFiles = try fixture.jobRepository.fetchJobFiles(jobID: "job-insta360-runtime-preflight")
+        #expect(finalFiles.allSatisfy { $0.copyStatus == .pending })
+    }
+
+    @Test("Insta360 progress keeps the failed member detail when a later member copies")
+    func insta360ProgressKeepsFailureDetail() throws {
+        let fixture = try Fixture()
+        let directory = fixture.mountURL.appendingPathComponent("DCIM/Camera01", isDirectory: true)
+        let masterName = "VID_20181001_210458_00_013.insv"
+        let proxyName = "LRV_20181001_210458_01_013.lrv"
+        for filename in [masterName, proxyName] {
+            try fixture.writeFile(
+                directory.appendingPathComponent(filename),
+                bytes: Data(filename.utf8)
+            )
+        }
+
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: "job-insta360-progress-failure"))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: "job-insta360-progress-failure")
+        let builder = ImportPlanBuilder(
+            sessions: [
+                ImportPlanSession(
+                    date: "2024-07-15",
+                    label: "TEST",
+                    photoCount: 0,
+                    videoCount: 1,
+                    unsupportedCount: 0,
+                    includePhotos: false,
+                    includeVideos: true,
+                    includeSidecars: false
+                )
+            ],
+            organizationPreset: .classicDatedFolders,
+            roots: DestinationRoots(photosURL: fixture.photosURL, videosURL: fixture.videosURL),
+            fallbackLocation: "TEST",
+            volumeName: "CARD"
+        )
+        try fixture.jobRepository.updateJobImportPlan(
+            jobID: "job-insta360-progress-failure",
+            destinationRoots: nil,
+            updates: builder.updates(files: files)
+        )
+        try FileManager.default.removeItem(at: directory.appendingPathComponent(masterName))
+
+        var finalProgress: ImportProgress?
+        _ = try fixture.importEngine.importFiles(
+            jobID: "job-insta360-progress-failure",
+            onProgress: { finalProgress = $0 }
+        )
+        let event = try #require(finalProgress?.recentFiles.first)
+
+        #expect(finalProgress?.recentFiles.count == 1)
+        #expect(event.status == .failed)
+        #expect(event.detail == "source file missing")
+        #expect(event.destinationPath?.hasSuffix(masterName) == true)
+        #expect(event.memberCount == 2)
     }
 
     @Test("missing source after scan records a failed file")

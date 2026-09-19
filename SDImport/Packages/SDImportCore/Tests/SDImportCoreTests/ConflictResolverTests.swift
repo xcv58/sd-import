@@ -41,4 +41,23 @@ struct ConflictResolverTests {
 
         #expect(resolution == .copy(to: directory.appendingPathComponent("IMG_0001-copy-2.JPG")))
     }
+
+    @Test("blocks a differing destination when renaming is disabled")
+    func blocksDifferingDestinationWithoutRename() throws {
+        let directory = try temporaryDirectory()
+        let candidate = directory.appendingPathComponent("VID_20181001_210458_00_007.insv")
+        try Data("old".utf8).write(to: candidate)
+        let fingerprint = FileFingerprint.compute(
+            size: 17,
+            modificationDateString: "2023-11-14T22:13:20"
+        )
+
+        let resolution = ConflictResolver().resolveDestination(
+            candidate: candidate,
+            expectedFingerprint: fingerprint,
+            allowsRename: false
+        )
+
+        #expect(resolution == .blocked(reason: "destination_filename_conflict"))
+    }
 }
