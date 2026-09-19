@@ -107,14 +107,20 @@ public struct MountHandoffDeduplicator: Sendable {
     }
 }
 
-public struct MountHandoffDeliveryController: Sendable {
+/// Coordinates correlated foreground/helper deliveries.
+///
+/// This is intentionally a reference type. `evaluate` invokes application code,
+/// and that handler can synchronously consume another queued handoff. Keeping the
+/// controller as a value type would hold an exclusive `inout` access across the
+/// handler and abort if delivery re-entered before the outer call returned.
+public final class MountHandoffDeliveryController {
     private var deduplicator: MountHandoffDeduplicator
 
     public init(deduplicator: MountHandoffDeduplicator = MountHandoffDeduplicator()) {
         self.deduplicator = deduplicator
     }
 
-    public mutating func evaluate(
+    public func evaluate(
         event: MountHandoffEvent,
         volume: MountedVolume,
         handler: (MountedVolume) -> MountEventHandlingDisposition

@@ -367,7 +367,7 @@ struct MountHandoffStoreTests {
         #expect(firstAgentWasDuplicate)
         #expect(!secondAgentWasDuplicate)
 
-        var controller = MountHandoffDeliveryController(
+        let controller = MountHandoffDeliveryController(
             deduplicator: MountHandoffDeduplicator(correlationInterval: 10)
         )
         var handlerCallCount = 0
@@ -396,6 +396,60 @@ struct MountHandoffStoreTests {
             } == .deferred
         )
         #expect(handlerCallCount == 3)
+    }
+
+    @Test("delivery controller permits a handler to consume another handoff")
+    func deliveryControllerPermitsReentrantDelivery() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let volume = MountedVolume(
+            id: "reentrant-volume",
+            name: "Untitled",
+            mountURL: URL(fileURLWithPath: "/Volumes/Untitled", isDirectory: true),
+            volumeUUID: "REENTRANT-UUID",
+            isRemovable: true,
+            isInternal: false,
+            isDiskImage: false
+        )
+        let foreground = MountHandoffEvent(
+            createdAt: start,
+            mountPath: volume.mountURL.path,
+            volumeName: volume.name,
+            agentBuild: "4",
+            targetApplicationPath: targetApplicationPath,
+            origin: .foregroundApplication,
+            mountedVolume: volume
+        )
+        let agent = MountHandoffEvent(
+            createdAt: start.addingTimeInterval(1),
+            mountPath: volume.mountURL.path,
+            volumeName: volume.name,
+            agentBuild: "4",
+            targetApplicationPath: targetApplicationPath,
+            origin: .backgroundAgent,
+            mountedVolume: volume
+        )
+        let controller = MountHandoffDeliveryController(
+            deduplicator: MountHandoffDeduplicator(correlationInterval: 10)
+        )
+        var nestedHandlerCallCount = 0
+
+        let disposition = controller.evaluate(event: foreground, volume: volume) { _ in
+            let nestedDisposition = controller.evaluate(event: agent, volume: volume) { _ in
+                nestedHandlerCallCount += 1
+                return .deferred
+            }
+            #expect(nestedDisposition == .deferred)
+            return .accepted
+        }
+
+        #expect(disposition == .accepted)
+        #expect(nestedHandlerCallCount == 1)
+        #expect(
+            controller.evaluate(event: agent, volume: volume) { _ in
+                Issue.record("correlated helper delivery should be consumed")
+                return .deferred
+            } == .accepted
+        )
     }
 
     @Test("old valid handoffs survive while corrupt records are discarded")
