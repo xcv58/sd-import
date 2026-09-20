@@ -9,6 +9,7 @@ import SDImportCore
 @MainActor
 final class StoreKitTestPurchaseDriver {
     static let lifetimeProductIdentifier = AppDistribution.lifetimeProductIdentifier
+    static let trialProductIdentifier = AppDistribution.trialProductIdentifier
 
     private let manager: PurchaseManager
 
@@ -35,6 +36,18 @@ final class StoreKitTestPurchaseDriver {
         manager.hasLifetimeUnlock
     }
 
+    var isTrialProductAvailable: Bool {
+        manager.isTrialProductAvailable
+    }
+
+    var hasActiveTrial: Bool {
+        manager.hasActiveTrial
+    }
+
+    var hasUsedTrial: Bool {
+        manager.hasUsedTrial
+    }
+
     var purchaseStatus: ImportPurchaseStatus {
         manager.accessState.purchaseStatus
     }
@@ -45,6 +58,10 @@ final class StoreKitTestPurchaseDriver {
 
     func purchase() async {
         await manager.purchase()
+    }
+
+    func startTrial() async {
+        await manager.startTrial()
     }
 
     func restorePurchases() async {

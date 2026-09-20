@@ -1130,7 +1130,7 @@ private struct ImportReviewPrimaryAction: View {
             return L10n.tr("Nothing to Import")
         }
         if !purchaseManager.canStartImport {
-            return L10n.tr("Unlock Unlimited Imports")
+            return L10n.tr("Start Trial or Unlock")
         }
         return model.previewTotals.copyFiles == 1
             ? L10n.tr("Import 1 File")

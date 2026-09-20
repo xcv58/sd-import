@@ -24,6 +24,9 @@ public enum AppDistribution: String, Codable, Sendable {
     public static let appStoreAgentBundleIdentifier = "media.jenny.sdimport.agent"
     public static let appGroupIdentifier = "group.media.jenny.sdimport"
     public static let lifetimeProductIdentifier = "media.jenny.sdimport.unlimited"
+    public static let trialProductIdentifier = "media.jenny.sdimport.trial14"
+    public static let trialDurationDays = 14
+    public static let trialDuration: TimeInterval = 14 * 24 * 60 * 60
 
     public var displayName: String {
         switch self {

@@ -242,7 +242,7 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
 
                             HStack(spacing: 10) {
-                                Button(L10n.tr("Unlock Unlimited Imports…")) {
+                                Button(L10n.tr("Trial & Purchase…")) {
                                     purchaseManager.isShowingPurchase = true
                                 }
                                 .disabled(purchaseManager.hasLifetimeUnlock)

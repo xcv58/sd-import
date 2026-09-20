@@ -11,6 +11,9 @@ struct AppStoreDistributionTests {
         #expect(AppDistribution.appStoreAgentBundleIdentifier == "media.jenny.sdimport.agent")
         #expect(AppDistribution.appGroupIdentifier == "group.media.jenny.sdimport")
         #expect(AppDistribution.lifetimeProductIdentifier == "media.jenny.sdimport.unlimited")
+        #expect(AppDistribution.trialProductIdentifier == "media.jenny.sdimport.trial14")
+        #expect(AppDistribution.trialDurationDays == 14)
+        #expect(AppDistribution.trialDuration == 14 * 24 * 60 * 60)
 
         #expect(
             AppDistribution.direct.mountPrivacyPolicy

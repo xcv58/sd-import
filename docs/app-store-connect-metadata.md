@@ -36,6 +36,18 @@ These values intentionally match
 - English (U.S.) display name: `SD Import Unlimited`
 - English (U.S.) description: `Unlimited SD imports with Family Sharing.`
 
+## 14-Day Trial In-App Purchase
+
+- Type: Non-Consumable
+- Reference name: `14-day Trial`
+- Product ID: `media.jenny.sdimport.trial14`
+- Base price: Free (Price Tier 0)
+- Family Sharing: Off
+- English (U.S.) display name: `14-Day Trial`
+- English (U.S.) description: `Unlimited imports for 14 days. No automatic charge.`
+- Localizations: English, German, Spanish, French, Italian, Japanese, Korean,
+  Brazilian Portuguese, Simplified Chinese, and Traditional Chinese
+
 ### IAP Review Notes
 
 The copy below reflects the renamed app. App Store Connect locks the attached
@@ -43,17 +55,19 @@ IAP record during this submission; its existing review notes still refer to
 SD Import for Mac. The new name and refreshed purchase screenshot were sent
 to App Review in the September 10 response instead.
 
-SD Card Import includes one successfully completed import at no charge.
-Previewing and scanning do not consume the allowance. After that first import,
-start another import or open Settings > Purchase and choose Unlock Unlimited
-Imports to present this non-consumable purchase. The purchase unlocks unlimited
-completed imports and supports Family Sharing. Restore Purchases is available
-in the same Settings section. The app has no account or purchase server.
+SD Card Import offers a free 14-day trial with unlimited completed imports.
+Previewing and scanning remain free. The trial is a separate free
+non-consumable purchase, starts from its verified App Store transaction date,
+does not renew, and never charges automatically. After the trial, start another
+import or open Settings > Trial & Purchase to buy lifetime access. The lifetime
+purchase supports Family Sharing. Restore Purchases is available in the same
+Settings section. The app has no account or purchase server.
 
 For review, select a source containing a JPEG or MOV file and a writable
-destination folder. Complete one import, then attempt a second import to open
-the purchase sheet. The attached review screenshot shows the same sheet and
-the localized App Store price.
+destination folder. Start the trial, complete an import, and use the StoreKit
+test environment to advance beyond 14 days before confirming that another
+import opens the purchase sheet. The attached review screenshot should show the
+same sheet and localized App Store price.
 
 ### IAP Review Screenshot
 
@@ -149,11 +163,11 @@ as the source and choose writable destination folders. To test the physical
 helper flow, allow SD Card Import under System Settings > General > Login Items &
 Extensions, quit the main app, and insert a removable card.
 
-The app includes one successfully completed import at no charge. Scanning,
-previewing, cancelling, and failed or empty imports do not consume it. After the
-first completed import, attempting another import opens the lifetime purchase
-sheet. Purchase and restore controls are also available under Settings >
-Purchase.
+The app includes a free 14-day trial with unlimited imports. Scanning and
+previewing remain free. The trial does not renew and never charges
+automatically. After 14 days, attempting another import opens the lifetime
+purchase sheet. Trial, purchase, and restore controls are available under
+Settings > Trial & Purchase.
 
 The Mac App Store build contains no Sparkle updater, temporary sandbox
 exception, privileged operation, or analytics, and it does not download or

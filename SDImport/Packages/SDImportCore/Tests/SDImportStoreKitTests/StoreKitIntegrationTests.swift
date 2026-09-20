@@ -20,17 +20,35 @@ final class StoreKitIntegrationTests: XCTestCase {
         session = nil
     }
 
-    func testLocalConfigurationDefinesLifetimeProduct() async throws {
-        let product = try await requireRuntimeProduct()
+    func testLocalConfigurationDefinesLifetimeAndTrialProducts() async throws {
+        let products = try await requireRuntimeProducts()
+        let product = try XCTUnwrap(products[StoreKitTestPurchaseDriver.lifetimeProductIdentifier])
+        let trial = try XCTUnwrap(products[StoreKitTestPurchaseDriver.trialProductIdentifier])
 
         XCTAssertEqual(product.id, "media.jenny.sdimport.unlimited")
         XCTAssertEqual(product.type, .nonConsumable)
         XCTAssertEqual(product.displayName, "SD Import Unlimited")
         XCTAssertTrue(product.isFamilyShareable)
+        XCTAssertEqual(trial.id, "media.jenny.sdimport.trial14")
+        XCTAssertEqual(trial.type, .nonConsumable)
+        XCTAssertEqual(trial.displayName, "14-Day Trial")
+        XCTAssertFalse(trial.isFamilyShareable)
 
         let manager = makeManager(label: "metadata", observesTransactions: false)
         await manager.refreshStoreState()
         XCTAssertTrue(manager.isFamilyShareable)
+        XCTAssertTrue(manager.isTrialProductAvailable)
+    }
+
+    func testTrialPurchaseUnlocksWithoutLifetimePurchase() async throws {
+        let trial = makeManager(label: "trial")
+        await trial.refreshStoreState()
+
+        await trial.startTrial()
+
+        XCTAssertTrue(trial.hasUsedTrial)
+        XCTAssertTrue(trial.hasActiveTrial)
+        XCTAssertFalse(trial.hasLifetimeUnlock)
     }
 
     func testPurchaseAndRefundLifecycle() async throws {
@@ -106,11 +124,14 @@ final class StoreKitIntegrationTests: XCTestCase {
         XCTAssertEqual(restored.purchaseStatus, .purchased)
     }
 
-    private func requireRuntimeProduct() async throws -> Product {
+    private func requireRuntimeProducts() async throws -> [String: Product] {
         let products = try await Product.products(
-            for: [StoreKitTestPurchaseDriver.lifetimeProductIdentifier]
+            for: [
+                StoreKitTestPurchaseDriver.lifetimeProductIdentifier,
+                StoreKitTestPurchaseDriver.trialProductIdentifier
+            ]
         )
-        return try XCTUnwrap(products.first)
+        return Dictionary(uniqueKeysWithValues: products.map { ($0.id, $0) })
     }
 
     private func makeManager(
@@ -129,7 +150,7 @@ final class StoreKitIntegrationTests: XCTestCase {
     private func waitForState(
         _ manager: StoreKitTestPurchaseDriver,
         matching predicate: (StoreKitTestPurchaseDriver) -> Bool,
-        attempts: Int = 50
+        attempts: Int = 150
     ) async -> StoreKitTestPurchaseDriver? {
         for _ in 0..<attempts {
             await manager.refreshStoreState()

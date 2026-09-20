@@ -140,6 +140,18 @@ def check():
     build = (ROOT / 'script/build_and_run.sh').read_text()
     assert '$APP_RESOURCES/SDImportCore_SDImportCore.bundle' in build
     assert '$AGENT_CONTENTS/Resources/SDImportCore_SDImportCore.bundle' in build
+    storekit = json.loads((ROOT / 'SDImport/Packaging/MacAppStore/SDImport.storekit').read_text())
+    trial = next(
+        product for product in storekit['products']
+        if product['productID'] == 'media.jenny.sdimport.trial14'
+    )
+    storekit_locales = {
+        'en_US', 'de_DE', 'es_ES', 'fr_FR', 'it_IT',
+        'ja_JP', 'ko_KR', 'pt_BR', 'zh_Hans', 'zh_Hant',
+    }
+    assert {item['locale'] for item in trial['localizations']} == storekit_locales
+    assert all(item['displayName'].strip() and item['description'].strip()
+               for item in trial['localizations'])
     print(f'{occurrences} localized source expressions covered; bundle declarations OK')
 
 

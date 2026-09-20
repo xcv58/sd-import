@@ -5,6 +5,7 @@ public enum ImportPurchaseStatus: Equatable, Sendable {
     case loading
     case available
     case purchasing
+    case startingTrial
     case pending
     case purchased
     case cancelled
@@ -18,6 +19,8 @@ public enum ImportPurchaseOutcome: Equatable, Sendable {
     case productUnavailable
     case purchased
     case restored
+    case trialStarted(Date)
+    case trialRevoked
     case pending
     case cancelled
     case verificationFailed
@@ -27,25 +30,33 @@ public enum ImportPurchaseOutcome: Equatable, Sendable {
 
 public struct ImportAccessState: Equatable, Sendable {
     public private(set) var hasLifetimeUnlock: Bool
-    public private(set) var completedFreeImports: Int
+    public private(set) var trialStartDate: Date?
     public private(set) var purchaseStatus: ImportPurchaseStatus
 
     public init(
         hasLifetimeUnlock: Bool = false,
-        completedFreeImports: Int = 0,
+        trialStartDate: Date? = nil,
         purchaseStatus: ImportPurchaseStatus = .idle
     ) {
         self.hasLifetimeUnlock = hasLifetimeUnlock
-        self.completedFreeImports = max(0, completedFreeImports)
+        self.trialStartDate = trialStartDate
         self.purchaseStatus = purchaseStatus
     }
 
-    public func canStartImport(distribution: AppDistribution) -> Bool {
-        distribution == .direct || hasLifetimeUnlock || completedFreeImports == 0
+    public var trialEndDate: Date? {
+        trialStartDate?.addingTimeInterval(AppDistribution.trialDuration)
     }
 
-    public func remainingFreeImports(distribution: AppDistribution) -> Int? {
-        distribution == .direct ? nil : max(0, 1 - completedFreeImports)
+    public func isTrialActive(at date: Date = Date()) -> Bool {
+        guard let trialEndDate else { return false }
+        return date < trialEndDate
+    }
+
+    public func canStartImport(
+        distribution: AppDistribution,
+        at date: Date = Date()
+    ) -> Bool {
+        distribution == .direct || hasLifetimeUnlock || isTrialActive(at: date)
     }
 
     public mutating func beginLoading() {
@@ -54,6 +65,10 @@ public struct ImportAccessState: Equatable, Sendable {
 
     public mutating func beginPurchase() {
         purchaseStatus = .purchasing
+    }
+
+    public mutating func beginTrial() {
+        purchaseStatus = .startingTrial
     }
 
     public mutating func apply(_ outcome: ImportPurchaseOutcome) {
@@ -65,6 +80,16 @@ public struct ImportAccessState: Equatable, Sendable {
         case .purchased, .restored:
             hasLifetimeUnlock = true
             purchaseStatus = .purchased
+        case .trialStarted(let startDate):
+            trialStartDate = startDate
+            if !hasLifetimeUnlock {
+                purchaseStatus = .available
+            }
+        case .trialRevoked:
+            trialStartDate = nil
+            if !hasLifetimeUnlock {
+                purchaseStatus = .available
+            }
         case .pending:
             purchaseStatus = .pending
         case .cancelled:
@@ -79,12 +104,4 @@ public struct ImportAccessState: Equatable, Sendable {
         }
     }
 
-    @discardableResult
-    public mutating func recordSuccessfulImport(_ result: ImportResult) -> Bool {
-        guard result.importedFiles > 0, result.failedFiles == 0 else {
-            return false
-        }
-        completedFreeImports = max(1, completedFreeImports)
-        return true
-    }
 }

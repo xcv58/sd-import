@@ -1683,7 +1683,7 @@ final class AppModel: ObservableObject {
         }
         guard purchaseManager.canStartImport else {
             purchaseManager.isShowingPurchase = true
-            statusMessage = L10n.tr("Unlock unlimited imports to continue")
+            statusMessage = L10n.tr("Start your 14-day trial or unlock unlimited imports to continue")
             return
         }
         guard let currentSummary else {
@@ -1873,6 +1873,11 @@ final class AppModel: ObservableObject {
         retryContext: ImportRetryContext,
         planMode: ImportPlanMode
     ) {
+        guard purchaseManager.canStartImport else {
+            purchaseManager.isShowingPurchase = true
+            statusMessage = L10n.tr("Start your 14-day trial or unlock unlimited imports to continue")
+            return
+        }
         isWorking = true
         activeImportRetryContext = retryContext
         failedImportRetryContext = nil
@@ -1943,7 +1948,6 @@ final class AppModel: ObservableObject {
                         return
                     }
                     self.currentResult = result
-                    self.purchaseManager.recordSuccessfulImport(result)
                     self.importProgress = nil
                     self.jobs = jobs
                     self.selectedJobID = jobID
@@ -2978,7 +2982,7 @@ final class AppModel: ObservableObject {
         }
         guard purchaseManager.canStartImport else {
             purchaseManager.isShowingPurchase = true
-            statusMessage = L10n.tr("Unlock unlimited imports to continue")
+            statusMessage = L10n.tr("Start your 14-day trial or unlock unlimited imports to continue")
             return
         }
         guard let job = selectedJob(), job.canRetryImport else {

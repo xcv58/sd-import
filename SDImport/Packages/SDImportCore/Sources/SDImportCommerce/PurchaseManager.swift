@@ -4,7 +4,7 @@ import SDImportCore
 import StoreKit
 
 enum StoreEntitlementLookup: Sendable {
-    case entitled
+    case entitled(purchaseDate: Date)
     case notEntitled
     case verificationFailed
 }
@@ -38,19 +38,22 @@ struct PurchaseStorefront: Sendable {
             )
         },
         currentEntitlement: { identifier in
-            var foundEntitlement = false
+            var purchaseDate: Date?
             var encounteredVerificationFailure = false
             for await verification in Transaction.currentEntitlements {
-                guard case .verified(let transaction) = verification else {
-                    encounteredVerificationFailure = true
-                    continue
-                }
-                if transaction.productID == identifier, transaction.revocationDate == nil {
-                    foundEntitlement = true
+                switch verification {
+                case .verified(let transaction):
+                    if transaction.productID == identifier, transaction.revocationDate == nil {
+                        purchaseDate = transaction.purchaseDate
+                    }
+                case .unverified(let transaction, _):
+                    if transaction.productID == identifier {
+                        encounteredVerificationFailure = true
+                    }
                 }
             }
-            if foundEntitlement {
-                return .entitled
+            if let purchaseDate {
+                return .entitled(purchaseDate: purchaseDate)
             }
             return encounteredVerificationFailure ? .verificationFailed : .notEntitled
         },
@@ -64,7 +67,7 @@ struct PurchaseStorefront: Sendable {
             guard transaction.productID == identifier, transaction.revocationDate == nil else {
                 return .notEntitled
             }
-            return .entitled
+            return .entitled(purchaseDate: transaction.purchaseDate)
         },
         sync: {
             try await AppStore.sync()
@@ -77,23 +80,25 @@ struct PurchaseStorefront: Sendable {
 
 @MainActor
 public final class PurchaseManager: ObservableObject {
-    private enum DefaultsKey {
-        static let completedFreeImports = "SDImport.purchase.completedFreeImports"
-    }
-
-    @Published public private(set) var accessState: ImportAccessState
+    @Published public private(set) var accessState = ImportAccessState()
     @Published public var isShowingPurchase = false
     @Published public private(set) var productDisplayName = "SD Import Unlimited"
     @Published public private(set) var productDisplayPrice: String?
     @Published public private(set) var isFamilyShareable = false
+    @Published public private(set) var isTrialProductAvailable = false
+    @Published public private(set) var lifetimeProductError: String?
+    @Published public private(set) var trialProductError: String?
 
-    private let defaults: UserDefaults
     private let distribution: AppDistribution
     private let storefront: PurchaseStorefront
-    private var product: Product?
+    private let nowProvider: @MainActor @Sendable () -> Date
+    private var lifetimeProduct: Product?
+    private var trialProduct: Product?
     private var updatesTask: Task<Void, Never>?
     private var initialStoreRefreshTask: Task<Void, Never>?
-    private var entitlementRevision: UInt64 = 0
+    private var trialExpirationTask: Task<Void, Never>?
+    private var lifetimeEntitlementRevision: UInt64 = 0
+    private var trialEntitlementRevision: UInt64 = 0
 
     public convenience init(
         defaults: UserDefaults = .standard,
@@ -104,7 +109,8 @@ public final class PurchaseManager: ObservableObject {
             defaults: defaults,
             distribution: distribution,
             startsStoreTask: startsStoreTask,
-            storefront: .live
+            storefront: .live,
+            nowProvider: Date.init
         )
     }
 
@@ -112,14 +118,15 @@ public final class PurchaseManager: ObservableObject {
         defaults: UserDefaults,
         distribution: AppDistribution,
         startsStoreTask: Bool,
-        storefront: PurchaseStorefront
+        storefront: PurchaseStorefront,
+        nowProvider: @escaping @MainActor @Sendable () -> Date = Date.init
     ) {
-        self.defaults = defaults
+        // Trial state comes exclusively from verified StoreKit transactions.
+        // Keep this argument source-compatible with existing callers.
+        _ = defaults
         self.distribution = distribution
         self.storefront = storefront
-        accessState = ImportAccessState(
-            completedFreeImports: defaults.integer(forKey: DefaultsKey.completedFreeImports)
-        )
+        self.nowProvider = nowProvider
         let isHostedTest = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         if distribution == .macAppStore, startsStoreTask, !isHostedTest {
             startObservingTransactions()
@@ -129,6 +136,7 @@ public final class PurchaseManager: ObservableObject {
     deinit {
         updatesTask?.cancel()
         initialStoreRefreshTask?.cancel()
+        trialExpirationTask?.cancel()
     }
 
     public var isMacAppStoreEdition: Bool {
@@ -136,16 +144,28 @@ public final class PurchaseManager: ObservableObject {
     }
 
     public var canStartImport: Bool {
-        accessState.canStartImport(distribution: distribution)
+        accessState.canStartImport(distribution: distribution, at: nowProvider())
     }
 
     public var hasLifetimeUnlock: Bool {
         accessState.hasLifetimeUnlock
     }
 
+    public var hasActiveTrial: Bool {
+        accessState.isTrialActive(at: nowProvider())
+    }
+
+    public var hasUsedTrial: Bool {
+        accessState.trialStartDate != nil
+    }
+
+    public var trialEndDate: Date? {
+        accessState.trialEndDate
+    }
+
     public var isPerformingStoreOperation: Bool {
         switch accessState.purchaseStatus {
-        case .loading, .purchasing:
+        case .loading, .purchasing, .startingTrial:
             true
         default:
             false
@@ -156,10 +176,17 @@ public final class PurchaseManager: ObservableObject {
         if accessState.hasLifetimeUnlock {
             return L10n.tr("Lifetime access unlocked")
         }
-        if accessState.remainingFreeImports(distribution: distribution) == 1 {
-            return L10n.tr("Your first completed import is free")
+        if let trialEndDate = accessState.trialEndDate {
+            if accessState.isTrialActive(at: nowProvider()) {
+                let formatter = DateFormatter()
+                formatter.locale = L10n.presentationLocale
+                formatter.dateStyle = .medium
+                formatter.timeStyle = .short
+                return L10n.tr("Trial active until \(formatter.string(from: trialEndDate))")
+            }
+            return L10n.tr("Your 14-day trial has ended")
         }
-        return L10n.tr("The free import has been used")
+        return L10n.tr("14-day trial available")
     }
 
     public var statusMessage: String? {
@@ -170,6 +197,8 @@ public final class PurchaseManager: ObservableObject {
             return L10n.tr("Loading purchase information…")
         case .purchasing:
             return L10n.tr("Completing purchase…")
+        case .startingTrial:
+            return L10n.tr("Starting trial…")
         case .pending:
             return L10n.tr("Purchase is pending approval.")
         case .cancelled:
@@ -191,43 +220,22 @@ public final class PurchaseManager: ObservableObject {
         }
     }
 
-    public func recordSuccessfulImport(_ result: ImportResult) {
-        guard
-            distribution == .macAppStore,
-            !accessState.hasLifetimeUnlock,
-            accessState.recordSuccessfulImport(result)
-        else {
-            return
-        }
-        defaults.set(
-            accessState.completedFreeImports,
-            forKey: DefaultsKey.completedFreeImports
-        )
-    }
-
     public func purchase() async {
-        guard distribution == .macAppStore else {
-            return
+        guard distribution == .macAppStore else { return }
+        if lifetimeProduct == nil {
+            await loadProducts()
         }
-        if product == nil {
-            await loadProduct()
-        }
-        guard let product else {
-            if case .failed = accessState.purchaseStatus {
-                return
-            }
-            accessState.apply(.productUnavailable)
+        guard let lifetimeProduct else {
+            lifetimeProductError = lifetimeProductError
+                ?? L10n.tr("Purchase information is temporarily unavailable.")
             return
         }
         accessState.beginPurchase()
         do {
-            switch try await product.purchase() {
+            switch try await lifetimeProduct.purchase() {
             case .success(let verification):
-                guard case .verified(let transaction) = verification else {
-                    accessState.apply(.verificationFailed)
-                    return
-                }
-                guard transaction.productID == AppDistribution.lifetimeProductIdentifier else {
+                guard case .verified(let transaction) = verification,
+                      transaction.productID == AppDistribution.lifetimeProductIdentifier else {
                     accessState.apply(.verificationFailed)
                     return
                 }
@@ -247,17 +255,49 @@ public final class PurchaseManager: ObservableObject {
         }
     }
 
+    public func startTrial() async {
+        guard distribution == .macAppStore, !hasUsedTrial else { return }
+        if trialProduct == nil {
+            await loadProducts()
+        }
+        guard let trialProduct else {
+            trialProductError = trialProductError
+                ?? L10n.tr("Purchase information is temporarily unavailable.")
+            return
+        }
+        accessState.beginTrial()
+        do {
+            switch try await trialProduct.purchase() {
+            case .success(let verification):
+                guard case .verified(let transaction) = verification,
+                      transaction.productID == AppDistribution.trialProductIdentifier else {
+                    accessState.apply(.verificationFailed)
+                    return
+                }
+                applyVerifiedTrialEntitlement(purchaseDate: transaction.purchaseDate)
+                await transaction.finish()
+            case .pending:
+                accessState.apply(.pending)
+            case .userCancelled:
+                accessState.apply(.cancelled)
+            @unknown default:
+                accessState.apply(.failed(L10n.tr("The App Store returned an unknown purchase result.")))
+            }
+        } catch StoreKitError.userCancelled {
+            accessState.apply(.cancelled)
+        } catch {
+            accessState.apply(.failed(error.localizedDescription))
+        }
+    }
+
     public func restorePurchases() async {
-        guard distribution == .macAppStore else {
-            return
-        }
+        guard distribution == .macAppStore else { return }
         accessState.beginLoading()
-        if await resolveExistingEntitlement(restored: true) {
+        let existing = await resolveExistingEntitlements(restored: true)
+        if existing.foundLifetime {
             return
         }
-        guard accessState.purchaseStatus != .verificationFailed else {
-            return
-        }
+        guard accessState.purchaseStatus != .verificationFailed || existing.foundTrial else { return }
 
         switch await performWithTimeout(storefront.restoreSyncTimeout, operation: storefront.sync) {
         case .success:
@@ -276,14 +316,11 @@ public final class PurchaseManager: ObservableObject {
         }
 
         for attempt in 0..<5 {
-            if await resolveExistingEntitlement(restored: true) {
+            let restored = await resolveExistingEntitlements(restored: true)
+            if restored.foundLifetime || restored.foundTrial {
                 return
             }
-            guard accessState.purchaseStatus != .verificationFailed, attempt < 4 else {
-                break
-            }
-            // AppStore.sync() can complete just before the restored transaction
-            // becomes visible to currentEntitlements.
+            guard accessState.purchaseStatus != .verificationFailed, attempt < 4 else { break }
             try? await Task.sleep(for: .milliseconds(100))
         }
         accessState.apply(.failed(L10n.tr("No restorable purchase was found for this App Store account.")))
@@ -291,44 +328,38 @@ public final class PurchaseManager: ObservableObject {
 
     public func refreshStoreState() async {
         accessState.beginLoading()
-        if !(await resolveExistingEntitlement(restored: false)) {
-            guard accessState.purchaseStatus != .verificationFailed else {
-                return
-            }
-        }
-        await loadProduct()
+        _ = await resolveExistingEntitlements(restored: false)
+        guard accessState.purchaseStatus != .verificationFailed else { return }
+        await loadProducts()
     }
 
     public func startObservingTransactions() {
-        guard distribution == .macAppStore, updatesTask == nil else {
-            return
-        }
+        guard distribution == .macAppStore, updatesTask == nil else { return }
         updatesTask = Task { [weak self] in
             for await verification in Transaction.updates {
-                guard !Task.isCancelled else {
-                    return
-                }
-                guard let self else {
-                    return
-                }
+                guard !Task.isCancelled, let self else { return }
                 guard case .verified(let transaction) = verification else {
                     accessState.apply(.verificationFailed)
                     continue
                 }
-                guard transaction.productID == AppDistribution.lifetimeProductIdentifier else {
+                switch transaction.productID {
+                case AppDistribution.lifetimeProductIdentifier:
+                    if transaction.revocationDate == nil {
+                        applyVerifiedLifetimeEntitlement(restored: false)
+                    } else {
+                        await refreshLifetimeEntitlement(restored: false)
+                    }
+                    await transaction.finish()
+                case AppDistribution.trialProductIdentifier:
+                    if transaction.revocationDate == nil {
+                        applyVerifiedTrialEntitlement(purchaseDate: transaction.purchaseDate)
+                    } else {
+                        await refreshTrialEntitlement()
+                    }
+                    await transaction.finish()
+                default:
                     continue
                 }
-                if transaction.revocationDate == nil {
-                    // The verified update is already authoritative. Re-querying
-                    // currentEntitlements here can briefly return the pre-update
-                    // snapshot and incorrectly treat a new purchase as revoked.
-                    applyVerifiedLifetimeEntitlement(restored: false)
-                } else {
-                    // A revocation can coexist with another valid transaction, so
-                    // resolve the complete entitlement set before locking access.
-                    await refreshEntitlement(restored: false)
-                }
-                await transaction.finish()
             }
         }
         initialStoreRefreshTask = Task { [weak self] in
@@ -336,70 +367,111 @@ public final class PurchaseManager: ObservableObject {
         }
     }
 
-    private func loadProduct() async {
+    private func loadProducts() async {
         let productLoader = storefront.loadProduct
-        let productIdentifier = AppDistribution.lifetimeProductIdentifier
-        let outcome = await performWithTimeout(
-            storefront.productLoadTimeout,
-            operation: {
-                try await productLoader(productIdentifier)
-            }
-        )
-        switch outcome {
+        async let lifetimeOutcome = performWithTimeout(storefront.productLoadTimeout) {
+            try await productLoader(AppDistribution.lifetimeProductIdentifier)
+        }
+        async let trialOutcome = performWithTimeout(storefront.productLoadTimeout) {
+            try await productLoader(AppDistribution.trialProductIdentifier)
+        }
+        let (lifetime, trial) = await (lifetimeOutcome, trialOutcome)
+
+        lifetimeProductError = nil
+        trialProductError = nil
+        var anyAvailable = false
+        var failureMessage: String?
+        var timedOut = false
+
+        switch lifetime {
         case .success(let snapshot):
-            product = snapshot?.product
+            lifetimeProduct = snapshot?.product
             productDisplayName = snapshot?.displayName ?? "SD Import Unlimited"
             productDisplayPrice = snapshot?.displayPrice
             isFamilyShareable = snapshot?.isFamilyShareable ?? false
-            applyProductAvailability(isAvailable: snapshot != nil)
-        case .cancelled:
-            if !accessState.hasLifetimeUnlock {
-                accessState.apply(.cancelled)
+            anyAvailable = snapshot != nil
+            if snapshot == nil {
+                lifetimeProductError = L10n.tr("Purchase information is temporarily unavailable.")
             }
+        case .cancelled:
+            break
         case .failed(let message):
+            lifetimeProduct = nil
+            productDisplayPrice = nil
             isFamilyShareable = false
-            applyProductLoadFailure(message)
+            lifetimeProductError = message
+            failureMessage = message
         case .timedOut:
+            lifetimeProduct = nil
+            productDisplayPrice = nil
             isFamilyShareable = false
+            lifetimeProductError = L10n.tr("Purchase information is taking longer than expected. Try again.")
+            timedOut = true
+        }
+
+        switch trial {
+        case .success(let snapshot):
+            trialProduct = snapshot?.product
+            isTrialProductAvailable = snapshot != nil
+            anyAvailable = anyAvailable || snapshot != nil
+            if snapshot == nil {
+                trialProductError = L10n.tr("Purchase information is temporarily unavailable.")
+            }
+        case .cancelled:
+            break
+        case .failed(let message):
+            trialProduct = nil
+            isTrialProductAvailable = false
+            trialProductError = message
+            failureMessage = failureMessage ?? message
+        case .timedOut:
+            trialProduct = nil
+            isTrialProductAvailable = false
+            trialProductError = L10n.tr("Purchase information is taking longer than expected. Try again.")
+            timedOut = true
+        }
+
+        if anyAvailable {
+            applyProductAvailability(isAvailable: true)
+        } else if let failureMessage {
+            applyProductLoadFailure(failureMessage)
+        } else if timedOut {
             applyProductLoadFailure(L10n.tr("Purchase information is taking longer than expected. Try again."))
+        } else {
+            applyProductAvailability(isAvailable: false)
         }
     }
 
     @discardableResult
-    func refreshEntitlement(restored: Bool, settleWhenMissing: Bool = true) async -> Bool {
-        let startingEntitlementRevision = entitlementRevision
-        let currentEntitlement = storefront.currentEntitlement
-        let productIdentifier = AppDistribution.lifetimeProductIdentifier
-        let lookup = await performWithTimeout(
-            storefront.entitlementLookupTimeout,
-            operation: {
-                await currentEntitlement(productIdentifier)
-            }
+    func refreshLifetimeEntitlement(
+        restored: Bool,
+        settleWhenMissing: Bool = true
+    ) async -> EntitlementRefreshResult {
+        let startingRevision = lifetimeEntitlementRevision
+        let lookup = await entitlementLookup(
+            storefront.currentEntitlement,
+            productIdentifier: AppDistribution.lifetimeProductIdentifier
         )
         switch lookup {
         case .success(.entitled):
             applyVerifiedLifetimeEntitlement(restored: restored)
-            return true
+            return .found
         case .success(.verificationFailed):
-            accessState.apply(.verificationFailed)
+            if !accessState.hasLifetimeUnlock {
+                accessState.apply(.verificationFailed)
+            }
+            return .verificationFailed
         case .success(.notEntitled):
-            if accessState.hasLifetimeUnlock, entitlementRevision == startingEntitlementRevision {
-                // A refresh can overlap a purchase while StoreKit still exposes
-                // its earlier entitlement snapshot. Only revoke the state that
-                // this refresh actually began checking.
-                entitlementRevision &+= 1
+            if accessState.hasLifetimeUnlock, lifetimeEntitlementRevision == startingRevision {
+                lifetimeEntitlementRevision &+= 1
                 accessState.apply(.revoked)
-            } else if settleWhenMissing, product != nil {
+            } else if settleWhenMissing, lifetimeProduct != nil || trialProduct != nil {
                 accessState.apply(.productAvailable)
             }
         case .cancelled:
-            if !accessState.hasLifetimeUnlock {
-                accessState.apply(.cancelled)
-            }
+            if !accessState.hasLifetimeUnlock { accessState.apply(.cancelled) }
         case .failed(let message):
-            if !accessState.hasLifetimeUnlock {
-                accessState.apply(.failed(message))
-            }
+            if !accessState.hasLifetimeUnlock { accessState.apply(.failed(message)) }
         case .timedOut:
             if !accessState.hasLifetimeUnlock {
                 accessState.apply(.failed(
@@ -407,39 +479,67 @@ public final class PurchaseManager: ObservableObject {
                 ))
             }
         }
-        return false
+        return .notFound
     }
 
-    private func applyVerifiedLifetimeEntitlement(restored: Bool) {
-        entitlementRevision &+= 1
-        accessState.apply(restored ? .restored : .purchased)
-    }
-
-    private func refreshLatestLifetimeTransaction(restored: Bool) async -> Bool {
-        let latestEntitlement = storefront.latestEntitlement
-        let productIdentifier = AppDistribution.lifetimeProductIdentifier
-        let lookup = await performWithTimeout(
-            storefront.entitlementLookupTimeout,
-            operation: {
-                await latestEntitlement(productIdentifier)
+    @discardableResult
+    private func refreshTrialEntitlement(
+        settleWhenMissing: Bool = true
+    ) async -> EntitlementRefreshResult {
+        let startingRevision = trialEntitlementRevision
+        let lookup = await entitlementLookup(
+            storefront.currentEntitlement,
+            productIdentifier: AppDistribution.trialProductIdentifier
+        )
+        switch lookup {
+        case .success(.entitled(let purchaseDate)):
+            applyVerifiedTrialEntitlement(purchaseDate: purchaseDate)
+            return .found
+        case .success(.verificationFailed):
+            if !accessState.hasLifetimeUnlock {
+                accessState.apply(.verificationFailed)
             }
+            return .verificationFailed
+        case .success(.notEntitled):
+            if accessState.trialStartDate != nil, trialEntitlementRevision == startingRevision {
+                trialEntitlementRevision &+= 1
+                accessState.apply(.trialRevoked)
+                scheduleTrialExpiration()
+            } else if settleWhenMissing, lifetimeProduct != nil || trialProduct != nil {
+                accessState.apply(.productAvailable)
+            }
+        case .cancelled:
+            if !canStartImport { accessState.apply(.cancelled) }
+        case .failed(let message):
+            if !canStartImport { accessState.apply(.failed(message)) }
+        case .timedOut:
+            if !canStartImport {
+                accessState.apply(.failed(
+                    L10n.tr("The App Store did not finish checking purchases. Try Restore Purchases.")
+                ))
+            }
+        }
+        return .notFound
+    }
+
+    private func refreshLatestLifetimeTransaction(restored: Bool) async -> EntitlementRefreshResult {
+        let lookup = await entitlementLookup(
+            storefront.latestEntitlement,
+            productIdentifier: AppDistribution.lifetimeProductIdentifier
         )
         switch lookup {
         case .success(.entitled):
             applyVerifiedLifetimeEntitlement(restored: restored)
-            return true
+            return .found
         case .success(.verificationFailed):
             accessState.apply(.verificationFailed)
+            return .verificationFailed
         case .success(.notEntitled):
             break
         case .cancelled:
-            if !accessState.hasLifetimeUnlock {
-                accessState.apply(.cancelled)
-            }
+            if !accessState.hasLifetimeUnlock { accessState.apply(.cancelled) }
         case .failed(let message):
-            if !accessState.hasLifetimeUnlock {
-                accessState.apply(.failed(message))
-            }
+            if !accessState.hasLifetimeUnlock { accessState.apply(.failed(message)) }
         case .timedOut:
             if !accessState.hasLifetimeUnlock {
                 accessState.apply(.failed(
@@ -447,24 +547,110 @@ public final class PurchaseManager: ObservableObject {
                 ))
             }
         }
-        return false
+        return .notFound
     }
 
-    private func resolveExistingEntitlement(restored: Bool) async -> Bool {
+    private func refreshLatestTrialTransaction() async -> EntitlementRefreshResult {
+        let lookup = await entitlementLookup(
+            storefront.latestEntitlement,
+            productIdentifier: AppDistribution.trialProductIdentifier
+        )
+        switch lookup {
+        case .success(.entitled(let purchaseDate)):
+            applyVerifiedTrialEntitlement(purchaseDate: purchaseDate)
+            return .found
+        case .success(.verificationFailed):
+            if !accessState.hasLifetimeUnlock {
+                accessState.apply(.verificationFailed)
+            }
+            return .verificationFailed
+        case .success(.notEntitled):
+            break
+        case .cancelled:
+            if !canStartImport { accessState.apply(.cancelled) }
+        case .failed(let message):
+            if !canStartImport { accessState.apply(.failed(message)) }
+        case .timedOut:
+            if !canStartImport {
+                accessState.apply(.failed(
+                    L10n.tr("The App Store did not finish checking purchases. Try Restore Purchases.")
+                ))
+            }
+        }
+        return .notFound
+    }
+
+    enum EntitlementRefreshResult: Equatable {
+        case found
+        case notFound
+        case verificationFailed
+    }
+
+    private struct EntitlementResolution {
+        let foundLifetime: Bool
+        let foundTrial: Bool
+    }
+
+    private func resolveExistingEntitlements(restored: Bool) async -> EntitlementResolution {
         let hadLifetimeUnlock = accessState.hasLifetimeUnlock
-        if await refreshEntitlement(restored: restored, settleWhenMissing: false) {
-            return true
+        let currentLifetime = await refreshLifetimeEntitlement(
+            restored: restored,
+            settleWhenMissing: false
+        )
+        var foundLifetime = currentLifetime == .found
+        if !foundLifetime,
+           currentLifetime != .verificationFailed,
+           !(hadLifetimeUnlock && !accessState.hasLifetimeUnlock) {
+            foundLifetime = await refreshLatestLifetimeTransaction(restored: restored) == .found
         }
-        guard accessState.purchaseStatus != .verificationFailed else {
-            return false
+
+        let hadTrial = accessState.trialStartDate != nil
+        let currentTrial = await refreshTrialEntitlement(settleWhenMissing: false)
+        var foundTrial = currentTrial == .found
+        if !foundTrial,
+           currentTrial != .verificationFailed,
+           !(hadTrial && accessState.trialStartDate == nil) {
+            foundTrial = await refreshLatestTrialTransaction() == .found
         }
-        // `currentEntitlements` excludes refunded and revoked products. If it
-        // just removed an entitlement this manager had already granted, do not
-        // let a temporarily stale `latest(for:)` snapshot grant it again.
-        if hadLifetimeUnlock, !accessState.hasLifetimeUnlock {
-            return false
+        return EntitlementResolution(foundLifetime: foundLifetime, foundTrial: foundTrial)
+    }
+
+    private func entitlementLookup(
+        _ lookup: @escaping @MainActor @Sendable (String) async -> StoreEntitlementLookup,
+        productIdentifier: String
+    ) async -> TimedOperationOutcome<StoreEntitlementLookup> {
+        await performWithTimeout(storefront.entitlementLookupTimeout) {
+            await lookup(productIdentifier)
         }
-        return await refreshLatestLifetimeTransaction(restored: restored)
+    }
+
+    private func applyVerifiedLifetimeEntitlement(restored: Bool) {
+        lifetimeEntitlementRevision &+= 1
+        accessState.apply(restored ? .restored : .purchased)
+    }
+
+    private func applyVerifiedTrialEntitlement(purchaseDate: Date) {
+        trialEntitlementRevision &+= 1
+        accessState.apply(.trialStarted(purchaseDate))
+        scheduleTrialExpiration()
+    }
+
+    private func scheduleTrialExpiration() {
+        trialExpirationTask?.cancel()
+        guard let endDate = accessState.trialEndDate else { return }
+        let delay = endDate.timeIntervalSinceNow
+        guard delay > 0 else {
+            objectWillChange.send()
+            return
+        }
+        trialExpirationTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(delay))
+                self?.objectWillChange.send()
+            } catch {
+                // A refreshed or revoked entitlement replaces this timer.
+            }
+        }
     }
 
     private func applyProductAvailability(isAvailable: Bool) {
@@ -475,7 +661,7 @@ public final class PurchaseManager: ObservableObject {
             accessState.apply(
                 accessState.hasLifetimeUnlock
                     ? .purchased
-                    : (isAvailable ? .productAvailable : .productUnavailable)
+                    : (isAvailable || hasActiveTrial ? .productAvailable : .productUnavailable)
             )
         }
     }
@@ -483,6 +669,8 @@ public final class PurchaseManager: ObservableObject {
     private func applyProductLoadFailure(_ message: String) {
         if accessState.hasLifetimeUnlock {
             accessState.apply(.purchased)
+        } else if hasActiveTrial {
+            accessState.apply(.productAvailable)
         } else {
             accessState.apply(.failed(message))
         }

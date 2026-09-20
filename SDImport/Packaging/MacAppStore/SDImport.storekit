@@ -4,6 +4,66 @@
   ],
   "products" : [
     {
+      "displayPrice" : "0.00",
+      "familyShareable" : false,
+      "internalID" : "E0B9075C-313F-4D2E-9355-D184D9089802",
+      "localizations" : [
+        {
+          "description" : "Unlimited imports for 14 days. No automatic charge.",
+          "displayName" : "14-Day Trial",
+          "locale" : "en_US"
+        },
+        {
+          "description" : "14 Tage unbegrenzt importieren. Keine Auto-Zahlung.",
+          "displayName" : "14-Tage-Testversion",
+          "locale" : "de_DE"
+        },
+        {
+          "description" : "Importaciones ilimitadas 14 días. Sin cobro auto.",
+          "displayName" : "Prueba de 14 días",
+          "locale" : "es_ES"
+        },
+        {
+          "description" : "Importations illimitées 14 jours. Aucun débit auto.",
+          "displayName" : "Essai de 14 jours",
+          "locale" : "fr_FR"
+        },
+        {
+          "description" : "Import illimitati per 14 giorni. Nessun addebito.",
+          "displayName" : "Prova di 14 giorni",
+          "locale" : "it_IT"
+        },
+        {
+          "description" : "14日間、無制限に読み込めます。自動的に課金されません。",
+          "displayName" : "14日間トライアル",
+          "locale" : "ja_JP"
+        },
+        {
+          "description" : "14일 동안 무제한으로 가져오기. 자동 결제 없음.",
+          "displayName" : "14일 체험",
+          "locale" : "ko_KR"
+        },
+        {
+          "description" : "Importações ilimitadas por 14 dias. Sem cobrança auto.",
+          "displayName" : "Teste de 14 dias",
+          "locale" : "pt_BR"
+        },
+        {
+          "description" : "14 天内可无限次导入。不会自动扣费。",
+          "displayName" : "14 天试用",
+          "locale" : "zh_Hans"
+        },
+        {
+          "description" : "14 天內可無限次匯入。不會自動扣款。",
+          "displayName" : "14 天試用",
+          "locale" : "zh_Hant"
+        }
+      ],
+      "productID" : "media.jenny.sdimport.trial14",
+      "referenceName" : "14-day Trial",
+      "type" : "NonConsumable"
+    },
+    {
       "displayPrice" : "9.99",
       "familyShareable" : true,
       "internalID" : "321B01AA-00A4-4C4D-A4B1-53E76163FD8C",

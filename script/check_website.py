@@ -2,6 +2,7 @@
 """Check catalog coverage, generated markup, internal links, and official assets."""
 import hashlib
 from html.parser import HTMLParser
+import json
 import re
 from urllib.parse import unquote, urlsplit
 import xml.etree.ElementTree as ET
@@ -71,6 +72,9 @@ def check():
                 coverage(child, covered)
         coverage(parse((SITE / 'templates' / f'{page}.html').read_text()))
     assert referenced == set(units), ('unused messages', set(units) - referenced)
+    english_copy = json.dumps(load_json(SITE / 'locales/en.json')).lower()
+    for retired in ['one completed import', 'first completed import', 'free-import usage']:
+        assert retired not in english_copy, f'retired trial copy returned: {retired}'
     # A translator can supply text and known placeholders, never executable markup.
     assert '&lt;script&gt;' in ''.join(n.html() for n in translated('<script>alert(1)</script>', 'plain', {}))
     try:
@@ -117,7 +121,6 @@ def check():
                     if attr in n.attrs:
                         assert all(value in ids for value in n.attrs[attr].split()), (path, attr)
                 if n.tag == 'script' and n.attrs.get('type') == 'application/ld+json':
-                    import json
                     schema = json.loads(n.children[0].text)
                     assert schema['name'] == 'SD Card Import' and schema['downloadUrl'] == APP_STORE
                     assert schema['inLanguage'] == language and schema['description'] == catalog['m002']
