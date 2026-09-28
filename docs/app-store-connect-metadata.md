@@ -1,23 +1,22 @@
 # App Store Connect Metadata
 
-This is the owner-reviewed source of truth for the first Mac App Store release.
-Copy from this file into App Store Connect, then record any accepted change here
-so the shipped app, StoreKit configuration, screenshots, and review notes do not
-drift apart.
+This records the Mac App Store metadata and submission history. Verify the live
+App Store Connect record before changing a submission; older review records below
+are retained for reference.
 
 ## App Record
 
 - App name: `SD Card Import`
 - Apple ID: `6807178069`
 - Platform: macOS
-- Version: `1.0`
-- Resubmission build: `6`
+- Version in review: `1.1`
+- Build in review: `14`
 - Bundle ID: `media.jenny.sdimport`
 - SKU: `media.jenny.sdimport.macos`
 - Primary language: English (U.S.)
 - Price: Free
-- Primary category: Photography
-- Suggested secondary category: Utilities
+- Primary category: Photo & Video
+- Secondary category: Utilities
 - Release mode: Manual release after approval
 - Copyright: `2026 Jenny Media LLC`
 
@@ -41,6 +40,7 @@ These values intentionally match
 - Type: Non-Consumable
 - Reference name: `14-day Trial`
 - Product ID: `media.jenny.sdimport.trial14`
+- App Store Connect Apple ID: `6814199382`
 - Base price: Free (Price Tier 0)
 - Family Sharing: Off
 - English (U.S.) display name: `14-Day Trial`
@@ -50,10 +50,9 @@ These values intentionally match
 
 ### IAP Review Notes
 
-The copy below reflects the renamed app. App Store Connect locks the attached
-IAP record during this submission; its existing review notes still refer to
-SD Import for Mac. The new name and refreshed purchase screenshot were sent
-to App Review in the September 10 response instead.
+The trial IAP review notes in App Store Connect reflect version 1.1. The
+previously approved lifetime IAP still has historical review notes describing
+one free import; its customer-facing name and description remain accurate.
 
 SD Card Import offers a free 14-day trial with unlimited completed imports.
 Previewing and scanning remain free. The trial is a separate free
@@ -71,17 +70,12 @@ same sheet and localized App Store price.
 
 ### IAP Review Screenshot
 
-The refreshed 2560 x 1600 review image shows the real purchase sheet in the
-local development build of version 1.0 (6), including the displayed `$9.99`
-price and Family Sharing disclosure. The image uses only synthetic media
-and contains no personal filenames, volume names, or paths. It is not a
-TestFlight purchase capture.
-
-This image was attached to the App Review response for the current
-resubmission. If App Review requires a capture from the processed TestFlight
-build, repeat the same flow with a fresh sandbox account that does not own
-the product; do not describe this local development capture as a TestFlight
-purchase capture.
+`SDImport/Packaging/MacAppStore/ReviewAssets/1.1-trial-purchase-review.png`
+is the 2560 x 1600 review image attached to the 14-day Trial IAP. It shows
+the actual trial purchase sheet, including its no-renewal explanation and
+the displayed `$9.99` lifetime price. It came from the local Debug build
+1.1 (12) at the same source commit as submitted build 14; it is not a
+TestFlight capture. See the adjacent README for provenance.
 
 ## Product Page Copy
 
@@ -113,10 +107,11 @@ Features:
 - Safe ejection for verified removable sources.
 - No account, advertising, analytics, or subscription.
 
-Previewing and scanning are free. The Mac App Store edition includes one
-successfully completed import, and a one-time lifetime purchase unlocks
-unlimited completed imports. Purchases can be restored for the current Apple
-ID, and eligible family members receive access through Apple's Family Sharing.
+Previewing and scanning are free. The Mac App Store edition includes a free
+14-day trial with unlimited imports. The trial does not renew or charge
+automatically. After the trial, a one-time lifetime purchase unlocks unlimited
+imports. Purchases can be restored for the current Apple ID, and eligible
+family members receive access through Apple's Family Sharing.
 
 Your media stays on your Mac and in the destination folders you choose. SD Card
 Import does not upload media or automatically delete files from a source card.
@@ -134,6 +129,11 @@ Import does not upload media or automatically delete files from a source card.
 Publish the current `docs/support.html` and `docs/privacy.html` before entering
 these URLs in a submission, then verify the production responses in a private
 browser window.
+
+On September 28, 2026, the live support page described the 14-day trial
+correctly but still directed users to `Settings > Purchase`. The version 1.1
+control is `Settings > Trial & Purchase…`. The website source and generated
+pages now use the correct label.
 
 ## App Privacy Draft
 
@@ -175,7 +175,7 @@ launch command-line tools. Source ejection uses the public macOS workspace API
 only for the user-selected, verified removable source and never forces a busy
 volume.
 
-### Build 6 Rejection Fixes
+### Historical Build 6 Rejection Fixes
 
 The App Store listing and installed app are now named SD Card Import. The app
 bundle identifier remains media.jenny.sdimport.
@@ -217,18 +217,25 @@ unaltered native window capture, including its real controls and transparent
 rounded corners, alongside each App Store composition. Use only synthetic
 media; never use the volume `Sandisk 4T`.
 
-Final submitted gallery, September 10, 2026:
+The version 1.1 gallery in App Store Connect on September 28, 2026 contains:
 
-1. `01-file-preview-2560x1600.png`: 27 synthetic files in the preview grid.
-2. `02-import-plan-2560x1600.png`: Sample Shoot and the Shared library destination.
-3. `03-lifetime-purchase-2560x1600.png`: genuine purchase sheet showing $9.99
-   and Family Sharing.
+1. `01-file-preview-2560x1600.png`: 27 synthetic files in the preview grid;
+   the toolbar still says `Unlock Unlimited Imports` instead of the version 1.1
+   `Start Trial or Unlock` label.
+2. `02-import-plan-2560x1600.png`: Sample Shoot and the Shared library
+   destination; the toolbar has the same outdated label.
+3. `02-copy-progress.png`: copy progress.
+4. `03-complete.png`: import completion.
+5. `03-lifetime-purchase-2560x1600.png`: **outdated** version 1.0 purchase
+   sheet saying the free import was used. This conflicts with the version 1.1
+   trial. The IAP review image is current, but it does not replace the public
+   gallery image. App Store Connect does not allow editing screenshots while
+   the version is Waiting for Review; correcting the gallery requires removing
+   and resubmitting the version.
 
-All three are fresh native captures of the local development build of version
-1.0 (6). They are not TestFlight captures. Superseded receipt and Settings
-images were removed from the product-page gallery; original files remain in
-the local release archives. The purchase image was also attached to the review
-response because the separate IAP review materials are locked.
+The first, second, and fifth screenshots originated in the version 1.0 (6)
+local development build. They are not TestFlight captures. The progress and
+completion screenshots do not show the old purchase offer.
 
 Prepared files and their SHA-256 manifest are in:
 
@@ -239,7 +246,18 @@ are opaque 2560 x 1600. All three images were inspected, including all four
 corners. They contain no sharing indicator or cursor, and no controls were
 repainted. The purchase sheet legitimately disables the red close button.
 
-## Resubmission Record
+## Version 1.1 submission record
+
+- Source commit: `3968f1473900bbcb4b66a1f140625b021b7265aa`.
+- Version/build: `1.1 (14)`; the user manually checked TestFlight build 13
+  from the same source commit.
+- The app version and free 14-day Trial IAP were submitted together on
+  September 28, 2026. Both were Waiting for Review at the live check.
+- Release mode: manual release after approval.
+- Submission ID: `bf2e30b7-3509-4e89-938b-140111d17e01`.
+- [Submission details](https://appstoreconnect.apple.com/apps/6807178069/distribution/reviewsubmissions/details/bf2e30b7-3509-4e89-938b-140111d17e01).
+
+## Historical version 1.0 resubmission record
 
 - Source commit: `615a51f3287a5d470d56fce66bbdacb36bd71d79`.
 - Version/build: `1.0 (6)`, built with stable Xcode 26.6 (`17F113`).
