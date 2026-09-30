@@ -34,7 +34,7 @@ open-source public release.
 Status: documented.
 
 GitHub issues are the public support path, with support email
-`i@xcv58.com`. The project should keep support expectations modest: best-effort
+`sd-card-import@jenny.media`. The project should keep support expectations modest: best-effort
 help for the latest release, with security reports handled privately.
 
 Next action: after the first public release, add issue labels or saved replies

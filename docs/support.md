@@ -1,6 +1,11 @@
-# SD Import Support
+# SD Card Import Support
 
-Support email: [i@xcv58.com](mailto:i@xcv58.com)
+Support email: [sd-card-import@jenny.media](mailto:sd-card-import@jenny.media)
+
+In app versions with `Send Feedback…`, choose
+`Settings > General > Send Feedback…` or `Help > Send Feedback…`. This opens an
+email draft with the app version, build, and macOS version. Add your message,
+then send it from your email app.
 
 Public bugs and feature requests should use GitHub Issues:
 
@@ -11,7 +16,7 @@ unredacted logs to public issues.
 
 ## What To Include
 
-- SD Import version and build.
+- SD Card Import version and build.
 - macOS version and Mac model.
 - Camera/card brand, filesystem, and reader type.
 - Whether import was automatic or manually started.
@@ -21,14 +26,25 @@ unredacted logs to public issues.
 
 ## Diagnostics Export
 
-Diagnostics export is opt-in from `Diagnostics > Export Diagnostics` or
-`Diagnostics > Copy Diagnostics`.
+Open `Help > Diagnostics...`, then choose `Export Diagnostics` or
+`Copy Diagnostics`. Export is optional.
 
 The export includes app version, macOS version, settings status, recent job
-counts, and selected-job file statuses. It excludes media files, file names, and
-full source/destination paths.
+counts, and selected-job file statuses. It contains no media files. Folder names,
+volume names, paths, and error text may remain.
 
-Review the export before sharing it.
+Review the export and redact private information before sharing it.
+
+## Purchases and Restore
+
+Scanning and previewing stay free. The App Store app offers a free 14-day trial
+with unlimited imports, no renewal, and no automatic charge. After the trial,
+a one-time $9.99 U.S. purchase unlocks lifetime access with Family Sharing.
+Local pricing may vary.
+
+Choose `Settings > General > Restore Purchases` using the purchasing Apple
+Account or an eligible Family Sharing account. If access is still missing,
+email support with the app version and what the purchase sheet shows.
 
 ## Card Mount Prompt Troubleshooting
 
@@ -37,22 +53,22 @@ card is mounted`.
 
 - `Running`: the helper is registered, matches the installed app, and has
   launched since the latest enable or repair attempt.
-- `Install required`: move SD Import into `/Applications` or
-  `~/Applications`. Copies launched from Downloads, a mounted DMG, or another
-  folder cannot own the background helper.
+- `Install required`: install SD Card Import through the App Store in
+  `Applications`. Copies launched from other folders cannot own the background
+  helper.
 - `Managed by installed copy`: choose `Open Installed Copy`. The copy in
   `/Applications` takes precedence over `~/Applications`; within either folder,
-  the canonical `SD Import.app` name takes precedence over renamed copies.
+  the canonical `SD Card Import.app` name takes precedence over renamed copies.
 - `Needs attention`: read the detail shown below the status, then choose
   `Repair`. Runtime launch and handoff failures stay visible until a later
   card handoff succeeds.
-- `Needs approval`: choose `Open Login Items`, then allow SD Import under
+- `Needs approval`: choose `Open Login Items`, then allow SD Card Import under
   System Settings > General > Login Items & Extensions.
 - `Not registered` or `Helper update needed`: leave the installed app running
   while it retries registration and helper launch with a bounded cooldown. If
   the state remains after the retry window, choose `Repair`.
-- `Helper missing`: install the latest SD Import in `/Applications` and remove
-  older copies or mounted installer-disk copies.
+- `Helper missing`: update SD Card Import through the App Store and open the
+  installed copy in `Applications`.
 
 If the state does not return to `Running`, export diagnostics before changing
 the setting so support can see the actual macOS helper status, ownership, build,
@@ -64,7 +80,7 @@ reuse the same `/Volumes/...` path remain separate queue entries.
 
 ## Crash Reports
 
-SD Import does not upload crash reports automatically.
+SD Card Import does not upload crash reports automatically.
 
 If the app crashes, macOS may store a local crash report under:
 
@@ -72,9 +88,8 @@ If the app crashes, macOS may store a local crash report under:
 ~/Library/Logs/DiagnosticReports/
 ```
 
-Use `Diagnostics > Reveal Crash Reports` to open the folder, or
-`Diagnostics > Export Latest Crash Report` to save the newest local SD Import
-report for support.
+The App Store app cannot browse system crash reports. Use macOS Console to
+locate a report if support requests one.
 
 Only share crash reports you have reviewed. Redact private folder names,
 filenames, card names, serial numbers, and any media metadata you do not want to

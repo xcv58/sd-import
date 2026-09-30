@@ -1,8 +1,8 @@
 # Website maintenance
 
 The public site is static HTML in `docs/`. Its main product is **SD Card Import**
-from the Mac App Store. **SD Import** remains the name of the free direct edition;
-its downloads, update instructions and MIT license retain that name.
+from the Mac App Store. All public installation and update links point to that
+listing; GitHub is linked only for source code, licensing, and issue reporting.
 
 Edit `website/templates/` for structure and `website/locales/` for copy. The same
 seven pages are available in English, Simplified and Traditional Chinese,
@@ -29,6 +29,13 @@ product names and original screenshots remain unchanged. Add new visible text
 and accessibility labels to every catalog, then regenerate and check all pages.
 Screenshots and the silent demo show the original English app UI; their captions,
 transcript, alternative text and playback controls are localized.
+
+The purchase image `sd-card-import-trial-purchase-20260930.png` is an unmodified
+copy of `SDImport/Packaging/MacAppStore/ReviewAssets/1.1-trial-purchase-local.png`.
+It shows the version 1.1 trial and lifetime purchase controls. The adjacent review
+asset README records its native Debug capture provenance. Older workflow images
+remain labeled as captures from earlier versions; they are not current purchase
+flow evidence. Never edit screenshots to manufacture newer app controls.
 
 The language menu is native HTML and works without JavaScript. With JavaScript,
 explicit selection wins, followed by the localized URL, saved preference and

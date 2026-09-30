@@ -532,10 +532,7 @@
   },
   "m116": {
     "page": "index",
-    "tokens": {
-      "{0}": "<a href=\"#download\">",
-      "{/0}": "</a>"
-    }
+    "tokens": {}
   },
   "m117": {
     "page": "index",
@@ -647,10 +644,7 @@
   },
   "m139": {
     "page": "index",
-    "tokens": {
-      "{0}": "<a href=\"https://github.com/xcv58/sd-import\">",
-      "{/0}": "</a>"
-    }
+    "tokens": {}
   },
   "m140": {
     "page": "index",
@@ -746,64 +740,11 @@
       "{/1}": "</a>"
     }
   },
-  "m161": {
-    "page": "install",
-    "tokens": {}
-  },
-  "m162": {
-    "page": "install",
-    "tokens": {}
-  },
-  "m163": {
-    "page": "install",
-    "tokens": {
-      "{0}": "<strong>",
-      "{/0}": "</strong>"
-    }
-  },
-  "m164": {
-    "page": "install",
-    "tokens": {}
-  },
-  "m165": {
-    "page": "install",
-    "tokens": {
-      "{0}": "<code>SD-Import.dmg</code>"
-    }
-  },
-  "m166": {
-    "page": "install",
-    "tokens": {}
-  },
-  "m167": {
-    "page": "install",
-    "tokens": {
-      "{0}": "<code>SD Import.app</code>",
-      "{1}": "<code>Applications</code>"
-    }
-  },
   "m168": {
     "page": "install",
     "tokens": {}
   },
   "m169": {
-    "page": "install",
-    "tokens": {}
-  },
-  "m170": {
-    "page": "install",
-    "tokens": {
-      "{0}": "<a class=\"cta-button cta-primary\" href=\"https://github.com/xcv58/sd-import/releases/latest/download/SD-Import.dmg\">",
-      "{/0}": "</a>",
-      "{1}": "<a class=\"cta-button cta-secondary\" href=\"https://github.com/xcv58/sd-import/releases/latest\">",
-      "{/1}": "</a>"
-    }
-  },
-  "m171": {
-    "page": "install",
-    "tokens": {}
-  },
-  "m172": {
     "page": "install",
     "tokens": {}
   },
@@ -830,7 +771,7 @@
   "m178": {
     "page": "install",
     "tokens": {
-      "{0}": "<a href=\"mailto:i@xcv58.com\">i@xcv58.com</a>"
+      "{0}": "<a href=\"mailto:sd-card-import@jenny.media\">sd-card-import@jenny.media</a>"
     }
   },
   "m179": {
@@ -862,22 +803,6 @@
     "page": "user-guide",
     "tokens": {}
   },
-  "m184": {
-    "page": "user-guide",
-    "tokens": {
-      "{0}": "<a href=\"install.html#app-store\">",
-      "{/0}": "</a>",
-      "{1}": "<a href=\"support.html#purchases\">",
-      "{/1}": "</a>"
-    }
-  },
-  "m185": {
-    "page": "user-guide",
-    "tokens": {
-      "{0}": "<a href=\"install.html#app-store\">",
-      "{/0}": "</a>"
-    }
-  },
   "m186": {
     "page": "user-guide",
     "tokens": {}
@@ -888,10 +813,7 @@
   },
   "m188": {
     "page": "user-guide",
-    "tokens": {
-      "{0}": "<code>SD Import.app</code>",
-      "{1}": "<code>Applications</code>"
-    }
+    "tokens": {}
   },
   "m189": {
     "page": "user-guide",
@@ -1007,7 +929,7 @@
     "page": "user-guide",
     "tokens": {
       "{0}": "<code>Command-1</code>",
-      "{1}": "<code>Command-4</code>"
+      "{1}": "<code>Command-3</code>"
     }
   },
   "m212": {
@@ -1046,7 +968,7 @@
     "tokens": {
       "{0}": "<a class=\"cta-button cta-primary\" href=\"support.html\">",
       "{/0}": "</a>",
-      "{1}": "<a class=\"cta-button cta-secondary\" href=\"https://github.com/xcv58/sd-import/releases/latest\">",
+      "{1}": "<a class=\"cta-button cta-secondary\" href=\"https://apps.apple.com/us/app/sd-card-import/id6807178069?mt=12\">",
       "{/1}": "</a>"
     }
   },
@@ -1088,7 +1010,7 @@
   "m224": {
     "page": "support",
     "tokens": {
-      "{0}": "<a href=\"mailto:i@xcv58.com\">i@xcv58.com</a>"
+      "{0}": "<a href=\"mailto:sd-card-import@jenny.media\">sd-card-import@jenny.media</a>"
     }
   },
   "m225": {
@@ -1108,7 +1030,7 @@
   "m227": {
     "page": "support",
     "tokens": {
-      "{0}": "<a class=\"cta-button cta-primary\" href=\"mailto:i@xcv58.com\">",
+      "{0}": "<a class=\"cta-button cta-primary\" href=\"mailto:sd-card-import@jenny.media\">",
       "{1}": "<a class=\"cta-button cta-secondary\" href=\"https://github.com/xcv58/sd-import/issues/new/choose\">",
       "{/1}": "</a>",
       "{/0}": "</a>"
@@ -1243,9 +1165,7 @@
   },
   "m257": {
     "page": "privacy",
-    "tokens": {
-      "{0}": "<code>~/Library/Application Support/SD Import/state.sqlite</code>"
-    }
+    "tokens": {}
   },
   "m258": {
     "page": "privacy",
@@ -1292,7 +1212,7 @@
   "m268": {
     "page": "privacy",
     "tokens": {
-      "{0}": "<a href=\"mailto:i@xcv58.com\">i@xcv58.com</a>"
+      "{0}": "<a href=\"mailto:sd-card-import@jenny.media\">sd-card-import@jenny.media</a>"
     }
   },
   "m269": {
@@ -1397,13 +1317,6 @@
     "page": "updates",
     "tokens": {}
   },
-  "m289": {
-    "page": "updates",
-    "tokens": {
-      "{0}": "<a href=\"install.html#app-store\">",
-      "{/0}": "</a>"
-    }
-  },
   "m290": {
     "page": "updates",
     "tokens": {}
@@ -1414,10 +1327,7 @@
   },
   "m292": {
     "page": "updates",
-    "tokens": {
-      "{0}": "<code>",
-      "{/0}": "</code>"
-    }
+    "tokens": {}
   },
   "m293": {
     "page": "updates",
@@ -1429,16 +1339,12 @@
   },
   "m295": {
     "page": "updates",
-    "tokens": {
-      "{0}": "<code>SD-Import.dmg</code>",
-      "{1}": "<code>SD-Import.zip</code>",
-      "{2}": "<code>appcast.xml</code>"
-    }
+    "tokens": {}
   },
   "m296": {
     "page": "updates",
     "tokens": {
-      "{0}": "<a class=\"cta-button cta-secondary\" href=\"https://github.com/xcv58/sd-import/releases/latest\">",
+      "{0}": "<a class=\"cta-button cta-secondary\" href=\"https://apps.apple.com/us/app/sd-card-import/id6807178069?mt=12\">",
       "{/0}": "</a>"
     }
   },
@@ -1489,6 +1395,10 @@
   },
   "m305": {
     "page": "index",
+    "tokens": {}
+  },
+  "m307": {
+    "page": "support",
     "tokens": {}
   }
 }

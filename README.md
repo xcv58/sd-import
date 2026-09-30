@@ -41,7 +41,7 @@ language preference. English is the fallback. See
 ## Support
 
 - Public support and bug reports: GitHub Issues.
-- Support email: [i@xcv58.com](mailto:i@xcv58.com).
+- Support email: [sd-card-import@jenny.media](mailto:sd-card-import@jenny.media).
 - Security reports: see [SECURITY.md](SECURITY.md).
 - Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
 - License: MIT, see [LICENSE](LICENSE).

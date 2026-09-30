@@ -89,4 +89,4 @@ Do not attach private photos, videos, full card dumps, credentials, or
 personally sensitive folder paths. Redact paths when they include private names.
 
 For support that should not start in a public issue, email
-[i@xcv58.com](mailto:i@xcv58.com).
+[sd-card-import@jenny.media](mailto:sd-card-import@jenny.media).

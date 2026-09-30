@@ -1,70 +1,60 @@
-# SD Import Privacy Policy
+# SD Card Import Privacy Policy
 
-Last updated: 2026-07-31
+Last updated: 2026-09-30
 
-SD Import is a local macOS utility for copying photos and videos from SD cards
-or selected source folders into user-selected destinations.
+This policy covers SD Card Import, a macOS app for copying photos and videos
+from SD cards or selected source folders.
 
-## Data SD Import Stores Locally
+## Data Stored Locally
 
-SD Import stores app settings, security-scoped folder bookmarks, import history,
-and dedupe records on your Mac. The native app stores its database under:
+SD Card Import stores settings, folder permissions, import history, and
+duplicate-detection records locally on your Mac. The App Store app uses an App
+Group container shared with its card-detection helper and may also store
+preferences through macOS UserDefaults. Stored records can include folder
+paths, security-scoped bookmarks, import counts, timestamps, and file records.
+Imported media stays in the destinations you choose.
 
-```text
-~/Library/Application Support/SD Import/state.sqlite
-```
+## Optional Portable Import Receipts
 
-It may also store ordinary app preferences through macOS `UserDefaults`.
+When enabled, portable receipts create or append
+`.sd-import/imported-v1.jsonl` on writable sources. The hidden ledger contains
+versioned fingerprints, relative source paths, sizes, modification and import
+timestamps, and validation checksums so another Mac can avoid duplicate
+imports. It contains no destination paths, usernames, or media contents.
 
-The stored data can include:
+The option is disabled by default. Read-only sources continue without writing
+portable history, and ledger access refuses symbolic-link redirection outside
+the selected source. The app does not delete the original media.
 
-- Source, photo destination, and video destination folder paths.
-- Security-scoped bookmarks for selected folders.
-- Import job history, counts, timestamps, and file-level records used to avoid
-  duplicate imports.
-- Workflow preferences such as history retention, theme, prompt-on-mount, and
-  last-used import organization choices.
+## Network Use and Purchases
 
-Imported photos and videos are copied to the destination folders you choose.
-SD Import does not delete files from the source card.
+Apple handles App Store downloads, updates, and StoreKit purchases. Verified
+StoreKit transactions determine trial and lifetime access; trial timing comes
+from the verified transaction date. We do not receive payment card details.
 
-If you enable `Store portable import receipts on source drives`, SD Import also
-creates or appends a hidden `.sd-import/imported-v1.jsonl` file on writable
-sources. It stores versioned file fingerprints, relative source paths, sizes,
-modification timestamps, import timestamps, and validation checksums so another
-Mac can avoid duplicate imports. It does not store destination paths, usernames,
-or media contents in this portable ledger. The option is disabled by default,
-and read-only sources continue without writing portable history. Ledger access
-refuses symbolic-link redirection outside the selected source.
+Website links and feedback open your browser or email app. SD Card Import does
+not automatically send analytics, telemetry, import history, media, folder
+listings, or crash reports to the maintainer.
 
-## Network Use
+## Diagnostics and Crash Reports
 
-The native app uses the network for Sparkle update checks when updates are
-configured in the installed release build. Update checks contact the GitHub
-Release-hosted appcast for this repository.
+Diagnostics are exported only when you request them and contain no media files.
+Folder names, volume names, paths, and error text may remain. Review and redact
+the export before sharing it.
 
-SD Import does not currently send analytics, telemetry, import history, media
-files, folder listings, or crash reports to the maintainer. Diagnostics export
-is opt-in and redacted.
-
-## Diagnostics And Crash Reports
-
-SD Import does not include automatic crash-report upload. macOS may keep local
-diagnostic or crash logs according to your system settings. If you report a bug,
-you may choose what diagnostic details to share. The Diagnostics screen can
-reveal the local crash-report folder or export the latest local SD Import crash
-report, but the app does not upload it for you.
-
-When sharing diagnostics, redact private folder names, filenames, camera serial
-numbers, account names, and any media metadata you do not want public.
+SD Card Import does not automatically upload crash reports. The App Store app
+cannot browse system crash reports. macOS may store a local report under
+`~/Library/Logs/DiagnosticReports/`; use Console to locate one if support
+requests it and review it before sharing.
 
 ## Support Requests
+
+When emailing support, you choose which message and attachments to send through
+your email provider. In app versions with `Send Feedback…`, the prepared draft
+includes app version, build, and macOS details. You add the message and choose
+when to send it.
 
 Public GitHub issues are visible to everyone. Do not attach private photos,
 videos, full card dumps, credentials, or unredacted logs to public issues.
 
-Support email: [i@xcv58.com](mailto:i@xcv58.com)
-
-## Changes
-
-Privacy-impacting changes should be documented in this file before release.
+Contact: [sd-card-import@jenny.media](mailto:sd-card-import@jenny.media).

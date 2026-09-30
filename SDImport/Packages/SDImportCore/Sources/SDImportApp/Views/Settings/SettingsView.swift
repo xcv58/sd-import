@@ -264,22 +264,15 @@ struct SettingsView: View {
                     }
                 }
 
-                SettingsGroup(L10n.tr("Privacy & Support")) {
-                    HStack(spacing: 10) {
-                        Link(
-                            L10n.tr("Privacy Policy"),
-                            destination: URL(string: "https://macos-automation.vercel.app/privacy.html")!
-                        )
-                        Link(
-                            L10n.tr("Support"),
-                            destination: URL(string: "https://macos-automation.vercel.app/support.html")!
-                        )
-                    }
+                SettingsGroup(L10n.tr("Feedback & Support")) {
+                    FeedbackSupportSection()
                 }
 
+#if SDIMPORT_DIRECT
                 SettingsGroup(L10n.tr("Updates")) {
                     UpdaterSettingsView(appUpdater: appUpdater)
                 }
+#endif
             }
             .padding(.vertical, 8)
         }
@@ -417,6 +410,38 @@ private struct SettingsGroup<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .appCardSurface(cornerRadius: 10)
         }
+    }
+}
+
+private struct FeedbackSupportSection: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                model.sendFeedback()
+            } label: {
+                Label(L10n.tr("Send Feedback…"), systemImage: "envelope")
+            }
+            .accessibilityIdentifier("feedback.send")
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    supportLinks
+                }
+                .fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 8) {
+                    supportLinks
+                }
+            }
+            .font(.callout)
+        }
+    }
+
+    @ViewBuilder
+    private var supportLinks: some View {
+        Link(L10n.tr("Support Guide"), destination: AppSupport.guideURL)
+        Link(L10n.tr("Privacy Policy"), destination: AppSupport.privacyPolicyURL)
     }
 }
 

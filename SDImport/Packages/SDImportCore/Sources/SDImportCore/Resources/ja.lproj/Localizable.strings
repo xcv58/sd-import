@@ -595,3 +595,17 @@
 "Try SD Card Import free for 14 days" = "SD Card Importを14日間無料で試す";
 "Your 14-day trial has ended" = "14日間のトライアルは終了しました";
 "%@ · %lld files" = "%1$@ · %2$lld ファイル";
+
+/* Feedback and support. */
+"Feedback & Support" = "フィードバックとサポート";
+"Send Feedback…" = "フィードバックを送信…";
+"Copy Email Address" = "メールアドレスをコピー";
+"Support Guide" = "サポートガイド";
+"Could not open your email app" = "メールアプリを開けませんでした";
+"Send your feedback to %@ using your preferred email service." = "お好みのメールサービスで %@ にフィードバックをお送りください。";
+"Feedback for %@" = "%@ へのフィードバック";
+"What happened, or what would you like to see?" = "何が起きましたか？どのような改善をご希望ですか？";
+"If reporting a problem, please include what you expected and the steps to reproduce it." = "問題を報告する場合は、期待した結果と再現手順を記載してください。";
+"App: %@" = "アプリ：%@";
+"Version: %@ (build %@)" = "バージョン：%@（ビルド %@）";
+"macOS: %@" = "macOS：%@";

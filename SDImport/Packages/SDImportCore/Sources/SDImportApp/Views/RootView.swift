@@ -61,6 +61,14 @@ struct RootView: View {
             PurchaseView()
                 .environmentObject(purchaseManager)
         }
+        .alert(L10n.tr("Could not open your email app"), isPresented: $model.isShowingFeedbackEmailUnavailable) {
+            Button(L10n.tr("Copy Email Address")) {
+                model.copyFeedbackEmailAddress()
+            }
+            Button(L10n.tr("Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.tr("Send your feedback to \(AppSupport.emailAddress) using your preferred email service."))
+        }
         .environment(\.locale, L10n.presentationLocale(
             for: AppLanguage(rawValue: selectedLanguageCode) ?? .system
         ))

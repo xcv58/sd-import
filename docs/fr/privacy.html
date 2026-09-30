@@ -9,15 +9,15 @@
     <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
 
     <title data-i18n="m251">SD Card Import — Politique de confidentialité</title>
-    <meta name="description" content="Politique de confidentialité de SD Import et SD Card Import." data-i18n-attr-content="m252">
+    <meta name="description" content="Politique de confidentialité de SD Card Import." data-i18n-attr-content="m252">
     <meta property="og:title" content="SD Card Import — Politique de confidentialité" data-i18n-attr-content="m251">
-    <meta property="og:description" content="Comment SD Import et SD Card Import stockent les données localement et gèrent diagnostics, mises à jour et achats." data-i18n-attr-content="m253">
+    <meta property="og:description" content="Comment SD Card Import stocke les données localement et gère les diagnostics, les mises à jour et les achats." data-i18n-attr-content="m253">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sd.jenny.media/fr/privacy.html">
     <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="SD Card Import — Politique de confidentialité" data-i18n-attr-content="m251">
-    <meta name="twitter:description" content="Comment SD Import et SD Card Import stockent les données localement et gèrent diagnostics, mises à jour et achats." data-i18n-attr-content="m253">
+    <meta name="twitter:description" content="Comment SD Card Import stocke les données localement et gère les diagnostics, les mises à jour et les achats." data-i18n-attr-content="m253">
     <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
     <link rel="canonical" href="https://sd.jenny.media/fr/privacy.html">
     <link rel="stylesheet" href="../assets/site-20260512.css?v=20260530c">
@@ -37,24 +37,24 @@
     <main id="main" class="container">
         <section class="page-title">
             <h1 data-i18n="m254">Politique de confidentialité</h1>
-            <p data-i18n="m255">Dernière mise à jour : 2026-09-10. Cette politique couvre SD Import (téléchargement direct) et SD Card Import (édition App Store), des utilitaires macOS locaux pour copier photos et vidéos depuis des cartes SD ou des dossiers source choisis.</p>
+            <p data-i18n="m255">Dernière mise à jour : 2026-09-30. Cette politique concerne SD Card Import, une app macOS qui copie les photos et vidéos de cartes SD ou de dossiers sources sélectionnés.</p>
         </section>
         <section class="section section-divider">
             <article class="policy-box">
                 <h2 data-i18n="m256">Données stockées localement</h2>
-                <p data-i18n="m257">Les deux éditions conservent sur votre Mac les réglages, autorisations des dossiers, historiques d’import et données servant à éviter les doublons. L’édition directe utilise <code>~/Library/Application Support/SD Import/state.sqlite</code>. SD Card Import utilise un conteneur local App Group partagé avec son assistant de détection des cartes. Les deux peuvent aussi enregistrer des préférences ordinaires via UserDefaults de macOS.</p>
+                <p data-i18n="m257">SD Card Import conserve les réglages, les autorisations de dossiers, l’historique des imports et les données de détection des doublons localement sur votre Mac. L’app utilise un conteneur App Group partagé avec son auxiliaire de détection des cartes et peut aussi enregistrer des préférences via macOS UserDefaults.</p>
                 <h2 data-i18n="m258">Reçus d’import portables facultatifs</h2>
                 <p data-i18n="m259">Si vous activez les reçus portables, l’application crée ou complète <code>.sd-import/imported-v1.jsonl</code> sur les sources accessibles en écriture. Ce registre caché contient des empreintes de fichiers versionnées, des chemins source relatifs, tailles, dates de modification et d’import, et sommes de contrôle pour éviter les doublons sur un autre Mac. Il ne contient ni chemins de destination, ni noms d’utilisateur, ni contenu des médias. L’option est désactivée par défaut. Les sources en lecture seule restent utilisables sans écrire d’historique portable. L’accès au registre refuse toute redirection par lien symbolique hors de la source choisie.</p>
                 <h2 data-i18n="m260">Utilisation du réseau</h2>
-                <p data-i18n="m261">L’édition directe utilise Sparkle pour rechercher les mises à jour lorsque la version installée le prévoit. Elle contacte l’appcast de ce dépôt hébergé dans les versions GitHub. SD Card Import reçoit les mises à jour via l’App Store et n’inclut pas Sparkle.</p>
+                <p data-i18n="m261">Apple gère les téléchargements de l’App Store, les mises à jour et les achats StoreKit. Les liens du site et les commentaires s’ouvrent dans votre navigateur ou votre app de messagerie. SD Card Import ne téléverse pas vos médias.</p>
                 <h2 data-i18n="m262">Achats sur l’App Store</h2>
                 <p data-i18n="m263">Apple traite les achats et restaurations de SD Card Import. L’application utilise les informations vérifiées de transactions et de droits StoreKit pour déterminer si l’essai de 14 jours ou l’accès à vie est actif. La durée de l’essai commence à la date de transaction vérifiée. Nous ne recevons pas les coordonnées des cartes de paiement.</p>
                 <h2 data-i18n="m264">Aucune télémétrie automatique</h2>
-                <p data-i18n="m265">Aucune édition n’envoie au responsable du projet d’analyses, de télémétrie, d’historique d’import, de médias, de listes de dossiers ou de rapports de plantage. L’export des diagnostics est volontaire et expurgé. L’édition directe peut afficher le dossier des rapports de macOS ou exporter le dernier rapport local de l’application. L’édition App Store ne peut pas parcourir les rapports système. Aucune édition ne les envoie automatiquement.</p>
+                <p data-i18n="m265">SD Card Import n’envoie pas automatiquement au développeur de données d’analyse, de télémétrie, d’historique d’importation, de médias, de listes de dossiers ou de rapports de plantage. Les diagnostics sont exportés à votre demande et peuvent contenir des noms de dossiers, des chemins et des messages d’erreur. Vérifiez-les et masquez les informations privées avant de les partager. L’app ne peut pas parcourir les rapports de plantage du système.</p>
                 <h2 data-i18n="m266">Demandes d’assistance</h2>
-                <p data-i18n="m267">Les tickets GitHub publics sont visibles par tous. N’y joignez pas de photos ou vidéos privées, de copies intégrales de cartes, d’identifiants secrets ou de journaux non expurgés.</p>
+                <p data-i18n="m267">Lorsque vous contactez l’assistance par e-mail, vous choisissez le message et les pièces jointes transmis par votre fournisseur de messagerie. Les tickets GitHub publics sont visibles par tous. N’y joignez pas de photos ou vidéos privées, de copies complètes de cartes, d’identifiants ou de journaux non expurgés.</p>
                 <h2 data-i18n="m223">Contact</h2>
-                <p data-i18n="m268">Pour toute question de confidentialité ou d’assistance, écrivez à <a href="mailto:i@xcv58.com">i@xcv58.com</a>.</p>
+                <p data-i18n="m268">Pour toute question de confidentialité ou d’assistance, écrivez à <a href="mailto:sd-card-import@jenny.media">sd-card-import@jenny.media</a>.</p>
             </article>
         </section>
     </main>

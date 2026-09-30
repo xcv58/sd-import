@@ -595,3 +595,17 @@
 "Try SD Card Import free for 14 days" = "免費試用 SD Card Import 14 天";
 "Your 14-day trial has ended" = "你的 14 天試用已結束";
 "%@ · %lld files" = "%1$@ · %2$lld 個檔案";
+
+/* Feedback and support. */
+"Feedback & Support" = "意見回饋與支援";
+"Send Feedback…" = "傳送意見回饋…";
+"Copy Email Address" = "複製電子郵件地址";
+"Support Guide" = "支援指南";
+"Could not open your email app" = "無法開啟你的郵件 App";
+"Send your feedback to %@ using your preferred email service." = "請使用你偏好的電子郵件服務，將意見回饋寄至 %@。";
+"Feedback for %@" = "%@ 的意見回饋";
+"What happened, or what would you like to see?" = "發生了什麼，或你希望看到哪些改善？";
+"If reporting a problem, please include what you expected and the steps to reproduce it." = "若要回報問題，請提供預期結果與重現步驟。";
+"App: %@" = "App：%@";
+"Version: %@ (build %@)" = "版本：%@（組建 %@）";
+"macOS: %@" = "macOS：%@";

@@ -595,3 +595,17 @@
 "Try SD Card Import free for 14 days" = "Try SD Card Import free for 14 days";
 "Your 14-day trial has ended" = "Your 14-day trial has ended";
 "%@ · %lld files" = "%1$@ · %2$lld files";
+
+/* Feedback and support. */
+"Feedback & Support" = "Feedback & Support";
+"Send Feedback…" = "Send Feedback…";
+"Copy Email Address" = "Copy Email Address";
+"Support Guide" = "Support Guide";
+"Could not open your email app" = "Could not open your email app";
+"Send your feedback to %@ using your preferred email service." = "Send your feedback to %@ using your preferred email service.";
+"Feedback for %@" = "Feedback for %@";
+"What happened, or what would you like to see?" = "What happened, or what would you like to see?";
+"If reporting a problem, please include what you expected and the steps to reproduce it." = "If reporting a problem, please include what you expected and the steps to reproduce it.";
+"App: %@" = "App: %@";
+"Version: %@ (build %@)" = "Version: %@ (build %@)";
+"macOS: %@" = "macOS: %@";

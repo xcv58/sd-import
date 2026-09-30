@@ -323,6 +323,7 @@ final class AppModel: ObservableObject {
     @Published var statusMessage = "" {
         didSet { statusMessageRenderer = nil }
     }
+    @Published var isShowingFeedbackEmailUnavailable = false
     @Published private(set) var settingsFeedback: SettingsFeedback?
     private var statusMessageRenderer: (() -> String)?
     private var importFailureRenderer: (() -> String)?
@@ -3165,6 +3166,24 @@ final class AppModel: ObservableObject {
             let detail = Self.errorMessage(for: error)
             setLocalizedStatusMessage { L10n.tr("Could not export summary: \(detail)") }
         }
+    }
+
+    func sendFeedback() {
+        let info = Bundle.main.infoDictionary ?? [:]
+        guard let url = AppSupport.feedbackEmailURL(
+            appName: AppDistribution.current.displayName,
+            appVersion: info["CFBundleShortVersionString"] as? String ?? "dev",
+            appBuild: info["CFBundleVersion"] as? String ?? "dev",
+            osVersion: ProcessInfo.processInfo.operatingSystemVersionString
+        ), NSWorkspace.shared.open(url) else {
+            isShowingFeedbackEmailUnavailable = true
+            return
+        }
+    }
+
+    func copyFeedbackEmailAddress() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(AppSupport.emailAddress, forType: .string)
     }
 
     func copyDiagnostics() {

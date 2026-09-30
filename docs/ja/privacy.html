@@ -9,15 +9,15 @@
     <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
 
     <title data-i18n="m251">SD Card Import — プライバシーポリシー</title>
-    <meta name="description" content="SD Import と SD Card Import のプライバシーポリシー。" data-i18n-attr-content="m252">
+    <meta name="description" content="SD Card Import のプライバシーポリシー。" data-i18n-attr-content="m252">
     <meta property="og:title" content="SD Card Import — プライバシーポリシー" data-i18n-attr-content="m251">
-    <meta property="og:description" content="SD Import と SD Card Import のローカルデータ保存、診断、更新、購入の取り扱いについて。" data-i18n-attr-content="m253">
+    <meta property="og:description" content="SD Card Import のローカルデータ保存と、診断、アップデート、購入の取り扱いについて。" data-i18n-attr-content="m253">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sd.jenny.media/ja/privacy.html">
     <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="SD Card Import — プライバシーポリシー" data-i18n-attr-content="m251">
-    <meta name="twitter:description" content="SD Import と SD Card Import のローカルデータ保存、診断、更新、購入の取り扱いについて。" data-i18n-attr-content="m253">
+    <meta name="twitter:description" content="SD Card Import のローカルデータ保存と、診断、アップデート、購入の取り扱いについて。" data-i18n-attr-content="m253">
     <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
     <link rel="canonical" href="https://sd.jenny.media/ja/privacy.html">
     <link rel="stylesheet" href="../assets/site-20260512.css?v=20260530c">
@@ -37,24 +37,24 @@
     <main id="main" class="container">
         <section class="page-title">
             <h1 data-i18n="m254">プライバシーポリシー</h1>
-            <p data-i18n="m255">最終更新：2026-09-10。本ポリシーは SD Import（直接配布版）と SD Card Import（App Store 版）に適用されます。両アプリは、SD カードや選択したソースフォルダから写真と動画をコピーするローカルの macOS ユーティリティです。</p>
+            <p data-i18n="m255">最終更新日：2026-09-30。このポリシーは、SD カードや選択した読み込み元フォルダから写真と動画をコピーする macOS アプリ、SD Card Import に適用されます。</p>
         </section>
         <section class="section section-divider">
             <article class="policy-box">
                 <h2 data-i18n="m256">ローカルに保存するデータ</h2>
-                <p data-i18n="m257">両エディションは、設定、フォルダのアクセス許可、取り込み履歴、重複を避けるための記録を Mac 内に保存します。直接配布版は <code>~/Library/Application Support/SD Import/state.sqlite</code> を使用します。SD Card Import はカード検出ヘルパーと共有するローカルの App Group コンテナを使います。また、通常の環境設定を macOS UserDefaults に保存する場合があります。</p>
+                <p data-i18n="m257">SD Card Import は設定、フォルダへのアクセス権、読み込み履歴、重複検出の記録を Mac 内に保存します。カード検出ヘルパーと共有する App Group コンテナを使用し、macOS UserDefaults に設定を保存する場合もあります。</p>
                 <h2 data-i18n="m258">任意のポータブル取り込み記録</h2>
                 <p data-i18n="m259">ポータブル取り込み記録を有効にすると、書き込み可能なソースに <code>.sd-import/imported-v1.jsonl</code> を作成または追記します。非表示の台帳には、別の Mac で重複を避けるため、バージョン付きファイル指紋、相対ソースパス、サイズ、変更日時、取り込み日時、検証用チェックサムが含まれます。保存先パス、ユーザー名、メディアの内容は含みません。初期状態では無効です。読み取り専用ソースではポータブル履歴を書かずに続行し、台帳へのアクセスは選択したソース外へのシンボリックリンクによる転送を拒否します。</p>
                 <h2 data-i18n="m260">ネットワークの利用</h2>
-                <p data-i18n="m261">直接配布版は、インストール済みのリリースで設定されている場合、Sparkle で更新を確認します。確認先は、このリポジトリの GitHub Releases に置かれた appcast です。SD Card Import は App Store から更新を受け取り、Sparkle を含みません。</p>
+                <p data-i18n="m261">App Store のダウンロード、アップデート、StoreKit の購入は Apple が処理します。ウェブサイトのリンクやフィードバックにはブラウザまたはメールアプリを使用します。SD Card Import はメディアをアップロードしません。</p>
                 <h2 data-i18n="m262">App Store での購入</h2>
                 <p data-i18n="m263">SD Card Import の購入と復元は Apple が処理します。アプリは検証済みの StoreKit 取引情報と権利情報から、14 日間トライアルまたは永続アクセスが有効かを判断します。トライアル期間は検証済みの取引日から始まります。支払いカードの情報を当方が受け取ることはありません。</p>
                 <h2 data-i18n="m264">自動テレメトリなし</h2>
-                <p data-i18n="m265">どちらのエディションも、分析データ、テレメトリ、取り込み履歴、メディア、フォルダ一覧、クラッシュレポートを管理者に送信しません。診断情報の書き出しは任意で、個人情報は伏せられます。直接配布版は macOS のクラッシュレポートフォルダの表示や、最新のローカルアプリレポートの書き出しができます。App Store 版はシステムのクラッシュレポートを参照できません。どちらも自動アップロードしません。</p>
+                <p data-i18n="m265">SD Card Import は解析データ、テレメトリ、読み込み履歴、メディア、フォルダ一覧、クラッシュレポートを開発者に自動送信しません。診断は要求した場合のみ出力され、フォルダ名、パス、エラーの文面が含まれる場合があります。共有前に確認して個人情報を伏せてください。アプリはシステムのクラッシュレポートを閲覧できません。</p>
                 <h2 data-i18n="m266">サポートへの連絡</h2>
-                <p data-i18n="m267">公開 GitHub Issue は誰でも閲覧できます。私的な写真や動画、カード全体のダンプ、認証情報、個人情報を伏せていないログは添付しないでください。</p>
+                <p data-i18n="m267">サポートにメールを送る際は、メールサービスを通じて共有する本文と添付ファイルを自分で選択します。公開の GitHub Issue は誰でも閲覧できます。個人の写真や動画、カード全体のデータ、認証情報、未編集のログを公開 Issue に添付しないでください。</p>
                 <h2 data-i18n="m223">お問い合わせ</h2>
-                <p data-i18n="m268">プライバシーやサポートのお問い合わせは <a href="mailto:i@xcv58.com">i@xcv58.com</a> へ。</p>
+                <p data-i18n="m268">プライバシーやサポートのお問い合わせは <a href="mailto:sd-card-import@jenny.media">sd-card-import@jenny.media</a> へ。</p>
             </article>
         </section>
     </main>

@@ -10,11 +10,10 @@ from build_website import APP_STORE, DOCS, LANGUAGES, PAGES, SITE, build, load_j
 
 
 LITERAL_TOKENS = {
-    '·', '→', '↗', 'SD-Import.dmg', 'SD-Import.zip', 'SD Import.app',
-    'Applications', 'i@xcv58.com', '.sd-import', '.sd-import/imported-v1.jsonl',
-    '~/Library/Application Support/SD Import/state.sqlite', 'appcast.xml',
+    '·', '→', '↗',
+    'Applications', 'sd-card-import@jenny.media', '.sd-import', '.sd-import/imported-v1.jsonl',
     '~/Library/Logs/DiagnosticReports/',
-    'Command-I', 'Command-1', 'Command-4', 'Control-Tab', 'Command-R', 'Command-,',
+    'Command-I', 'Command-1', 'Command-3', 'Control-Tab', 'Command-R', 'Command-,',
 }
 
 
@@ -48,7 +47,7 @@ def check():
         except AssertionError as error:
             raise AssertionError((key, *error.args)) from error
     # Regression: buttons and formatted command names must remain translatable.
-    for markup in ['<a href="mailto:i@xcv58.com">Email support</a>', '<code>Import Anyway</code>', '<span title="Help">']:
+    for markup in ['<a href="mailto:sd-card-import@jenny.media">Email support</a>', '<code>Import Anyway</code>', '<span title="Help">']:
         try:
             check_token_copy({'{0}': markup})
         except AssertionError:
@@ -101,6 +100,8 @@ def check():
         for page in PAGES:
             path = DOCS / ('' if language == 'en' else language) / f'{page}.html'
             content = path.read_text()
+            assert 'i@xcv58.com' not in content, (path, 'retired support address')
+            assert 'Sparkle' not in content, (path, 'retired updater instructions')
             tree = parse(content)
             nodes = list(tree.all())
             assert next(n for n in nodes if n.tag == 'html').attrs['lang'] == language
@@ -117,6 +118,11 @@ def check():
             alternates = [n.attrs['hreflang'] for n in nodes if n.tag == 'link' and n.attrs.get('rel') == 'alternate']
             assert alternates == [*LANGUAGES, 'x-default']
             for n in nodes:
+                if n.tag == 'a' and 'href' in n.attrs:
+                    link = urlsplit(n.attrs['href'])
+                    if link.scheme == 'mailto':
+                        assert unquote(link.path) == 'sd-card-import@jenny.media', (path, 'incorrect contact address')
+                    assert not (link.netloc == 'github.com' and link.path.startswith('/xcv58/sd-import/releases')), (path, 'retired download destination')
                 for attr in ['aria-labelledby', 'aria-describedby']:
                     if attr in n.attrs:
                         assert all(value in ids for value in n.attrs[attr].split()), (path, attr)
@@ -133,7 +139,7 @@ def check():
                 video = next(n for n in nodes if n.tag == 'video')
                 media = next(n for n in video.children if n.tag == 'source')
                 assert (path.parent / media.attrs['src']).resolve() == (DOCS.parent / screencast['output']).resolve(), path
-                assert len([n for n in nodes if n.tag == 'a' and n.attrs.get('href') == APP_STORE]) == 3
+                assert len([n for n in nodes if n.tag == 'a' and n.attrs.get('href') == APP_STORE]) == 4
                 assert next(n for n in nodes if n.tag == 'video').attrs.get('controls') is None
                 assert 'controls' in next(n for n in nodes if n.tag == 'video').attrs
                 assert len([n for n in nodes if 'data-gallery-choice' in n.attrs]) == 7

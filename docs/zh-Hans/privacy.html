@@ -9,15 +9,15 @@
     <meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
 
     <title data-i18n="m251">SD Card Import — 隐私政策</title>
-    <meta name="description" content="SD Import 与 SD Card Import 的隐私政策。" data-i18n-attr-content="m252">
+    <meta name="description" content="SD Card Import 隐私政策。" data-i18n-attr-content="m252">
     <meta property="og:title" content="SD Card Import — 隐私政策" data-i18n-attr-content="m251">
-    <meta property="og:description" content="SD Import 与 SD Card Import 如何在本地保存数据，以及如何处理诊断、更新和购买。" data-i18n-attr-content="m253">
+    <meta property="og:description" content="了解 SD Card Import 如何在本地保存数据，以及如何处理诊断、更新和购买。" data-i18n-attr-content="m253">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sd.jenny.media/zh-Hans/privacy.html">
     <meta property="og:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="SD Card Import — 隐私政策" data-i18n-attr-content="m251">
-    <meta name="twitter:description" content="SD Import 与 SD Card Import 如何在本地保存数据，以及如何处理诊断、更新和购买。" data-i18n-attr-content="m253">
+    <meta name="twitter:description" content="了解 SD Card Import 如何在本地保存数据，以及如何处理诊断、更新和购买。" data-i18n-attr-content="m253">
     <meta name="twitter:image" content="https://sd.jenny.media/assets/images/sd-card-import-file-preview-20260910-1920.webp">
     <link rel="canonical" href="https://sd.jenny.media/zh-Hans/privacy.html">
     <link rel="stylesheet" href="../assets/site-20260512.css?v=20260530c">
@@ -37,24 +37,24 @@
     <main id="main" class="container">
         <section class="page-title">
             <h1 data-i18n="m254">隐私政策</h1>
-            <p data-i18n="m255">最后更新：2026-09-10。本政策涵盖 SD Import（直接下载版）和 SD Card Import（App Store 版），它们是在本地将 SD 卡或所选源文件夹中的照片和视频拷贝到目标位置的 macOS 工具。</p>
+            <p data-i18n="m255">最后更新：2026-09-30。本政策适用于 SD Card Import，这是一款从 SD 卡或所选源文件夹复制照片和视频的 macOS 应用。</p>
         </section>
         <section class="section section-divider">
             <article class="policy-box">
                 <h2 data-i18n="m256">本地保存的数据</h2>
-                <p data-i18n="m257">两个版本都在 Mac 本地保存应用设置、文件夹权限、导入历史和用于跳过重复导入的记录。直接下载版使用 <code>~/Library/Application Support/SD Import/state.sqlite</code>。SD Card Import 使用与存储卡检测辅助程序共享的本地 App Group 容器。两个版本也可能通过 macOS UserDefaults 保存常规偏好设置。</p>
+                <p data-i18n="m257">SD Card Import 将设置、文件夹权限、导入历史和重复检测记录保存在你的 Mac 本地。它使用与存储卡检测辅助程序共享的 App Group 容器，也可能通过 macOS UserDefaults 保存偏好设置。</p>
                 <h2 data-i18n="m258">可选的便携导入回执</h2>
                 <p data-i18n="m259">启用便携导入回执后，应用会在可写源上创建或追加 <code>.sd-import/imported-v1.jsonl</code>。此隐藏台账包含带版本的文件指纹、相对源路径、大小、修改和导入时间戳及校验和，便于另一台 Mac 避免重复导入。它不包含目标路径、用户名或媒体内容。此选项默认关闭；只读源会继续处理而不写入便携历史；台账访问会拒绝通过符号链接重定向到所选源之外。</p>
                 <h2 data-i18n="m260">网络使用</h2>
-                <p data-i18n="m261">如果已安装的发行版配置了更新检查，直接下载版会使用 Sparkle 连接本仓库托管在 GitHub Release 上的 appcast。SD Card Import 通过 App Store 接收更新，不包含 Sparkle。</p>
+                <p data-i18n="m261">Apple 负责 App Store 下载、更新和 StoreKit 购买。打开网站链接或反馈会使用浏览器或邮件应用。SD Card Import 不会上传您的媒体。</p>
                 <h2 data-i18n="m262">App Store 购买</h2>
                 <p data-i18n="m263">Apple 处理 SD Card Import 的购买和恢复。应用通过经验证的 StoreKit 交易及权益信息，确定 14 天试用或终身使用权限是否有效。试用期从经验证的交易日期开始计算。我们不会收到付款卡信息。</p>
                 <h2 data-i18n="m264">无自动遥测</h2>
-                <p data-i18n="m265">两个版本都不会向维护者发送分析数据、遥测、导入历史、媒体文件、文件夹列表或崩溃报告。诊断导出由你选择，并经过隐私处理。直接下载版可以显示 macOS 崩溃报告文件夹，或导出最新的本地应用崩溃报告。App Store 版无法浏览系统崩溃报告。两个版本都不会自动上传崩溃报告。</p>
+                <p data-i18n="m265">SD Card Import 不会自动向维护者发送分析数据、遥测、导入历史、媒体、文件夹列表或崩溃报告。仅在您请求时导出诊断，其中可能包含文件夹名称、路径和错误文本。分享前请检查并隐去私人信息。应用无法浏览系统崩溃报告。</p>
                 <h2 data-i18n="m266">支持请求</h2>
-                <p data-i18n="m267">公开的 GitHub 问题对所有人可见。请勿在公开问题中附上私人照片、视频、完整存储卡转储、凭据或未经隐私处理的日志。</p>
+                <p data-i18n="m267">通过电子邮件联系支持时，您自行选择经邮件服务提供商发送的消息和附件。公开的 GitHub 问题对所有人可见。请勿在公开问题中附上私人照片、视频、完整存储卡转储、凭据或未经处理的日志。</p>
                 <h2 data-i18n="m223">联系方式</h2>
-                <p data-i18n="m268">隐私与支持问题请发邮件至 <a href="mailto:i@xcv58.com">i@xcv58.com</a>。</p>
+                <p data-i18n="m268">隐私与支持问题请发邮件至 <a href="mailto:sd-card-import@jenny.media">sd-card-import@jenny.media</a>。</p>
             </article>
         </section>
     </main>

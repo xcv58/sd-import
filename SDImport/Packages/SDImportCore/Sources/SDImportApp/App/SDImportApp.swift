@@ -83,7 +83,9 @@ struct SDImportApp: App {
             }
 
             CommandGroup(after: .appInfo) {
+#if SDIMPORT_DIRECT
                 CheckForUpdatesView(updater: appUpdater)
+#endif
             }
 
             CommandGroup(replacing: .newItem) {
@@ -136,6 +138,11 @@ struct SDImportApp: App {
             }
 
             CommandGroup(after: .help) {
+                Button(L10n.tr("Send Feedback…")) {
+                    showMainWindow()
+                    model.sendFeedback()
+                }
+
                 Button(L10n.tr("Diagnostics...")) {
                     openWindow(id: "diagnostics")
                 }

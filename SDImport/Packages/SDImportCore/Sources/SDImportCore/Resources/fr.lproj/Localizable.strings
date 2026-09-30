@@ -595,3 +595,17 @@
 "Try SD Card Import free for 14 days" = "Essayez SD Card Import gratuitement pendant 14 jours";
 "Your 14-day trial has ended" = "Votre essai de 14 jours est terminé";
 "%@ · %lld files" = "%1$@ · %2$lld fichiers";
+
+/* Feedback and support. */
+"Feedback & Support" = "Commentaires et assistance";
+"Send Feedback…" = "Envoyer un commentaire…";
+"Copy Email Address" = "Copier l’adresse e-mail";
+"Support Guide" = "Guide d’assistance";
+"Could not open your email app" = "Impossible d’ouvrir votre app de messagerie";
+"Send your feedback to %@ using your preferred email service." = "Envoyez vos commentaires à %@ avec votre service de messagerie préféré.";
+"Feedback for %@" = "Commentaires sur %@";
+"What happened, or what would you like to see?" = "Que s’est-il passé ou que souhaiteriez-vous voir ?";
+"If reporting a problem, please include what you expected and the steps to reproduce it." = "Si vous signalez un problème, indiquez le résultat attendu et les étapes pour le reproduire.";
+"App: %@" = "App : %@";
+"Version: %@ (build %@)" = "Version : %@ (build %@)";
+"macOS: %@" = "macOS : %@";
