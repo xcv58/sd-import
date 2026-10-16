@@ -968,7 +968,7 @@
     "tokens": {
       "{0}": "<a class=\"cta-button cta-primary\" href=\"support.html\">",
       "{/0}": "</a>",
-      "{1}": "<a class=\"cta-button cta-secondary\" href=\"https://apps.apple.com/us/app/sd-card-import/id6807178069?mt=12\">",
+      "{1}": "<a class=\"cta-button cta-secondary\" href=\"https://apps.apple.com/app/sd-card-import/id6807178069?mt=12\">",
       "{/1}": "</a>"
     }
   },
@@ -1344,7 +1344,7 @@
   "m296": {
     "page": "updates",
     "tokens": {
-      "{0}": "<a class=\"cta-button cta-secondary\" href=\"https://apps.apple.com/us/app/sd-card-import/id6807178069?mt=12\">",
+      "{0}": "<a class=\"cta-button cta-secondary\" href=\"https://apps.apple.com/app/sd-card-import/id6807178069?mt=12\">",
       "{/0}": "</a>"
     }
   },
@@ -1399,6 +1399,18 @@
   },
   "m307": {
     "page": "support",
+    "tokens": {}
+  },
+  "m308": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m309": {
+    "page": "privacy",
+    "tokens": {}
+  },
+  "m310": {
+    "page": "privacy",
     "tokens": {}
   }
 }

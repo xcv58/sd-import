@@ -1,0 +1,7 @@
+/* Keep enlarged and translated text inside the available column width. */
+body { overflow-wrap: anywhere; }
+body .site-header .logo { min-width: 0; white-space: normal; }
+body .site-header .logo img { flex-shrink: 0; }
+.download-panel > *, .store-heading > *, .folder-children > * { min-width: 0; }
+.download-details .action, .inline-link { max-width: 100%; white-space: normal; }
+.download-details .action svg, .inline-link svg { flex-shrink: 0; }
