@@ -90,7 +90,9 @@ After editing the demo, update its three duration messages (`m016`, `m052`,
 `m063`) in every catalog, the English template, the edit record, and the browser
 duration/ending checks, then regenerate the site.
 
-The shared header keeps appearance at the physical top right. Up to 1050 pixels,
-an accessible menu opens the existing navigation and native language picker.
-Without the menu script those links stay visible. New header assets are
-`header-20261016.css` and `header-20261016.js`; older immutable assets stay intact.
+The shared header keeps one vertically centered desktop row and appearance at
+the physical top right in compact layouts. At 1050 pixels or below, or whenever
+the full navigation no longer fits, an accessible menu opens the existing links
+and native language picker. Without the menu script those links stay visible.
+Current header assets are `header-alignment-20261016.css` and
+`header-alignment-20261016.js`; older immutable assets stay intact.
