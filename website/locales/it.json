@@ -301,5 +301,7 @@
   "m307": "Nelle versioni dell’app con Invia feedback…, scegli Impostazioni > Generali > Invia feedback… o Aiuto > Invia feedback…. Si apre una bozza con la versione dell’app, il numero di build e la versione di macOS. Aggiungi il messaggio e invialo dall’app di posta.",
   "m308": "Dettagli tecnici",
   "m309": "Le impostazioni, i permessi delle cartelle e la cronologia delle importazioni restano sul Mac. L’app usa questi dati per riconoscere i file già importati.",
-  "m310": "Questa opzione è disattivata per impostazione predefinita. Se la attivi, l’app salva una cronologia nascosta sulle schede o nelle cartelle sorgenti scrivibili, così un altro Mac può riconoscere i file già copiati. Non contiene contenuti multimediali, percorsi di destinazione o nomi utente. Le sorgenti di sola lettura restano utilizzabili senza scrivere questa cronologia."
+  "m310": "Questa opzione è disattivata per impostazione predefinita. Se la attivi, l’app salva una cronologia nascosta sulle schede o nelle cartelle sorgenti scrivibili, così un altro Mac può riconoscere i file già copiati. Non contiene contenuti multimediali, percorsi di destinazione o nomi utente. Le sorgenti di sola lettura restano utilizzabili senza scrivere questa cronologia.",
+  "ui.menuOpen": "Apri menu",
+  "ui.menuClose": "Chiudi menu"
 }

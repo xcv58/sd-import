@@ -301,5 +301,7 @@
   "m307": "In app versions with Send Feedback…, choose Settings > General > Send Feedback… or Help > Send Feedback…. This opens a draft with the app version, build, and macOS version. Add your message and send it from your email app.",
   "m308": "Technical details",
   "m309": "Your settings, folder permissions, and import history stay on your Mac. The app uses these records to recognize files you have already imported.",
-  "m310": "This setting is off by default. If you enable it, the app saves a hidden import-history file on writable source cards or folders so another Mac can recognize files already copied. It contains no media contents, destination paths, or usernames. Read-only sources still work without writing this history."
+  "m310": "This setting is off by default. If you enable it, the app saves a hidden import-history file on writable source cards or folders so another Mac can recognize files already copied. It contains no media contents, destination paths, or usernames. Read-only sources still work without writing this history.",
+  "ui.menuOpen": "Open menu",
+  "ui.menuClose": "Close menu"
 }
