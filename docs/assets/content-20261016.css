@@ -1,0 +1,5 @@
+/* Optional implementation details keep the privacy overview easy to read. */
+.privacy-details { margin: 12px 0 28px; }
+.privacy-details > summary { min-height: 44px; padding-block: 10px; color: var(--accent); cursor: pointer; font-weight: 600; }
+.privacy-details > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.privacy-details > p { margin-top: 12px; }

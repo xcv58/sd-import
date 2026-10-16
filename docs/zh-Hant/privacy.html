@@ -23,7 +23,8 @@
     <link rel="stylesheet" href="../assets/site-20260512.css?v=20260530c">
     <link rel="stylesheet" href="../assets/redesign-20260906.css">
 <link rel="stylesheet" href="../assets/site-controls-20260912.css">
-  <link rel="stylesheet" href="../assets/layout-20261016.css"><link rel="alternate" hreflang="en" href="https://sd.jenny.media/privacy.html"><link rel="alternate" hreflang="zh-Hans" href="https://sd.jenny.media/zh-Hans/privacy.html"><link rel="alternate" hreflang="zh-Hant" href="https://sd.jenny.media/zh-Hant/privacy.html"><link rel="alternate" hreflang="ja" href="https://sd.jenny.media/ja/privacy.html"><link rel="alternate" hreflang="ko" href="https://sd.jenny.media/ko/privacy.html"><link rel="alternate" hreflang="de" href="https://sd.jenny.media/de/privacy.html"><link rel="alternate" hreflang="fr" href="https://sd.jenny.media/fr/privacy.html"><link rel="alternate" hreflang="es" href="https://sd.jenny.media/es/privacy.html"><link rel="alternate" hreflang="pt-BR" href="https://sd.jenny.media/pt-BR/privacy.html"><link rel="alternate" hreflang="it" href="https://sd.jenny.media/it/privacy.html"><link rel="alternate" hreflang="x-default" href="https://sd.jenny.media/privacy.html"></head>
+  <link rel="stylesheet" href="../assets/layout-20261016.css">
+  <link rel="stylesheet" href="../assets/content-20261016.css"><link rel="alternate" hreflang="en" href="https://sd.jenny.media/privacy.html"><link rel="alternate" hreflang="zh-Hans" href="https://sd.jenny.media/zh-Hans/privacy.html"><link rel="alternate" hreflang="zh-Hant" href="https://sd.jenny.media/zh-Hant/privacy.html"><link rel="alternate" hreflang="ja" href="https://sd.jenny.media/ja/privacy.html"><link rel="alternate" hreflang="ko" href="https://sd.jenny.media/ko/privacy.html"><link rel="alternate" hreflang="de" href="https://sd.jenny.media/de/privacy.html"><link rel="alternate" hreflang="fr" href="https://sd.jenny.media/fr/privacy.html"><link rel="alternate" hreflang="es" href="https://sd.jenny.media/es/privacy.html"><link rel="alternate" hreflang="pt-BR" href="https://sd.jenny.media/pt-BR/privacy.html"><link rel="alternate" hreflang="it" href="https://sd.jenny.media/it/privacy.html"><link rel="alternate" hreflang="x-default" href="https://sd.jenny.media/privacy.html"></head>
 <body class="preload">
     <a class="skip-link" href="#main" data-i18n="m003">跳至正文</a>
     <div class="container">
@@ -43,15 +44,23 @@
         <section class="section section-divider">
             <article class="policy-box">
                 <h2 data-i18n="m256">本地保存的資料</h2>
-                <p data-i18n="m257">SD Card Import 將設定、資料夾權限、匯入歷史與重複偵測記錄儲存在你的 Mac 本機。它使用與記憶卡偵測輔助程式共用的 App Group 容器，也可能透過 macOS UserDefaults 儲存偏好設定。</p>
-                <h2 data-i18n="m258">可選的便攜匯入回執</h2>
-                <p data-i18n="m259">啟用便攜匯入回執後，App會在可寫來源上建立或追加 <code>.sd-import/imported-v1.jsonl</code>。此隱藏台帳包含帶版本的檔案指紋、相對來源路徑、大小、修改和匯入時間戳及校驗和，便於另一台 Mac 避免重複匯入。它不包含目標路徑、使用者名稱或媒體內容。此選項預設關閉；唯讀來源會繼續處理而不寫入便攜歷史；台帳訪問會拒絕通過符號連結重定向到所選來源之外。</p>
+                <p data-i18n="m309">你的設定、資料夾存取權限和匯入記錄都留在 Mac 上。App 會利用這些記錄辨識已匯入的檔案。</p>
+                <details class="privacy-details">
+                    <summary data-i18n="m308">技術細節</summary>
+                    <p data-i18n="m257">SD Card Import 將設定、資料夾權限、匯入歷史與重複偵測記錄儲存在你的 Mac 本機。它使用與記憶卡偵測輔助程式共用的 App Group 容器，也可能透過 macOS UserDefaults 儲存偏好設定。</p>
+                </details>
+                <h2 data-i18n="m258">讓另一台 Mac 辨識已匯入的檔案</h2>
+                <p data-i18n="m310">這項功能預設關閉。啟用後，App 會在可寫入的記憶卡或來源資料夾儲存隱藏的匯入記錄，讓另一台 Mac 辨識已拷貝的檔案。記錄不含照片或影片內容、目標資料夾路徑或使用者名稱。唯讀來源仍可匯入，不會寫入這些記錄。</p>
+                <details class="privacy-details">
+                    <summary data-i18n="m308">技術細節</summary>
+                    <p data-i18n="m259">啟用在來源儲存匯入記錄後，App 會在可寫入的來源建立或更新 <code>.sd-import/imported-v1.jsonl</code>。這個隱藏檔案包含有版本資訊的檔案識別資料、相對來源路徑、大小、修改與匯入時間，以及檢查資料是否完整的檢查碼，讓另一台 Mac 避免重複匯入。它不包含目標路徑、使用者名稱或照片、影片內容。這項功能預設關閉；唯讀來源仍可匯入，不會寫入這些記錄。App 會拒絕透過符號連結讀寫所選來源以外的位置。</p>
+                </details>
                 <h2 data-i18n="m260">網絡使用</h2>
-                <p data-i18n="m261">Apple 負責 App Store 下載、更新和 StoreKit 購買。開啟網站連結或意見回饋會使用瀏覽器或郵件 App。SD Card Import 不會上傳您的媒體。</p>
+                <p data-i18n="m261">Apple 負責 App Store 下載、更新和購買。開啟網站連結或傳送意見時，會使用你的瀏覽器或郵件 App。SD Card Import 不會上傳你的照片或影片。</p>
                 <h2 data-i18n="m262">App Store 購買</h2>
-                <p data-i18n="m263">Apple 處理 SD Card Import 的購買和恢復。App 透過經驗證的 StoreKit 交易及權益資訊，判斷 14 天試用或終身使用權限是否有效。試用期從經驗證的交易日期開始計算。我們不會收到付款卡資訊。</p>
-                <h2 data-i18n="m264">無自動遙測</h2>
-                <p data-i18n="m265">SD Card Import 不會自動向維護者傳送分析資料、遙測、匯入歷史、媒體、資料夾清單或當機報告。僅在您要求時匯出診斷，其中可能包含資料夾名稱、路徑和錯誤文字。分享前請檢查並遮蔽私人資訊。App 無法瀏覽系統當機報告。</p>
+                <p data-i18n="m263">Apple 負責處理 SD Card Import 的購買和恢復購買。App 會檢查 Apple 驗證過的購買與使用權限記錄，確認 14 天試用或終身使用權限是否有效。試用期從經驗證的購買日期起算。我們不會收到你的付款卡資料。</p>
+                <h2 data-i18n="m264">不會自動傳送使用報告</h2>
+                <p data-i18n="m265">SD Card Import 不會自動向開發者傳送使用情況、匯入記錄、照片或影片、資料夾清單或當機報告。只有在你要求時才會匯出診斷報告，其中可能包含資料夾名稱、路徑和錯誤訊息。分享前請先檢查並移除私人資訊。App 無法瀏覽系統當機報告。</p>
                 <h2 data-i18n="m266">支援請求</h2>
                 <p data-i18n="m267">透過電子郵件聯絡支援時，您自行選擇經郵件服務供應商傳送的訊息和附件。公開的 GitHub 議題對所有人可見。請勿在公開議題中附上私人照片、影片、完整記憶卡傾印、憑證或未遮蔽的日誌。</p>
                 <h2 data-i18n="m223">聯繫方式</h2>

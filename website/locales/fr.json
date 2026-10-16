@@ -298,5 +298,8 @@
   "m303": "Matin en montagne",
   "m304": "Votre navigateur ne prend pas en charge la vidéo SD Card Import.",
   "m305": "Fermer",
-  "m307": "Dans les versions de l’app proposant Envoyer un commentaire…, choisissez Réglages > Général > Envoyer un commentaire… ou Aide > Envoyer un commentaire…. Un brouillon contenant la version de l’app, son numéro de build et la version de macOS s’ouvre. Ajoutez votre message, puis envoyez-le depuis votre app de messagerie."
+  "m307": "Dans les versions de l’app proposant Envoyer un commentaire…, choisissez Réglages > Général > Envoyer un commentaire… ou Aide > Envoyer un commentaire…. Un brouillon contenant la version de l’app, son numéro de build et la version de macOS s’ouvre. Ajoutez votre message, puis envoyez-le depuis votre app de messagerie.",
+  "m308": "Détails techniques",
+  "m309": "Vos réglages, autorisations de dossiers et historique d’importation restent sur votre Mac. Ces informations permettent à l’app de reconnaître les fichiers déjà importés.",
+  "m310": "Cette option est désactivée par défaut. Si vous l’activez, l’app enregistre un historique masqué sur les cartes ou dossiers sources accessibles en écriture. Un autre Mac peut ainsi reconnaître les fichiers déjà copiés. Cet historique ne contient ni contenu multimédia, ni chemin de destination, ni nom d’utilisateur. Les sources en lecture seule restent utilisables sans enregistrer cet historique."
 }

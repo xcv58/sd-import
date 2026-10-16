@@ -57,12 +57,12 @@
                 <article class="step">
                     <span class="step-number">2</span>
                     <h3 data-i18n="m189">Set folders</h3>
-                    <p data-i18n="m190">Open Settings, choose photo and video destinations, and optionally enable automatic source ejection or portable import receipts. Portable receipts write a hidden <code>.sd-import</code> ledger on writable sources so other Macs can avoid duplicate imports.</p>
+                    <p data-i18n="m190">Open Settings and choose photo and video destination folders. You can also enable automatic source ejection. To recognize previous imports on another Mac, enable “Store portable import receipts on source drives”. This saves a hidden import-history file inside the <code>.sd-import</code> folder on writable sources.</p>
                 </article>
                 <article class="step">
                     <span class="step-number">3</span>
                     <h3 data-i18n="m191">Import</h3>
-                    <p data-i18n="m192">Insert a card, allow the scan, and review the preview. Files recognized from portable history are labeled <code>Other Mac</code>; choose <code>Import Anyway</code> only if you want to copy those files again. Keep the card connected until copying finishes, then eject it safely.</p>
+                    <p data-i18n="m192">Insert a card, allow the scan, and review the preview. Files recognized from the history on your card are labeled <code>Other Mac</code>; choose <code>Import Anyway</code> only if you want to copy those files again. Keep the card connected until copying finishes, then eject it safely.</p>
                 </article>
             </div>
         </section>
@@ -76,7 +76,7 @@
                 <li><span class="step-number">1</span><div><h3 data-i18n="m195">Connect a card.</h3><p data-i18n="m196">Insert an SD card or connect a camera card reader.</p></div></li>
                 <li><span class="step-number">2</span><div><h3 data-i18n="m197">Review the scan.</h3><p data-i18n="m198">Check what is new, already imported, unsupported, or conflicting.</p></div></li>
                 <li><span class="step-number">3</span><div><h3 data-i18n="m199">Start the copy.</h3><p data-i18n="m200">Confirm the destinations and leave the source connected until the import completes.</p></div></li>
-                <li><span class="step-number">4</span><div><h3 data-i18n="m201">Eject safely.</h3><p data-i18n="m202">Choose <code>Eject Source</code> on the receipt, or enable automatic ejection in Settings. Automatic ejection runs only after an error-free import.</p></div></li>
+                <li><span class="step-number">4</span><div><h3 data-i18n="m201">Eject safely.</h3><p data-i18n="m202">Choose <code>Eject Source</code> in the import results, or enable automatic ejection in Settings. Automatic ejection runs only after an error-free import.</p></div></li>
             </ol>
         </section>
 
@@ -85,8 +85,8 @@
                 <h2 data-i18n="m203">Safety notes</h2>
                 <ul>
                     <li data-i18n="m204">SD Card Import copies files; it does not erase the card.</li>
-                    <li data-i18n="m205">When portable receipts are enabled, SD Card Import writes only its hidden <code>.sd-import</code> ledger on the source. Locked and read-only sources continue with a warning.</li>
-                    <li data-i18n="m206">Files already imported are skipped on future runs. <code>Import Anyway</code> is available only for files recognized from portable history. If a source file changes after scanning, SD Card Import requires a rescan instead of applying stale history.</li>
+                    <li data-i18n="m205">If you enable import history on source drives, SD Card Import writes only its history inside the hidden <code>.sd-import</code> folder on the source. Locked and read-only sources still import, with a warning that this history cannot be saved.</li>
+                    <li data-i18n="m206">Files already imported are skipped on future runs. <code>Import Anyway</code> is available only for files recognized from the history on your card. If a source file changes after scanning, SD Card Import requires a rescan instead of using outdated history.</li>
                     <li data-i18n="m207">SD Card Import does not overwrite different files at an existing destination. Ordinary filename conflicts get a suffix. Insta360 recording conflicts are skipped to preserve filenames; choose a different destination before copying.</li>
                     <li data-i18n="m208">Keep the app installed in <code>Applications</code> to use background card prompts.</li>
                 </ul>
@@ -108,7 +108,7 @@
                 <h2 data-i18n="m215">If import does not start automatically.</h2>
                 <p data-i18n="m216">Make sure <code>Prompt when a card is mounted</code> is enabled in Settings &gt; General, open SD Card Import manually, then choose <code>Import From Card...</code>. For persistent issues, export diagnostics and contact support.</p>
             </div>
-            <div class="cta-group" data-i18n="m217"><a class="cta-button cta-primary" href="support.html">Get support</a> <a class="cta-button cta-secondary" href="https://apps.apple.com/us/app/sd-card-import/id6807178069?mt=12">Updates</a></div>
+            <div class="cta-group" data-i18n="m217"><a class="cta-button cta-primary" href="support.html">Get support</a> <a class="cta-button cta-secondary" href="https://apps.apple.com/app/sd-card-import/id6807178069?mt=12">Updates</a></div>
         </section>
     </main>
 

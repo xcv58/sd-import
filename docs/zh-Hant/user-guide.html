@@ -57,12 +57,12 @@
                 <article class="step">
                     <span class="step-number">2</span>
                     <h3 data-i18n="m189">設定檔案夾</h3>
-                    <p data-i18n="m190">打開“設定”，選擇照片和影片目的位置，還可啟用自動推出來源裝置或便攜匯入回執。便攜回執會在可寫來源上寫入隱藏的 <code>.sd-import</code> 台帳，讓其他 Mac 避免重複匯入。</p>
+                    <p data-i18n="m190">開啟「設定」，選擇照片和影片的目的資料夾，也可啟用匯入後自動退出來源。若要讓另一台 Mac 辨識已匯入的檔案，啟用「在來源驅動器上保存可攜式匯入記錄」。App 會在可寫入來源的隱藏 <code>.sd-import</code> 資料夾中儲存匯入記錄。</p>
                 </article>
                 <article class="step">
                     <span class="step-number">3</span>
                     <h3 data-i18n="m191">匯入</h3>
-                    <p data-i18n="m192">插入記憶卡，允許掃描並檢查預覽。從可攜式歷史記錄識別的檔案標示為<code>另一台 Mac</code>；僅在希望再次複製這些檔案時選擇<code>仍然匯入</code>。複製完成前保持記憶卡連接，然後安全退出。</p>
+                    <p data-i18n="m192">插入記憶卡，允許掃描並檢查預覽。從卡上記錄辨識出的檔案會標示為<code>另一台 Mac</code>；只有想再次拷貝這些檔案時，才選擇<code>仍然匯入</code>。請保持記憶卡連接，直到拷貝完成，再安全退出。</p>
                 </article>
             </div>
         </section>
@@ -76,7 +76,7 @@
                 <li><span class="step-number">1</span><div><h3 data-i18n="m195">連接記憶卡。</h3><p data-i18n="m196">插入 SD 卡或連接相機讀卡器。</p></div></li>
                 <li><span class="step-number">2</span><div><h3 data-i18n="m197">檢查掃描結果。</h3><p data-i18n="m198">檢查新增、已匯入、不支援或存在衝突的檔案。</p></div></li>
                 <li><span class="step-number">3</span><div><h3 data-i18n="m199">開始拷貝。</h3><p data-i18n="m200">確認目的位置，保持來源裝置連接直到匯入完成。</p></div></li>
-                <li><span class="step-number">4</span><div><h3 data-i18n="m201">安全推出。</h3><p data-i18n="m202">在回執中選擇 <code>退出來源</code>，或在“設定”中啟用自動推出。只有匯入無錯誤時才會自動推出。</p></div></li>
+                <li><span class="step-number">4</span><div><h3 data-i18n="m201">安全推出。</h3><p data-i18n="m202">在匯入結果中選擇<code>退出來源</code>，或在「設定」中啟用自動退出。只有匯入沒有錯誤時才會自動退出。</p></div></li>
             </ol>
         </section>
 
@@ -85,8 +85,8 @@
                 <h2 data-i18n="m203">安全說明</h2>
                 <ul>
                     <li data-i18n="m204">SD Card Import 拷貝檔案，不會抹掉記憶卡。</li>
-                    <li data-i18n="m205">啟用便攜回執後，SD Card Import 僅在來源上寫入隱藏的 <code>.sd-import</code> 台帳。已鎖定和唯讀來源會繼續匯入，並顯示警告。</li>
-                    <li data-i18n="m206">已匯入檔案會在之後跳過。<code>仍然匯入</code> 僅適用於從便攜歷史識別的檔案。如果來源檔案在掃描後改變，SD Card Import 會要求重新掃描，不會使用過期歷史。</li>
+                    <li data-i18n="m205">若啟用在來源儲存匯入記錄，SD Card Import 只會在來源隱藏的 <code>.sd-import</code> 資料夾中寫入記錄。鎖定或唯讀的來源仍可匯入，並會提示無法儲存這些記錄。</li>
+                    <li data-i18n="m206">已匯入的檔案會在之後略過。<code>仍然匯入</code>只適用於從卡上記錄辨識出的檔案。如果來源檔案在掃描後變更，SD Card Import 會要求重新掃描，不會沿用過期記錄。</li>
                     <li data-i18n="m207">SD Card Import 不會覆寫目的地中內容不同的檔案。一般檔名衝突會加上後綴。Insta360 錄影發生衝突時會略過，以保留原始檔名；請在複製前選擇其他目的地。</li>
                     <li data-i18n="m208">將 App 保留在 <code>Applications</code> 中，以使用背景記憶卡提示。</li>
                 </ul>
@@ -108,7 +108,7 @@
                 <h2 data-i18n="m215">如果匯入沒有自動開始。</h2>
                 <p data-i18n="m216">確認在「設定 &gt; 通用」中啟用<code>記憶卡掛載時顯示提示</code>，手動開啟 SD Card Import，再選擇<code>從記憶卡匯入…</code>。如果問題持續，請匯出診斷並聯絡支援。</p>
             </div>
-            <div class="cta-group" data-i18n="m217"><a class="cta-button cta-primary" href="support.html">獲取支援</a> <a class="cta-button cta-secondary" href="https://apps.apple.com/us/app/sd-card-import/id6807178069?mt=12">更新</a></div>
+            <div class="cta-group" data-i18n="m217"><a class="cta-button cta-primary" href="support.html">獲取支援</a> <a class="cta-button cta-secondary" href="https://apps.apple.com/app/sd-card-import/id6807178069?mt=12">更新</a></div>
         </section>
     </main>
 

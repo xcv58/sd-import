@@ -298,5 +298,8 @@
   "m303": "Mañana en la montaña",
   "m304": "Tu navegador no admite el vídeo de SD Card Import.",
   "m305": "Cerrar",
-  "m307": "En las versiones de la app que incluyen Enviar comentarios…, elige Ajustes > General > Enviar comentarios… o Ayuda > Enviar comentarios…. Se abre un borrador con la versión de la app, la compilación y la versión de macOS. Añade tu mensaje y envíalo desde tu app de correo."
+  "m307": "En las versiones de la app que incluyen Enviar comentarios…, elige Ajustes > General > Enviar comentarios… o Ayuda > Enviar comentarios…. Se abre un borrador con la versión de la app, la compilación y la versión de macOS. Añade tu mensaje y envíalo desde tu app de correo.",
+  "m308": "Detalles técnicos",
+  "m309": "Los ajustes, permisos de carpetas e historial de importación permanecen en tu Mac. La app usa estos registros para reconocer los archivos ya importados.",
+  "m310": "Esta opción está desactivada de forma predeterminada. Si la activas, la app guarda un historial oculto en las tarjetas o carpetas de origen que permiten escritura, para que otro Mac reconozca los archivos ya copiados. No contiene archivos multimedia, rutas de destino ni nombres de usuario. Los orígenes de solo lectura siguen funcionando sin guardar este historial."
 }

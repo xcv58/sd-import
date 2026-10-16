@@ -18,7 +18,7 @@ LANGUAGES = {
     "pt-BR": "Português (Brasil)", "it": "Italiano",
 }
 PAGES = ["index", "install", "user-guide", "support", "privacy", "eula", "updates"]
-APP_STORE = "https://apps.apple.com/us/app/sd-card-import/id6807178069?mt=12"
+APP_STORE = "https://apps.apple.com/app/sd-card-import/id6807178069?mt=12"
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
 TOKEN = re.compile(r"\{/?\d+\}")
 
