@@ -303,5 +303,21 @@
   "m309": "설정, 폴더 접근 권한, 가져오기 기록은 Mac에 저장됩니다. 앱은 이 기록으로 이미 가져온 파일을 식별합니다.",
   "m310": "이 설정은 기본적으로 꺼져 있습니다. 켜면 쓰기 가능한 원본 카드나 폴더에 숨겨진 가져오기 기록 파일을 저장하여 다른 Mac에서도 이미 복사한 파일을 식별할 수 있습니다. 미디어 내용, 대상 경로, 사용자 이름은 포함되지 않습니다. 읽기 전용 원본은 이 기록을 쓰지 않고 계속 사용할 수 있습니다.",
   "ui.menuOpen": "메뉴 열기",
-  "ui.menuClose": "메뉴 닫기"
+  "ui.menuClose": "메뉴 닫기",
+  "beta.title": "SD Card Import — 베타",
+  "beta.description": "Apple의 TestFlight 앱으로 Mac용 SD Card Import 공개 베타에 참여하세요.",
+  "beta.heading": "SD Card Import 베타에 참여하세요.",
+  "beta.intro": "Mac에서 SD Card Import를 테스트하고 의견을 보내 주세요.",
+  "beta.eyebrow": "Mac용 TestFlight",
+  "beta.join": "TestFlight에서 참여",
+  "beta.getTestFlight": "Mac용 TestFlight 받기",
+  "beta.availability": "TestFlight에는 현재 이용할 수 있는 베타 빌드가 표시됩니다. 이용 가능 여부와 기능은 Mac App Store 버전과 다를 수 있습니다.",
+  "beta.how": "참여 방법",
+  "beta.step1.title": "TestFlight를 설치하세요.",
+  "beta.step1.body": "테스트할 Mac에 Apple의 TestFlight 앱을 설치하세요.",
+  "beta.step2.title": "초대를 수락하세요.",
+  "beta.step2.body": "Mac에서 공개 베타 링크를 열고 TestFlight의 안내에 따라 SD Card Import를 설치하세요.",
+  "beta.step3.title": "의견을 보내 주세요.",
+  "beta.step3.body": "TestFlight에서 피드백을 보내거나 앱 버전과 발생한 상황을 이메일로 알려 주세요.",
+  "beta.feedback": "베타 피드백 이메일 보내기"
 }

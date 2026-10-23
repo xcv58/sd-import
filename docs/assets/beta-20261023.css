@@ -1,0 +1,22 @@
+/* Layout for the unlisted TestFlight invitation page. */
+.beta-page .beta-hero { max-width: 920px; }
+.beta-page .beta-eyebrow {
+  margin-bottom: 16px;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+.beta-page .beta-actions { justify-content: flex-start; }
+.beta-page .beta-actions .cta-button {
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.beta-page .beta-availability {
+  max-width: 68ch;
+  margin-top: 24px;
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+.beta-page .beta-feedback { display: inline-block; margin-top: 18px; }

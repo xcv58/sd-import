@@ -18,7 +18,10 @@ LANGUAGES = {
     "pt-BR": "Português (Brasil)", "it": "Italiano",
 }
 PAGES = ["index", "install", "user-guide", "support", "privacy", "eula", "updates"]
+UNLISTED_PAGES = ["beta"]
+ALL_PAGES = PAGES + UNLISTED_PAGES
 APP_STORE = "https://apps.apple.com/app/sd-card-import/id6807178069?mt=12"
+TESTFLIGHT = "https://testflight.apple.com/join/PZR6FJCy"
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
 TOKEN = re.compile(r"\{/?\d+\}")
 
@@ -112,7 +115,7 @@ def local_link(value, language):
     parsed = urlsplit(value)
     if parsed.scheme or parsed.netloc or not parsed.path or parsed.path.startswith("/"):
         return value
-    if parsed.path in {page + ".html" for page in PAGES}:
+    if parsed.path in {page + ".html" for page in ALL_PAGES}:
         query = "lang=en" if language == "en" else ""
         return urlunsplit(("", "", parsed.path, query, parsed.fragment))
     if parsed.path.startswith("assets/") and language != "en":
@@ -184,7 +187,7 @@ def build(check=False):
         assert all(isinstance(value, str) and value.strip() for value in catalog.values())
         for key in english:
             assert Counter(re.findall(r"\{/?[\w]+\}", catalog[key])) == Counter(re.findall(r"\{/?[\w]+\}", english[key])), (language, key)
-        for page in PAGES:
+        for page in ALL_PAGES:
             output = render(page, language, catalog, english, units)
             path = DOCS / ("" if language == "en" else language) / f"{page}.html"
             if check:
@@ -205,7 +208,7 @@ def build(check=False):
     else:
         (DOCS / "sitemap.xml").write_text(sitemap)
     assert not failures, f"Generated pages are stale: {failures}"
-    print(f"70 static pages, {len(english)} messages across 10 languages: {'current' if check else 'generated'}")
+    print(f"{len(ALL_PAGES) * len(LANGUAGES)} static pages, {len(english)} messages across {len(LANGUAGES)} languages: {'current' if check else 'generated'}")
 
 
 if __name__ == "__main__":

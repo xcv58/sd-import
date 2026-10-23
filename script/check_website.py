@@ -6,7 +6,7 @@ import json
 import re
 from urllib.parse import unquote, urlsplit
 import xml.etree.ElementTree as ET
-from build_website import APP_STORE, DOCS, LANGUAGES, PAGES, SITE, build, load_json, parse, translated
+from build_website import ALL_PAGES, APP_STORE, DOCS, LANGUAGES, PAGES, SITE, TESTFLIGHT, UNLISTED_PAGES, build, load_json, parse, translated
 
 
 LITERAL_TOKENS = {
@@ -56,7 +56,7 @@ def check():
             raise AssertionError(('Opaque copy accepted', markup))
     referenced = set()
     exempt = {'SD Card Import', 'SD Import', 'GitHub', 'RAW', 'JPEG'} | LITERAL_TOKENS
-    for page in PAGES:
+    for page in ALL_PAGES:
         def coverage(node, covered=False):
             covered = covered or 'data-i18n' in node.attrs or node.tag in {'script', 'style', 'svg'} or any(key in node.attrs for key in ['data-language-name', 'data-language-short', 'data-language-menu'])
             if node.tag is None and re.search('[A-Za-z]', node.text) and not covered:
@@ -97,7 +97,7 @@ def check():
         catalog = load_json(SITE / 'locales' / f'{language}.json')
         for key in ['m016', 'm052', 'm063']:
             assert str(screencast['duration_seconds']) in catalog[key] and '28' not in catalog[key], (language, key)
-        for page in PAGES:
+        for page in ALL_PAGES:
             path = DOCS / ('' if language == 'en' else language) / f'{page}.html'
             content = path.read_text()
             assert 'i@xcv58.com' not in content, (path, 'retired support address')
@@ -108,6 +108,16 @@ def check():
             ids = [n.attrs['id'] for n in nodes if 'id' in n.attrs]
             assert len(ids) == len(set(ids)), (path, 'duplicate id')
             assert len([n for n in nodes if n.tag == 'h1']) == 1
+            if page in UNLISTED_PAGES:
+                robots = next(n for n in nodes if n.tag == 'meta' and n.attrs.get('name') == 'robots')
+                assert {'noindex', 'nofollow', 'noarchive'} <= set(robots.attrs['content'].replace(' ', '').split(',')), path
+                join = next(n for n in nodes if 'data-beta-join' in n.attrs)
+                assert join.attrs.get('href') == TESTFLIGHT, path
+            else:
+                assert not any(
+                    n.tag == 'a' and urlsplit(n.attrs.get('href', '')).path.rstrip('/').split('/')[-1] in {'beta', 'beta.html'}
+                    for n in nodes
+                ), (path, 'unlisted beta page linked from public page')
             assert len([n for n in nodes if 'data-theme-toggle' in n.attrs]) == 1
             assert not any('data-theme-value' in n.attrs for n in nodes)
             theme = next(n for n in nodes if 'data-theme-toggle' in n.attrs)
@@ -167,8 +177,16 @@ def check():
                     assert url.query == ('lang=en' if path.parent == DOCS.resolve() else ''), (path, value)
                 links += 1
     sitemap = ET.parse(DOCS / 'sitemap.xml')
-    assert len(sitemap.findall('{http://www.sitemaps.org/schemas/sitemap/0.9}url')) == 70
-    print(f'PASS: 10 complete catalogs, 70 pages, {links} local references, 10 unmodified Apple badges')
+    urls = sitemap.findall('{http://www.sitemaps.org/schemas/sitemap/0.9}url')
+    assert len(urls) == len(PAGES) * len(LANGUAGES)
+    assert all('/beta' not in node.find('{http://www.sitemaps.org/schemas/sitemap/0.9}loc').text for node in urls)
+    hosting = load_json(DOCS / 'vercel.json')
+    assert hosting == load_json(DOCS.parent / 'vercel.json'), 'Hosting configurations differ'
+    assert {'source': '/beta', 'destination': '/beta.html'} in hosting['rewrites']
+    for route in ['/beta', '/beta.html']:
+        rule = next(rule for rule in hosting['headers'] if rule['source'] == route)
+        assert any(header['key'] == 'X-Robots-Tag' and 'noindex' in header['value'] for header in rule['headers']), route
+    print(f'PASS: {len(LANGUAGES)} complete catalogs, {len(ALL_PAGES) * len(LANGUAGES)} pages, {links} local references, 10 unmodified Apple badges; beta pages unlisted and noindex')
 
 
 if __name__ == '__main__':
