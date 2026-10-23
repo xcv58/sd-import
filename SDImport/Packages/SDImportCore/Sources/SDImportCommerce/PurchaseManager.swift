@@ -196,13 +196,13 @@ public final class PurchaseManager: ObservableObject {
         case .loading:
             return L10n.tr("Loading purchase information…")
         case .purchasing:
-            return L10n.tr("Completing purchase…")
+            return L10n.tr("Waiting for the App Store to complete your purchase…")
         case .startingTrial:
-            return L10n.tr("Starting trial…")
+            return L10n.tr("Waiting for the App Store to activate your free trial…")
         case .pending:
-            return L10n.tr("Purchase is pending approval.")
+            return L10n.tr("Waiting for App Store approval. Access will unlock after approval.")
         case .cancelled:
-            return L10n.tr("Purchase cancelled.")
+            return L10n.tr("App Store request cancelled. You can try again.")
         case .verificationFailed:
             return L10n.tr("The App Store transaction could not be verified.")
         case .unavailable:

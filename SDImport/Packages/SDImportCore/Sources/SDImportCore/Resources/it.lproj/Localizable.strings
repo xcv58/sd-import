@@ -609,3 +609,9 @@
 "App: %@" = "App: %@";
 "Version: %@ (build %@)" = "Versione: %@ (build %@)";
 "macOS: %@" = "macOS: %@";
+"Apple handles the free trial and purchases. You may be asked for Touch ID or your Apple Account password. SD Card Import never sees your password." = "Apple gestisce la prova gratuita e gli acquisti. Potrebbe esserti chiesto di usare Touch ID o di inserire la password del tuo Apple Account. SD Card Import non riceve mai la tua password.";
+"Waiting for the App Store to complete your purchase…" = "In attesa che l’App Store completi il tuo acquisto…";
+"Waiting for the App Store to activate your free trial…" = "In attesa che l’App Store attivi la tua prova gratuita…";
+"Waiting for App Store approval. Access will unlock after approval." = "In attesa dell’approvazione dell’App Store. L’accesso verrà sbloccato dopo l’approvazione.";
+"App Store request cancelled. You can try again." = "Richiesta all’App Store annullata. Puoi riprovare.";
+"Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "Riprova. Se hai già attivato la prova o acquistato l’accesso a vita, scegli Ripristina acquisti.";

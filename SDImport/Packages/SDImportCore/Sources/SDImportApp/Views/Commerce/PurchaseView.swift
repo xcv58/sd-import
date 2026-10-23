@@ -34,10 +34,28 @@ struct PurchaseView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            Label {
+                Text(L10n.tr("Apple handles the free trial and purchases. You may be asked for Touch ID or your Apple Account password. SD Card Import never sees your password."))
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "info.circle")
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+
             if let status = purchaseManager.statusMessage {
-                Text(status)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(status)
+                    switch purchaseManager.accessState.purchaseStatus {
+                    case .failed, .verificationFailed:
+                        Text(L10n.tr("Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases."))
+                    default:
+                        EmptyView()
+                    }
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(spacing: 10) {
@@ -59,7 +77,8 @@ struct PurchaseView: View {
                     .disabled(purchaseManager.isPerformingStoreOperation)
                     .frame(maxWidth: .infinity)
 
-                    if let error = purchaseManager.trialProductError {
+                    if let error = purchaseManager.trialProductError,
+                       error != purchaseManager.statusMessage {
                         Text(error)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -82,7 +101,8 @@ struct PurchaseView: View {
                 .disabled(purchaseManager.isPerformingStoreOperation)
                 .frame(maxWidth: .infinity)
 
-                if let error = purchaseManager.lifetimeProductError {
+                if let error = purchaseManager.lifetimeProductError,
+                   error != purchaseManager.statusMessage {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.secondary)
