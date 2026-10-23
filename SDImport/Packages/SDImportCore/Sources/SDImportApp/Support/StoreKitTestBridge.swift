@@ -54,6 +54,12 @@ final class StoreKitTestPurchaseDriver {
 
     func refreshStoreState() async {
         await manager.refreshStoreState()
+        // Observing transactions also schedules an initial refresh. Match the
+        // UI's disabled purchase controls until every refresh has finished.
+        for _ in 0..<500 {
+            guard manager.isPerformingStoreOperation else { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     func purchase() async {
