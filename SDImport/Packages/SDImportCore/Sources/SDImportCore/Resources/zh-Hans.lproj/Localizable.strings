@@ -609,3 +609,9 @@
 "App: %@" = "应用：%@";
 "Version: %@ (build %@)" = "版本：%@（构建 %@）";
 "macOS: %@" = "macOS：%@";
+"Apple handles the free trial and purchases. You may be asked for Touch ID or your Apple Account password. SD Card Import never sees your password." = "免费试用和购买均由 Apple 处理。系统可能会要求你使用触控 ID 或输入 Apple 账户密码。SD Card Import 不会获取你的密码。";
+"Waiting for the App Store to complete your purchase…" = "正在等待 App Store 完成购买…";
+"Waiting for the App Store to activate your free trial…" = "正在等待 App Store 激活免费试用…";
+"Waiting for App Store approval. Access will unlock after approval." = "正在等待 App Store 批准。批准后即可解锁使用权限。";
+"App Store request cancelled. You can try again." = "App Store 请求已取消。你可以重试。";
+"Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "请重试。如果你已经激活试用或购买了终身使用权限，请选择“恢复购买”。";
