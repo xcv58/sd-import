@@ -1,0 +1,116 @@
+{
+  "source_commit": "6e867a9e3e023a7b468eb53c9f946560f80477fc",
+  "capture_date": "2026-10-23",
+  "method": "screencapture -x -o -l <native-window-id>",
+  "context": "Isolated local development harness with unchanged production views. Actual MediaScanner and ImportEngine results populate the workflow screens. The capture fixture supplies sample trial/lifetime product metadata without making purchases. Folder-picker authorization and real StoreKit authentication are not exercised by these screenshots.",
+  "synthetic_import": {
+    "files_copied": 27,
+    "failed_files": 0,
+    "bytes_verified": 996257943,
+    "sha256_matched_files": 27
+  },
+  "native_size": [
+    2400,
+    1500
+  ],
+  "native_corner_alpha": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "composition_background": "#F2F3F5",
+  "files": [
+    {
+      "path": "docs/review-assets/release-1.1.1/01-file-preview-native.png",
+      "sha256": "e0e7ceb62f65598db305f7c041569602e6c7ff058ab571a984a3c489dc0bdaac",
+      "width": 2400,
+      "height": 1500,
+      "mode": "RGBA"
+    },
+    {
+      "path": "docs/review-assets/release-1.1.1/01-file-preview-2560x1600.png",
+      "sha256": "a31bd5726747b5256a7bd333d080e25074dc621cec43ac9b782d9617c70646e3",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "docs/assets/images/sd-card-import-file-preview-20261023-960.webp",
+      "sha256": "f82497b6168673d00082cc66b159df28427bfbb77876b19ccecd0a08fd2f4a3d",
+      "width": 960,
+      "height": 600,
+      "mode": "RGB"
+    },
+    {
+      "path": "docs/assets/images/sd-card-import-file-preview-20261023-1920.webp",
+      "sha256": "5ff8a25c76fa129a1d90828bce49d9c2dd26bec51e96a05051f2b63e7710ec75",
+      "width": 1920,
+      "height": 1200,
+      "mode": "RGB"
+    },
+    {
+      "path": "docs/review-assets/release-1.1.1/02-import-plan-native.png",
+      "sha256": "a7149daac45b66d47c01c4c9e479e0ae2d3cfda8d5faa4426e93b7df4564f15a",
+      "width": 2400,
+      "height": 1500,
+      "mode": "RGBA"
+    },
+    {
+      "path": "docs/review-assets/release-1.1.1/02-import-plan-2560x1600.png",
+      "sha256": "d01e9af865c32963e128ccfadd8ee03e73267d59e8a7fb9b7aa5acb55e9a618d",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "docs/assets/images/sd-card-import-import-plan-20261023-960.webp",
+      "sha256": "61230d6d0be06f772e77f33ab302293964c9746a8f4a442fccc5f750959f5ed5",
+      "width": 960,
+      "height": 600,
+      "mode": "RGB"
+    },
+    {
+      "path": "docs/assets/images/sd-card-import-import-plan-20261023-1920.webp",
+      "sha256": "6566896c6efe71393e0a376bbea2572fc6d2e5ddde533b6ab949bbe69504946f",
+      "width": 1920,
+      "height": 1200,
+      "mode": "RGB"
+    },
+    {
+      "path": "docs/review-assets/release-1.1.1/04-complete-native.png",
+      "sha256": "1be692a06f82c8406011890296d99e924c5d70aeb00623a85b71ed0981cf6e57",
+      "width": 2400,
+      "height": 1500,
+      "mode": "RGBA"
+    },
+    {
+      "path": "docs/review-assets/release-1.1.1/04-complete-2560x1600.png",
+      "sha256": "e390cf82f9a430a65c1db6aa486160f2221e270ac42424103249fc2a7cfbb5b7",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "docs/review-assets/release-1.1.1/05-trial-purchase-native.png",
+      "sha256": "d90891271b82e61232cf647b1e94d069f25c60ac061a10e21aa8e549a81af9e8",
+      "width": 2400,
+      "height": 1500,
+      "mode": "RGBA"
+    },
+    {
+      "path": "docs/review-assets/release-1.1.1/05-trial-purchase-2560x1600.png",
+      "sha256": "f01eafb982e07d2a34609608ec189e562a747a8e4e46cfc5d6bacd1b80636813",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "docs/assets/images/sd-card-import-trial-purchase-20261023.png",
+      "sha256": "524972162cbd0a93050dda6be3acfa3c7e5463ec372b606216d0ed4ee0aa1398",
+      "width": 1920,
+      "height": 1200,
+      "mode": "RGB"
+    }
+  ]
+}

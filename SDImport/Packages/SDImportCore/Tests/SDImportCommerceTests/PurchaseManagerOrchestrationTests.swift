@@ -293,7 +293,7 @@ final class PurchaseManagerOrchestrationTests: XCTestCase {
         XCTAssertFalse(manager.isPerformingStoreOperation)
     }
 
-    func testRestoreVerificationFailureNeverUnlocksOrStartsSync() async {
+    func testRestoreVerificationFailureAllowsSyncButNeverUnlocks() async {
         let recorder = StorefrontCallRecorder()
         let manager = makeManager(storefront: PurchaseStorefront(
             loadProduct: { _ in nil },
@@ -315,7 +315,7 @@ final class PurchaseManagerOrchestrationTests: XCTestCase {
 
         XCTAssertFalse(manager.hasLifetimeUnlock)
         XCTAssertEqual(manager.accessState.purchaseStatus, .verificationFailed)
-        XCTAssertEqual(recorder.syncCalls, 0)
+        XCTAssertEqual(recorder.syncCalls, 1)
     }
 
     func testProductTimeoutDoesNotLeavePurchaseLoadingForever() async {

@@ -246,6 +246,18 @@ are opaque 2560 x 1600. All three images were inspected, including all four
 corners. They contain no sharing indicator or cursor, and no controls were
 repainted. The purchase sheet legitimately disables the red close button.
 
+### Version 1.1.1 preparation on October 23, 2026
+
+Replacement file-preview, import-plan, completion, and trial/purchase images
+are prepared in `docs/review-assets/release-1.1.1/`. Original native windows are
+preserved with transparent corners, alongside opaque 2560 x 1600 compositions
+on #F2F3F5. The preview and plan show `Start Trial or Unlock`; the completion
+has no sharing indicator; the purchase sheet includes the Apple authentication
+explanation. These are local development captures at `6e867a9`, using synthetic
+media and sample StoreKit metadata. They are not TestFlight captures. See the
+README and SHA-256 manifest for provenance and validation. Nothing has been
+uploaded to App Store Connect as part of this preparation.
+
 ## Version 1.1 submission record
 
 - Source commit: `3968f1473900bbcb4b66a1f140625b021b7265aa`.
