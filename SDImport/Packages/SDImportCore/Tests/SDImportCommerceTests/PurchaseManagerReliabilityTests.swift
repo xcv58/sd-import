@@ -154,6 +154,38 @@ final class PurchaseManagerReliabilityTests: XCTestCase {
         await assertNewerVerifiedAccessIsPreserved(product: .trial)
     }
 
+    func testFailedNewerLifetimeCheckDoesNotSuppressRevocation() async {
+        await assertOlderResultSurvivesFailedNewerCheck(product: .lifetime)
+    }
+
+    func testFailedNewerTrialCheckDoesNotSuppressRevocation() async {
+        await assertOlderResultSurvivesFailedNewerCheck(product: .trial)
+    }
+
+    func testTimedOutNewerLifetimeCheckDoesNotSuppressRevocation() async {
+        await assertOlderResultSurvivesFailedNewerCheck(product: .lifetime, newerTimesOut: true)
+    }
+
+    func testTimedOutNewerTrialCheckDoesNotSuppressRevocation() async {
+        await assertOlderResultSurvivesFailedNewerCheck(product: .trial, newerTimesOut: true)
+    }
+
+    func testFailedNewerLifetimeCheckDoesNotSuppressVerifiedGrant() async {
+        await assertOlderResultSurvivesFailedNewerCheck(product: .lifetime, revoking: false)
+    }
+
+    func testFailedNewerTrialCheckDoesNotSuppressVerifiedGrant() async {
+        await assertOlderResultSurvivesFailedNewerCheck(product: .trial, revoking: false)
+    }
+
+    func testOlderLifetimeGrantDoesNotInvalidateNewerPendingCheck() async {
+        await assertNewerCheckAppliesAfterOlderGrant(product: .lifetime)
+    }
+
+    func testOlderTrialGrantDoesNotInvalidateNewerPendingCheck() async {
+        await assertNewerCheckAppliesAfterOlderGrant(product: .trial)
+    }
+
     func testOrdinaryLookupTimeoutPreservesPreviouslyVerifiedAccess() async {
         let state = StorefrontState()
         let manager = makeManager(
@@ -272,9 +304,90 @@ final class PurchaseManagerReliabilityTests: XCTestCase {
         XCTAssertTrue(manager.canStartImport, file: file, line: line)
     }
 
+    private func assertOlderResultSurvivesFailedNewerCheck(
+        product: EntitlementProduct,
+        newerTimesOut: Bool = false,
+        revoking: Bool = true,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let state = StorefrontState()
+        state.currentResult = revoking ? .entitled(purchaseDate: purchaseDate) : .notEntitled
+        let manager = makeOrderedLookupManager(
+            state: state,
+            product: product,
+            lookupTimeout: newerTimesOut ? .milliseconds(200) : .seconds(5)
+        )
+        await manager.refreshStoreState()
+        XCTAssertEqual(manager.canStartImport, revoking, file: file, line: line)
+
+        state.heldLookupSource = .current
+        let older = Task { await manager.refreshStoreState() }
+        let started = await waitUntil { state.lookupContinuation != nil }
+        XCTAssertTrue(started, file: file, line: line)
+        state.heldLookupSource = nil
+        state.currentResult = .verificationFailed
+        state.delayCurrentLookup = newerTimesOut
+        let newer = Task { await manager.refreshStoreState() }
+        if newerTimesOut {
+            let newerStarted = await waitUntil { state.delayedCurrentLookupStarted }
+            XCTAssertTrue(newerStarted, file: file, line: line)
+        } else {
+            await newer.value
+        }
+        XCTAssertEqual(manager.canStartImport, revoking, "A failed check must preserve existing access", file: file, line: line)
+
+        // Both requests share a deadline duration, so deliver the older valid
+        // result while the newer request is pending, then let that request time out.
+        state.finishLookup(with: revoking ? .notEntitled : .entitled(purchaseDate: purchaseDate))
+        await older.value
+        await newer.value
+        state.delayCurrentLookup = false
+
+        XCTAssertEqual(manager.canStartImport, !revoking, "A failed newer check must not cancel a valid older result", file: file, line: line)
+        XCTAssertFalse(manager.isPerformingStoreOperation, file: file, line: line)
+    }
+
+    private func assertNewerCheckAppliesAfterOlderGrant(
+        product: EntitlementProduct,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let state = StorefrontState()
+        let manager = makeManager(state: state, current: { identifier in
+            guard identifier == product.identifier else { return .notEntitled }
+            return await withCheckedContinuation { state.lookupContinuations.append($0) }
+        })
+
+        let older = Task { await manager.refreshStoreState() }
+        let olderStarted = await waitUntil { state.lookupContinuations.count == 1 }
+        XCTAssertTrue(olderStarted, file: file, line: line)
+        let newer = Task { await manager.refreshStoreState() }
+        let newerStarted = await waitUntil { state.lookupContinuations.count == 2 }
+        XCTAssertTrue(newerStarted, file: file, line: line)
+        guard olderStarted, newerStarted else {
+            let pending = state.lookupContinuations
+            state.lookupContinuations.removeAll()
+            for continuation in pending { continuation.resume(returning: .notEntitled) }
+            await older.value
+            await newer.value
+            return
+        }
+
+        state.lookupContinuations.removeFirst().resume(returning: .entitled(purchaseDate: purchaseDate))
+        await older.value
+        XCTAssertTrue(manager.canStartImport, file: file, line: line)
+
+        state.lookupContinuations.removeFirst().resume(returning: .notEntitled)
+        await newer.value
+        XCTAssertFalse(manager.canStartImport, "Committing an older grant must not cancel a newer request", file: file, line: line)
+        XCTAssertFalse(manager.isPerformingStoreOperation, file: file, line: line)
+    }
+
     private func makeOrderedLookupManager(
         state: StorefrontState,
-        product: EntitlementProduct
+        product: EntitlementProduct,
+        lookupTimeout: Duration = .seconds(5)
     ) -> PurchaseManager {
         makeManager(
             state: state,
@@ -282,6 +395,10 @@ final class PurchaseManagerReliabilityTests: XCTestCase {
                 guard identifier == product.identifier else { return .notEntitled }
                 if state.heldLookupSource == .current {
                     return await withCheckedContinuation { state.lookupContinuation = $0 }
+                }
+                if state.delayCurrentLookup {
+                    state.delayedCurrentLookupStarted = true
+                    try? await Task.sleep(for: .seconds(1))
                 }
                 return state.currentResult
             },
@@ -291,7 +408,8 @@ final class PurchaseManagerReliabilityTests: XCTestCase {
                     return await withCheckedContinuation { state.lookupContinuation = $0 }
                 }
                 return .notEntitled
-            }
+            },
+            lookupTimeout: lookupTimeout
         )
     }
 
@@ -372,8 +490,10 @@ private final class StorefrontState {
     var syncContinuations: [CheckedContinuation<Void, Never>] = []
     var currentResult: StoreEntitlementLookup = .notEntitled
     var delayCurrentLookup = false
+    var delayedCurrentLookupStarted = false
     var heldLookupSource: LookupSource?
     var lookupContinuation: CheckedContinuation<StoreEntitlementLookup, Never>?
+    var lookupContinuations: [CheckedContinuation<StoreEntitlementLookup, Never>] = []
 
     func finishSyncs() {
         holdSync = false

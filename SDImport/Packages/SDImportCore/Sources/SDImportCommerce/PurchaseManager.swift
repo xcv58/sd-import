@@ -116,6 +116,8 @@ public final class PurchaseManager: ObservableObject {
     private var trialExpirationTask: Task<Void, Never>?
     private var lifetimeEntitlementRevision: UInt64 = 0
     private var trialEntitlementRevision: UInt64 = 0
+    private var lifetimeEntitlementRequestRevision: UInt64 = 0
+    private var trialEntitlementRequestRevision: UInt64 = 0
 
     public convenience init(
         defaults: UserDefaults = .standard,
@@ -470,15 +472,15 @@ public final class PurchaseManager: ObservableObject {
         revision: UInt64? = nil
     ) async -> EntitlementRefreshResult {
         let startingRevision = revision ?? nextLifetimeEntitlementRevision()
-        guard lifetimeEntitlementRevision == startingRevision else { return .superseded }
+        guard startingRevision >= lifetimeEntitlementRevision else { return .superseded }
         let lookup = await entitlementLookup(
             storefront.currentEntitlement,
             productIdentifier: AppDistribution.lifetimeProductIdentifier
         )
-        guard lifetimeEntitlementRevision == startingRevision else { return .superseded }
+        guard startingRevision >= lifetimeEntitlementRevision else { return .superseded }
         switch lookup {
         case .success(.entitled):
-            applyVerifiedLifetimeEntitlement(restored: restored)
+            applyVerifiedLifetimeEntitlement(restored: restored, revision: startingRevision)
             return .found
         case .success(.verificationFailed):
             if !accessState.hasLifetimeUnlock {
@@ -486,6 +488,7 @@ public final class PurchaseManager: ObservableObject {
             }
             return .verificationFailed
         case .success(.notEntitled):
+            lifetimeEntitlementRevision = startingRevision
             if accessState.hasLifetimeUnlock {
                 accessState.apply(.revoked)
             } else if settleWhenMissing, lifetimeProduct != nil || trialProduct != nil {
@@ -511,15 +514,15 @@ public final class PurchaseManager: ObservableObject {
         revision: UInt64? = nil
     ) async -> EntitlementRefreshResult {
         let startingRevision = revision ?? nextTrialEntitlementRevision()
-        guard trialEntitlementRevision == startingRevision else { return .superseded }
+        guard startingRevision >= trialEntitlementRevision else { return .superseded }
         let lookup = await entitlementLookup(
             storefront.currentEntitlement,
             productIdentifier: AppDistribution.trialProductIdentifier
         )
-        guard trialEntitlementRevision == startingRevision else { return .superseded }
+        guard startingRevision >= trialEntitlementRevision else { return .superseded }
         switch lookup {
         case .success(.entitled(let purchaseDate)):
-            applyVerifiedTrialEntitlement(purchaseDate: purchaseDate)
+            applyVerifiedTrialEntitlement(purchaseDate: purchaseDate, revision: startingRevision)
             return .found
         case .success(.verificationFailed):
             if !accessState.hasLifetimeUnlock {
@@ -527,6 +530,7 @@ public final class PurchaseManager: ObservableObject {
             }
             return .verificationFailed
         case .success(.notEntitled):
+            trialEntitlementRevision = startingRevision
             if accessState.trialStartDate != nil {
                 accessState.apply(.trialRevoked)
                 scheduleTrialExpiration()
@@ -551,15 +555,15 @@ public final class PurchaseManager: ObservableObject {
         restored: Bool,
         revision: UInt64
     ) async -> EntitlementRefreshResult {
-        guard lifetimeEntitlementRevision == revision else { return .superseded }
+        guard revision >= lifetimeEntitlementRevision else { return .superseded }
         let lookup = await entitlementLookup(
             storefront.latestEntitlement,
             productIdentifier: AppDistribution.lifetimeProductIdentifier
         )
-        guard lifetimeEntitlementRevision == revision else { return .superseded }
+        guard revision >= lifetimeEntitlementRevision else { return .superseded }
         switch lookup {
         case .success(.entitled):
-            applyVerifiedLifetimeEntitlement(restored: restored)
+            applyVerifiedLifetimeEntitlement(restored: restored, revision: revision)
             return .found
         case .success(.verificationFailed):
             accessState.apply(.verificationFailed)
@@ -581,15 +585,15 @@ public final class PurchaseManager: ObservableObject {
     }
 
     private func refreshLatestTrialTransaction(revision: UInt64) async -> EntitlementRefreshResult {
-        guard trialEntitlementRevision == revision else { return .superseded }
+        guard revision >= trialEntitlementRevision else { return .superseded }
         let lookup = await entitlementLookup(
             storefront.latestEntitlement,
             productIdentifier: AppDistribution.trialProductIdentifier
         )
-        guard trialEntitlementRevision == revision else { return .superseded }
+        guard revision >= trialEntitlementRevision else { return .superseded }
         switch lookup {
         case .success(.entitled(let purchaseDate)):
-            applyVerifiedTrialEntitlement(purchaseDate: purchaseDate)
+            applyVerifiedTrialEntitlement(purchaseDate: purchaseDate, revision: revision)
             return .found
         case .success(.verificationFailed):
             if !accessState.hasLifetimeUnlock {
@@ -668,16 +672,16 @@ public final class PurchaseManager: ObservableObject {
         )
     }
 
-    // A new check invalidates every older response, including a latest-transaction
-    // fallback. Verified purchases and transaction updates advance these too.
+    // Issuing a request does not supersede an older valid result. Only a valid
+    // entitlement decision advances the committed revision; failures do not.
     private func nextLifetimeEntitlementRevision() -> UInt64 {
-        lifetimeEntitlementRevision &+= 1
-        return lifetimeEntitlementRevision
+        lifetimeEntitlementRequestRevision &+= 1
+        return lifetimeEntitlementRequestRevision
     }
 
     private func nextTrialEntitlementRevision() -> UInt64 {
-        trialEntitlementRevision &+= 1
-        return trialEntitlementRevision
+        trialEntitlementRequestRevision &+= 1
+        return trialEntitlementRequestRevision
     }
 
     private func entitlementLookup(
@@ -689,13 +693,13 @@ public final class PurchaseManager: ObservableObject {
         }
     }
 
-    private func applyVerifiedLifetimeEntitlement(restored: Bool) {
-        lifetimeEntitlementRevision &+= 1
+    private func applyVerifiedLifetimeEntitlement(restored: Bool, revision: UInt64? = nil) {
+        lifetimeEntitlementRevision = revision ?? nextLifetimeEntitlementRevision()
         accessState.apply(restored ? .restored : .purchased)
     }
 
-    private func applyVerifiedTrialEntitlement(purchaseDate: Date) {
-        trialEntitlementRevision &+= 1
+    private func applyVerifiedTrialEntitlement(purchaseDate: Date, revision: UInt64? = nil) {
+        trialEntitlementRevision = revision ?? nextTrialEntitlementRevision()
         accessState.apply(.trialStarted(purchaseDate))
         scheduleTrialExpiration()
     }
