@@ -303,5 +303,21 @@
   "m309": "你的设置、文件夹访问权限和导入记录都留在 Mac 上。App 会利用这些记录识别已导入的文件。",
   "m310": "这项功能默认关闭。启用后，App 会在可写入的存储卡或源文件夹保存隐藏的导入记录，让另一台 Mac 识别已复制的文件。记录不含照片或视频内容、目标文件夹路径或用户名。只读来源仍可导入，不会写入这些记录。",
   "ui.menuOpen": "打开菜单",
-  "ui.menuClose": "关闭菜单"
+  "ui.menuClose": "关闭菜单",
+  "beta.title": "SD Card Import — 测试版",
+  "beta.description": "通过 Apple 的 TestFlight App 加入 Mac 版 SD Card Import 的公开测试。",
+  "beta.heading": "加入 SD Card Import 测试。",
+  "beta.intro": "在 Mac 上测试 SD Card Import，并分享你的反馈。",
+  "beta.eyebrow": "Mac 版 TestFlight",
+  "beta.join": "通过 TestFlight 加入",
+  "beta.getTestFlight": "获取 Mac 版 TestFlight",
+  "beta.availability": "TestFlight 会显示你目前可以使用的测试构建版本。可用情况和功能可能与 Mac App Store 版本不同。",
+  "beta.how": "如何加入",
+  "beta.step1.title": "安装 TestFlight。",
+  "beta.step1.body": "在用于测试的 Mac 上安装 Apple 的 TestFlight App。",
+  "beta.step2.title": "接受邀请。",
+  "beta.step2.body": "在 Mac 上打开公开测试链接，然后按照 TestFlight 中的步骤安装 SD Card Import。",
+  "beta.step3.title": "分享反馈。",
+  "beta.step3.body": "通过 TestFlight 发送反馈，或通过电子邮件告诉我们 App 版本和遇到的情况。",
+  "beta.feedback": "通过电子邮件发送测试反馈"
 }

@@ -2,12 +2,26 @@
 
 The public site is static HTML in `docs/`. Its main product is **SD Card Import**
 from the Mac App Store. All public installation and update links point to that
-listing; GitHub is linked only for source code, licensing, and issue reporting.
+listing, apart from the unlisted TestFlight invitation page described below.
+GitHub is linked only for source code, licensing, and issue reporting.
 
 Edit `website/templates/` for structure and `website/locales/` for copy. The same
 seven pages are available in English, Simplified and Traditional Chinese,
 Japanese, Korean, German, French, Spanish, Brazilian Portuguese and Italian.
 English URLs remain at the root; translated pages use a locale directory.
+
+The unlisted TestFlight invitation is available at `/beta` (rewritten to
+`beta.html`) with matching pages in all ten languages. Edit
+`website/templates/beta.html` and its `beta.*` catalog messages, then regenerate.
+These pages have `noindex, nofollow, noarchive` metadata and hosting headers.
+They stay out of public navigation and the sitemap. This is an unlisted page,
+not a password-protected page; anyone with its URL can open it.
+
+The public TestFlight link is recorded as `TESTFLIGHT` in the generator and in
+the template's join button; the checker requires them to match. Before changing
+the link, verify the app, external build approval, and enrollment availability
+in App Store Connect. An internal-only cloud build does not update the public
+beta group.
 
 ```sh
 python3 script/build_website.py

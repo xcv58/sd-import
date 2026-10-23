@@ -303,5 +303,21 @@
   "m309": "Le impostazioni, i permessi delle cartelle e la cronologia delle importazioni restano sul Mac. L’app usa questi dati per riconoscere i file già importati.",
   "m310": "Questa opzione è disattivata per impostazione predefinita. Se la attivi, l’app salva una cronologia nascosta sulle schede o nelle cartelle sorgenti scrivibili, così un altro Mac può riconoscere i file già copiati. Non contiene contenuti multimediali, percorsi di destinazione o nomi utente. Le sorgenti di sola lettura restano utilizzabili senza scrivere questa cronologia.",
   "ui.menuOpen": "Apri menu",
-  "ui.menuClose": "Chiudi menu"
+  "ui.menuClose": "Chiudi menu",
+  "beta.title": "SD Card Import — Beta",
+  "beta.description": "Partecipa alla beta pubblica di SD Card Import per Mac con l’app TestFlight di Apple.",
+  "beta.heading": "Partecipa alla beta di SD Card Import.",
+  "beta.intro": "Prova SD Card Import sul tuo Mac e condividi il tuo feedback.",
+  "beta.eyebrow": "TestFlight per Mac",
+  "beta.join": "Partecipa su TestFlight",
+  "beta.getTestFlight": "Scarica TestFlight per Mac",
+  "beta.availability": "TestFlight mostra le versioni beta attualmente disponibili per te. La disponibilità e le funzionalità possono differire dalla versione del Mac App Store.",
+  "beta.how": "Come partecipare",
+  "beta.step1.title": "Installa TestFlight.",
+  "beta.step1.body": "Scarica l’app TestFlight di Apple sul Mac che userai per i test.",
+  "beta.step2.title": "Accetta l’invito.",
+  "beta.step2.body": "Apri il link della beta pubblica sul tuo Mac, poi segui i passaggi in TestFlight per installare SD Card Import.",
+  "beta.step3.title": "Condividi il tuo feedback.",
+  "beta.step3.body": "Invia il feedback da TestFlight oppure scrivici indicando la versione dell’app e cosa è successo.",
+  "beta.feedback": "Invia feedback sulla beta via e-mail"
 }

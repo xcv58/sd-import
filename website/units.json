@@ -1412,5 +1412,69 @@
   "m310": {
     "page": "privacy",
     "tokens": {}
+  },
+  "beta.title": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.description": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.heading": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.intro": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.eyebrow": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.join": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.getTestFlight": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.availability": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.how": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.step1.title": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.step1.body": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.step2.title": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.step2.body": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.step3.title": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.step3.body": {
+    "page": "beta",
+    "tokens": {}
+  },
+  "beta.feedback": {
+    "page": "beta",
+    "tokens": {}
   }
 }

@@ -303,5 +303,21 @@
   "m309": "你的設定、資料夾存取權限和匯入記錄都留在 Mac 上。App 會利用這些記錄辨識已匯入的檔案。",
   "m310": "這項功能預設關閉。啟用後，App 會在可寫入的記憶卡或來源資料夾儲存隱藏的匯入記錄，讓另一台 Mac 辨識已拷貝的檔案。記錄不含照片或影片內容、目標資料夾路徑或使用者名稱。唯讀來源仍可匯入，不會寫入這些記錄。",
   "ui.menuOpen": "開啟選單",
-  "ui.menuClose": "關閉選單"
+  "ui.menuClose": "關閉選單",
+  "beta.title": "SD Card Import — 測試版",
+  "beta.description": "透過 Apple 的 TestFlight App 加入 Mac 版 SD Card Import 的公開測試。",
+  "beta.heading": "加入 SD Card Import 測試。",
+  "beta.intro": "在 Mac 上測試 SD Card Import，並分享你的意見。",
+  "beta.eyebrow": "Mac 版 TestFlight",
+  "beta.join": "透過 TestFlight 加入",
+  "beta.getTestFlight": "取得 Mac 版 TestFlight",
+  "beta.availability": "TestFlight 會顯示你目前可以使用的測試組建版本。供應情況和功能可能與 Mac App Store 版本不同。",
+  "beta.how": "如何加入",
+  "beta.step1.title": "安裝 TestFlight。",
+  "beta.step1.body": "在用於測試的 Mac 上安裝 Apple 的 TestFlight App。",
+  "beta.step2.title": "接受邀請。",
+  "beta.step2.body": "在 Mac 上開啟公開測試連結，然後依照 TestFlight 中的步驟安裝 SD Card Import。",
+  "beta.step3.title": "分享意見。",
+  "beta.step3.body": "透過 TestFlight 傳送意見回饋，或透過電子郵件告訴我們 App 版本和遇到的情況。",
+  "beta.feedback": "透過電子郵件傳送測試意見"
 }

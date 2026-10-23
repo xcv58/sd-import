@@ -303,5 +303,21 @@
   "m309": "Your settings, folder permissions, and import history stay on your Mac. The app uses these records to recognize files you have already imported.",
   "m310": "This setting is off by default. If you enable it, the app saves a hidden import-history file on writable source cards or folders so another Mac can recognize files already copied. It contains no media contents, destination paths, or usernames. Read-only sources still work without writing this history.",
   "ui.menuOpen": "Open menu",
-  "ui.menuClose": "Close menu"
+  "ui.menuClose": "Close menu",
+  "beta.title": "SD Card Import — Beta",
+  "beta.description": "Join the SD Card Import public beta for Mac using Apple’s TestFlight app.",
+  "beta.heading": "Join the SD Card Import beta.",
+  "beta.intro": "Test SD Card Import on your Mac and share your feedback.",
+  "beta.eyebrow": "TestFlight for Mac",
+  "beta.join": "Join on TestFlight",
+  "beta.getTestFlight": "Get TestFlight for Mac",
+  "beta.availability": "TestFlight shows the beta builds currently available to you. Availability and features may differ from the Mac App Store version.",
+  "beta.how": "How to join",
+  "beta.step1.title": "Install TestFlight.",
+  "beta.step1.body": "Get Apple’s TestFlight app on the Mac you’ll use for testing.",
+  "beta.step2.title": "Accept the invitation.",
+  "beta.step2.body": "Open the public beta link on your Mac, then follow the steps in TestFlight to install SD Card Import.",
+  "beta.step3.title": "Share your feedback.",
+  "beta.step3.body": "Send feedback from TestFlight, or email us with the app version and what happened.",
+  "beta.feedback": "Email beta feedback"
 }

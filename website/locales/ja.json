@@ -303,5 +303,21 @@
   "m309": "設定、フォルダへのアクセス権、読み込み履歴は Mac 上に保存されます。アプリはこの記録を使って、読み込み済みのファイルを識別します。",
   "m310": "この設定は初期状態ではオフです。有効にすると、書き込み可能なカードや読み込み元フォルダに非表示の履歴ファイルが保存され、別の Mac でもコピー済みのファイルを識別できます。メディアの内容、保存先のパス、ユーザ名は含まれません。読み取り専用の読み込み元では履歴を書き込まずに読み込みを続行できます。",
   "ui.menuOpen": "メニューを開く",
-  "ui.menuClose": "メニューを閉じる"
+  "ui.menuClose": "メニューを閉じる",
+  "beta.title": "SD Card Import — ベータ版",
+  "beta.description": "AppleのTestFlightアプリで、Mac版SD Card Importの公開ベータテストに参加できます。",
+  "beta.heading": "SD Card Importのベータテストに参加。",
+  "beta.intro": "MacでSD Card Importをテストして、ご意見をお聞かせください。",
+  "beta.eyebrow": "Mac用TestFlight",
+  "beta.join": "TestFlightで参加",
+  "beta.getTestFlight": "Mac用TestFlightを入手",
+  "beta.availability": "TestFlightには、現在利用できるベータビルドが表示されます。利用状況や機能はMac App Store版と異なる場合があります。",
+  "beta.how": "参加方法",
+  "beta.step1.title": "TestFlightをインストール。",
+  "beta.step1.body": "テストに使うMacにAppleのTestFlightアプリをインストールしてください。",
+  "beta.step2.title": "招待を承諾。",
+  "beta.step2.body": "Macで公開ベータのリンクを開き、TestFlightの手順に従ってSD Card Importをインストールしてください。",
+  "beta.step3.title": "フィードバックを送信。",
+  "beta.step3.body": "TestFlightからフィードバックを送るか、アプリのバージョンと発生した状況を添えてメールでご連絡ください。",
+  "beta.feedback": "ベータ版のフィードバックをメールで送信"
 }
