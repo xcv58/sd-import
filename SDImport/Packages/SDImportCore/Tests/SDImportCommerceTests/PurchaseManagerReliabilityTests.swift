@@ -50,6 +50,42 @@ final class PurchaseManagerReliabilityTests: XCTestCase {
         XCTAssertFalse(manager.isPerformingStoreOperation)
     }
 
+    func testRestoreSkipsSyncWhenNewerLifetimeGrantSupersedesPreflight() async {
+        let state = StorefrontState()
+        state.heldLookupSource = .current
+        state.syncFailure = .userCancelled
+        let manager = makeManager(state: state, current: { identifier in
+            guard identifier == AppDistribution.lifetimeProductIdentifier else { return .notEntitled }
+            if state.heldLookupSource == .current {
+                state.heldLookupSource = nil
+                return await withCheckedContinuation { state.lookupContinuation = $0 }
+            }
+            return .entitled(purchaseDate: self.purchaseDate)
+        })
+        let restore = Task { await manager.restorePurchases() }
+        let started = await waitUntil { state.lookupContinuation != nil }
+        XCTAssertTrue(started)
+
+        await manager.refreshLifetimeEntitlement(restored: false)
+        XCTAssertTrue(manager.hasLifetimeUnlock)
+        state.finishLookup(with: .entitled(purchaseDate: purchaseDate))
+        await restore.value
+
+        XCTAssertEqual(state.syncCalls, 0, "A newer verified grant must avoid another App Store authentication")
+        XCTAssertTrue(manager.hasLifetimeUnlock)
+        XCTAssertEqual(manager.accessState.purchaseStatus, .purchased)
+        XCTAssertNil(manager.statusMessage)
+        XCTAssertFalse(manager.isPerformingStoreOperation)
+    }
+
+    func testRestoreUsesLifetimeGrantReceivedWhileCheckingTrial() async {
+        await assertRestoreUsesLatestLifetimeStateWhileCheckingTrial(initiallyEntitled: false)
+    }
+
+    func testRestoreDoesNotSkipSyncAfterLifetimeIsRevokedWhileCheckingTrial() async {
+        await assertRestoreUsesLatestLifetimeStateWhileCheckingTrial(initiallyEntitled: true)
+    }
+
     func testActiveTrialKeepsRestoreBusyUntilSyncFinishes() async {
         await assertRestoreStaysBusy(trialAgeInDays: 1)
     }
@@ -209,6 +245,44 @@ final class PurchaseManagerReliabilityTests: XCTestCase {
         XCTAssertEqual(result, .notFound)
         XCTAssertTrue(manager.hasLifetimeUnlock)
         XCTAssertTrue(manager.canStartImport)
+    }
+
+    private func assertRestoreUsesLatestLifetimeStateWhileCheckingTrial(
+        initiallyEntitled: Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let state = StorefrontState()
+        state.currentResult = initiallyEntitled ? .entitled(purchaseDate: purchaseDate) : .notEntitled
+        state.heldLookupSource = .current
+        state.syncFailure = .userCancelled
+        let manager = makeManager(state: state, current: { identifier in
+            if identifier == AppDistribution.lifetimeProductIdentifier { return state.currentResult }
+            if state.heldLookupSource == .current {
+                state.heldLookupSource = nil
+                return await withCheckedContinuation { state.lookupContinuation = $0 }
+            }
+            return .notEntitled
+        })
+        let restore = Task { await manager.restorePurchases() }
+        let started = await waitUntil { state.lookupContinuation != nil }
+        XCTAssertTrue(started, file: file, line: line)
+        XCTAssertEqual(manager.hasLifetimeUnlock, initiallyEntitled, file: file, line: line)
+
+        state.currentResult = initiallyEntitled ? .notEntitled : .entitled(purchaseDate: purchaseDate)
+        await manager.refreshLifetimeEntitlement(restored: false)
+        state.finishLookup(with: .notEntitled)
+        await restore.value
+
+        XCTAssertEqual(state.syncCalls, initiallyEntitled ? 1 : 0, file: file, line: line)
+        XCTAssertEqual(manager.hasLifetimeUnlock, !initiallyEntitled, file: file, line: line)
+        XCTAssertEqual(
+            manager.accessState.purchaseStatus,
+            initiallyEntitled ? .cancelled : .purchased,
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(manager.isPerformingStoreOperation, file: file, line: line)
     }
 
     private func assertRestoreStaysBusy(
@@ -444,6 +518,7 @@ final class PurchaseManagerReliabilityTests: XCTestCase {
                     if state.holdSync {
                         await withCheckedContinuation { state.syncContinuations.append($0) }
                     }
+                    if let failure = state.syncFailure { throw failure }
                 },
                 entitlementLookupTimeout: lookupTimeout,
                 productLoadTimeout: .seconds(5),
@@ -485,6 +560,7 @@ private final class StorefrontState {
     var holdProducts = false
     var productContinuations: [CheckedContinuation<StoreProductSnapshot?, Never>] = []
     var syncCalls = 0
+    var syncFailure: StoreKitError?
     var completedOverlappingOperations = 0
     var holdSync = false
     var syncContinuations: [CheckedContinuation<Void, Never>] = []

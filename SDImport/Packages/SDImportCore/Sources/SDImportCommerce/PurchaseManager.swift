@@ -317,6 +317,7 @@ public final class PurchaseManager: ObservableObject {
         accessState.beginLoading()
         let existing = await resolveExistingEntitlements(restored: true)
         if existing.foundLifetime {
+            accessState.apply(.restored)
             return
         }
         switch await performWithTimeout(storefront.restoreSyncTimeout, operation: storefront.sync) {
@@ -666,7 +667,9 @@ public final class PurchaseManager: ObservableObject {
             trialVerificationFailed = latestTrial == .verificationFailed
         }
         return EntitlementResolution(
-            foundLifetime: foundLifetime,
+            // A newer lifetime decision can arrive during either lookup. Restore
+            // must use the committed verified state, including any revocation.
+            foundLifetime: accessState.hasLifetimeUnlock,
             foundTrial: foundTrial,
             verificationFailed: lifetimeVerificationFailed || trialVerificationFailed
         )
