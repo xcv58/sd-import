@@ -44,12 +44,15 @@ and accessibility labels to every catalog, then regenerate and check all pages.
 Screenshots and the silent demo show the original English app UI; their captions,
 transcript, alternative text and playback controls are localized.
 
-The purchase image `sd-card-import-trial-purchase-20260930.png` is an unmodified
-copy of `SDImport/Packaging/MacAppStore/ReviewAssets/1.1-trial-purchase-local.png`.
-It shows the version 1.1 trial and lifetime purchase controls. The adjacent review
-asset README records its native Debug capture provenance. Older workflow images
-remain labeled as captures from earlier versions; they are not current purchase
-flow evidence. Never edit screenshots to manufacture newer app controls.
+The product gallery and social preview use the versioned `20261023` images
+from the local version 1.1.1 development capture. The preview and plan show the
+current trial action; the purchase sheet includes Apple authentication guidance.
+`docs/review-assets/release-1.1.1/` preserves the original native windows,
+App Store compositions, capture provenance, and SHA-256 manifest. The purchase
+capture uses sample StoreKit product metadata. Older workflow images in the
+video section remain labeled as captures from earlier versions. Never edit
+screenshots to manufacture newer app controls. Previously published immutable
+assets remain available at their original filenames.
 
 The language menu is native HTML and works without JavaScript. With JavaScript,
 explicit selection wins, followed by the localized URL, saved preference and
