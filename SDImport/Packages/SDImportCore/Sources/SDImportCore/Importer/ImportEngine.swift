@@ -35,6 +35,7 @@ public struct ImportEngine {
     @discardableResult
     public func importFiles(
         jobID: String,
+        requiresReviewedDestinations: Bool = false,
         onProgress: ((ImportProgress) -> Void)? = nil,
         shouldCancel: () -> Bool = { false }
     ) throws -> ImportResult {
@@ -174,6 +175,21 @@ public struct ImportEngine {
 
         refreshPortableFingerprints()
 
+        if requiresReviewedDestinations {
+            for file in allFilesAtStart where file.decision == .known && file.knownSource == .destination {
+                guard let path = file.plannedDestinationPath else { continue }
+                let candidate = URL(fileURLWithPath: path, isDirectory: false)
+                let fingerprint = fingerprint(for: file, currentIdentity: nil)
+                guard case .skip = conflictResolver.resolveDestination(
+                    candidate: candidate,
+                    expectedFingerprint: fingerprint,
+                    allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file)
+                ) else {
+                    throw SDImportError.reviewedDestinationChanged
+                }
+            }
+        }
+
         let pendingSourcePaths = Set(files.map(\.sourcePath))
         for group in Insta360ClipDetector().groups(files: allFilesAtStart) {
             let pendingMembers = group.files.filter { pendingSourcePaths.contains($0.sourcePath) }
@@ -196,6 +212,7 @@ public struct ImportEngine {
                     expectedFingerprint: memberFingerprint,
                     allowsRename: false
                 ) {
+                    if requiresReviewedDestinations { throw SDImportError.reviewedDestinationChanged }
                     throw SDImportError.destinationFilenameConflict(candidate.path)
                 }
             }
@@ -224,13 +241,15 @@ public struct ImportEngine {
             switch conflictResolver.resolveDestination(
                 candidate: candidate,
                 expectedFingerprint: fingerprint,
-                allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file)
+                allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file)
             ) {
             case .skip:
+                if requiresReviewedDestinations { throw SDImportError.reviewedDestinationChanged }
                 return false
             case .copy:
                 return true
             case .blocked:
+                if requiresReviewedDestinations { throw SDImportError.reviewedDestinationChanged }
                 throw SDImportError.destinationFilenameConflict(candidate.path)
             }
         }
@@ -364,6 +383,16 @@ public struct ImportEngine {
             throw SDImportError.cancelled
         }
 
+        func stopForDestinationChange() throws -> Never {
+            let processedAnyFiles = !completedStatusBySourcePath.isEmpty
+            try jobRepository.refreshImportTotals(
+                jobID: jobID,
+                finalStatus: processedAnyFiles ? .importedWithErrors : job.status,
+                completedAt: processedAnyFiles ? Date() : job.completedAt
+            )
+            throw SDImportError.reviewedDestinationChanged
+        }
+
         for file in files {
             guard let fileID = file.id else {
                 throw SDImportError.invalidDatabaseValue(column: "job_files.id", value: "nil")
@@ -487,9 +516,10 @@ public struct ImportEngine {
             switch conflictResolver.resolveDestination(
                 candidate: candidate,
                 expectedFingerprint: fingerprint,
-                allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file)
+                allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file)
             ) {
             case .skip(let reason):
+                if requiresReviewedDestinations { try stopForDestinationChange() }
                 markDone(file, status: .skipped)
                 processedBytes += file.size
                 try jobRepository.updateFileCopyStatus(
@@ -512,6 +542,7 @@ public struct ImportEngine {
                     destinationPath: candidate.path
                 )
             case .blocked:
+                if requiresReviewedDestinations { try stopForDestinationChange() }
                 throw SDImportError.destinationFilenameConflict(candidate.path)
             case .copy(let destinationURL):
                 do {
@@ -522,6 +553,7 @@ public struct ImportEngine {
                         to: destinationURL,
                         expectedSize: file.size,
                         modificationDate: modificationDate(from: file.modificationDateString),
+                        replacesExisting: false,
                         onChunk: { chunkSize in
                             activeFileBytes = min(file.size, activeFileBytes + Int64(chunkSize))
                             emit(status: "copying")
@@ -551,6 +583,8 @@ public struct ImportEngine {
                     )
                 } catch SDImportError.cancelled {
                     try cancelImport(currentFileID: fileID)
+                } catch CocoaError.fileWriteFileExists where requiresReviewedDestinations {
+                    try stopForDestinationChange()
                 } catch {
                     markDone(file, status: .failed)
                     processedBytes += file.size

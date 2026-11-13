@@ -56,7 +56,7 @@ struct ImportPreviewView: View {
         VStack(spacing: 0) {
             reviewHeader
 
-            AppPage(maxContentWidth: .infinity) {
+            AppPage(status: model.folderAccessFeedback?.text, statusRole: .error, maxContentWidth: .infinity) {
                 LazyVStack(
                     alignment: .leading,
                     spacing: 14,

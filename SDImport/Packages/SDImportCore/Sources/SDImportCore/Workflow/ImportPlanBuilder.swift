@@ -97,7 +97,7 @@ public enum ImportPlanDisposition: Hashable, Sendable {
     }
 }
 
-public struct ImportFilePlan: Sendable {
+public struct ImportFilePlan: Equatable, Sendable {
     public let update: JobFilePlanUpdate?
     public let willCopy: Bool
     public let disposition: ImportPlanDisposition
@@ -288,7 +288,8 @@ public struct ImportPlanBuilder: Sendable {
             )
         }
 
-        if file.decision == .known && !isInsta360RecordingFile {
+        let knownFromImportHistory = file.decision == .known && file.knownSource != .destination
+        if knownFromImportHistory && !isInsta360RecordingFile {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
                     id: id,
@@ -337,7 +338,7 @@ public struct ImportPlanBuilder: Sendable {
             )
         }
 
-        if file.decision == .known {
+        if knownFromImportHistory {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
                     id: id,
@@ -374,7 +375,8 @@ public struct ImportPlanBuilder: Sendable {
                     destinationDirectory: destinationURL.deletingLastPathComponent().path,
                     plannedDestinationPath: destinationURL.path,
                     copyStatus: .skipped,
-                    error: reason
+                    error: reason,
+                    knownSource: .destination
                 ),
                 willCopy: false,
                 disposition: .alreadyExists,

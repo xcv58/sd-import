@@ -52,6 +52,30 @@ struct CopyEngineTests {
         #expect(FileManager.default.fileExists(atPath: destination.path + ".part") == false)
     }
 
+    @Test("a copy can preserve a destination created during the transfer")
+    func preservesDestinationCreatedDuringCopy() throws {
+        let directory = try temporaryDirectory()
+        let source = directory.appendingPathComponent("source.bin")
+        let destination = directory.appendingPathComponent("destination.bin")
+        let bytes = Data("source".utf8)
+        let existing = Data("appeared during transfer".utf8)
+        try bytes.write(to: source)
+
+        do {
+            try CopyEngine().copyFile(
+                from: source, to: destination, expectedSize: Int64(bytes.count),
+                modificationDate: nil, replacesExisting: false
+            ) { _ in
+                try? existing.write(to: destination)
+            }
+            Issue.record("The copy should reject a destination created during transfer")
+        } catch let error as CocoaError {
+            #expect(error.code == .fileWriteFileExists)
+        }
+        #expect(try Data(contentsOf: destination) == existing)
+        #expect(!FileManager.default.fileExists(atPath: destination.path + ".part"))
+    }
+
     @Test("fails when copied size does not match expected size")
     func failsWhenCopiedSizeDoesNotMatchExpectedSize() throws {
         let directory = try temporaryDirectory()

@@ -6,11 +6,8 @@ struct OnboardingFlowView: View {
     @EnvironmentObject private var model: AppModel
 
     private var canComplete: Bool {
-        sourceIsReadyForSetup
-    }
-
-    private var sourceIsReadyForSetup: Bool {
-        model.sourceValidation.isUsable || model.sourceValidation.status == .placeholder
+        (model.sourceValidation.isUsable && !model.sourceNeedsAccess)
+            || model.sourceValidation.status == .placeholder
     }
 
     var body: some View {
@@ -57,6 +54,7 @@ struct OnboardingFlowView: View {
                     title: L10n.tr("Card or source"),
                     path: $model.cardPath,
                     validation: model.sourceValidation,
+                    needsAccess: model.sourceNeedsAccess,
                     action: model.chooseOnboardingCardFolder
                 )
                 OnboardingFolderRow(
@@ -64,6 +62,7 @@ struct OnboardingFlowView: View {
                     path: $model.photosPath,
                     validation: model.photosValidation,
                     isRequired: false,
+                    needsAccess: model.destinationNeedsAccess(model.photosValidation),
                     action: model.chooseOnboardingPhotosFolder
                 )
                 OnboardingFolderRow(
@@ -71,6 +70,7 @@ struct OnboardingFlowView: View {
                     path: $model.videosPath,
                     validation: model.videosValidation,
                     isRequired: false,
+                    needsAccess: model.destinationNeedsAccess(model.videosValidation),
                     action: model.chooseOnboardingVideosFolder
                 )
                 TextField(L10n.tr("Shoot name"), text: $model.location)
@@ -81,6 +81,12 @@ struct OnboardingFlowView: View {
                     .foregroundStyle(.secondary)
 
                 Toggle(L10n.tr("Prompt on card mount"), isOn: $model.autoPromptEnabled)
+            }
+
+            if let feedback = model.folderAccessFeedback {
+                AppStatusLabel(title: feedback.text, systemImage: "exclamationmark.triangle", role: .error)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack {
@@ -141,6 +147,7 @@ private struct OnboardingFolderRow: View {
     @Binding var path: String
     let validation: PathValidationResult
     var isRequired = true
+    let needsAccess: Bool
     let action: () -> Void
 
     var body: some View {
@@ -156,10 +163,14 @@ private struct OnboardingFolderRow: View {
                 Button {
                     action()
                 } label: {
-                    Image(systemName: "folder")
+                    if needsAccess {
+                        Label(L10n.tr("Allow Access"), systemImage: "lock.open")
+                    } else {
+                        Image(systemName: "folder")
+                    }
                 }
                 .help(L10n.tr("Choose \(title)"))
-                .accessibilityLabel(L10n.tr("Choose \(title)"))
+                .accessibilityLabel(needsAccess ? L10n.tr("Allow Access to \(title)") : L10n.tr("Choose \(title)"))
             }
 
             AppStatusLabel(
@@ -173,6 +184,9 @@ private struct OnboardingFolderRow: View {
     }
 
     private var statusMessage: String {
+        if needsAccess {
+            return L10n.tr("Permission needed")
+        }
         guard !isRequired, !validation.isUsable else {
             return validation.message
         }
@@ -188,10 +202,16 @@ private struct OnboardingFolderRow: View {
     }
 
     private var statusImage: String {
-        validation.isUsable ? "checkmark.circle" : (isSoftOptionalWarning ? "info.circle" : "exclamationmark.triangle")
+        if needsAccess {
+            return "lock"
+        }
+        return validation.isUsable ? "checkmark.circle" : (isSoftOptionalWarning ? "info.circle" : "exclamationmark.triangle")
     }
 
     private var statusRole: AppStatusLabel.Role {
+        if needsAccess {
+            return .warning
+        }
         if validation.isUsable {
             return .neutral
         }

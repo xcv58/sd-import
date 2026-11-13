@@ -62,6 +62,8 @@
 "All" = "すべて";
 "Allow %@ in System Settings → General → Login Items & Extensions." = "「システム設定 → 一般 → ログイン項目と機能拡張」で %1$@ を許可してください。";
 "Allow Access" = "アクセスを許可";
+"Allow Access & Scan" = "アクセスを許可してスキャン";
+"macOS needs your permission to read this source." = "この読み込み元を読み取るには、macOS でアクセスを許可する必要があります。";
 "Allow Access to %@" = "%1$@ へのアクセスを許可";
 "Allow Access to Source" = "読み込み元へのアクセスを許可";
 "Allow Scan" = "スキャンを許可";
@@ -110,6 +112,7 @@
 "Choose %@ folder" = "%1$@ のフォルダを選択";
 "Choose %@ or a folder on that card" = "%1$@ またはそのカード内のフォルダを選択";
 "Choose %@ or one of its parent folders" = "%1$@ またはその親フォルダを選択";
+"Choose %@ or one of its subfolders." = "%@ またはそのサブフォルダを選択してください。";
 "Choose Default Photo Destination" = "写真の既定の保存先を選択";
 "Choose Default Video Destination" = "ビデオの既定の保存先を選択";
 "Choose Photo Destination" = "写真の保存先を選択";
@@ -615,3 +618,4 @@
 "Waiting for App Store approval. Access will unlock after approval." = "App Storeの承認を待っています。承認後に利用できるようになります。";
 "App Store request cancelled. You can try again." = "App Storeへのリクエストがキャンセルされました。もう一度お試しいただけます。";
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "もう一度お試しください。トライアルをすでに有効にした場合、または買い切りの無期限アクセスを購入済みの場合は、「購入を復元」を選択してください。";
+"The import plan changed. Review it before copying." = "読み込みプランが変更されました。コピーする前に確認してください。";

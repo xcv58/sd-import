@@ -15,6 +15,7 @@ public struct CopyEngine {
         to destinationURL: URL,
         expectedSize: Int64,
         modificationDate: Date?,
+        replacesExisting: Bool = true,
         onChunk: ((Int) -> Void)? = nil,
         shouldCancel: () -> Bool = { false }
     ) throws {
@@ -39,7 +40,7 @@ public struct CopyEngine {
                 throw SDImportError.copySizeMismatch(expected: expectedSize, actual: copiedSize)
             }
 
-            if fileManager.fileExists(atPath: destinationURL.path) {
+            if replacesExisting && fileManager.fileExists(atPath: destinationURL.path) {
                 _ = try fileManager.replaceItemAt(
                     destinationURL,
                     withItemAt: temporaryURL,

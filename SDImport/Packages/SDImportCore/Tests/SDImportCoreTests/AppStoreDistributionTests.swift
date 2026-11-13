@@ -82,6 +82,20 @@ struct AppStoreDistributionTests {
         )
     }
 
+    @Test("manual scans offer authorization for sources that need access")
+    func manualScanSourceAccess() {
+        for distribution in [AppDistribution.direct, .macAppStore] {
+            #expect(distribution.requiresSourceAccess(for: .unreadable, hasAuthorizedAccess: false))
+            #expect(!distribution.requiresSourceAccess(for: .ready, hasAuthorizedAccess: true))
+            for status in [PathValidationStatus.empty, .missing, .notDirectory, .placeholder] {
+                #expect(!distribution.requiresSourceAccess(for: status, hasAuthorizedAccess: false))
+            }
+        }
+
+        #expect(AppDistribution.macAppStore.requiresSourceAccess(for: .ready, hasAuthorizedAccess: false))
+        #expect(!AppDistribution.direct.requiresSourceAccess(for: .ready, hasAuthorizedAccess: false))
+    }
+
     @Test("the App Store edition rejects stale bookmarks until the user selects again")
     func staleBookmarkPolicy() {
         #expect(

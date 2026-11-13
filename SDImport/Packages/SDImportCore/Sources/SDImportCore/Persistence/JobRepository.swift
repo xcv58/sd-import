@@ -289,6 +289,10 @@ public struct JobRepository {
                     sql: """
                     UPDATE job_files
                     SET decision = ?,
+                        known_source = CASE
+                            WHEN ? != ? AND known_source = ? THEN NULL
+                            ELSE COALESCE(?, known_source)
+                        END,
                         dest_dir = ?,
                         dest_path = ?,
                         final_dest_path = NULL,
@@ -300,6 +304,10 @@ public struct JobRepository {
                     """,
                     arguments: [
                         update.decision.databaseValue,
+                        update.decision.databaseValue,
+                        FileDecision.known.databaseValue,
+                        KnownFileSource.destination.rawValue,
+                        update.knownSource?.rawValue,
                         update.destinationDirectory,
                         update.plannedDestinationPath,
                         update.copyStatus.databaseValue,
