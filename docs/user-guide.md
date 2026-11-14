@@ -27,6 +27,10 @@ pricing may vary.
    until the import finishes.
 5. Choose `Eject Source` when finished with a verified removable source.
 
+To retry an unfinished import, reconnect the original card or source folder and
+choose `Retry` in History. If the destination changed during copying, review the
+remaining files and confirm where they will go before copying resumes.
+
 You can keep photos and videos together or use separate destinations, and group
 imports by capture date. Each mounted storage volume remains selectable in the
 source menu. A device eject action can unmount related volumes belonging to the

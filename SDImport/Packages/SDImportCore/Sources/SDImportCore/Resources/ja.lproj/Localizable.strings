@@ -619,3 +619,4 @@
 "App Store request cancelled. You can try again." = "App Storeへのリクエストがキャンセルされました。もう一度お試しいただけます。";
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "もう一度お試しください。トライアルをすでに有効にした場合、または買い切りの無期限アクセスを購入済みの場合は、「購入を復元」を選択してください。";
 "The import plan changed. Review it before copying." = "読み込みプランが変更されました。コピーする前に確認してください。";
+"Reconnect the original card or restore its source folder, then retry." = "元のカードを再接続するか、ソースフォルダを元に戻してから、もう一度お試しください。";

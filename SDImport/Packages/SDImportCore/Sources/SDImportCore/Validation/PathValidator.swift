@@ -70,7 +70,9 @@ public struct PathValidator {
         self.fileManager = fileManager
     }
 
-    public func validate(path: String, purpose: PathValidationPurpose) -> PathValidationResult {
+    public func validate(
+        path: String, purpose: PathValidationPurpose, allowsWhitespaceFallback: Bool = true
+    ) -> PathValidationResult {
         let trimmedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedPath.isEmpty else {
@@ -84,7 +86,7 @@ public struct PathValidator {
 
         let expandedPath = (path as NSString).expandingTildeInPath
         let exactResult = validateExpandedPath(expandedPath, originalPath: path, purpose: purpose)
-        if exactResult.status != .missing {
+        if exactResult.status != .missing || !allowsWhitespaceFallback {
             return exactResult
         }
 

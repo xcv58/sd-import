@@ -43,7 +43,7 @@ struct SchemaMigratorTests {
         #expect(userVersion == Int(SchemaMigrator.currentUserVersion))
     }
 
-    @Test("upgrades v3 job files with safe portable receipt defaults")
+    @Test("upgrades v3 imports with safe receipt and review defaults")
     func upgradesVersionThreeJobFiles() throws {
         let directoryURL = try temporaryDirectory()
         let databaseURL = directoryURL.appendingPathComponent("state.sqlite")
@@ -79,5 +79,6 @@ struct SchemaMigratorTests {
         }
         #expect(values.0 == nil)
         #expect(values.1 == false)
+        #expect(try JobRepository(pool: pool).needsDestinationReview(jobID: "legacy-job") == false)
     }
 }

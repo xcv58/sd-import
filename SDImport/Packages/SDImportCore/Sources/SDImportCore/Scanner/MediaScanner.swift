@@ -184,7 +184,7 @@ public struct MediaScanner {
             var copyStatus: CopyStatus = alreadyImported ? .skipped : .pending
             var error: String?
 
-            if decision == .new, let destinationURL, fileManager.fileExists(atPath: destinationURL.path) {
+            if decision == .new, let destinationURL, ConflictResolver.destinationEntryExists(at: destinationURL) {
                 switch conflictResolver.resolveDestination(
                     candidate: destinationURL,
                     expectedFingerprint: fingerprint,

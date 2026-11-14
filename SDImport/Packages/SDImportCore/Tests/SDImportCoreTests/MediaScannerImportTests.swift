@@ -1546,13 +1546,21 @@ struct MediaScannerImportTests {
         let jobID = "job-reviewed-partial"
         let sourceBytes = Data("source".utf8)
         let conflictBytes = Data("different destination".utf8)
-        for name in ["A.JPG", "B.JPG"] {
+        for name in ["A.JPG", "B.JPG", "C.JPG"] {
             try fixture.writeFile(fixture.mountURL.appendingPathComponent(name), bytes: sourceBytes)
         }
         _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
         let initialFiles = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
         let first = try #require(initialFiles.first { $0.filename == "A.JPG" })
         let second = try #require(initialFiles.first { $0.filename == "B.JPG" })
+        let excluded = try #require(initialFiles.first { $0.filename == "C.JPG" })
+        try fixture.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: [
+            JobFilePlanUpdate(
+                id: try #require(excluded.id), decision: .new,
+                destinationDirectory: nil, plannedDestinationPath: nil,
+                copyStatus: .skipped, error: "excluded_by_import_selection"
+            )
+        ])
         let firstDestination = URL(fileURLWithPath: try #require(first.plannedDestinationPath))
         let secondDestination = URL(fileURLWithPath: try #require(second.plannedDestinationPath))
         let firstID = try #require(first.id)
@@ -1572,6 +1580,48 @@ struct MediaScannerImportTests {
         #expect(try fixture.jobRepository.fetchJob(id: jobID)?.status == .importedWithErrors)
         #expect(try Data(contentsOf: firstDestination) == sourceBytes)
         #expect(try Data(contentsOf: secondDestination) == conflictBytes)
+        #expect(try fixture.jobRepository.needsDestinationReview(jobID: jobID))
+
+        let suffix = secondDestination.deletingLastPathComponent().appendingPathComponent("B-copy-1.JPG")
+        #expect(throws: SDImportError.reviewedDestinationChanged) {
+            try fixture.importEngine.importFiles(jobID: jobID)
+        }
+        #expect(!FileManager.default.fileExists(atPath: suffix.path))
+
+        let plans = ImportPlanBuilder.plansForStoredImport(files: updatedFiles)
+        let byName = Dictionary(uniqueKeysWithValues: zip(updatedFiles.map(\.filename), plans))
+        #expect(byName["A.JPG"]?.disposition == .copied)
+        #expect(byName["B.JPG"]?.destinationPath == suffix.path)
+        #expect(byName["C.JPG"]?.disposition == .excluded)
+        try fixture.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: plans.compactMap(\.update))
+        let resumed = try fixture.importEngine.importFiles(jobID: jobID, requiresReviewedDestinations: true)
+        #expect(resumed.importedFiles == 1)
+        #expect(try Data(contentsOf: suffix) == sourceBytes)
+        #expect(try Data(contentsOf: firstDestination) == sourceBytes)
+        #expect(try Data(contentsOf: secondDestination) == conflictBytes)
+        #expect(try fixture.jobRepository.needsDestinationReview(jobID: jobID) == false)
+        #expect(try fixture.jobRepository.fetchJob(id: jobID)?.importedFiles == 2)
+    }
+
+    @Test("reviewing a saved job reserves other pending paths before proposing a rename")
+    func storedImportReviewReservesPendingPaths() throws {
+        let fixture = try Fixture()
+        let jobID = "job-reviewed-pending-paths"
+        let data = Data("source".utf8)
+        for name in ["A.JPG", "A-copy-1.JPG"] {
+            try fixture.writeFile(fixture.mountURL.appendingPathComponent(name), bytes: data)
+        }
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+        let first = try #require(files.first { $0.filename == "A.JPG" })
+        let other = try #require(files.first { $0.filename == "A-copy-1.JPG" })
+        let target = URL(fileURLWithPath: try #require(first.plannedDestinationPath))
+        try fixture.writeFile(target, bytes: Data("occupied".utf8))
+
+        let plans = ImportPlanBuilder.plansForStoredImport(files: files)
+        let byName = Dictionary(uniqueKeysWithValues: zip(files.map(\.filename), plans))
+        #expect(byName["A.JPG"]?.destinationPath == target.deletingLastPathComponent().appendingPathComponent("A-copy-2.JPG").path)
+        #expect(byName["A-copy-1.JPG"]?.destinationPath == other.plannedDestinationPath)
     }
 
     @Test("planned footage backup sidecars import as flat files")

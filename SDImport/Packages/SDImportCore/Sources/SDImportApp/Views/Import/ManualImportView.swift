@@ -317,7 +317,7 @@ struct ImportSourceSummaryView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .help(model.cardPath)
+                .help(model.importSourcePath)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(L10n.tr("Source, \(sourceTitle), \(sourceDetail)"))
@@ -339,7 +339,7 @@ struct ImportSourceSummaryView: View {
                 .disabled(!model.canStartScan)
             }
 
-            if model.shouldOfferSelectedSourceEjection {
+            if !model.isReviewingStoredImport, model.shouldOfferSelectedSourceEjection {
                 Button {
                     model.ejectSelectedSource()
                 } label: {
@@ -360,19 +360,19 @@ struct ImportSourceSummaryView: View {
     }
 
     private var sourceTitle: String {
-        model.selectedSourceVolume?.name
-            ?? URL(fileURLWithPath: model.cardPath, isDirectory: true).lastPathComponent.nilIfBlank
+        (model.isReviewingStoredImport ? model.currentSummary?.volumeName : model.selectedSourceVolume?.name)
+            ?? URL(fileURLWithPath: model.importSourcePath, isDirectory: true).lastPathComponent.nilIfBlank
             ?? L10n.tr("Source Folder")
     }
 
     private var sourceDetail: String {
-        if let volume = model.selectedSourceVolume {
+        if !model.isReviewingStoredImport, let volume = model.selectedSourceVolume {
             return volume.detailText
         }
         if let summary = model.currentSummary {
-            return L10n.tr("\(summary.scannedFiles) scanned files · \(model.cardPath)")
+            return L10n.tr("\(summary.scannedFiles) scanned files · \(model.importSourcePath)")
         }
-        return model.cardPath
+        return model.importSourcePath
     }
 }
 

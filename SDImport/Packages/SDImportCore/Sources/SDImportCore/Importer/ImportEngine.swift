@@ -43,8 +43,12 @@ public struct ImportEngine {
             throw SDImportError.jobNotFound(jobID)
         }
 
+        if !requiresReviewedDestinations, try jobRepository.needsDestinationReview(jobID: jobID) {
+            throw SDImportError.reviewedDestinationChanged
+        }
+
         let allFilesAtStart = try jobRepository.fetchJobFiles(jobID: jobID)
-        let files = try jobRepository.pendingFilesForImport(jobID: jobID)
+        let files = allFilesAtStart.filter(\.isPendingImport)
         let progressUnitIDBySourcePath = Insta360ClipDetector()
             .unitIDBySourcePath(files: allFilesAtStart)
         let progressUnitMembers = Dictionary(grouping: files) {
@@ -173,6 +177,17 @@ public struct ImportEngine {
             }
         }
 
+        func stopForDestinationChange() throws -> Never {
+            let processedAnyFiles = !completedStatusBySourcePath.isEmpty
+            try jobRepository.refreshImportTotals(
+                jobID: jobID,
+                finalStatus: processedAnyFiles ? .importedWithErrors : job.status,
+                completedAt: processedAnyFiles ? Date() : job.completedAt,
+                needsDestinationReview: true
+            )
+            throw SDImportError.reviewedDestinationChanged
+        }
+
         refreshPortableFingerprints()
 
         if requiresReviewedDestinations {
@@ -185,7 +200,7 @@ public struct ImportEngine {
                     expectedFingerprint: fingerprint,
                     allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file)
                 ) else {
-                    throw SDImportError.reviewedDestinationChanged
+                    try stopForDestinationChange()
                 }
             }
         }
@@ -212,7 +227,7 @@ public struct ImportEngine {
                     expectedFingerprint: memberFingerprint,
                     allowsRename: false
                 ) {
-                    if requiresReviewedDestinations { throw SDImportError.reviewedDestinationChanged }
+                    if requiresReviewedDestinations { try stopForDestinationChange() }
                     throw SDImportError.destinationFilenameConflict(candidate.path)
                 }
             }
@@ -244,12 +259,12 @@ public struct ImportEngine {
                 allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file)
             ) {
             case .skip:
-                if requiresReviewedDestinations { throw SDImportError.reviewedDestinationChanged }
+                if requiresReviewedDestinations { try stopForDestinationChange() }
                 return false
             case .copy:
                 return true
             case .blocked:
-                if requiresReviewedDestinations { throw SDImportError.reviewedDestinationChanged }
+                if requiresReviewedDestinations { try stopForDestinationChange() }
                 throw SDImportError.destinationFilenameConflict(candidate.path)
             }
         }
@@ -381,16 +396,6 @@ public struct ImportEngine {
             )
             emit(status: "aborted")
             throw SDImportError.cancelled
-        }
-
-        func stopForDestinationChange() throws -> Never {
-            let processedAnyFiles = !completedStatusBySourcePath.isEmpty
-            try jobRepository.refreshImportTotals(
-                jobID: jobID,
-                finalStatus: processedAnyFiles ? .importedWithErrors : job.status,
-                completedAt: processedAnyFiles ? Date() : job.completedAt
-            )
-            throw SDImportError.reviewedDestinationChanged
         }
 
         for file in files {
@@ -614,7 +619,8 @@ public struct ImportEngine {
         try jobRepository.refreshImportTotals(
             jobID: jobID,
             finalStatus: finalJobStatus,
-            completedAt: Date()
+            completedAt: Date(),
+            needsDestinationReview: failedFiles == 0 ? false : nil
         )
         rewriteReportIfPossible(jobID: jobID)
         emit(status: terminalStatus, forceProcessedBytes: totalBytes)

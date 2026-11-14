@@ -42,6 +42,24 @@ struct ConflictResolverTests {
         #expect(resolution == .copy(to: directory.appendingPathComponent("IMG_0001-copy-2.JPG")))
     }
 
+    @Test("a dangling symlink occupies the original and numbered destination paths")
+    func danglingLinksOccupyDestinationNames() throws {
+        let directory = try temporaryDirectory()
+        let candidate = directory.appendingPathComponent("IMG_0001.JPG")
+        let copy1 = directory.appendingPathComponent("IMG_0001-copy-1.JPG")
+        let missing = directory.appendingPathComponent("missing")
+        for path in [candidate, copy1] {
+            try FileManager.default.createSymbolicLink(at: path, withDestinationURL: missing)
+        }
+        let fingerprint = FileFingerprint.compute(size: 17, modificationDateString: "2023-11-14T22:13:20")
+        let resolver = ConflictResolver()
+
+        #expect(resolver.resolveDestination(candidate: candidate, expectedFingerprint: fingerprint)
+            == .copy(to: directory.appendingPathComponent("IMG_0001-copy-2.JPG")))
+        #expect(resolver.resolveDestination(candidate: candidate, expectedFingerprint: fingerprint, allowsRename: false)
+            == .blocked(reason: "destination_filename_conflict"))
+    }
+
     @Test("blocks a differing destination when renaming is disabled")
     func blocksDifferingDestinationWithoutRename() throws {
         let directory = try temporaryDirectory()

@@ -156,6 +156,17 @@ struct PathValidatorTests {
         #expect(result.message == "Not a folder")
     }
 
+    @Test("stored paths can require the original folder name")
+    func storedPathsDoNotUseWhitespaceFallback() throws {
+        let root = try temporaryDirectory()
+        let replacement = root.appendingPathComponent("Card", isDirectory: true)
+        try FileManager.default.createDirectory(at: replacement, withIntermediateDirectories: true)
+        let original = root.appendingPathComponent("Card ", isDirectory: true)
+        let validator = PathValidator()
+        #expect(validator.validate(path: original.path, purpose: .source).expandedPath == replacement.path)
+        #expect(validator.validate(path: original.path, purpose: .source, allowsWhitespaceFallback: false).status == .missing)
+    }
+
     @Test("expands tilde before validation")
     func expandsTildeBeforeValidation() {
         let result = PathValidator().validate(path: "~", purpose: .destination)

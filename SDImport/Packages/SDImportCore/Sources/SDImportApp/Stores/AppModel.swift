@@ -459,6 +459,10 @@ final class AppModel: ObservableObject {
     private var preferredMixedDestinationLayout: ImportDestinationLayout = .singleLibrary
     private var hiddenRecentPaths: Set<String> = []
     private var workflowProfileWasManuallyChosenForCurrentJob = false
+    private var storedImportReview: StoredImportReview?
+    var isReviewingStoredImport: Bool { storedImportReview != nil }
+    var importSourcePath: String { storedImportReview?.job.mountPath ?? cardPath }
+
     private var knownImportedPreviewFileIDs: Set<Int64> = []
     private var currentPreviewFiles: [JobFileRecord] = [] {
         didSet {
@@ -932,6 +936,7 @@ final class AppModel: ObservableObject {
             return
         }
         folderAccessFeedback = nil
+        storedImportReview = nil
         currentSummary = nil
         currentResult = nil
         importProgress = nil
@@ -1028,7 +1033,7 @@ final class AppModel: ObservableObject {
 
     func validatePaths() {
         let validator = PathValidator()
-        sourceValidation = validator.validate(path: cardPath, purpose: .source)
+        sourceValidation = validator.validate(path: importSourcePath, purpose: .source, allowsWhitespaceFallback: !isReviewingStoredImport)
         photosValidation = validator.validate(path: photosPath, purpose: .destination)
         videosValidation = validator.validate(path: videosPath, purpose: .destination)
         rebuildRecentImportSuggestions()
@@ -1070,7 +1075,10 @@ final class AppModel: ObservableObject {
     var sourceNeedsAccess: Bool {
         AppDistribution.current.requiresSourceAccess(
             for: sourceValidation.status,
-            hasAuthorizedAccess: hasActiveFolderAccess(covering: sourceValidation.expandedPath)
+            hasAuthorizedAccess: hasActiveFolderAccess(
+                covering: sourceValidation.expandedPath,
+                additionalAccess: storedImportReview?.access ?? []
+            )
         )
     }
 
@@ -1088,7 +1096,7 @@ final class AppModel: ObservableObject {
         return !isWorking
             && !isEjectingSource
             && currentSummary != nil
-            && previewTotals.copyFiles > 0
+            && (previewTotals.copyFiles > 0 || isReviewingStoredImport)
             && !previewRows.contains { $0.disposition.attention == .blocking }
             && sourceValidation.isUsable
             && !sourceNeedsAccess
@@ -1097,20 +1105,17 @@ final class AppModel: ObservableObject {
     }
 
     var importReadinessMessage: String? {
-        if previewRows.contains(where: {
-            if case .filenameConflict = $0.disposition { return true }
-            return false
-        }) {
+        if previewRows.contains(where: { $0.disposition.attention == .blocking }) {
             return L10n.tr("Conflicts")
         }
-        if previewTotals.copyFiles == 0 {
+        if previewTotals.copyFiles == 0 && !isReviewingStoredImport {
             return L10n.tr("No files are selected for copying")
         }
         if sourceNeedsAccess {
             return L10n.tr("macOS needs your permission to read this source.")
         }
         if !sourceValidation.isUsable {
-            return sourceValidation.message
+            return isReviewingStoredImport ? Self.retrySourceMessage(sourceValidation) : sourceValidation.message
         }
         if !requiredDestinationPathsAreUsable() {
             return L10n.tr("Choose usable destination folders")
@@ -1140,7 +1145,7 @@ final class AppModel: ObservableObject {
     }
 
     func scan() {
-        guard !isWorking, !isEjectingSource else {
+        guard !isWorking, !isEjectingSource, !isReviewingStoredImport else {
             statusMessage = L10n.tr("Finish the current scan or import first")
             return
         }
@@ -1422,7 +1427,11 @@ final class AppModel: ObservableObject {
     }
 
     private func rebuildPreviewPlanCache() {
-        let plans = buildImportPlans(files: currentPreviewFiles, sessions: previewSessions)
+        let plans = if isReviewingStoredImport {
+            ImportPlanBuilder.plansForStoredImport(files: currentPreviewFiles)
+        } else {
+            buildImportPlans(files: currentPreviewFiles, sessions: previewSessions)
+        }
         updatePreviewPlanCache(rows: makePreviewRows(files: currentPreviewFiles, plans: plans))
     }
 
@@ -1461,7 +1470,8 @@ final class AppModel: ObservableObject {
     }
 
     private var effectiveDestinationRoots: DestinationRoots {
-        DestinationRoots(
+        if let storedImportReview { return storedImportReview.roots }
+        return DestinationRoots(
             photosURL: URL(
                 fileURLWithPath: resolvedPath(photosPath, validation: photosValidation),
                 isDirectory: true
@@ -1598,7 +1608,7 @@ final class AppModel: ObservableObject {
         let photosRoot = roots.photosURL
         let videosRoot = roots.videosURL
 
-        if destinationLayout == .singleLibrary, isDescendant(destination, of: photosRoot) {
+        if !isReviewingStoredImport, destinationLayout == .singleLibrary, isDescendant(destination, of: photosRoot) {
             return (.library, relativePath(from: photosRoot, to: destination))
         }
         if photosRoot == videosRoot, isDescendant(destination, of: photosRoot) {
@@ -1728,7 +1738,11 @@ final class AppModel: ObservableObject {
         }
         guard sourceValidation.isUsable else {
             let validation = sourceValidation
-            setLocalizedStatusMessage { validation.message }
+            if isReviewingStoredImport {
+                showFolderAccessError { Self.retrySourceMessage(validation) }
+            } else {
+                setLocalizedStatusMessage { validation.message }
+            }
             return
         }
         guard requiredDestinationPathsAreUsable() else {
@@ -1741,8 +1755,16 @@ final class AppModel: ObservableObject {
                 dedupeRepository: dedupeRepository
             )
         }
-        guard let builder = importPlanBuilder(sessions: previewSessions) else { return }
-        let plans = builder.plans(files: currentPreviewFiles)
+        let plans: [ImportFilePlan]
+        let planMode: ImportPlanMode
+        if let storedImportReview {
+            plans = ImportPlanBuilder.plansForStoredImport(files: currentPreviewFiles)
+            planMode = .storedReview(storedImportReview.access, plans)
+        } else {
+            guard let builder = importPlanBuilder(sessions: previewSessions) else { return }
+            plans = builder.plans(files: currentPreviewFiles)
+            planMode = .reviewed(builder, plans)
+        }
         let freshRows = makePreviewRows(files: currentPreviewFiles, plans: plans)
         let planChanged = freshRows != previewRows
         updatePreviewPlanCache(rows: freshRows)
@@ -1751,7 +1773,7 @@ final class AppModel: ObservableObject {
             return
         }
         folderAccessFeedback = nil
-        guard previewTotals.copyFiles > 0,
+        guard previewTotals.copyFiles > 0 || isReviewingStoredImport,
               !previewRows.contains(where: { $0.disposition.attention == .blocking })
         else { return }
         if let failure = previewSpaceRequirements.first(where: { !$0.isSatisfied }) {
@@ -1764,13 +1786,13 @@ final class AppModel: ObservableObject {
             return
         }
 
-        savePreferences()
+        if !isReviewingStoredImport { savePreferences() }
 
         startImport(
             jobID: jobID,
             databaseURL: databaseURL,
-            retryContext: .currentReview,
-            planMode: .reviewed(builder, plans)
+            retryContext: isReviewingStoredImport ? .existingJob(jobID: jobID) : .currentReview,
+            planMode: planMode
         )
     }
 
@@ -1903,7 +1925,7 @@ final class AppModel: ObservableObject {
         switch planMode {
         case .reviewed:
             retainedAccess = folderAccesses.values.filter(\.isActive)
-        case .existing(let access):
+        case .storedReview(let access, _), .existing(let access):
             retainedAccess = access
         }
 
@@ -1924,6 +1946,14 @@ final class AppModel: ObservableObject {
                         destinationRoots: builder.roots,
                         updates: plans.compactMap(\.update)
                     )
+                    requiresReviewedDestinations = true
+                case .storedReview(_, let plans):
+                    let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                    guard ImportPlanBuilder.plansForStoredImport(files: files) == plans else {
+                        throw SDImportError.reviewedDestinationChanged
+                    }
+                    if Task.isCancelled { throw SDImportError.cancelled }
+                    try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: plans.compactMap(\.update))
                     requiresReviewedDestinations = true
                 case .existing:
                     requiresReviewedDestinations = false
@@ -2016,10 +2046,14 @@ final class AppModel: ObservableObject {
                     }
                     self.importProgress = nil
                     self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.recover(hasScannedJob: true))
-                    self.showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
                     self.importTask = nil
                     self.isWorking = false
+                    if case .existing = planMode {
+                        self.retryExistingJob(id: jobID)
+                    } else {
+                        self.transitionImportWorkspace(.recover(hasScannedJob: self.currentSummary?.jobID == jobID))
+                        self.showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
+                    }
                 }
             } catch SDImportError.cancelled {
                 let snapshot = try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID)
@@ -2158,6 +2192,7 @@ final class AppModel: ObservableObject {
         guard !isWorking, !isEjectingSource else {
             return
         }
+        storedImportReview = nil
         currentSummary = nil
         currentResult = nil
         importProgress = nil
@@ -3033,17 +3068,29 @@ final class AppModel: ObservableObject {
         }
         let job: ImportJob
         let files: [JobFileRecord]
+        let needsReview: Bool
         do {
             guard let storedJob = try jobRepository.fetchJob(id: jobID) else {
                 throw SDImportError.jobNotFound(jobID)
             }
             job = storedJob
-            files = try jobRepository.pendingFilesForImport(jobID: jobID)
+            needsReview = try jobRepository.needsDestinationReview(jobID: jobID)
+            files = needsReview
+                ? try jobRepository.fetchJobFiles(jobID: jobID)
+                : try jobRepository.pendingFilesForImport(jobID: jobID)
         } catch {
             showFolderAccessError { Self.errorMessage(for: error) }
             return
         }
-        guard let access = accessForRetryingJob(job, files: files) else { return }
+        let filesNeedingAccess = files.filter {
+            $0.isPendingImport || (needsReview && $0.copyStatus == .skipped && $0.knownSource == .destination)
+        }
+        guard let access = accessForRetryingJob(job, files: filesNeedingAccess) else { return }
+        if needsReview {
+            openStoredImportReview(job, files: files, access: access)
+            return
+        }
+        storedImportReview = nil
         selection = .import
         currentSummary = nil
         selectedJobID = jobID
@@ -3054,6 +3101,49 @@ final class AppModel: ObservableObject {
             retryContext: .existingJob(jobID: jobID),
             planMode: .existing(access)
         )
+    }
+
+    private func openStoredImportReview(
+        _ job: ImportJob, files: [JobFileRecord], access: [SecurityScopedResourceAccess]
+    ) {
+        storedImportReview = StoredImportReview(job: job, access: access)
+        currentResult = nil
+        importProgress = nil
+        currentSummary = ScanSummary(
+            jobID: job.id,
+            mountPath: job.mountPath,
+            volumeName: job.volumeName,
+            volumeUUID: job.volumeUUID,
+            location: job.location,
+            scannedFiles: job.scannedFiles,
+            newFiles: job.newFiles,
+            knownFiles: job.knownFiles,
+            unsupportedFiles: job.unsupportedFiles,
+            conflictFiles: job.conflictFiles
+        )
+        selectedJobID = job.id
+        selectedJobFiles = files
+        knownImportedPreviewFileIDs = []
+        mediaContentProfile = nil
+        photoPairSummary = nil
+        validatePaths()
+        currentPreviewFiles = files
+        recoverImportWorkspace()
+        selection = .import
+    }
+
+    func refreshStoredImportReview() {
+        guard let storedImportReview else { return }
+        retryExistingJob(id: storedImportReview.job.id)
+    }
+
+    func closeStoredImportReview() {
+        guard isReviewingStoredImport, !isWorking else { return }
+        selection = .history
+        sourcePathDidChange()
+        if let selectedJobID {
+            loadJobDetail(jobID: selectedJobID)
+        }
     }
 
     func saveOnboardingSetup() {
@@ -3652,7 +3742,9 @@ final class AppModel: ObservableObject {
     }
 
     private func requiredDestinationPathsAreUsable() -> Bool {
-        requiredDestinationValidations().allSatisfy { $0.isUsable && !destinationNeedsAccess($0) }
+        isReviewingStoredImport || requiredDestinationValidations().allSatisfy {
+            $0.isUsable && !destinationNeedsAccess($0)
+        }
     }
 
     private func requiredDestinationPurposes() -> [BookmarkPurpose] {
@@ -4040,11 +4132,20 @@ final class AppModel: ObservableObject {
             }
         })
         var retainedAccess = folderAccesses.values.filter(\.isActive)
+        if storedImportReview?.job.id == job.id, let storedImportReview {
+            retainedAccess.append(contentsOf: storedImportReview.access.filter(\.isActive))
+        }
         let validator = PathValidator()
-        for request in requests where !request.path.isEmpty {
+        for request in requests where request.purpose == .source || !request.path.isEmpty {
             let requestedURL = URL(fileURLWithPath: request.path, isDirectory: true)
             let purpose: PathValidationPurpose = request.purpose == .source ? .source : .destination
-            let validation = validator.validate(path: request.path, purpose: purpose)
+            let validation = validator.validate(
+                path: request.path, purpose: purpose, allowsWhitespaceFallback: purpose == .destination
+            )
+            if purpose == .source, !validation.isUsable, validation.status != .unreadable {
+                showFolderAccessError { Self.retrySourceMessage(validation) }
+                return nil
+            }
             if AppDistribution.current == .direct,
                validation.status != .unreadable, validation.status != .unwritable {
                 continue
@@ -4074,18 +4175,30 @@ final class AppModel: ObservableObject {
                 return nil
             }
             retainedAccess.append(access)
-            let refreshed = validator.validate(path: request.path, purpose: purpose)
-            guard refreshed.status != .unreadable, refreshed.status != .unwritable else {
-                showFolderAccessError { refreshed.message }
+            let refreshed = validator.validate(
+                path: request.path, purpose: purpose, allowsWhitespaceFallback: purpose == .destination
+            )
+            let usable = purpose == .source ? refreshed.isUsable : refreshed.status != .unwritable
+            guard usable else {
+                showFolderAccessError { purpose == .source ? Self.retrySourceMessage(refreshed) : refreshed.message }
                 return nil
             }
         }
         return retainedAccess
     }
 
-    private func hasActiveFolderAccess(covering path: String) -> Bool {
+    private static func retrySourceMessage(_ validation: PathValidationResult) -> String {
+        if validation.status == .missing {
+            return L10n.tr("Reconnect the original card or restore its source folder, then retry.")
+        }
+        return validation.message
+    }
+
+    private func hasActiveFolderAccess(
+        covering path: String, additionalAccess: [SecurityScopedResourceAccess] = []
+    ) -> Bool {
         let requestedURL = URL(fileURLWithPath: expanded(path), isDirectory: true)
-        return folderAccesses.values.contains { access in
+        return (Array(folderAccesses.values) + additionalAccess).contains { access in
             access.isActive && Self.isSameOrDescendant(requestedURL, of: access.url)
         }
     }
@@ -4499,8 +4612,21 @@ final class AppModel: ObservableObject {
     }
 }
 
+private struct StoredImportReview: Sendable {
+    let job: ImportJob
+    let access: [SecurityScopedResourceAccess]
+
+    var roots: DestinationRoots {
+        DestinationRoots(
+            photosURL: URL(fileURLWithPath: job.photosRoot, isDirectory: true),
+            videosURL: URL(fileURLWithPath: job.videosRoot, isDirectory: true)
+        )
+    }
+}
+
 private enum ImportPlanMode: Sendable {
     case reviewed(ImportPlanBuilder, [ImportFilePlan])
+    case storedReview([SecurityScopedResourceAccess], [ImportFilePlan])
     case existing([SecurityScopedResourceAccess])
 }
 
