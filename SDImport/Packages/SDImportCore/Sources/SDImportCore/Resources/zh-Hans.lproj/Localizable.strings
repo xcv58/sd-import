@@ -432,6 +432,7 @@
 "Rename" = "重命名";
 "Repair" = "修复";
 "Repair Background Helper" = "修复后台辅助程序";
+"Repairing background helper…" = "正在修复后台辅助程序…";
 "Report opened with warnings" = "报告已打开，但有警告";
 "Report ready" = "报告已就绪";
 "Resolved Name" = "最终名称";

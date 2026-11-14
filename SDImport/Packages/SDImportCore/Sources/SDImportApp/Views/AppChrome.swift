@@ -1,4 +1,5 @@
 import AppKit
+import SDImportCore
 import SwiftUI
 
 enum AppSurfacePalette {
@@ -141,6 +142,68 @@ struct AppStatusLabel: View {
             return .orange
         case .error:
             return .red
+        }
+    }
+}
+
+struct BackgroundPromptStatusLabel: View {
+    @EnvironmentObject private var model: AppModel
+
+    var showHelperName = false
+
+    var body: some View {
+        if model.isRepairingBackgroundPrompt {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .controlSize(.small)
+                    .accessibilityHidden(true)
+                Text(L10n.tr("Repairing background helper…"))
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("backgroundHelper.repairProgress")
+        } else {
+            AppStatusLabel(title: title, systemImage: systemImage, role: role)
+        }
+    }
+
+    private var title: String {
+        showHelperName ? L10n.tr("Background helper: \(model.backgroundPromptStatusTitle)") : model.backgroundPromptStatusTitle
+    }
+
+    private var systemImage: String {
+        if model.backgroundPromptNeedsAttention { return "exclamationmark.triangle" }
+        return model.autoPromptEnabled ? "checkmark.circle" : "minus.circle"
+    }
+
+    private var role: AppStatusLabel.Role {
+        if model.backgroundPromptNeedsAttention { return .warning }
+        return model.autoPromptEnabled ? .success : .neutral
+    }
+}
+
+struct BackgroundPromptControls: View {
+    @EnvironmentObject private var model: AppModel
+
+    let repairTitle: String
+    var onlyWhenNeeded = false
+
+    var body: some View {
+        if model.isRepairingBackgroundPrompt
+            || (model.backgroundPromptCanRepair && (!onlyWhenNeeded || model.backgroundPromptNeedsAttention)) {
+            Button(repairTitle) {
+                model.repairBackgroundPrompt()
+            }
+            .disabled(model.isRepairingBackgroundPrompt)
+            .accessibilityIdentifier("backgroundHelper.repair")
+        } else if !model.backgroundPromptCanConfigure {
+            Button(model.backgroundPromptApplicationOwnership.authoritativeApplicationPath == nil ? L10n.tr("Open Applications") : L10n.tr("Open Installed Copy")) {
+                model.openBackgroundPromptOwner()
+            }
+        } else if model.backgroundPromptServiceStatus == .requiresApproval {
+            Button(L10n.tr("Open Login Items")) {
+                model.openBackgroundPromptSystemSettings()
+            }
         }
     }
 }

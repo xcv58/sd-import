@@ -40,17 +40,15 @@ struct DiagnosticsView: View {
     private var backgroundPromptSection: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                AppStatusLabel(
-                    title: model.backgroundPromptStatusTitle,
-                    systemImage: backgroundPromptStatusImage,
-                    role: backgroundPromptStatusRole
-                )
-                .font(.callout)
-
-                Text(model.backgroundPromptStatusDetail)
+                BackgroundPromptStatusLabel()
                     .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+
+                if !model.isRepairingBackgroundPrompt {
+                    Text(model.backgroundPromptStatusDetail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 if let state = model.backgroundPromptAgentState {
                     Text(L10n.tr("Helper build \(state.agentBuild) · last started \(state.launchedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .standard).locale(L10n.presentationLocale)))"))
@@ -59,48 +57,12 @@ struct DiagnosticsView: View {
                         .textSelection(.enabled)
                 }
 
-                HStack {
-                    if !model.backgroundPromptCanConfigure {
-                        Button(model.backgroundPromptApplicationOwnership.authoritativeApplicationPath == nil ? L10n.tr("Open Applications") : L10n.tr("Open Installed Copy")) {
-                            model.openBackgroundPromptOwner()
-                        }
-                    } else if model.backgroundPromptServiceStatus == .requiresApproval {
-                        Button(L10n.tr("Open Login Items")) {
-                            model.openBackgroundPromptSystemSettings()
-                        }
-                    } else if model.backgroundPromptCanRepair {
-                        Button(L10n.tr("Repair Background Helper")) {
-                            model.repairBackgroundPrompt()
-                        }
-                    }
-                }
+                BackgroundPromptControls(repairTitle: L10n.tr("Repair Background Helper"))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             Label(L10n.tr("Background Prompt"), systemImage: "externaldrive.badge.timemachine")
         }
-    }
-
-    private var backgroundPromptStatusImage: String {
-        if !model.backgroundPromptCanConfigure {
-            return "exclamationmark.triangle"
-        }
-        if !model.autoPromptEnabled {
-            return "minus.circle"
-        }
-        return model.backgroundPromptNeedsAttention
-            ? "exclamationmark.triangle"
-            : "checkmark.circle"
-    }
-
-    private var backgroundPromptStatusRole: AppStatusLabel.Role {
-        if !model.backgroundPromptCanConfigure {
-            return .warning
-        }
-        if !model.autoPromptEnabled {
-            return .neutral
-        }
-        return model.backgroundPromptNeedsAttention ? .warning : .success
     }
 
     private var diagnosticsExportSection: some View {
