@@ -11,12 +11,19 @@ public struct FileEnumerator {
         in rootURL: URL,
         shouldCancel: () -> Bool = { false }
     ) throws -> [URL] {
+        var rootError: Error?
+        let rootPath = rootURL.standardizedFileURL.path
         guard let enumerator = fileManager.enumerator(
             at: rootURL,
             includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
+            options: [.skipsHiddenFiles],
+            errorHandler: { url, error in
+                guard url.standardizedFileURL.path == rootPath else { return true }
+                rootError = error
+                return false
+            }
         ) else {
-            return []
+            throw CocoaError(.fileReadUnknown, userInfo: [NSURLErrorKey: rootURL])
         }
 
         var urls: [URL] = []
@@ -36,6 +43,9 @@ public struct FileEnumerator {
             urls.append(url)
         }
 
+        if let rootError {
+            throw rootError
+        }
         return urls.sorted { $0.path < $1.path }
     }
 

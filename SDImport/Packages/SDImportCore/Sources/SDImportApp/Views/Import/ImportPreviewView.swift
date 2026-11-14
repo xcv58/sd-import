@@ -18,7 +18,9 @@ struct ImportPreviewView: View {
     private let filePageSize = 100
 
     private var fileFilter: ImportPreviewFileFilter {
-        selectedFileFilter ?? (model.previewTotals.copyFiles == 0 ? .skipped : .copy)
+        if let selectedFileFilter { return selectedFileFilter }
+        if model.isReviewingStoredImport { return .all }
+        return model.previewTotals.copyFiles == 0 ? .skipped : .copy
     }
 
     private var allItems: [ImportPreviewVisualItem] {
@@ -56,19 +58,21 @@ struct ImportPreviewView: View {
         VStack(spacing: 0) {
             reviewHeader
 
-            AppPage(maxContentWidth: .infinity) {
+            AppPage(status: model.folderAccessFeedback?.text, statusRole: .error, maxContentWidth: .infinity) {
                 LazyVStack(
                     alignment: .leading,
                     spacing: 14,
                     pinnedViews: [.sectionHeaders]
                 ) {
                     ImportSourceSummaryView(
-                        allowsChange: true,
-                        allowsRescan: true,
+                        allowsChange: !model.isReviewingStoredImport,
+                        allowsRescan: !model.isReviewingStoredImport,
                         compact: true
                     )
 
-                    if model.previewTotals.copyFiles == 0 {
+                    if model.isReviewingStoredImport {
+                        storedImportPlanCard
+                    } else if model.previewTotals.copyFiles == 0 {
                         zeroCopyCard
                     } else {
                         importPlanCard
@@ -138,6 +142,28 @@ struct ImportPreviewView: View {
         .background(AppSurfacePalette.contentBackground)
         .overlay(alignment: .bottom) {
             Divider()
+        }
+    }
+
+    private var storedImportPlanCard: some View {
+        AppSection(L10n.tr("Import Plan"), systemImage: "list.bullet.rectangle") {
+            if let blockingReason = model.importReadinessMessage {
+                AppStatusLabel(title: blockingReason, systemImage: "exclamationmark.triangle", role: .warning)
+            } else if model.previewTotals.copyFiles == 0 {
+                Text(L10n.tr("No files will be copied"))
+            } else {
+                reviewSummary
+            }
+            destinationTree
+            HStack {
+                Button(L10n.tr("Refresh")) {
+                    model.refreshStoredImportReview()
+                }
+                Button(L10n.tr("Close")) {
+                    model.closeStoredImportReview()
+                }
+            }
+            .buttonStyle(.bordered)
         }
     }
 
@@ -1127,7 +1153,7 @@ private struct ImportReviewPrimaryAction: View {
 
     private var buttonTitle: String {
         guard model.previewTotals.copyFiles > 0 else {
-            return L10n.tr("Nothing to Import")
+            return model.isReviewingStoredImport ? L10n.tr("Done") : L10n.tr("Nothing to Import")
         }
         if !purchaseManager.canStartImport {
             return L10n.tr("Start Trial or Unlock")

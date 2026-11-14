@@ -23,6 +23,10 @@ public struct JobFileRecord: Identifiable, Hashable, Codable, Sendable {
     public let portableReceiptOverride: Bool?
     public let completedAt: Date?
 
+    public var isPendingImport: Bool {
+        (decision == .new || decision == .conflict) && (copyStatus == .pending || copyStatus == .failed)
+    }
+
     public init(
         id: Int64? = nil,
         jobID: String,

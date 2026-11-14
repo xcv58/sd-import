@@ -11,7 +11,7 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        AppPage(scrolls: false, maxContentWidth: .infinity) {
+        AppPage(status: model.folderAccessFeedback?.text, statusRole: .error, scrolls: false, maxContentWidth: .infinity) {
             historyLayout
         }
         .navigationTitle(L10n.tr("History"))

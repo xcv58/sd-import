@@ -91,6 +91,10 @@ public enum AppDistribution: String, Codable, Sendable {
         }
     }
 
+    public func requiresSourceAccess(for status: PathValidationStatus, hasAuthorizedAccess: Bool) -> Bool {
+        status == .unreadable || (status == .ready && self == .macAppStore && !hasAuthorizedAccess)
+    }
+
     public func retainedDestinationPath(
         _ path: String,
         hasAuthorizedAccess: Bool

@@ -35,6 +35,7 @@ public struct ImportEngine {
     @discardableResult
     public func importFiles(
         jobID: String,
+        requiresReviewedDestinations: Bool = false,
         onProgress: ((ImportProgress) -> Void)? = nil,
         shouldCancel: () -> Bool = { false }
     ) throws -> ImportResult {
@@ -42,8 +43,12 @@ public struct ImportEngine {
             throw SDImportError.jobNotFound(jobID)
         }
 
+        if !requiresReviewedDestinations, try jobRepository.needsDestinationReview(jobID: jobID) {
+            throw SDImportError.reviewedDestinationChanged
+        }
+
         let allFilesAtStart = try jobRepository.fetchJobFiles(jobID: jobID)
-        let files = try jobRepository.pendingFilesForImport(jobID: jobID)
+        let files = allFilesAtStart.filter(\.isPendingImport)
         let progressUnitIDBySourcePath = Insta360ClipDetector()
             .unitIDBySourcePath(files: allFilesAtStart)
         let progressUnitMembers = Dictionary(grouping: files) {
@@ -172,7 +177,33 @@ public struct ImportEngine {
             }
         }
 
+        func stopForDestinationChange() throws -> Never {
+            let processedAnyFiles = !completedStatusBySourcePath.isEmpty
+            try jobRepository.refreshImportTotals(
+                jobID: jobID,
+                finalStatus: processedAnyFiles ? .importedWithErrors : job.status,
+                completedAt: processedAnyFiles ? Date() : job.completedAt,
+                needsDestinationReview: true
+            )
+            throw SDImportError.reviewedDestinationChanged
+        }
+
         refreshPortableFingerprints()
+
+        if requiresReviewedDestinations {
+            for file in allFilesAtStart where file.decision == .known && file.knownSource == .destination {
+                guard let path = file.plannedDestinationPath else { continue }
+                let candidate = URL(fileURLWithPath: path, isDirectory: false)
+                let fingerprint = fingerprint(for: file, currentIdentity: nil)
+                guard case .skip = conflictResolver.resolveDestination(
+                    candidate: candidate,
+                    expectedFingerprint: fingerprint,
+                    allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file)
+                ) else {
+                    try stopForDestinationChange()
+                }
+            }
+        }
 
         let pendingSourcePaths = Set(files.map(\.sourcePath))
         for group in Insta360ClipDetector().groups(files: allFilesAtStart) {
@@ -196,6 +227,7 @@ public struct ImportEngine {
                     expectedFingerprint: memberFingerprint,
                     allowsRename: false
                 ) {
+                    if requiresReviewedDestinations { try stopForDestinationChange() }
                     throw SDImportError.destinationFilenameConflict(candidate.path)
                 }
             }
@@ -224,13 +256,15 @@ public struct ImportEngine {
             switch conflictResolver.resolveDestination(
                 candidate: candidate,
                 expectedFingerprint: fingerprint,
-                allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file)
+                allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file)
             ) {
             case .skip:
+                if requiresReviewedDestinations { try stopForDestinationChange() }
                 return false
             case .copy:
                 return true
             case .blocked:
+                if requiresReviewedDestinations { try stopForDestinationChange() }
                 throw SDImportError.destinationFilenameConflict(candidate.path)
             }
         }
@@ -487,9 +521,10 @@ public struct ImportEngine {
             switch conflictResolver.resolveDestination(
                 candidate: candidate,
                 expectedFingerprint: fingerprint,
-                allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file)
+                allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file)
             ) {
             case .skip(let reason):
+                if requiresReviewedDestinations { try stopForDestinationChange() }
                 markDone(file, status: .skipped)
                 processedBytes += file.size
                 try jobRepository.updateFileCopyStatus(
@@ -512,6 +547,7 @@ public struct ImportEngine {
                     destinationPath: candidate.path
                 )
             case .blocked:
+                if requiresReviewedDestinations { try stopForDestinationChange() }
                 throw SDImportError.destinationFilenameConflict(candidate.path)
             case .copy(let destinationURL):
                 do {
@@ -522,6 +558,7 @@ public struct ImportEngine {
                         to: destinationURL,
                         expectedSize: file.size,
                         modificationDate: modificationDate(from: file.modificationDateString),
+                        replacesExisting: false,
                         onChunk: { chunkSize in
                             activeFileBytes = min(file.size, activeFileBytes + Int64(chunkSize))
                             emit(status: "copying")
@@ -551,6 +588,8 @@ public struct ImportEngine {
                     )
                 } catch SDImportError.cancelled {
                     try cancelImport(currentFileID: fileID)
+                } catch CocoaError.fileWriteFileExists where requiresReviewedDestinations {
+                    try stopForDestinationChange()
                 } catch {
                     markDone(file, status: .failed)
                     processedBytes += file.size
@@ -580,7 +619,8 @@ public struct ImportEngine {
         try jobRepository.refreshImportTotals(
             jobID: jobID,
             finalStatus: finalJobStatus,
-            completedAt: Date()
+            completedAt: Date(),
+            needsDestinationReview: failedFiles == 0 ? false : nil
         )
         rewriteReportIfPossible(jobID: jobID)
         emit(status: terminalStatus, forceProcessedBytes: totalBytes)

@@ -62,6 +62,8 @@
 "All" = "全部";
 "Allow %@ in System Settings → General → Login Items & Extensions." = "請在“系統設定 → 通用 → 登入項與擴展”中允許 %1$@。";
 "Allow Access" = "允許訪問";
+"Allow Access & Scan" = "允許取用並掃描";
+"macOS needs your permission to read this source." = "macOS 需要你的許可才能讀取這個來源。";
 "Allow Access to %@" = "允許訪問 %1$@";
 "Allow Access to Source" = "允許訪問來源";
 "Allow Scan" = "允許掃描";
@@ -110,6 +112,7 @@
 "Choose %@ folder" = "選擇 %1$@ 資料夾";
 "Choose %@ or a folder on that card" = "選擇 %1$@ 或該記憶卡上的資料夾";
 "Choose %@ or one of its parent folders" = "選擇 %1$@ 或其上級資料夾";
+"Choose %@ or one of its subfolders." = "請選擇 %@ 或其子資料夾。";
 "Choose Default Photo Destination" = "選擇預設照片目標位置";
 "Choose Default Video Destination" = "選擇預設影片目標位置";
 "Choose Photo Destination" = "選擇照片目標位置";
@@ -615,3 +618,5 @@
 "Waiting for App Store approval. Access will unlock after approval." = "正在等待 App Store 核准。核准後即可解鎖使用權限。";
 "App Store request cancelled. You can try again." = "App Store 要求已取消。你可以重試。";
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "請重試。如果你已經啟用試用或購買了終身使用權限，請選擇「回復購買」。";
+"The import plan changed. Review it before copying." = "匯入計畫已變更。請在複製前重新確認。";
+"Reconnect the original card or restore its source folder, then retry." = "請重新連接原本的記憶卡或還原其來源資料夾，然後重試。";

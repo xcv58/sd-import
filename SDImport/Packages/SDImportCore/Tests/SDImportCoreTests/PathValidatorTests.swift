@@ -27,6 +27,46 @@ struct PathValidatorTests {
         #expect(result.message == "Card is not mounted")
     }
 
+    @Test("distinguishes permission denied from a missing folder")
+    func reportsPermissionDeniedWhenParentCannotBeTraversed() throws {
+        let root = try temporaryDirectory()
+        let parent = root.appendingPathComponent("Protected", isDirectory: true)
+        let child = parent.appendingPathComponent("Media", isDirectory: true)
+        let link = root.appendingPathComponent("Card")
+        let danglingLink = root.appendingPathComponent("Dangling")
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: child, withIntermediateDirectories: true)
+        try fileManager.createSymbolicLink(at: link, withDestinationURL: child)
+        try fileManager.createSymbolicLink(at: danglingLink, withDestinationURL: root.appendingPathComponent("Absent"))
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: parent.path)
+        defer { try? fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: parent.path) }
+
+        let validator = PathValidator()
+        let source = validator.validate(path: child.path, purpose: .source)
+        let destination = validator.validate(path: child.path, purpose: .destination)
+
+        #expect(source.status == .unreadable)
+        #expect(destination.status == .unwritable)
+        #expect(AppDistribution.macAppStore.requiresSourceAccess(for: source.status, hasAuthorizedAccess: false))
+        #expect(validator.validate(path: link.path, purpose: .source).status == .unreadable)
+        #expect(validator.validate(path: link.path, purpose: .destination).status == .unwritable)
+        #expect(validator.validate(path: danglingLink.path, purpose: .source).status == .missing)
+    }
+
+    @Test("the selected directory must allow traversal")
+    func rejectsSelectedDirectoryWithoutSearchPermission() throws {
+        let root = try temporaryDirectory()
+        let fileManager = FileManager.default
+        try Data([1]).write(to: root.appendingPathComponent("IMG.JPG"))
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: root.path)
+        defer { try? fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path) }
+
+        let validator = PathValidator()
+        #expect(validator.validate(path: root.path, purpose: .source).status == .unreadable)
+        #expect(validator.validate(path: root.path, purpose: .destination).status == .unwritable)
+        #expect(throws: (any Error).self) { try FileEnumerator().mediaCandidateFiles(in: root) }
+    }
+
     @Test("reports volumes root as a placeholder source")
     func reportsVolumesRootAsPlaceholderSource() {
         let result = PathValidator().validate(path: "/Volumes", purpose: .source)
@@ -114,6 +154,17 @@ struct PathValidatorTests {
         #expect(result.status == .notDirectory)
         #expect(result.isUsable == false)
         #expect(result.message == "Not a folder")
+    }
+
+    @Test("stored paths can require the original folder name")
+    func storedPathsDoNotUseWhitespaceFallback() throws {
+        let root = try temporaryDirectory()
+        let replacement = root.appendingPathComponent("Card", isDirectory: true)
+        try FileManager.default.createDirectory(at: replacement, withIntermediateDirectories: true)
+        let original = root.appendingPathComponent("Card ", isDirectory: true)
+        let validator = PathValidator()
+        #expect(validator.validate(path: original.path, purpose: .source).expandedPath == replacement.path)
+        #expect(validator.validate(path: original.path, purpose: .source, allowsWhitespaceFallback: false).status == .missing)
     }
 
     @Test("expands tilde before validation")

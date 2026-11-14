@@ -19,9 +19,17 @@ pricing may vary.
 
 1. Open Settings and choose your photo and video destinations.
 2. Insert a card or choose `File > Import From Card...` (`Command-I`).
-3. Allow the scan and review the files, shoot name, and planned destinations.
-4. Start copying and keep the source connected until the import finishes.
+3. Select the source and click `Scan Card`. If the button says `Allow Access & Scan`,
+   confirm the source in the macOS folder picker. Review the files, shoot name,
+   and planned destinations after scanning.
+4. If a destination shows `Allow Access`, choose the folder in the macOS picker
+   and review the updated plan. Then start copying and keep the source connected
+   until the import finishes.
 5. Choose `Eject Source` when finished with a verified removable source.
+
+To retry an unfinished import, reconnect the original card or source folder and
+choose `Retry` in History. If the destination changed during copying, review the
+remaining files and confirm where they will go before copying resumes.
 
 You can keep photos and videos together or use separate destinations, and group
 imports by capture date. Each mounted storage volume remains selectable in the

@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public enum ConflictResolution: Equatable, Sendable {
@@ -18,7 +19,7 @@ public struct ConflictResolver {
         expectedFingerprint: FileFingerprint,
         allowsRename: Bool = true
     ) -> ConflictResolution {
-        if !fileManager.fileExists(atPath: candidate.path) {
+        if !Self.destinationEntryExists(at: candidate) {
             return .copy(to: candidate)
         }
 
@@ -38,7 +39,7 @@ public struct ConflictResolver {
         while true {
             let suffix = ext.isEmpty ? "" : ".\(ext)"
             let next = directory.appendingPathComponent("\(stem)-copy-\(counter)\(suffix)")
-            if !fileManager.fileExists(atPath: next.path) {
+            if !Self.destinationEntryExists(at: next) {
                 return .copy(to: next)
             }
             if existingFileMatches(next, expectedFingerprint: expectedFingerprint) {
@@ -48,12 +49,18 @@ public struct ConflictResolver {
         }
     }
 
+    static func destinationEntryExists(at url: URL) -> Bool {
+        var metadata = stat()
+        return lstat(url.path, &metadata) == 0
+    }
+
     private func existingFileMatches(
         _ url: URL,
         expectedFingerprint: FileFingerprint
     ) -> Bool {
         guard
             let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+            attributes[.type] as? FileAttributeType == .typeRegular,
             let size = attributes[.size] as? NSNumber,
             let modificationDate = attributes[.modificationDate] as? Date
         else {

@@ -158,7 +158,7 @@ public struct MediaContentProfile: Equatable, Sendable {
     }
 }
 
-public struct JobFilePlanUpdate: Sendable {
+public struct JobFilePlanUpdate: Equatable, Sendable {
     public let id: Int64
     public let decision: FileDecision
     public let destinationDirectory: String?
@@ -166,6 +166,7 @@ public struct JobFilePlanUpdate: Sendable {
     public let copyStatus: CopyStatus
     public let error: String?
     public let portableReceiptOverride: Bool?
+    public let knownSource: KnownFileSource?
 
     public init(
         id: Int64,
@@ -174,7 +175,8 @@ public struct JobFilePlanUpdate: Sendable {
         plannedDestinationPath: String?,
         copyStatus: CopyStatus,
         error: String?,
-        portableReceiptOverride: Bool? = nil
+        portableReceiptOverride: Bool? = nil,
+        knownSource: KnownFileSource? = nil
     ) {
         self.id = id
         self.decision = decision
@@ -183,5 +185,6 @@ public struct JobFilePlanUpdate: Sendable {
         self.copyStatus = copyStatus
         self.error = error
         self.portableReceiptOverride = portableReceiptOverride
+        self.knownSource = knownSource
     }
 }

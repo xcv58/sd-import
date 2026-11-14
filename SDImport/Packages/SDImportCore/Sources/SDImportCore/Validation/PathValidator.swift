@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public enum PathValidationPurpose: String, Codable, Sendable {
@@ -69,7 +70,9 @@ public struct PathValidator {
         self.fileManager = fileManager
     }
 
-    public func validate(path: String, purpose: PathValidationPurpose) -> PathValidationResult {
+    public func validate(
+        path: String, purpose: PathValidationPurpose, allowsWhitespaceFallback: Bool = true
+    ) -> PathValidationResult {
         let trimmedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedPath.isEmpty else {
@@ -83,7 +86,7 @@ public struct PathValidator {
 
         let expandedPath = (path as NSString).expandingTildeInPath
         let exactResult = validateExpandedPath(expandedPath, originalPath: path, purpose: purpose)
-        if exactResult.status != .missing {
+        if exactResult.status != .missing || !allowsWhitespaceFallback {
             return exactResult
         }
 
@@ -158,48 +161,28 @@ public struct PathValidator {
             )
         }
 
-        var isDirectory: ObjCBool = false
-        guard fileManager.fileExists(atPath: expandedPath, isDirectory: &isDirectory) else {
-            return PathValidationResult(
-                originalPath: originalPath,
-                expandedPath: expandedPath,
-                purpose: purpose,
-                status: .missing
-            )
-        }
-
-        guard isDirectory.boolValue else {
-            return PathValidationResult(
-                originalPath: originalPath,
-                expandedPath: expandedPath,
-                purpose: purpose,
-                status: .notDirectory
-            )
-        }
-
-        if purpose == .source, !fileManager.isReadableFile(atPath: expandedPath) {
-            return PathValidationResult(
-                originalPath: originalPath,
-                expandedPath: expandedPath,
-                purpose: purpose,
-                status: .unreadable
-            )
-        }
-
-        if purpose == .destination, !fileManager.isWritableFile(atPath: expandedPath) {
-            return PathValidationResult(
-                originalPath: originalPath,
-                expandedPath: expandedPath,
-                purpose: purpose,
-                status: .unwritable
-            )
+        let denied: PathValidationStatus = purpose == .source ? .unreadable : .unwritable
+        let status: PathValidationStatus
+        var metadata = stat()
+        // Follow symlinks and retain the lookup error when macOS hides the target.
+        if stat(expandedPath, &metadata) != 0 {
+            let lookupError = errno
+            status = lookupError == EACCES || lookupError == EPERM ? denied : .missing
+        } else if metadata.st_mode & S_IFMT != S_IFDIR {
+            status = .notDirectory
+        } else {
+            let canTraverse = fileManager.isExecutableFile(atPath: expandedPath)
+            let canUse = purpose == .source
+                ? fileManager.isReadableFile(atPath: expandedPath)
+                : fileManager.isWritableFile(atPath: expandedPath)
+            status = canTraverse && canUse ? .ready : denied
         }
 
         return PathValidationResult(
             originalPath: originalPath,
             expandedPath: expandedPath,
             purpose: purpose,
-            status: .ready
+            status: status
         )
     }
 }

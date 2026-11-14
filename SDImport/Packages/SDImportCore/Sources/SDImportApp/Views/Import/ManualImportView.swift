@@ -139,7 +139,7 @@ struct ManualImportView: View {
                     model.importUIPhase == .cancelled ? L10n.tr("Cancelled") : L10n.tr("Couldn’t Continue"),
                     systemImage: model.importUIPhase == .cancelled ? "xmark.circle" : "exclamationmark.triangle"
                 ) {
-                    Text(model.importFailure?.message ?? model.statusMessage)
+                    Text(model.folderAccessFeedback?.text ?? model.importFailure?.message ?? model.statusMessage)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -216,11 +216,11 @@ struct ManualImportView: View {
             Button {
                 model.scan()
             } label: {
-                Label(scanButtonTitle, systemImage: "magnifyingglass")
+                Label(scanButtonTitle, systemImage: model.sourceNeedsAccess ? "lock.open" : "magnifyingglass")
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.return, modifiers: [.command])
-            .disabled(!model.canScan)
+            .disabled(!model.canStartScan)
             .accessibilityIdentifier("import.scan")
 
             if model.shouldOfferSelectedSourceEjection {
@@ -238,7 +238,10 @@ struct ManualImportView: View {
     }
 
     private var scanButtonTitle: String {
-        model.currentSummary == nil ? L10n.tr("Scan Card") : L10n.tr("Scan Again")
+        if model.sourceNeedsAccess {
+            return L10n.tr("Allow Access & Scan")
+        }
+        return model.currentSummary == nil ? L10n.tr("Scan Card") : L10n.tr("Scan Again")
     }
 }
 
@@ -314,7 +317,7 @@ struct ImportSourceSummaryView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .help(model.cardPath)
+                .help(model.importSourcePath)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(L10n.tr("Source, \(sourceTitle), \(sourceDetail)"))
@@ -326,13 +329,17 @@ struct ImportSourceSummaryView: View {
                 Button {
                     model.scan()
                 } label: {
-                    Label(L10n.tr("Scan Again"), systemImage: "arrow.clockwise")
+                    if model.sourceNeedsAccess {
+                        Label(L10n.tr("Allow Access & Scan"), systemImage: "lock.open")
+                    } else {
+                        Label(L10n.tr("Scan Again"), systemImage: "arrow.clockwise")
+                    }
                 }
                 .buttonStyle(.bordered)
-                .disabled(!model.canScan)
+                .disabled(!model.canStartScan)
             }
 
-            if model.shouldOfferSelectedSourceEjection {
+            if !model.isReviewingStoredImport, model.shouldOfferSelectedSourceEjection {
                 Button {
                     model.ejectSelectedSource()
                 } label: {
@@ -353,19 +360,19 @@ struct ImportSourceSummaryView: View {
     }
 
     private var sourceTitle: String {
-        model.selectedSourceVolume?.name
-            ?? URL(fileURLWithPath: model.cardPath, isDirectory: true).lastPathComponent.nilIfBlank
+        (model.isReviewingStoredImport ? model.currentSummary?.volumeName : model.selectedSourceVolume?.name)
+            ?? URL(fileURLWithPath: model.importSourcePath, isDirectory: true).lastPathComponent.nilIfBlank
             ?? L10n.tr("Source Folder")
     }
 
     private var sourceDetail: String {
-        if let volume = model.selectedSourceVolume {
+        if !model.isReviewingStoredImport, let volume = model.selectedSourceVolume {
             return volume.detailText
         }
         if let summary = model.currentSummary {
-            return L10n.tr("\(summary.scannedFiles) scanned files · \(model.cardPath)")
+            return L10n.tr("\(summary.scannedFiles) scanned files · \(model.importSourcePath)")
         }
-        return model.cardPath
+        return model.importSourcePath
     }
 }
 
@@ -508,7 +515,17 @@ private struct SourceField: View {
                     .lineLimit(1)
             }
 
-            ValidationStatusView(result: model.sourceValidation)
+            if model.sourceNeedsAccess {
+                AppStatusLabel(
+                    title: L10n.tr("macOS needs your permission to read this source."),
+                    systemImage: "lock",
+                    role: .warning
+                )
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ValidationStatusView(result: model.sourceValidation)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -578,7 +595,7 @@ private struct SourceField: View {
                                 systemImage: suggestion.isAvailable ? "externaldrive" : "exclamationmark.triangle"
                             )
                         }
-                        .disabled(!suggestion.isAvailable)
+                        .disabled(!suggestion.canSelect)
                         .help(suggestion.path)
                     }
                 }
@@ -696,7 +713,7 @@ private struct FolderField: View {
                                     systemImage: suggestion.isAvailable ? "folder" : "exclamationmark.triangle"
                                 )
                             }
-                            .disabled(!suggestion.isAvailable)
+                            .disabled(!suggestion.canSelect)
                             .help(suggestion.path)
                         }
                     }
@@ -735,15 +752,25 @@ private struct FolderField: View {
                 Button {
                     action()
                 } label: {
-                    Image(systemName: "folder")
+                    if model.destinationNeedsAccess(validation) {
+                        Label(L10n.tr("Allow Access"), systemImage: "lock.open")
+                    } else {
+                        Image(systemName: "folder")
+                    }
                 }
                 .help(L10n.tr("Choose \(title) folder"))
-                .accessibilityLabel(L10n.tr("Choose \(title) folder"))
+                .accessibilityLabel(model.destinationNeedsAccess(validation)
+                    ? L10n.tr("Allow Access to \(title)") : L10n.tr("Choose \(title) folder"))
                 .fixedSize()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            ValidationStatusView(result: validation)
+            if model.destinationNeedsAccess(validation) {
+                AppStatusLabel(title: L10n.tr("Permission needed"), systemImage: "lock", role: .warning)
+                    .font(.callout)
+            } else {
+                ValidationStatusView(result: validation)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -843,7 +870,7 @@ private struct RecentPathManagementRow: View {
             } label: {
                 Label(L10n.tr("Use"), systemImage: "checkmark")
             }
-            .disabled(!suggestion.isAvailable)
+            .disabled(!suggestion.canSelect)
             .buttonStyle(.borderless)
 
             Button(role: .destructive) {

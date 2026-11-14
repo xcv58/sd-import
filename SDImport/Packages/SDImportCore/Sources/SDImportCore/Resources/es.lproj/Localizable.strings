@@ -62,6 +62,8 @@
 "All" = "Todo";
 "Allow %@ in System Settings → General → Login Items & Extensions." = "Permita %1$@ en Ajustes del Sistema → General → Ítems de inicio y extensiones.";
 "Allow Access" = "Permitir acceso";
+"Allow Access & Scan" = "Permitir acceso y analizar";
+"macOS needs your permission to read this source." = "macOS necesita su permiso para leer este origen.";
 "Allow Access to %@" = "Permitir acceso a %1$@";
 "Allow Access to Source" = "Permitir acceso al origen";
 "Allow Scan" = "Permitir análisis";
@@ -110,6 +112,7 @@
 "Choose %@ folder" = "Elegir carpeta de %1$@";
 "Choose %@ or a folder on that card" = "Elegir %1$@ o una carpeta de esa tarjeta";
 "Choose %@ or one of its parent folders" = "Elegir %1$@ o una de sus carpetas superiores";
+"Choose %@ or one of its subfolders." = "Elija %@ o una de sus subcarpetas.";
 "Choose Default Photo Destination" = "Elegir destino predeterminado de fotos";
 "Choose Default Video Destination" = "Elegir destino predeterminado de vídeos";
 "Choose Photo Destination" = "Elegir destino de fotos";
@@ -615,3 +618,5 @@
 "Waiting for App Store approval. Access will unlock after approval." = "Esperando la aprobación del App Store. El acceso se desbloqueará tras la aprobación.";
 "App Store request cancelled. You can try again." = "Solicitud del App Store cancelada. Puedes volver a intentarlo.";
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "Vuelve a intentarlo. Si ya activaste tu prueba o compraste el acceso de por vida, selecciona Restaurar compras.";
+"The import plan changed. Review it before copying." = "El plan de importación cambió. Revíselo antes de copiar.";
+"Reconnect the original card or restore its source folder, then retry." = "Vuelve a conectar la tarjeta original o restaura su carpeta de origen y vuelve a intentarlo.";

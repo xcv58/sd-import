@@ -97,11 +97,18 @@ public struct JobRepository {
         }
     }
 
-    public func pendingFilesForImport(jobID: String) throws -> [JobFileRecord] {
-        try fetchJobFiles(jobID: jobID).filter { file in
-            (file.decision == .new || file.decision == .conflict)
-                && (file.copyStatus == .pending || file.copyStatus == .failed)
+    public func needsDestinationReview(jobID: String) throws -> Bool {
+        try pool.read { db in
+            try Bool.fetchOne(
+                db,
+                sql: "SELECT needs_destination_review FROM jobs WHERE job_id = ?",
+                arguments: [jobID]
+            ) ?? false
         }
+    }
+
+    public func pendingFilesForImport(jobID: String) throws -> [JobFileRecord] {
+        try fetchJobFiles(jobID: jobID).filter(\.isPendingImport)
     }
 
     public func updateJobStatus(
@@ -163,7 +170,8 @@ public struct JobRepository {
     public func refreshImportTotals(
         jobID: String,
         finalStatus: ImportJobStatus,
-        completedAt: Date? = Date()
+        completedAt: Date? = Date(),
+        needsDestinationReview: Bool? = nil
     ) throws {
         try pool.write { db in
             let totals = try recordingAwareTotals(jobID: jobID, db: db)
@@ -178,7 +186,8 @@ public struct JobRepository {
                     unsupported_files = ?,
                     conflict_files = ?,
                     status = ?,
-                    completed_at = ?
+                    completed_at = ?,
+                    needs_destination_review = COALESCE(?, needs_destination_review)
                 WHERE job_id = ?
                 """,
                 arguments: [
@@ -191,6 +200,7 @@ public struct JobRepository {
                     totals.conflictFiles,
                     finalStatus.databaseValue,
                     DateCoding.optionalString(from: completedAt),
+                    needsDestinationReview,
                     jobID
                 ]
             )
@@ -289,6 +299,10 @@ public struct JobRepository {
                     sql: """
                     UPDATE job_files
                     SET decision = ?,
+                        known_source = CASE
+                            WHEN ? != ? AND known_source = ? THEN NULL
+                            ELSE COALESCE(?, known_source)
+                        END,
                         dest_dir = ?,
                         dest_path = ?,
                         final_dest_path = NULL,
@@ -300,6 +314,10 @@ public struct JobRepository {
                     """,
                     arguments: [
                         update.decision.databaseValue,
+                        update.decision.databaseValue,
+                        FileDecision.known.databaseValue,
+                        KnownFileSource.destination.rawValue,
+                        update.knownSource?.rawValue,
                         update.destinationDirectory,
                         update.plannedDestinationPath,
                         update.copyStatus.databaseValue,
