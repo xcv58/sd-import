@@ -372,8 +372,8 @@ struct BackgroundPromptRegistrationTests {
         ))
     }
 
-    @Test("launch timeout survives a diagnostic-only record and clears on a fresh matching launch")
-    func launchTimeoutRequiresFreshMatchingLaunch() throws {
+    @Test("only fresh matching launch evidence proves registration")
+    func diagnosticRecordDoesNotProveRegistration() throws {
         let directory = try temporaryDirectory()
         let identity = BackgroundPromptRepairIdentity(
             appBuild: "44",
@@ -382,19 +382,13 @@ struct BackgroundPromptRegistrationTests {
         )
         let store = BackgroundPromptAgentStateStore(fileURL: directory.appendingPathComponent("agent-state.json"))
         let cutoff = Date(timeIntervalSince1970: 1_800_000_000)
-        let timeout = BackgroundPromptHealth.missingLaunchError
 
-        func refreshedTimeout() throws -> String? {
-            let ownsRegistration = BackgroundPromptApplicationOwnershipPolicy.ownsRegistration(
+        func ownsRegistration() throws -> Bool {
+            BackgroundPromptApplicationOwnershipPolicy.ownsRegistration(
                 identity: identity,
                 serviceStatus: .enabled,
                 liveAgentState: try store.load(),
                 minimumLaunchAt: cutoff
-            )
-            return BackgroundPromptHealth.appErrorAfterRefresh(
-                existingError: timeout,
-                reason: .launchTimeout,
-                ownsRegistration: ownsRegistration
             )
         }
 
@@ -405,21 +399,21 @@ struct BackgroundPromptRegistrationTests {
         )
         let diagnosticState = try #require(try store.load())
         #expect(diagnosticState.launchedAtEpoch == nil)
-        #expect(try refreshedTimeout() == timeout)
+        #expect(try !ownsRegistration())
 
         try store.recordLaunch(
             agentBuild: identity.appBuild,
             agentBundlePath: identity.agentBundlePath,
             now: cutoff.addingTimeInterval(-1)
         )
-        #expect(try refreshedTimeout() == timeout)
+        #expect(try !ownsRegistration())
 
         try store.recordLaunch(
             agentBuild: identity.appBuild,
             agentBundlePath: identity.agentBundlePath,
             now: cutoff.addingTimeInterval(17)
         )
-        #expect(try refreshedTimeout() == nil)
+        #expect(try ownsRegistration())
     }
 
     @Test("agent errors surface until a later handoff is acknowledged")
@@ -475,21 +469,14 @@ struct BackgroundPromptRegistrationTests {
         #expect(try store.load()?.lastError == nil)
     }
 
-    @Test("a stale refresh cannot erase a newer app error")
-    func staleRefreshCannotEraseNewError() {
+    @Test("invalidating a refresh generation rejects work from the previous generation")
+    func staleRefreshGenerationIsRejected() {
         var generations = BackgroundPromptHealthRefreshGeneration()
         let staleGeneration = generations.begin()
         generations.invalidate()
-        let newerError = "Could not acknowledge a background prompt event"
-
         #expect(!generations.isCurrent(staleGeneration))
-        #expect(
-            BackgroundPromptHealth.appErrorAfterRefresh(
-                existingError: newerError,
-                reason: nil,
-                ownsRegistration: false
-            ) == newerError
-        )
+        let currentGeneration = generations.begin()
+        #expect(generations.isCurrent(currentGeneration))
     }
 
     @Test("agent state records launch and later handoff without losing launch time")

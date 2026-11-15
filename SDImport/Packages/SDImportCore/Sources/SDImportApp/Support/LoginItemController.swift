@@ -4,7 +4,27 @@ import SDImportCore
 import ServiceManagement
 
 @MainActor
-enum LoginItemController {
+struct LoginItemController {
+    let readStatus: () -> BackgroundPromptServiceStatus
+    let readApplicationOwnership: () -> BackgroundPromptApplicationOwnership
+    let invalidateApplicationOwnershipCache: () -> Void
+    let hasEmbeddedAgent: () -> Bool
+    let register: () throws -> Void
+    let unregister: () async throws -> Void
+
+    var status: BackgroundPromptServiceStatus { readStatus() }
+    var applicationOwnership: BackgroundPromptApplicationOwnership { readApplicationOwnership() }
+    var embeddedAgentExists: Bool { hasEmbeddedAgent() }
+
+    static let live = Self(
+        readStatus: { liveServiceStatus },
+        readApplicationOwnership: { liveApplicationOwnership },
+        invalidateApplicationOwnershipCache: { cachedApplicationOwnership = nil },
+        hasEmbeddedAgent: { FileManager.default.fileExists(atPath: embeddedAgentURL.path) },
+        register: { try service.register() },
+        unregister: unregisterServiceAndWait
+    )
+
     static var identifier: String {
         AppDistribution.current == .macAppStore
             ? AppDistribution.appStoreAgentBundleIdentifier
@@ -13,7 +33,7 @@ enum LoginItemController {
 
     private static var cachedApplicationOwnership: BackgroundPromptApplicationOwnership?
 
-    static var status: BackgroundPromptServiceStatus {
+    private static var liveServiceStatus: BackgroundPromptServiceStatus {
         switch service.status {
         case .notRegistered:
             return .notRegistered
@@ -28,11 +48,7 @@ enum LoginItemController {
         }
     }
 
-    static var embeddedAgentExists: Bool {
-        FileManager.default.fileExists(atPath: embeddedAgentURL.path)
-    }
-
-    static var applicationOwnership: BackgroundPromptApplicationOwnership {
+    private static var liveApplicationOwnership: BackgroundPromptApplicationOwnership {
         if let cachedApplicationOwnership {
             return cachedApplicationOwnership
         }
@@ -45,33 +61,29 @@ enum LoginItemController {
         return ownership
     }
 
-    static func invalidateApplicationOwnershipCache() {
-        cachedApplicationOwnership = nil
-    }
-
-    static func setEnabled(_ enabled: Bool) async throws {
+    func setEnabled(_ enabled: Bool) async throws {
         try requireAuthoritativeApplication()
         if enabled {
             switch status {
             case .notRegistered:
-                try service.register()
+                try register()
             case .notFound:
                 guard embeddedAgentExists else {
                     throw LoginItemControllerError.missingEmbeddedHelper
                 }
-                try service.register()
+                try register()
             case .enabled, .requiresApproval, .unknown:
                 break
             }
         } else {
             if status == .enabled || status == .requiresApproval {
-                try await unregisterAndWait()
+                try await unregister()
             }
         }
     }
 
     @discardableResult
-    static func reconcile(
+    func reconcile(
         desiredEnabled: Bool,
         allowNotFoundRegistration: Bool
     ) async throws -> BackgroundPromptServiceStatus {
@@ -87,9 +99,9 @@ enum LoginItemController {
             guard embeddedAgentExists else {
                 throw LoginItemControllerError.missingEmbeddedHelper
             }
-            try service.register()
+            try register()
         case .unregister:
-            try await unregisterAndWait()
+            try await unregister()
         case .none, .requestApproval, .reportMissingHelper:
             break
         }
@@ -98,8 +110,8 @@ enum LoginItemController {
 
     @discardableResult
     @MainActor
-    static func repair(
-        willRegister: (Date) -> Void,
+    func repair(
+        requireLaunchAfter: (Date) -> Void,
         shouldRegister: @escaping @MainActor () -> Bool = { true }
     ) async throws -> BackgroundPromptServiceStatus {
         try requireAuthoritativeApplication()
@@ -109,14 +121,16 @@ enum LoginItemController {
 
         try await BackgroundPromptRepairSequence.execute(
             BackgroundPromptRepairSequence.operations(for: status),
-            unregister: unregisterAndWait,
+            unregister: unregister,
             register: { registrationStartedAt in
-                guard shouldRegister(), status != .enabled else {
-                    return
-                }
+                guard shouldRegister() else { return }
                 try requireAuthoritativeApplication()
-                willRegister(registrationStartedAt)
-                try service.register()
+                // Registration may already have been restored by another caller.
+                // The previous launch record still predates this repair.
+                requireLaunchAfter(registrationStartedAt)
+                if status != .enabled {
+                    try register()
+                }
             }
         )
         return status
@@ -127,7 +141,7 @@ enum LoginItemController {
     }
 
     static func openAuthoritativeApplication() {
-        guard let path = applicationOwnership.authoritativeApplicationPath else {
+        guard let path = liveApplicationOwnership.authoritativeApplicationPath else {
             NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications", isDirectory: true))
             return
         }
@@ -188,7 +202,7 @@ enum LoginItemController {
         return applications
     }
 
-    private static func requireAuthoritativeApplication() throws {
+    private func requireAuthoritativeApplication() throws {
         let ownership = applicationOwnership
         guard ownership.isCurrentApplicationAuthoritative else {
             if ownership.authoritativeApplicationPath == nil {
@@ -198,7 +212,7 @@ enum LoginItemController {
         }
     }
 
-    private static func unregisterAndWait() async throws {
+    private static func unregisterServiceAndWait() async throws {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
             service.unregister(completionHandler: { error in

@@ -71,6 +71,10 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "SDImportAppTests",
+            dependencies: ["SDImportApp", "SDImportCommerce", "SDImportCore"]
+        ),
+        .testTarget(
             name: "SDImportCommerceTests",
             dependencies: [
                 "SDImportCommerce",

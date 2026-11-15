@@ -37,8 +37,8 @@ struct SDImportApp: App {
         if BackgroundPromptRuntimeQA.preparesApplication() {
             Task { @MainActor in
                 do {
-                    try await LoginItemController.setEnabled(false)
-                    try await LoginItemController.setEnabled(true)
+                    try await LoginItemController.live.setEnabled(false)
+                    try await LoginItemController.live.setEnabled(true)
                 } catch {
                     NSLog("SD Import helper runtime QA registration failed: %@", error.localizedDescription)
                 }
@@ -46,7 +46,7 @@ struct SDImportApp: App {
         }
         if BackgroundPromptRuntimeQA.unregistersHelper() {
             Task { @MainActor in
-                try? await LoginItemController.setEnabled(false)
+                try? await LoginItemController.live.setEnabled(false)
                 try? BackgroundPromptRuntimeQA.clearHelperLifecycleMarker()
                 NSApp.terminate(nil)
             }

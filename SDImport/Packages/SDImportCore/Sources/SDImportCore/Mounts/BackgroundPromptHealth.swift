@@ -1,10 +1,5 @@
 import Foundation
 
-public enum BackgroundPromptAppErrorReason: Equatable, Sendable {
-    case launchTimeout
-    case diagnosticsReadFailure
-}
-
 public enum BackgroundPromptHealth {
     public static let refreshDelayMilliseconds: [Int64] = [500, 1_000, 2_000, 4_000, 8_000]
     public static var missingLaunchError: String {
@@ -22,17 +17,6 @@ public enum BackgroundPromptHealth {
             return L10n.storedMessage(agentError)
         }
         return nil
-    }
-
-    public static func appErrorAfterRefresh(
-        existingError: String?,
-        reason: BackgroundPromptAppErrorReason?,
-        ownsRegistration: Bool
-    ) -> String? {
-        if reason == .diagnosticsReadFailure || (reason == .launchTimeout && ownsRegistration) {
-            return nil
-        }
-        return existingError
     }
 
     public static func shouldClearRuntimeAppError(
