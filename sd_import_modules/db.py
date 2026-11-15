@@ -93,6 +93,14 @@ def connect_db(db_path: Path) -> sqlite3.Connection:
             FOREIGN KEY(job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS exclusive_copy_attempts (
+            file_id INTEGER PRIMARY KEY REFERENCES job_files(id) ON DELETE CASCADE,
+            target TEXT NOT NULL,
+            file_identity TEXT NOT NULL,
+            parent_identity TEXT NOT NULL,
+            content_digest TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_job_files_job_decision
             ON job_files(job_id, decision, copy_status);
 

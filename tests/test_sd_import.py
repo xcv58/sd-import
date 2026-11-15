@@ -354,6 +354,40 @@ class MetadataDedupeTests(unittest.TestCase):
                 ).fetchone()
                 self.assertEqual(Path(copied["dest_path"]).read_bytes(), data)
 
+    def test_retry_recovers_owned_partial_exclusive_destination(self) -> None:
+        source = self.mount / "IMG_INTERRUPTED.JPG"
+        source.write_bytes(b"complete data")
+        summary = sd_import.scan_mount(
+            conn=self.conn,
+            mount_path=self.mount,
+            location="TEST",
+            photos_base=self.photos,
+            videos_base=self.videos,
+        )
+        job_id = summary["job_id"]
+        row = self.conn.execute("SELECT dest_path FROM job_files WHERE job_id=?", (job_id,)).fetchone()
+        target = Path(row["dest_path"])
+
+        def interrupted_copy(source, target, expected_size, did_create, expected_digest):
+            with target.open("xb") as handle:
+                did_create(os.fstat(handle.fileno()))
+                handle.write(b"partial")
+            raise SystemExit(19)
+
+        with mock.patch.object(importer_mod, "publish_without_replacing", return_value=False):
+            with mock.patch.object(importer_mod, "copy_to_exclusive_destination", side_effect=interrupted_copy):
+                with self.assertRaises(SystemExit):
+                    sd_import.import_new_files(self.conn, job_id)
+            self.assertEqual(target.read_bytes(), b"partial")
+            self.conn.close()
+            self.conn = sd_import.connect_db(self.db_path)
+            result = sd_import.import_new_files(self.conn, job_id)
+
+        self.assertEqual(result["imported_files"], 1)
+        self.assertEqual(target.read_bytes(), source.read_bytes())
+        self.assertEqual(list(target.parent.iterdir()), [target])
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM exclusive_copy_attempts").fetchone()[0], 0)
+
     def test_import_replans_pending_destinations_after_scan(self) -> None:
         original_photos = self.root / "photos-a"
         original_videos = self.root / "videos-a"

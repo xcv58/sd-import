@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import datetime as dt
 import errno
+import hashlib
 import os
 import re
 import shutil
@@ -178,26 +179,84 @@ def publish_without_replacing(staging: Path, target: Path) -> bool:
     return True
 
 
-def copy_to_exclusive_destination(source: Path, target: Path, expected_size: int) -> None:
+def entry_inode(info: os.stat_result) -> str:
+    return f"{info.st_dev}:{info.st_ino}"
+
+
+def entry_identity(info: os.stat_result) -> str:
+    return f"{entry_inode(info)}:{getattr(info, 'st_birthtime', '')}"
+
+
+def file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def copy_to_exclusive_destination(
+    source: Path,
+    target: Path,
+    expected_size: int,
+    did_create: Optional[Callable[[os.stat_result], None]] = None,
+    expected_digest: Optional[str] = None,
+) -> None:
     # ExFAT and similar volumes may lack both exclusive rename and hard links.
     with source.open("rb") as input_file, target.open("xb") as output:
         owned = os.fstat(output.fileno())
         try:
-            shutil.copyfileobj(input_file, output, length=1024 * 1024)
+            if did_create:
+                did_create(owned)
+            digest = hashlib.sha256()
+            for chunk in iter(lambda: input_file.read(1024 * 1024), b""):
+                output.write(chunk)
+                digest.update(chunk)
             output.flush()
             if os.fstat(output.fileno()).st_size != expected_size:
                 raise RuntimeError("size mismatch after copy")
+            if expected_digest is not None and digest.hexdigest() != expected_digest:
+                raise RuntimeError("source changed during import")
             original = os.fstat(input_file.fileno())
             os.utime(output.fileno(), ns=(original.st_atime_ns, original.st_mtime_ns))
             os.fchmod(output.fileno(), stat.S_IMODE(original.st_mode))
+            # On macOS setting an older modification time can adjust birth time.
+            if entry_inode(target.lstat()) != entry_inode(owned):
+                raise RuntimeError("destination changed during import")
         except Exception:
             try:
-                current = target.lstat()
-                if (current.st_dev, current.st_ino) == (owned.st_dev, owned.st_ino):
+                if entry_identity(target.lstat()) == entry_identity(owned):
                     target.unlink()
             except FileNotFoundError:
                 pass
             raise
+
+
+def recover_exclusive_destination(
+    conn: sqlite3.Connection, file_id: int, expected_size: int
+) -> Optional[Path]:
+    attempt = conn.execute(
+        "SELECT * FROM exclusive_copy_attempts WHERE file_id=?", (file_id,)
+    ).fetchone()
+    if not attempt:
+        return None
+    target = Path(attempt["target"])
+    if entry_identity(target.parent.stat()) != attempt["parent_identity"]:
+        raise OSError(errno.ENODEV, "The original destination directory is unavailable", str(target.parent))
+
+    try:
+        info = target.lstat()
+    except FileNotFoundError:
+        info = None
+    if info and stat.S_ISREG(info.st_mode):
+        expected_inode, _ = attempt["file_identity"].rsplit(":", 1)
+        if entry_inode(info) == expected_inode and info.st_size == expected_size:
+            if file_digest(target) == attempt["content_digest"]:
+                return target
+        if info.st_size < expected_size and entry_identity(info) == attempt["file_identity"]:
+            target.unlink()
+    conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
+    return None
 
 
 def progress_path_for_job(state_dir: Path, job_id: str) -> Path:
@@ -366,12 +425,45 @@ def import_new_files(
 
         last_progress_emit_epoch = now_epoch
 
+    def record_copy(file_id: int, source: Path, target: Path, fingerprint: str, size: int) -> None:
+        nonlocal imported_files, done_files, processed_bytes_done, copied_bytes_done
+        nonlocal current_file, current_source_path, active_file_bytes
+        conn.execute(
+            "UPDATE job_files SET copy_status='COPIED', dest_path=?, error=NULL WHERE id=?",
+            (str(target), file_id),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO items (hash, size, first_seen_at, first_job_id, first_source_path) VALUES (?, ?, ?, ?, ?)",
+            (fingerprint, size, now_local_iso(), job_id, str(source)),
+        )
+        conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
+        imported_files += 1
+        done_files += 1
+        processed_bytes_done += size
+        copied_bytes_done += size
+        current_file = None
+        current_source_path = None
+        active_file_bytes = 0
+        emit_progress(force=True)
+
     emit_progress(force=True)
 
     for row in rows:
         src = Path(row["src_path"])
         filename = row["filename"]
         expected_size = int(row["size"])
+        try:
+            recovered = recover_exclusive_destination(conn, row["id"], expected_size)
+        except OSError as exc:
+            failed_files += 1
+            done_files += 1
+            processed_bytes_done += expected_size
+            conn.execute("UPDATE job_files SET copy_status='FAILED', error=? WHERE id=?", (str(exc), row["id"]))
+            emit_progress(force=True)
+            continue
+        if recovered is not None:
+            record_copy(row["id"], src, recovered, row["hash"], expected_size)
+            continue
         if not src.exists():
             current_file = filename
             current_source_path = str(src)
@@ -467,8 +559,18 @@ def import_new_files(
             if copied_size != expected_size:
                 raise RuntimeError("size mismatch after copy")
             if not publish_without_replacing(tmp_target, target):
+                expected_digest = file_digest(tmp_target)
                 tmp_target.unlink()
-                copy_to_exclusive_destination(src, target, expected_size)
+
+                def record_reservation(info: os.stat_result) -> None:
+                    conn.execute(
+                        "INSERT INTO exclusive_copy_attempts VALUES (?, ?, ?, ?, ?)",
+                        (row["id"], str(target), entry_identity(info),
+                         entry_identity(target.parent.stat()), expected_digest),
+                    )
+                    conn.commit()
+
+                copy_to_exclusive_destination(src, target, expected_size, record_reservation, expected_digest)
         except Exception as exc:
             failed_files += 1
             done_files += 1
@@ -486,22 +588,7 @@ def import_new_files(
             if tmp_target is not None:
                 tmp_target.unlink(missing_ok=True)
 
-        imported_files += 1
-        done_files += 1
-        processed_bytes_done += expected_size
-        copied_bytes_done += expected_size
-        conn.execute(
-            "UPDATE job_files SET copy_status='COPIED', dest_path=?, error=NULL WHERE id=?",
-            (str(target), row["id"]),
-        )
-        conn.execute(
-            "INSERT OR IGNORE INTO items (hash, size, first_seen_at, first_job_id, first_source_path) VALUES (?, ?, ?, ?, ?)",
-            (expected_hash, expected_size, now_local_iso(), job_id, str(src)),
-        )
-        current_file = None
-        current_source_path = None
-        active_file_bytes = 0
-        emit_progress(force=True)
+        record_copy(row["id"], src, target, expected_hash, expected_size)
 
     totals = conn.execute(
         """
