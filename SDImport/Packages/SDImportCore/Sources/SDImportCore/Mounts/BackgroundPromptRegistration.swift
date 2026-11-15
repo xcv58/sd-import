@@ -283,10 +283,19 @@ public enum BackgroundPromptRepairSequence {
 
     public static func execute(
         _ operations: [BackgroundPromptRepairOperation],
-        perform: (BackgroundPromptRepairOperation) async throws -> Void
+        isolation: isolated (any Actor)? = #isolation,
+        now: () -> Date = Date.init,
+        unregister: () async throws -> Void,
+        register: (Date) throws -> Void
     ) async throws {
         for operation in operations {
-            try await perform(operation)
+            switch operation {
+            case .unregister:
+                try await unregister()
+            case .register:
+                // A launch during unregister still belongs to the outgoing helper.
+                try register(now())
+            }
         }
     }
 }

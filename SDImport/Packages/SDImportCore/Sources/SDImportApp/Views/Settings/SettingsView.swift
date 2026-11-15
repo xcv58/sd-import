@@ -158,7 +158,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         VStack(alignment: .leading, spacing: 5) {
                             Toggle(L10n.tr("Prompt when a card is mounted"), isOn: autoPromptBinding)
-                                .disabled(!model.backgroundPromptCanConfigure)
+                                .disabled(!model.backgroundPromptCanConfigure || model.isRepairingBackgroundPrompt)
 
                             Text(L10n.tr("Runs a small background helper after login so \(AppDistribution.current.displayName) can notice newly mounted cards."))
                                 .font(.callout)
@@ -166,31 +166,15 @@ struct SettingsView: View {
                                 .fixedSize(horizontal: false, vertical: true)
 
                             HStack(spacing: 12) {
-                                AppStatusLabel(
-                                    title: L10n.tr("Background helper: \(model.backgroundPromptStatusTitle)"),
-                                    systemImage: backgroundPromptStatusImage,
-                                    role: backgroundPromptStatusRole
-                                )
-                                .font(.callout)
+                                BackgroundPromptStatusLabel(showHelperName: true)
+                                    .font(.callout)
 
                                 Spacer()
 
-                                if !model.backgroundPromptCanConfigure {
-                                    Button(model.backgroundPromptApplicationOwnership.authoritativeApplicationPath == nil ? L10n.tr("Open Applications") : L10n.tr("Open Installed Copy")) {
-                                        model.openBackgroundPromptOwner()
-                                    }
-                                } else if model.backgroundPromptServiceStatus == .requiresApproval {
-                                    Button(L10n.tr("Open Login Items")) {
-                                        model.openBackgroundPromptSystemSettings()
-                                    }
-                                } else if model.backgroundPromptNeedsAttention && model.backgroundPromptCanRepair {
-                                    Button(L10n.tr("Repair")) {
-                                        model.repairBackgroundPrompt()
-                                    }
-                                }
+                                BackgroundPromptControls(repairTitle: L10n.tr("Repair"), onlyWhenNeeded: true)
                             }
 
-                            if model.backgroundPromptNeedsAttention || !model.backgroundPromptCanConfigure {
+                            if !model.isRepairingBackgroundPrompt && model.backgroundPromptNeedsAttention {
                                 Text(model.backgroundPromptStatusDetail)
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
@@ -365,28 +349,6 @@ struct SettingsView: View {
 
     private var canCleanHistory: Bool {
         !model.isWorking && model.historyRetention.dayCount != nil
-    }
-
-    private var backgroundPromptStatusImage: String {
-        if !model.backgroundPromptCanConfigure {
-            return "exclamationmark.triangle"
-        }
-        if !model.autoPromptEnabled {
-            return "minus.circle"
-        }
-        return model.backgroundPromptNeedsAttention
-            ? "exclamationmark.triangle"
-            : "checkmark.circle"
-    }
-
-    private var backgroundPromptStatusRole: AppStatusLabel.Role {
-        if !model.backgroundPromptCanConfigure {
-            return .warning
-        }
-        if !model.autoPromptEnabled {
-            return .neutral
-        }
-        return model.backgroundPromptNeedsAttention ? .warning : .success
     }
 }
 

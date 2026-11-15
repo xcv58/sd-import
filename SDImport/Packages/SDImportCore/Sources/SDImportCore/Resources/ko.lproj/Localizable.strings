@@ -432,6 +432,7 @@
 "Rename" = "이름 변경";
 "Repair" = "복구";
 "Repair Background Helper" = "백그라운드 도우미 복구";
+"Repairing background helper…" = "백그라운드 도우미 복구 중…";
 "Report opened with warnings" = "경고와 함께 보고서 열림";
 "Report ready" = "보고서 준비됨";
 "Resolved Name" = "해결된 이름";

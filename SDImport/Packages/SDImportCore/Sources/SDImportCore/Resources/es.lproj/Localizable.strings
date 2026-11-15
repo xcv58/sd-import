@@ -432,6 +432,7 @@
 "Rename" = "Renombrar";
 "Repair" = "Reparar";
 "Repair Background Helper" = "Reparar asistente en segundo plano";
+"Repairing background helper…" = "Reparando el asistente en segundo plano…";
 "Report opened with warnings" = "Informe abierto con advertencias";
 "Report ready" = "Informe listo";
 "Resolved Name" = "Nombre resuelto";

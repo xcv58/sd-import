@@ -432,6 +432,7 @@
 "Rename" = "重命名";
 "Repair" = "修復";
 "Repair Background Helper" = "修復背景輔助程式";
+"Repairing background helper…" = "正在修復背景輔助程式…";
 "Report opened with warnings" = "報告已打開，但有警告";
 "Report ready" = "報告已就緒";
 "Resolved Name" = "最終名稱";

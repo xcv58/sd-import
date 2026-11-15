@@ -1,9 +1,5 @@
 import Foundation
 
-public enum BackgroundPromptAppErrorReason: Equatable, Sendable {
-    case missingLaunch
-}
-
 public enum BackgroundPromptHealth {
     public static let refreshDelayMilliseconds: [Int64] = [500, 1_000, 2_000, 4_000, 8_000]
     public static var missingLaunchError: String {
@@ -21,17 +17,6 @@ public enum BackgroundPromptHealth {
             return L10n.storedMessage(agentError)
         }
         return nil
-    }
-
-    public static func appErrorAfterRefresh(
-        existingError: String?,
-        reason: BackgroundPromptAppErrorReason?,
-        agentState: BackgroundPromptAgentState?
-    ) -> String? {
-        if reason == .missingLaunch, agentState != nil {
-            return nil
-        }
-        return existingError
     }
 
     public static func shouldClearRuntimeAppError(

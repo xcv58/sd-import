@@ -306,23 +306,114 @@ struct BackgroundPromptRegistrationTests {
 
     @Test("repair waits for unregister completion before registering")
     func repairSequenceWaitsForUnregister() async throws {
-        let recorder = RepairOperationRecorder()
+        var operations: [String] = []
 
         try await BackgroundPromptRepairSequence.execute(
-            BackgroundPromptRepairSequence.operations(for: .enabled)
-        ) { operation in
-            switch operation {
-            case .unregister:
-                await recorder.append("unregister-start")
+            BackgroundPromptRepairSequence.operations(for: .enabled),
+            unregister: {
+                operations.append("unregister-start")
                 try await Task.sleep(for: .milliseconds(20))
-                await recorder.append("unregister-finished")
-            case .register:
-                await recorder.append("register")
+                operations.append("unregister-finished")
+            },
+            register: { _ in
+                operations.append("register")
             }
+        )
+
+        #expect(operations == ["unregister-start", "unregister-finished", "register"])
+    }
+
+    @Test("repair rejects a same-build launch recorded while the outgoing helper unregisters")
+    func repairRejectsLaunchDuringUnregister() async throws {
+        let directory = try temporaryDirectory()
+        let identity = BackgroundPromptRepairIdentity(
+            appBuild: "44",
+            applicationPath: "/Applications/SD Import.app",
+            agentBundlePath: "/Applications/SD Import.app/Agent.app"
+        )
+        let store = BackgroundPromptAgentStateStore(fileURL: directory.appendingPathComponent("agent-state.json"))
+        let startedRepairAt = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = startedRepairAt
+        var registrationStartedAt: Date?
+
+        try await BackgroundPromptRepairSequence.execute(
+            BackgroundPromptRepairSequence.operations(for: .enabled),
+            now: { now },
+            unregister: {
+                await Task.yield()
+                now = startedRepairAt.addingTimeInterval(0.2)
+                try store.recordLaunch(agentBuild: identity.appBuild, agentBundlePath: identity.agentBundlePath, now: now)
+                now = startedRepairAt.addingTimeInterval(0.4)
+            },
+            register: { registrationStartedAt = $0 }
+        )
+
+        let cutoff = try #require(registrationStartedAt)
+        let outgoingState = try #require(try store.load())
+        #expect(outgoingState.launchedAtEpoch == startedRepairAt.addingTimeInterval(0.2).timeIntervalSince1970)
+        #expect(cutoff == startedRepairAt.addingTimeInterval(0.4))
+        #expect(!BackgroundPromptApplicationOwnershipPolicy.ownsRegistration(
+            identity: identity,
+            serviceStatus: .enabled,
+            liveAgentState: outgoingState,
+            minimumLaunchAt: cutoff
+        ))
+
+        try store.recordLaunch(
+            agentBuild: identity.appBuild,
+            agentBundlePath: identity.agentBundlePath,
+            now: cutoff.addingTimeInterval(0.2)
+        )
+        #expect(BackgroundPromptApplicationOwnershipPolicy.ownsRegistration(
+            identity: identity,
+            serviceStatus: .enabled,
+            liveAgentState: try store.load(),
+            minimumLaunchAt: cutoff
+        ))
+    }
+
+    @Test("only fresh matching launch evidence proves registration")
+    func diagnosticRecordDoesNotProveRegistration() throws {
+        let directory = try temporaryDirectory()
+        let identity = BackgroundPromptRepairIdentity(
+            appBuild: "44",
+            applicationPath: "/Applications/SD Import.app",
+            agentBundlePath: "/Applications/SD Import.app/Agent.app"
+        )
+        let store = BackgroundPromptAgentStateStore(fileURL: directory.appendingPathComponent("agent-state.json"))
+        let cutoff = Date(timeIntervalSince1970: 1_800_000_000)
+
+        func ownsRegistration() throws -> Bool {
+            BackgroundPromptApplicationOwnershipPolicy.ownsRegistration(
+                identity: identity,
+                serviceStatus: .enabled,
+                liveAgentState: try store.load(),
+                minimumLaunchAt: cutoff
+            )
         }
 
-        let operations = await recorder.values
-        #expect(operations == ["unregister-start", "unregister-finished", "register"])
+        try store.reserveDiagnosticSequence(
+            agentBuild: identity.appBuild,
+            agentBundlePath: identity.agentBundlePath,
+            now: cutoff.addingTimeInterval(16)
+        )
+        let diagnosticState = try #require(try store.load())
+        #expect(diagnosticState.launchedAtEpoch == nil)
+        #expect(try !ownsRegistration())
+
+        try store.recordLaunch(
+            agentBuild: identity.appBuild,
+            agentBundlePath: identity.agentBundlePath,
+            now: cutoff.addingTimeInterval(-1)
+        )
+        #expect(try !ownsRegistration())
+
+        try store.recordLaunch(
+            agentBuild: identity.appBuild,
+            agentBundlePath: identity.agentBundlePath,
+            now: cutoff.addingTimeInterval(17)
+        )
+        #expect(try ownsRegistration())
     }
 
     @Test("agent errors surface until a later handoff is acknowledged")
@@ -349,20 +440,6 @@ struct BackgroundPromptRegistrationTests {
         #expect(
             BackgroundPromptHealth.effectiveError(appError: nil, agentState: failedState)
                 == L10n.tr("Could not launch the containing SD Import application")
-        )
-        #expect(
-            BackgroundPromptHealth.appErrorAfterRefresh(
-                existingError: BackgroundPromptHealth.missingLaunchError,
-                reason: .missingLaunch,
-                agentState: failedState
-            ) == nil
-        )
-        #expect(
-            BackgroundPromptHealth.appErrorAfterRefresh(
-                existingError: "Localized missing-launch message in another language",
-                reason: .missingLaunch,
-                agentState: failedState
-            ) == nil
         )
         try store.recordLaunch(
             agentBuild: "44",
@@ -392,21 +469,14 @@ struct BackgroundPromptRegistrationTests {
         #expect(try store.load()?.lastError == nil)
     }
 
-    @Test("a stale refresh cannot erase a newer app error")
-    func staleRefreshCannotEraseNewError() {
+    @Test("invalidating a refresh generation rejects work from the previous generation")
+    func staleRefreshGenerationIsRejected() {
         var generations = BackgroundPromptHealthRefreshGeneration()
         let staleGeneration = generations.begin()
         generations.invalidate()
-        let newerError = "Could not acknowledge a background prompt event"
-
         #expect(!generations.isCurrent(staleGeneration))
-        #expect(
-            BackgroundPromptHealth.appErrorAfterRefresh(
-                existingError: newerError,
-                reason: nil,
-                agentState: nil
-            ) == newerError
-        )
+        let currentGeneration = generations.begin()
+        #expect(generations.isCurrent(currentGeneration))
     }
 
     @Test("agent state records launch and later handoff without losing launch time")
@@ -875,13 +945,5 @@ struct BackgroundPromptRegistrationTests {
                 expectedIdentity: identity
             ).contains("older or different")
         )
-    }
-}
-
-private actor RepairOperationRecorder {
-    private(set) var values: [String] = []
-
-    func append(_ value: String) {
-        values.append(value)
     }
 }

@@ -432,6 +432,7 @@
 "Rename" = "名前を変更";
 "Repair" = "修復";
 "Repair Background Helper" = "バックグラウンドヘルパーを修復";
+"Repairing background helper…" = "バックグラウンドヘルパーを修復中…";
 "Report opened with warnings" = "警告ありでレポートを開きました";
 "Report ready" = "レポートの準備完了";
 "Resolved Name" = "解決後の名前";
