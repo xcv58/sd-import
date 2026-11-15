@@ -254,6 +254,37 @@ struct BackgroundPromptRepairTests {
         #expect(fixture.model.backgroundPromptStatusTitle == L10n.tr("Needs attention"))
         #expect(fixture.model.backgroundPromptStatusDetail == L10n.tr("Could not read background helper diagnostics"))
     }
+
+    @Test("a registration failure takes priority over unreadable diagnostics during repair")
+    func registrationFailureTakesPriorityOverDiagnosticsReadFailure() async throws {
+        let fixture = try Fixture(serviceStatus: .notRegistered)
+        defer { fixture.cleanUp() }
+        let unreadableState = Data("{".utf8)
+        let diagnosticsWarning = L10n.tr("Could not read background helper diagnostics")
+        try unreadableState.write(to: fixture.store.fileURL, options: .atomic)
+        try #require(fixture.model.refreshBackgroundPromptHealth() == .diagnosticsUnavailable)
+        #expect(fixture.model.backgroundPromptStatusDetail == diagnosticsWarning)
+
+        fixture.service.registerError = FixtureError.registrationFailed
+        fixture.model.repairBackgroundPrompt()
+        let failedRepair = try #require(fixture.model.backgroundPromptOperationTask)
+        await failedRepair.value
+
+        let failure = FixtureError.registrationFailed.localizedDescription
+        #expect(fixture.service.registerCalls == 1)
+        #expect(!fixture.model.isRepairingBackgroundPrompt)
+        #expect(fixture.model.backgroundPromptStatusDetail == L10n.tr("Could not repair background prompt: \(failure)"))
+
+        fixture.service.registerError = nil
+        try unreadableState.write(to: fixture.store.fileURL, options: .atomic)
+        fixture.model.repairBackgroundPrompt()
+        let retry = try #require(fixture.model.backgroundPromptOperationTask)
+        await retry.value
+
+        #expect(fixture.service.registerCalls == 2)
+        #expect(!fixture.model.isRepairingBackgroundPrompt)
+        #expect(fixture.model.backgroundPromptStatusDetail == diagnosticsWarning)
+    }
 }
 
 private enum FixtureError: LocalizedError {

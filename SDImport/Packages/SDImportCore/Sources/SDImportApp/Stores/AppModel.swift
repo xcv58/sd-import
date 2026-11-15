@@ -265,10 +265,12 @@ final class AppModel: ObservableObject {
         didSet {
             if backgroundPromptLastError == nil {
                 backgroundPromptLastErrorContent = nil
+                backgroundPromptLastErrorIsRepairFailure = false
             }
         }
     }
     private var backgroundPromptLastErrorContent: RelocalizableMessage?
+    private var backgroundPromptLastErrorIsRepairFailure = false
     @Published private var backgroundPromptLaunchTimeout: RelocalizableMessage?
     @Published private var backgroundPromptDiagnosticsReadFailed = false
     private var backgroundPromptLastErrorSequence: UInt64?
@@ -2533,7 +2535,7 @@ final class AppModel: ObservableObject {
     }
 
     private var backgroundPromptEffectiveError: String? {
-        if backgroundPromptDiagnosticsReadFailed {
+        if backgroundPromptDiagnosticsReadFailed && !backgroundPromptLastErrorIsRepairFailure {
             return L10n.tr("Could not read background helper diagnostics")
         }
         let launchTimeout = backgroundPromptServiceStatus == .enabled ? backgroundPromptLaunchTimeout?.text : nil
@@ -2768,7 +2770,7 @@ final class AppModel: ObservableObject {
         } catch {
             refreshBackgroundPromptHealth()
             let message = { L10n.tr("Could not repair background prompt: \(Self.errorMessage(for: error))") }
-            recordBackgroundPromptError(message(), render: message)
+            recordBackgroundPromptError(message(), render: message, isRepairFailure: true)
             if backgroundPromptServiceStatus == .notFound
                 || backgroundPromptServiceStatus == .notRegistered {
                 scheduleRegistrationRetry()
@@ -2892,7 +2894,8 @@ final class AppModel: ObservableObject {
     private func recordBackgroundPromptError(
         _ message: String,
         render: (() -> String)? = nil,
-        eventSequence: UInt64? = nil
+        eventSequence: UInt64? = nil,
+        isRepairFailure: Bool = false
     ) {
         let sequence: UInt64
         if let eventSequence {
@@ -2918,6 +2921,7 @@ final class AppModel: ObservableObject {
         ) else {
             return
         }
+        backgroundPromptLastErrorIsRepairFailure = isRepairFailure
         backgroundPromptLastError = message
         backgroundPromptLastErrorContent = RelocalizableMessage(message, render: render)
         backgroundPromptLastErrorSequence = sequence
