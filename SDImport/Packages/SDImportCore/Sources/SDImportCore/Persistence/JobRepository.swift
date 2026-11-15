@@ -112,8 +112,23 @@ public struct JobRepository {
         }
     }
 
-    func unverifiedDestinationPaths() throws -> Set<String> {
-        try pool.read(Self.unverifiedDestinationPaths)
+    func isUnverifiedDestination(_ destination: URL) throws -> Bool {
+        let key = ConflictResolver.destinationKey(destination)
+        return try pool.read { db in try Self.isUnverifiedDestination(key, db: db) }
+    }
+
+    private static func isUnverifiedDestination(_ key: String, db: Database) throws -> Bool {
+        try Bool.fetchOne(
+            db,
+            sql: """
+            SELECT EXISTS (
+                SELECT key FROM unverified_copy_paths WHERE key = ?
+                UNION ALL
+                SELECT destination_key FROM import_copy_attempts WHERE copy_committed = 0 AND destination_key = ?
+            )
+            """,
+            arguments: [key, key]
+        ) ?? false
     }
 
     private static func unverifiedDestinationPaths(_ db: Database) throws -> Set<String> {
@@ -162,7 +177,8 @@ public struct JobRepository {
         id: String,
         status: ImportJobStatus,
         startedAt: Date? = nil,
-        completedAt: Date? = nil
+        completedAt: Date? = nil,
+        needsDestinationReview: Bool? = nil
     ) throws {
         try pool.write { db in
             try db.execute(
@@ -170,13 +186,15 @@ public struct JobRepository {
                 UPDATE jobs
                 SET status = ?,
                     started_at = COALESCE(?, started_at),
-                    completed_at = COALESCE(?, completed_at)
+                    completed_at = COALESCE(?, completed_at),
+                    needs_destination_review = COALESCE(?, needs_destination_review)
                 WHERE job_id = ?
                 """,
                 arguments: [
                     status.databaseValue,
                     DateCoding.optionalString(from: startedAt),
                     DateCoding.optionalString(from: completedAt),
+                    needsDestinationReview,
                     id
                 ]
             )
@@ -424,10 +442,6 @@ public struct JobRepository {
             try DedupeRepository.recordImported(
                 attempt.fingerprint, jobID: attempt.jobID, sourcePath: attempt.sourcePath, db: db
             )
-            try db.execute(
-                sql: "DELETE FROM unverified_copy_paths WHERE key = ?",
-                arguments: [ConflictResolver.destinationKey(attempt.destination)]
-            )
             if requireReviewForRemainingFiles {
                 try db.execute(
                     sql: """
@@ -462,7 +476,11 @@ public struct JobRepository {
         destination: URL,
         reason: String
     ) throws {
+        let key = ConflictResolver.destinationKey(destination)
         try pool.write { db in
+            guard try !Self.isUnverifiedDestination(key, db: db) else {
+                throw SDImportError.destinationFilenameConflict(destination.path)
+            }
             try db.execute(
                 sql: "UPDATE job_files SET dest_dir = ?, dest_path = ? WHERE id = ?",
                 arguments: [destination.deletingLastPathComponent().path, destination.path, fileID]

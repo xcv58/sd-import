@@ -12,11 +12,11 @@ import stat
 import sys
 import tempfile
 import time
-import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Set, Tuple
 
 from .common import (
+    destination_key,
     ensure_dir,
     format_bytes,
     format_duration,
@@ -51,10 +51,6 @@ def existing_hash_matches(path: Path, expected_hash: str, expected_size: int) ->
     return metadata_fingerprint(st.st_size, existing_mtime) == expected_hash
 
 
-def destination_key(path: Path) -> str:
-    return unicodedata.normalize("NFC", str(path.parent.resolve() / path.name)).lower()
-
-
 def unverified_destination_paths(conn: sqlite3.Connection) -> Set[str]:
     rejected = {row[0] for row in conn.execute("SELECT key FROM unverified_copy_paths")}
     rejected.update(destination_key(Path(row[0])) for row in conn.execute("SELECT target FROM exclusive_copy_attempts"))
@@ -64,17 +60,19 @@ def unverified_destination_paths(conn: sqlite3.Connection) -> Set[str]:
 def resolve_destination_path(
     candidate: Path, expected_hash: str, expected_size: int, unverified_paths: Optional[Set[str]] = None
 ) -> Tuple[Optional[Path], Optional[str]]:
-    path, reason = destination_resolution(candidate, expected_hash, expected_size, unverified_paths or set())
+    path, reason = destination_resolution(
+        candidate, expected_hash, expected_size, lambda path: destination_key(path) in (unverified_paths or set())
+    )
     return (None if reason else path), reason
 
 
 def destination_resolution(
-    candidate: Path, expected_hash: str, expected_size: int, unverified_paths: Set[str]
+    candidate: Path, expected_hash: str, expected_size: int, reject_match: Callable[[Path], bool]
 ) -> Tuple[Path, Optional[str]]:
     if not os.path.lexists(candidate):
         return candidate, None
 
-    if destination_key(candidate) not in unverified_paths and existing_hash_matches(candidate, expected_hash, expected_size):
+    if existing_hash_matches(candidate, expected_hash, expected_size) and not reject_match(candidate):
         return candidate, "already_exists_same_hash"
 
     stem = candidate.stem
@@ -86,7 +84,7 @@ def destination_resolution(
         nxt = parent / f"{stem}-copy-{counter}{suffix}"
         if not os.path.lexists(nxt):
             return nxt, None
-        if destination_key(nxt) not in unverified_paths and existing_hash_matches(nxt, expected_hash, expected_size):
+        if existing_hash_matches(nxt, expected_hash, expected_size) and not reject_match(nxt):
             return nxt, "already_exists_same_hash"
         counter += 1
 
@@ -246,9 +244,8 @@ def verified_destination_digest(path: Path, descriptor: int) -> Optional[str]:
         return None
     if entry_inode(named) != entry_inode(after):
         return None
-    if (before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
-        after.st_size, after.st_mtime_ns, after.st_ctime_ns
-    ):
+    original_state = (before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+    if any((info.st_size, info.st_mtime_ns, info.st_ctime_ns) != original_state for info in (after, named)):
         return None
     return digest
 
@@ -526,7 +523,6 @@ def import_new_files(
             (fingerprint, size, now_local_iso(), job_id, str(source)),
         )
         conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
-        conn.execute("DELETE FROM unverified_copy_paths WHERE key=?", (destination_key(target),))
         imported_files += 1
         done_files += 1
         processed_bytes_done += size
@@ -615,7 +611,8 @@ def import_new_files(
         ensure_dir(dest_dir)
         candidate = dest_dir / filename
         target, skip_reason = destination_resolution(
-            candidate, expected_hash, expected_size, unverified_destination_paths(conn)
+            candidate, expected_hash, expected_size,
+            lambda path: destination_key(path) in unverified_destination_paths(conn),
         )
 
         if skip_reason:
@@ -660,6 +657,7 @@ def import_new_files(
                 os.close(descriptor)
                 descriptor = None
                 original = src.stat()
+                target = target.parent.resolve() / target.name
                 destination_parent = parent_identity(target.parent)
 
                 def record_reservation(info: os.stat_result) -> None:

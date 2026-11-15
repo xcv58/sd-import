@@ -69,7 +69,6 @@ public struct MediaScanner {
         _ request: ScanRequest,
         shouldCancel: () -> Bool = { false }
     ) throws -> ScanSummary {
-        let unverifiedPaths = try jobRepository.unverifiedDestinationPaths()
         var files: [JobFileRecord] = []
         var portableFingerprints: Set<String> = []
         var portableIdentitiesToBackfill: [(sourcePath: String, identity: PortableFileIdentity)] = []
@@ -185,11 +184,11 @@ public struct MediaScanner {
             var error: String?
 
             if decision == .new, let candidate = destinationURL, ConflictResolver.destinationEntryExists(at: candidate) {
-                switch conflictResolver.resolveDestination(
+                switch try conflictResolver.resolveDestination(
                     candidate: candidate,
                     expectedFingerprint: fingerprint,
                     allowsRename: ![".insv", ".lrv"].contains(ext.lowercased()),
-                    rejectingMatchesAt: unverifiedPaths
+                    rejectMatch: jobRepository.isUnverifiedDestination
                 ) {
                 case .skip(let matchedURL, _):
                     destinationURL = matchedURL

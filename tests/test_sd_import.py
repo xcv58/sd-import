@@ -430,6 +430,8 @@ class MetadataDedupeTests(unittest.TestCase):
             self.assertEqual(target.read_bytes(), b"complete")
             self.conn.close()
             self.conn = sd_import.connect_db(self.db_path)
+            pruned = sd_import.prune_history(self.conn, cutoff_date="9999-12-31", vacuum=False, dry_run=False)
+            self.assertEqual(pruned["jobs_matched"], 0)
             result = sd_import.import_new_files(self.conn, job_id)
 
         self.assertEqual(result["imported_files"], 1)
@@ -439,7 +441,7 @@ class MetadataDedupeTests(unittest.TestCase):
         self.assertEqual(Path(copied["dest_path"]).read_bytes(), source.read_bytes())
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM exclusive_copy_attempts").fetchone()[0], 0)
 
-    def test_new_scan_keeps_unverified_destination_out_of_dedupe(self) -> None:
+    def test_rescan_preserves_unverified_evidence_from_previous_schema(self) -> None:
         source = self.mount / "IMG_UNVERIFIED.JPG"
         source.write_bytes(b"source")
         first_job = sd_import.scan_mount(
@@ -451,7 +453,11 @@ class MetadataDedupeTests(unittest.TestCase):
         target.write_bytes(b"edited")
         original = source.stat()
         os.utime(target, ns=(original.st_atime_ns, original.st_mtime_ns))
-        importer_mod.reject_unverified_destination(self.conn, row["id"], target)
+        self.conn.execute("CREATE TABLE unverified_copy_destinations (file_id INTEGER, path TEXT)")
+        self.conn.execute("INSERT INTO unverified_copy_destinations VALUES (?, ?)", (row["id"], str(target)))
+        self.conn.commit()
+        self.conn.close()
+        self.conn = sd_import.connect_db(self.db_path)
 
         job = sd_import.scan_mount(self.conn, self.mount, "TEST", self.photos, self.videos)
         rescanned = self.conn.execute("SELECT decision FROM job_files WHERE job_id=?", (job["job_id"],)).fetchone()

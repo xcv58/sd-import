@@ -18,14 +18,16 @@ public struct ConflictResolver {
         candidate: URL,
         expectedFingerprint: FileFingerprint,
         allowsRename: Bool = true,
-        rejectingMatchesAt unverifiedPaths: Set<String> = []
-    ) -> ConflictResolution {
+        rejectingMatchesAt unverifiedPaths: Set<String> = [],
+        rejectMatch: (URL) throws -> Bool = { _ in false }
+    ) rethrows -> ConflictResolution {
         if !Self.destinationEntryExists(at: candidate) {
             return .copy(to: candidate)
         }
 
         if !unverifiedPaths.contains(Self.destinationKey(candidate)),
-           existingFileMatches(candidate, expectedFingerprint: expectedFingerprint) {
+           existingFileMatches(candidate, expectedFingerprint: expectedFingerprint),
+           try !rejectMatch(candidate) {
             return .skip(at: candidate, reason: "already_exists_same_fingerprint")
         }
 
@@ -45,7 +47,8 @@ public struct ConflictResolver {
                 return .copy(to: next)
             }
             if !unverifiedPaths.contains(Self.destinationKey(next)),
-               existingFileMatches(next, expectedFingerprint: expectedFingerprint) {
+               existingFileMatches(next, expectedFingerprint: expectedFingerprint),
+               try !rejectMatch(next) {
                 return .skip(at: next, reason: "already_exists_same_fingerprint")
             }
             counter += 1

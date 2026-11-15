@@ -243,11 +243,11 @@ public struct ImportEngine {
                 guard let path = file.plannedDestinationPath else { continue }
                 let candidate = URL(fileURLWithPath: path, isDirectory: false)
                 let fingerprint = fingerprint(for: file, currentIdentity: nil)
-                guard case .skip = conflictResolver.resolveDestination(
+                guard case .skip = try conflictResolver.resolveDestination(
                     candidate: candidate,
                     expectedFingerprint: fingerprint,
-                    allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file),
-                    rejectingMatchesAt: file.unverifiedDestinationPaths
+                    allowsRename: false,
+                    rejectMatch: jobRepository.isUnverifiedDestination
                 ) else {
                     try stopForDestinationChange()
                 }
@@ -271,11 +271,11 @@ public struct ImportEngine {
                     ? validatedPortableIdentity(for: member)
                     : nil
                 let memberFingerprint = fingerprint(for: member, currentIdentity: portableIdentity)
-                if case .blocked = conflictResolver.resolveDestination(
+                if case .blocked = try conflictResolver.resolveDestination(
                     candidate: candidate,
                     expectedFingerprint: memberFingerprint,
                     allowsRename: false,
-                    rejectingMatchesAt: member.unverifiedDestinationPaths
+                    rejectMatch: jobRepository.isUnverifiedDestination
                 ) {
                     if requiresReviewedDestinations { try stopForDestinationChange() }
                     throw SDImportError.destinationFilenameConflict(candidate.path)
@@ -303,11 +303,11 @@ public struct ImportEngine {
                 return true
             }
             let candidate = URL(fileURLWithPath: plannedDestinationPath, isDirectory: false)
-            switch conflictResolver.resolveDestination(
+            switch try conflictResolver.resolveDestination(
                 candidate: candidate,
                 expectedFingerprint: fingerprint,
                 allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file),
-                rejectingMatchesAt: file.unverifiedDestinationPaths
+                rejectMatch: jobRepository.isUnverifiedDestination
             ) {
             case .skip:
                 if requiresReviewedDestinations { try stopForDestinationChange() }
@@ -329,7 +329,10 @@ public struct ImportEngine {
             )
         }
 
-        try jobRepository.updateJobStatus(id: jobID, status: .importing, startedAt: startedAt)
+        try jobRepository.updateJobStatus(
+            id: jobID, status: .importing, startedAt: startedAt,
+            needsDestinationReview: requiresReviewedDestinations ? true : nil
+        )
 
         func emit(status: String, forceProcessedBytes: Int64? = nil) {
             let elapsed = max(0.001, Date().timeIntervalSince(startedAt))
@@ -569,11 +572,11 @@ public struct ImportEngine {
             } ?? URL(fileURLWithPath: destinationDirectory, isDirectory: true)
                 .appendingPathComponent(file.filename, isDirectory: false)
 
-            switch conflictResolver.resolveDestination(
+            switch try conflictResolver.resolveDestination(
                 candidate: candidate,
                 expectedFingerprint: fingerprint,
                 allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file),
-                rejectingMatchesAt: file.unverifiedDestinationPaths
+                rejectMatch: jobRepository.isUnverifiedDestination
             ) {
             case .skip(let matchedURL, let reason):
                 if requiresReviewedDestinations { try stopForDestinationChange() }

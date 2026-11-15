@@ -103,7 +103,7 @@ public struct RecoveryService {
             && !files.contains(where: \.isPendingImport)
         try jobRepository.refreshImportTotals(
             jobID: jobID, finalStatus: fullyCopied ? .imported : .failed, completedAt: Date(),
-            needsDestinationReview: outcome.needsReview ? true : nil
+            needsDestinationReview: fullyCopied ? false : (outcome.needsReview ? true : nil)
         )
         ReportWriter(fileManager: fileManager).rewriteIfPossible(jobID: jobID, jobRepository: jobRepository)
         return outcome
@@ -156,8 +156,13 @@ public struct RecoveryService {
                 candidate: attempt.destination, expectedFingerprint: attempt.fingerprint, allowsRename: false
             ), try CopyEngine.readDigest(at: attempt.destination, identity: ImportCopyFileIdentity(final))
                 != verified.digest {
-                try fileManager.removeItem(at: attempt.staging)
-                return .unverifiedDestination(removedStaging: true)
+                guard attempt.destinationIsAccessible() else { return .unavailable }
+                let latestStaging = try CopyEngine.fileInfo(at: attempt.staging)
+                let stillOwned = latestStaging.map { attempt.stagingIdentity?.matches($0) == true } ?? false
+                if stillOwned {
+                    try fileManager.removeItem(at: attempt.staging)
+                }
+                return .unverifiedDestination(removedStaging: stillOwned)
             }
         }
 

@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import shutil
+import unicodedata
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -24,6 +25,14 @@ def make_job_id() -> str:
 
 def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
+
+
+def destination_key(path: Path) -> str:
+    try:
+        path = path.parent.resolve() / path.name
+    except (OSError, RuntimeError):
+        path = Path(os.path.abspath(path))
+    return unicodedata.normalize("NFC", str(path)).lower()
 
 
 def safe_destination_component(value: Optional[str], fallback: str) -> str:
