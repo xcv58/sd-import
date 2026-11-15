@@ -19,6 +19,25 @@ public enum ImportOperationKind: String, Equatable, Sendable {
     case eject
 }
 
+public struct ImportWorkspaceAttempt: Equatable, Sendable {
+    public let id: UUID
+    public let operation: ImportOperationKind
+    public private(set) var cancellationRequested = false
+
+    public init(id: UUID = UUID(), operation: ImportOperationKind) {
+        self.id = id
+        self.operation = operation
+    }
+
+    public mutating func requestCancellation() {
+        cancellationRequested = true
+    }
+
+    public func accepts(_ id: UUID, isProgress: Bool = false) -> Bool {
+        self.id == id && (!isProgress || !cancellationRequested)
+    }
+}
+
 public struct ImportFailureState: Equatable, Sendable {
     public let operation: ImportOperationKind
     public let message: String

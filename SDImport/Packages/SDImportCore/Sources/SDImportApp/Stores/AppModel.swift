@@ -429,20 +429,9 @@ final class AppModel: ObservableObject {
             )
         }
     }
-    @Published var isWorking = false {
-        didSet {
-            if oldValue, !isWorking {
-                schedulePendingMountHandoffRetry()
-            }
-        }
-    }
-    @Published private(set) var isEjectingSource = false {
-        didSet {
-            if oldValue, !isEjectingSource {
-                schedulePendingMountHandoffRetry()
-            }
-        }
-    }
+    @Published private var importAttempt: ImportWorkspaceAttempt?
+    var isWorking: Bool { importAttempt.map { $0.operation != .eject } ?? false }
+    var isEjectingSource: Bool { importAttempt?.operation == .eject }
     @Published private(set) var ejectedSourceJobID: String?
     @Published private(set) var ejectedSourceName: String?
     @Published private(set) var ejectedSourceVolumeCount = 0
@@ -1218,8 +1207,7 @@ final class AppModel: ObservableObject {
         previewSessions = []
         currentPreviewFiles = []
         clearPreviewPlanCache()
-        isWorking = true
-        transitionImportWorkspace(.beginScan)
+        let attemptID = beginImportAttempt(.scan, event: .beginScan)
         statusMessage = L10n.tr("Scanning...")
         importLogger.info("Scan started")
 
@@ -1269,6 +1257,7 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
 
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentSummary = summary
                     self.selectedJobID = summary.jobID
                     self.jobs = jobs
@@ -1293,41 +1282,38 @@ final class AppModel: ObservableObject {
                     } else {
                         self.statusMessage = L10n.tr("Scan complete")
                     }
-                    self.isWorking = false
-                    self.transitionImportWorkspace(.scanSucceeded)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .scanSucceeded)
                 }
                 importLogger.info(
                     "Scan complete scanned=\(summary.scannedFiles, privacy: .public) new=\(summary.newFiles, privacy: .public) known=\(summary.knownFiles, privacy: .public) sidecars=\(summary.unsupportedFiles, privacy: .public) conflicts=\(summary.conflictFiles, privacy: .public)"
                 )
             } catch is CancellationError {
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentSummary = nil
                     self.previewSessions = []
                     self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
                     self.clearPreviewPlanCache()
                     self.statusMessage = L10n.tr("Scan cancelled")
-                    self.isWorking = false
-                    self.transitionImportWorkspace(.cancelled)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .cancelled)
                 }
                 importLogger.notice("Scan cancelled")
             } catch SDImportError.cancelled {
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentSummary = nil
                     self.previewSessions = []
                     self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
                     self.clearPreviewPlanCache()
                     self.statusMessage = L10n.tr("Scan cancelled")
-                    self.isWorking = false
-                    self.transitionImportWorkspace(.cancelled)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .cancelled)
                 }
                 importLogger.notice("Scan cancelled")
             } catch {
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentSummary = nil
                     self.previewSessions = []
                     self.currentPreviewFiles = []
@@ -1336,9 +1322,9 @@ final class AppModel: ObservableObject {
                     let render: () -> String = { L10n.tr("Scan failed: \(Self.errorMessage(for: error))") }
                     self.setLocalizedStatusMessage(render)
                     let message = self.statusMessage
-                    self.isWorking = false
-                    self.transitionImportWorkspace(.failed(operation: .scan, message: message), failureRenderer: render)
-                    self.importTask = nil
+                    self.finishImportAttempt(
+                        attemptID, event: .failed(operation: .scan, message: message), failureRenderer: render
+                    )
                 }
                 importLogger.error("Scan failed errorType=\(String(describing: type(of: error)), privacy: .public)")
             }
@@ -1882,28 +1868,30 @@ final class AppModel: ObservableObject {
             return
         }
 
-        isWorking = true
-        activeImportRetryContext = .portableReceiptOverride
-        failedImportRetryContext = nil
-        transitionImportWorkspace(.beginPreparation(.portableReceiptOverride))
+        let attemptID = beginImportAttempt(
+            .portableReceiptOverride, event: .beginPreparation(.portableReceiptOverride),
+            retryContext: .portableReceiptOverride
+        )
         statusMessage = L10n.tr("Preparing files imported on another Mac...")
         importTask = Task.detached(priority: .userInitiated) {
             do {
                 try Task.checkCancellation()
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
                 try Task.checkCancellation()
-                try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: updates)
+                guard let files = try repositories.jobRepository.withImportLock(jobID: jobID, {
+                    try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: updates)
+                    return try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                }) else {
+                    throw SDImportError.invalidArgument(L10n.tr("Finish the current scan or import first"))
+                }
                 try Task.checkCancellation()
-                let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
                 let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
                 try Task.checkCancellation()
 
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     guard !Task.isCancelled else {
-                        self.isWorking = false
-                        self.activeImportRetryContext = nil
-                        self.transitionImportWorkspace(.cancelled)
-                        self.importTask = nil
+                        self.finishImportAttempt(attemptID, event: .cancelled)
                         return
                     }
                     self.currentPreviewFiles = files
@@ -1912,33 +1900,25 @@ final class AppModel: ObservableObject {
                     self.rebuildPreviewPlanCache()
                     let count = updates.count
                     self.setLocalizedStatusMessage { L10n.tr("Portable receipt overridden for \(count) files") }
-                    self.isWorking = false
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.scanSucceeded)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .scanSucceeded)
                 }
             } catch is CancellationError {
                 await MainActor.run {
-                    self.isWorking = false
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.cancelled)
-                    self.importTask = nil
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
+                    self.finishImportAttempt(attemptID, event: .cancelled)
                 }
             } catch {
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     let render: () -> String = {
                         L10n.tr("Could not override portable history: \(Self.errorMessage(for: error))")
                     }
                     self.setLocalizedStatusMessage(render)
                     let message = self.statusMessage
-                    self.isWorking = false
-                    self.failedImportRetryContext = self.activeImportRetryContext
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(
-                        .failed(operation: .portableReceiptOverride, message: message),
+                    self.finishImportAttempt(
+                        attemptID, event: .failed(operation: .portableReceiptOverride, message: message),
                         failureRenderer: render
                     )
-                    self.importTask = nil
                 }
             }
         }
@@ -1955,10 +1935,9 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Start your 14-day trial or unlock unlimited imports to continue")
             return
         }
-        isWorking = true
-        activeImportRetryContext = retryContext
-        failedImportRetryContext = nil
-        transitionImportWorkspace(.beginPreparation(.prepareImport))
+        let attemptID = beginImportAttempt(
+            .prepareImport, event: .beginPreparation(.prepareImport), retryContext: retryContext
+        )
         currentResult = nil
         importProgress = nil
         ejectedSourceJobID = nil
@@ -1980,31 +1959,11 @@ final class AppModel: ObservableObject {
             do {
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
                 let requiresReviewedDestinations: Bool
-                switch planMode {
-                case .reviewed(let builder, let plans):
-                    let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
-                    guard builder.plans(files: files) == plans else {
-                        throw SDImportError.reviewedDestinationChanged
-                    }
-                    if Task.isCancelled { throw SDImportError.cancelled }
-                    try repositories.jobRepository.updateJobImportPlan(
-                        jobID: jobID,
-                        destinationRoots: builder.roots,
-                        updates: plans.compactMap(\.update)
-                    )
-                    requiresReviewedDestinations = true
-                case .storedReview(_, let plans):
-                    let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
-                    guard ImportPlanBuilder.plansForStoredImport(files: files) == plans else {
-                        throw SDImportError.reviewedDestinationChanged
-                    }
-                    if Task.isCancelled { throw SDImportError.cancelled }
-                    try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: plans.compactMap(\.update))
-                    requiresReviewedDestinations = true
-                case .existing:
+                if case .existing = planMode {
                     requiresReviewedDestinations = false
+                } else {
+                    requiresReviewedDestinations = true
                 }
-
                 let engine = ImportEngine(
                     jobRepository: repositories.jobRepository,
                     dedupeRepository: repositories.dedupeRepository,
@@ -2014,6 +1973,30 @@ final class AppModel: ObservableObject {
                 let minimumUpdateInterval: TimeInterval = 0.75
 
                 let result = try engine.importFiles(
+                    preparing: {
+                        switch planMode {
+                        case .reviewed(let builder, let plans):
+                            let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                            guard builder.plans(files: files) == plans else {
+                                throw SDImportError.reviewedDestinationChanged
+                            }
+                            if Task.isCancelled { throw SDImportError.cancelled }
+                            try repositories.jobRepository.updateJobImportPlan(
+                                jobID: jobID,
+                                destinationRoots: builder.roots,
+                                updates: plans.compactMap(\.update)
+                            )
+                        case .storedReview(_, let plans):
+                            let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                            guard ImportPlanBuilder.plansForStoredImport(files: files) == plans else {
+                                throw SDImportError.reviewedDestinationChanged
+                            }
+                            if Task.isCancelled { throw SDImportError.cancelled }
+                            try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: plans.compactMap(\.update))
+                        case .existing:
+                            break
+                        }
+                    },
                     jobID: jobID,
                     requiresReviewedDestinations: requiresReviewedDestinations,
                     onProgress: { progress in
@@ -2030,8 +2013,7 @@ final class AppModel: ObservableObject {
 
                         lastPublishedAt = now
                         Task { @MainActor in
-                            guard self.activeImportOperation == .prepareImport
-                                    || self.activeImportOperation == .copy else { return }
+                            guard self.importAttempt?.accepts(attemptID, isProgress: true) == true else { return }
                             self.importProgress = progress
                             self.transitionImportWorkspace(.beginCopy)
                             self.setLocalizedStatusMessage { Self.importStatusMessage(for: progress) }
@@ -2045,9 +2027,7 @@ final class AppModel: ObservableObject {
                 let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
 
                 await MainActor.run {
-                    guard self.importTask != nil else {
-                        return
-                    }
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentResult = result
                     self.importProgress = nil
                     self.jobs = jobs
@@ -2068,10 +2048,7 @@ final class AppModel: ObservableObject {
                     } else {
                         self.statusMessage = L10n.tr("Import finished")
                     }
-                    self.isWorking = false
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.completed)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .completed)
                     if self.ejectAfterSuccessfulImport, self.canEjectSource(for: result) {
                         self.ejectSource(for: result)
                     }
@@ -2082,6 +2059,7 @@ final class AppModel: ObservableObject {
             } catch SDImportError.reviewedDestinationChanged {
                 let snapshot = try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID)
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.validatePaths()
                     if let snapshot {
                         self.jobs = snapshot.jobs
@@ -2091,19 +2069,19 @@ final class AppModel: ObservableObject {
                         self.rebuildPreviewPlanCache()
                     }
                     self.importProgress = nil
-                    self.activeImportRetryContext = nil
-                    self.importTask = nil
-                    self.isWorking = false
+                    self.finishImportAttempt(
+                        attemptID, event: .recover(hasScannedJob: self.currentSummary?.jobID == jobID)
+                    )
                     if case .existing = planMode {
                         self.retryExistingJob(id: jobID)
                     } else {
-                        self.transitionImportWorkspace(.recover(hasScannedJob: self.currentSummary?.jobID == jobID))
                         self.showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
                     }
                 }
             } catch SDImportError.cancelled {
                 let snapshot = try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID)
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     if let snapshot {
                         self.jobs = snapshot.jobs
                         self.selectedJobID = jobID
@@ -2117,28 +2095,22 @@ final class AppModel: ObservableObject {
                     self.currentResult = nil
                     self.importProgress = nil
                     self.statusMessage = L10n.tr("Import cancelled")
-                    self.isWorking = false
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.cancelled)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .cancelled)
                 }
                 importLogger.notice("Import cancelled jobID=\(jobID, privacy: .private)")
             } catch {
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentResult = nil
                     self.importProgress = nil
                     let failedOperation = self.activeImportOperation ?? .copy
                     let render: () -> String = { L10n.tr("Import failed: \(Self.errorMessage(for: error))") }
                     self.setLocalizedStatusMessage(render)
                     let message = self.statusMessage
-                    self.isWorking = false
-                    self.failedImportRetryContext = self.activeImportRetryContext
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(
-                        .failed(operation: failedOperation, message: message),
+                    self.finishImportAttempt(
+                        attemptID, event: .failed(operation: failedOperation, message: message),
                         failureRenderer: render
                     )
-                    self.importTask = nil
                 }
                 importLogger.error("Import failed errorType=\(String(describing: type(of: error)), privacy: .public)")
             }
@@ -2146,11 +2118,41 @@ final class AppModel: ObservableObject {
     }
 
     func cancelImport() {
-        guard importTask != nil else {
-            return
-        }
+        guard importTask != nil, importAttempt?.operation != .eject else { return }
+        importAttempt?.requestCancellation()
         statusMessage = L10n.tr("Cancelling...")
         importTask?.cancel()
+    }
+
+    private func beginImportAttempt(
+        _ operation: ImportOperationKind,
+        event: ImportWorkspaceEvent,
+        retryContext: ImportRetryContext? = nil
+    ) -> UUID {
+        let attempt = ImportWorkspaceAttempt(operation: operation)
+        activeImportRetryContext = retryContext
+        failedImportRetryContext = nil
+        importAttempt = attempt
+        transitionImportWorkspace(event)
+        return attempt.id
+    }
+
+    private func finishImportAttempt(
+        _ id: UUID,
+        event: ImportWorkspaceEvent,
+        failureRenderer: (() -> String)? = nil
+    ) {
+        guard let attempt = importAttempt, attempt.accepts(id) else { return }
+        if case .failed = event { failedImportRetryContext = activeImportRetryContext }
+        activeImportRetryContext = nil
+        if attempt.operation == .eject {
+            sourceEjectionTask = nil
+        } else {
+            importTask = nil
+        }
+        transitionImportWorkspace(event, failureRenderer: failureRenderer)
+        importAttempt = nil
+        schedulePendingMountHandoffRetry()
     }
 
     private func transitionImportWorkspace(
@@ -2174,12 +2176,14 @@ final class AppModel: ObservableObject {
     }
 
     func recoverImportWorkspace() {
+        guard importAttempt == nil else { return }
         failedImportRetryContext = nil
         transitionImportWorkspace(.recover(hasScannedJob: currentSummary != nil))
         statusMessage = currentSummary == nil ? L10n.tr("Ready") : L10n.tr("Review import")
     }
 
     func recoverImportReceipt() {
+        guard importAttempt == nil else { return }
         guard currentResult != nil else {
             recoverImportWorkspace()
             return
@@ -2190,6 +2194,7 @@ final class AppModel: ObservableObject {
     }
 
     func retryFailedImportOperation() {
+        guard importAttempt == nil else { return }
         let operation = importFailure?.operation
         let retryContext = failedImportRetryContext
         failedImportRetryContext = nil
@@ -2355,12 +2360,12 @@ final class AppModel: ObservableObject {
                 backgroundPrompt.requireLaunch(after: Date())
             }
             try await loginItem.setEnabled(enabled)
+            guard enabled == autoPromptEnabled else { return }
             refreshBackgroundPromptHealth()
             if enabled, backgroundPromptServiceStatus == .enabled {
                 recordCurrentRepairIdentity()
                 backgroundPrompt.clearRegistrationAttempt()
             } else if !enabled {
-            guard enabled == autoPromptEnabled else { return }
                 backgroundPrompt.cancelRetry(resetAttempts: true)
             }
             if enabled, backgroundPromptServiceStatus == .enabled {
@@ -2712,11 +2717,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func performBackgroundPromptReconciliation(showFeedback: Bool) async {
-        backgroundPrompt.cancelPoll()
-        refreshBackgroundPromptHealth()
-        guard hasCompletedOnboarding else {
-            backgroundPrompt.cancelRetry(resetAttempts: false)
     private func repairBackgroundPromptService(
         userInitiated: Bool,
         clearErrorOnRegistration: Bool = false
@@ -2738,6 +2738,11 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func performBackgroundPromptReconciliation(showFeedback: Bool) async {
+        backgroundPrompt.cancelPoll()
+        refreshBackgroundPromptHealth()
+        guard hasCompletedOnboarding else {
+            backgroundPrompt.cancelRetry(resetAttempts: false)
             return
         }
         guard backgroundPromptCanConfigure else {
@@ -2999,6 +3004,7 @@ final class AppModel: ObservableObject {
                     return
                 }
                 await MainActor.run {
+                    guard !Task.isCancelled else { return }
                     self.jobs = snapshot.jobs
                     self.selectedJobID = snapshot.selectedJobID
                     self.selectedJobFiles = []
@@ -3014,6 +3020,7 @@ final class AppModel: ObservableObject {
                     return
                 }
                 await MainActor.run {
+                    guard !Task.isCancelled else { return }
                     self.isHistoryLoading = false
                     self.isHistoryDetailLoading = false
                     self.historyRefreshTask = nil
@@ -3046,7 +3053,7 @@ final class AppModel: ObservableObject {
                     return
                 }
                 await MainActor.run {
-                    guard self.selectedJobID == jobID else {
+                    guard !Task.isCancelled, self.selectedJobID == jobID else {
                         return
                     }
                     self.selectedJobFiles = files
@@ -3058,7 +3065,7 @@ final class AppModel: ObservableObject {
                     return
                 }
                 await MainActor.run {
-                    guard self.selectedJobID == jobID else {
+                    guard !Task.isCancelled, self.selectedJobID == jobID else {
                         return
                     }
                     self.selectedJobFiles = []
@@ -3284,6 +3291,7 @@ final class AppModel: ObservableObject {
             }
 
             await MainActor.run {
+                guard !Task.isCancelled else { return }
                 self.reportPresentation = ImportReportPresentation(
                     job: job,
                     report: report,
@@ -3540,10 +3548,10 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Finish the current operation before ejecting")
             return
         }
-        isEjectingSource = true
-        activeImportRetryContext = .eject(jobID: jobID, target: target)
-        failedImportRetryContext = nil
-        transitionImportWorkspace(.beginAuxiliaryOperation(.eject))
+        let attemptID = beginImportAttempt(
+            .eject, event: .beginAuxiliaryOperation(.eject),
+            retryContext: .eject(jobID: jobID, target: target)
+        )
         if target.volumeCount > 1 {
             let name = target.displayName
             setLocalizedStatusMessage { L10n.tr("Ejecting \(name) storage...") }
@@ -3557,20 +3565,15 @@ final class AppModel: ObservableObject {
             }
             do {
                 try await Self.ejectDevice(target)
-                guard !Task.isCancelled else {
-                    self.isEjectingSource = false
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.endAuxiliaryOperation)
-                    self.sourceEjectionTask = nil
+                guard self.importAttempt?.accepts(attemptID) == true else { return }
+                if Task.isCancelled {
+                    self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                     return
                 }
                 self.ejectedSourceName = target.displayName
                 self.ejectedSourceVolumeCount = target.volumeCount
                 self.ejectedSourceJobID = jobID
-                self.isEjectingSource = false
-                self.activeImportRetryContext = nil
-                self.transitionImportWorkspace(.endAuxiliaryOperation)
-                self.sourceEjectionTask = nil
+                self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                 self.refreshAvailableSourceVolumes()
                 self.validatePaths()
                 if target.volumeCount > 1 {
@@ -3580,19 +3583,15 @@ final class AppModel: ObservableObject {
                     self.statusMessage = L10n.tr("Source ejected safely")
                 }
             } catch is CancellationError {
-                self.isEjectingSource = false
-                self.activeImportRetryContext = nil
-                self.transitionImportWorkspace(.endAuxiliaryOperation)
-                self.sourceEjectionTask = nil
+                self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
             } catch {
-                self.isEjectingSource = false
-                self.sourceEjectionTask = nil
+                guard self.importAttempt?.accepts(attemptID) == true else { return }
                 let render: () -> String = { L10n.tr("Could not eject source: \(error.localizedDescription)") }
                 self.setLocalizedStatusMessage(render)
                 let message = self.statusMessage
-                self.failedImportRetryContext = self.activeImportRetryContext
-                self.activeImportRetryContext = nil
-                self.transitionImportWorkspace(.failed(operation: .eject, message: message), failureRenderer: render)
+                self.finishImportAttempt(
+                    attemptID, event: .failed(operation: .eject, message: message), failureRenderer: render
+                )
             }
         }
     }
@@ -4617,7 +4616,16 @@ final class AppModel: ObservableObject {
                     continue
                 }
                 do {
-                    try NSWorkspace.shared.unmountAndEjectDevice(at: volume.mountURL)
+                    let mount = URL(fileURLWithPath: volume.mountURL.path, isDirectory: true)
+                    let currentRoot = try mount.resourceValues(forKeys: [.volumeURLKey]).volume
+                    guard currentRoot?.standardizedFileURL.path == mount.standardizedFileURL.path else {
+                        continue
+                    }
+                    let current = VolumeDetector().mountedVolume(from: mount, includeCapacity: false)
+                    guard SourceEjectionPolicy().canEjectCurrentVolume(current, matching: volume) else {
+                        throw SDImportError.invalidArgument(L10n.tr("Source cannot be ejected safely"))
+                    }
+                    try NSWorkspace.shared.unmountAndEjectDevice(at: mount)
                     ejectedVolumeNames.append(volume.name)
                 } catch {
                     throw SourceDeviceEjectionError(

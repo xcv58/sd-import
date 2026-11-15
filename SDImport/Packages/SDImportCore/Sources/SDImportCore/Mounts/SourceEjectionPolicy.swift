@@ -23,6 +23,17 @@ public struct SourceEjectionPolicy: Sendable {
         )
     }
 
+    public func canEjectCurrentVolume(_ current: MountedVolume, matching expected: MountedVolume) -> Bool {
+        guard current.isRemovable, !current.isDiskImage,
+              current.mountURL.standardizedFileURL.path == expected.mountURL.standardizedFileURL.path else {
+            return false
+        }
+        if let uuid = expected.volumeUUID, !uuid.isEmpty, current.volumeUUID != uuid { return false }
+        if let device = expected.deviceGroupIdentifier, current.deviceGroupIdentifier != device { return false }
+        if let disk = expected.wholeDiskIdentifier, current.wholeDiskIdentifier != disk { return false }
+        return true
+    }
+
     private func canEject(
         sourcePath: String,
         expectedVolumeUUID: String?,

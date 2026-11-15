@@ -31,6 +31,14 @@ struct SourceEjectionPolicyTests {
         #expect(!policy.canEject(job: job, result: result, volume: makeVolume(mountPath: "/Volumes/OTHER")))
     }
 
+    @Test("an eject attempt cannot target a replacement volume at the same path")
+    func rejectsReplacementVolume() {
+        let expected = makeVolume()
+        #expect(policy.canEjectCurrentVolume(makeVolume(isInternal: true), matching: expected))
+        #expect(!policy.canEjectCurrentVolume(makeVolume(volumeUUID: "new-card"), matching: expected))
+        #expect(!policy.canEjectCurrentVolume(makeVolume(isDiskImage: true), matching: expected))
+    }
+
     private func makeJob(
         status: ImportJobStatus = .imported,
         volumeUUID: String? = "card-uuid"
