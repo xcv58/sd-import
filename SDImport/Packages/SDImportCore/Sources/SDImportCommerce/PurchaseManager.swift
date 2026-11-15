@@ -4,7 +4,7 @@ import SDImportCore
 import StoreKit
 
 enum StoreEntitlementLookup: Sendable {
-    case entitled(purchaseDate: Date)
+    case entitled(purchaseDate: Date, transactionID: UInt64? = nil)
     case notEntitled
     case verificationFailed
 }
@@ -38,13 +38,13 @@ struct PurchaseStorefront: Sendable {
             )
         },
         currentEntitlement: { identifier in
-            var purchaseDate: Date?
+            var entitlement: Transaction?
             var encounteredVerificationFailure = false
             for await verification in Transaction.currentEntitlements {
                 switch verification {
                 case .verified(let transaction):
                     if transaction.productID == identifier, transaction.revocationDate == nil {
-                        purchaseDate = transaction.purchaseDate
+                        entitlement = transaction
                     }
                 case .unverified(let transaction, _):
                     if transaction.productID == identifier {
@@ -52,8 +52,8 @@ struct PurchaseStorefront: Sendable {
                     }
                 }
             }
-            if let purchaseDate {
-                return .entitled(purchaseDate: purchaseDate)
+            if let entitlement {
+                return .entitled(purchaseDate: entitlement.purchaseDate, transactionID: entitlement.id)
             }
             return encounteredVerificationFailure ? .verificationFailed : .notEntitled
         },
@@ -67,7 +67,7 @@ struct PurchaseStorefront: Sendable {
             guard transaction.productID == identifier, transaction.revocationDate == nil else {
                 return .notEntitled
             }
-            return .entitled(purchaseDate: transaction.purchaseDate)
+            return .entitled(purchaseDate: transaction.purchaseDate, transactionID: transaction.id)
         },
         sync: {
             try await AppStore.sync()
@@ -129,6 +129,8 @@ public final class PurchaseManager: ObservableObject {
     private struct EntitlementRevisions {
         var requested: UInt64 = 0
         var committed: UInt64 = 0
+        var grantedTransactionID: UInt64?
+        var revokedTransactionIDs: Set<UInt64> = []
     }
 
     private enum EntitlementLookupSource {
@@ -276,7 +278,7 @@ public final class PurchaseManager: ObservableObject {
                     accessState.apply(.verificationFailed)
                     return
                 }
-                applyEntitlementDecision(.granted(transaction.purchaseDate), for: .lifetime)
+                applyEntitlementDecision(.granted(transaction.purchaseDate, transaction.id), for: .lifetime)
                 await transaction.finish()
             case .pending:
                 accessState.apply(.pending)
@@ -314,7 +316,7 @@ public final class PurchaseManager: ObservableObject {
                     accessState.apply(.verificationFailed)
                     return
                 }
-                applyEntitlementDecision(.granted(transaction.purchaseDate), for: .trial)
+                applyEntitlementDecision(.granted(transaction.purchaseDate, transaction.id), for: .trial)
                 await transaction.finish()
             case .pending:
                 accessState.apply(.pending)
@@ -358,7 +360,12 @@ public final class PurchaseManager: ObservableObject {
 
         for attempt in 0..<5 {
             let restored = await resolveExistingEntitlements(restored: true)
-            if restored.foundLifetime || restored.foundTrial {
+            if restored.foundLifetime {
+                accessState.apply(.restored)
+                return
+            }
+            if let trialStartDate = restored.trialStartDate {
+                accessState.apply(.trialStarted(trialStartDate))
                 return
             }
             if restored.verificationFailed { return }
@@ -386,29 +393,47 @@ public final class PurchaseManager: ObservableObject {
                     accessState.apply(.verificationFailed)
                     continue
                 }
-                switch transaction.productID {
-                case AppDistribution.lifetimeProductIdentifier:
-                    if transaction.revocationDate == nil {
-                        applyEntitlementDecision(.granted(transaction.purchaseDate), for: .lifetime)
-                    } else {
-                        await refreshLifetimeEntitlement(restored: false)
-                    }
-                    await transaction.finish()
-                case AppDistribution.trialProductIdentifier:
-                    if transaction.revocationDate == nil {
-                        applyEntitlementDecision(.granted(transaction.purchaseDate), for: .trial)
-                    } else {
-                        await refreshTrialEntitlement()
-                    }
-                    await transaction.finish()
-                default:
-                    continue
-                }
+                guard await receiveVerifiedTransaction(
+                    productIdentifier: transaction.productID,
+                    purchaseDate: transaction.purchaseDate,
+                    transactionID: transaction.id,
+                    isRevoked: transaction.revocationDate != nil
+                ) else { continue }
+                await transaction.finish()
             }
         }
         initialStoreRefreshTask = Task { [weak self] in
             await self?.refreshStoreState()
         }
+    }
+
+    @discardableResult
+    func receiveVerifiedTransaction(
+        productIdentifier: String, purchaseDate: Date, transactionID: UInt64, isRevoked: Bool
+    ) async -> Bool {
+        let product: EntitlementProduct
+        switch productIdentifier {
+        case AppDistribution.lifetimeProductIdentifier: product = .lifetime
+        case AppDistribution.trialProductIdentifier: product = .trial
+        default: return false
+        }
+        if isRevoked {
+            let current = entitlementRevisions[product, default: EntitlementRevisions()].grantedTransactionID
+            entitlementRevisions[product, default: EntitlementRevisions()].revokedTransactionIDs.insert(transactionID)
+            let revision = nextEntitlementRevision(for: product)
+            if let current, current != transactionID {
+                entitlementRevisions[product, default: EntitlementRevisions()].committed = revision
+            } else {
+                applyEntitlementDecision(.absent, for: product, revision: revision)
+                _ = await refreshEntitlement(
+                    product, from: .current(settleWhenMissing: false), restored: false,
+                    revision: nextEntitlementRevision(for: product)
+                )
+            }
+        } else {
+            applyEntitlementDecision(.granted(purchaseDate, transactionID), for: product)
+        }
+        return true
     }
 
     private func loadProducts() async {
@@ -532,11 +557,11 @@ public final class PurchaseManager: ObservableObject {
 
         let allowsFailureFeedback = product == .lifetime ? !hasLifetimeUnlock : !canStartImport
         switch outcome {
-        case .success(.entitled(let purchaseDate)):
-            applyEntitlementDecision(
-                .granted(purchaseDate), for: product, restored: restored, revision: revision
+        case .success(.entitled(let purchaseDate, let transactionID)):
+            let applied = applyEntitlementDecision(
+                .granted(purchaseDate, transactionID), for: product, restored: restored, revision: revision
             )
-            return .found
+            return applied ? .found : .superseded
         case .success(.notEntitled):
             if case .current(let settleWhenMissing) = source {
                 let wasEntitled = hasEntitlement(for: product)
@@ -564,7 +589,7 @@ public final class PurchaseManager: ObservableObject {
 
     private struct EntitlementResolution {
         let foundLifetime: Bool
-        let foundTrial: Bool
+        let trialStartDate: Date?
         let verificationFailed: Bool
     }
 
@@ -573,7 +598,7 @@ public final class PurchaseManager: ObservableObject {
         let trial = await resolveEntitlement(.trial, restored: restored)
         return EntitlementResolution(
             foundLifetime: hasLifetimeUnlock,
-            foundTrial: hasUsedTrial,
+            trialStartDate: accessState.trialStartDate,
             verificationFailed: lifetime == .verificationFailed || trial == .verificationFailed
         )
     }
@@ -603,23 +628,33 @@ public final class PurchaseManager: ObservableObject {
     }
 
     private enum VerifiedEntitlementDecision {
-        case granted(Date)
+        case granted(Date, UInt64?)
         case absent
     }
 
     // Only verified grants and authoritative absence advance the committed revision.
+    @discardableResult
     private func applyEntitlementDecision(
         _ decision: VerifiedEntitlementDecision,
         for product: EntitlementProduct,
         restored: Bool = false,
         revision: UInt64? = nil
-    ) {
+    ) -> Bool {
+        switch decision {
+        case .granted(_, let id):
+            if let id, entitlementRevisions[product, default: EntitlementRevisions()].revokedTransactionIDs.contains(id) {
+                return false
+            }
+            entitlementRevisions[product, default: EntitlementRevisions()].grantedTransactionID = id
+        case .absent:
+            entitlementRevisions[product, default: EntitlementRevisions()].grantedTransactionID = nil
+        }
         let committed = revision ?? nextEntitlementRevision(for: product)
         entitlementRevisions[product, default: EntitlementRevisions()].committed = committed
         switch (product, decision) {
         case (.lifetime, .granted):
             accessState.apply(restored ? .restored : .purchased)
-        case (.trial, .granted(let purchaseDate)):
+        case (.trial, .granted(let purchaseDate, _)):
             accessState.apply(.trialStarted(purchaseDate))
             scheduleTrialExpiration()
         case (.lifetime, .absent):
@@ -630,6 +665,7 @@ public final class PurchaseManager: ObservableObject {
                 scheduleTrialExpiration()
             }
         }
+        return true
     }
 
     private func scheduleTrialExpiration() {

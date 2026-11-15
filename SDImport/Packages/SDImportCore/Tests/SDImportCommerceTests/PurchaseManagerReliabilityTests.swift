@@ -118,6 +118,62 @@ final class PurchaseManagerReliabilityTests: XCTestCase {
         XCTAssertNil(manager.statusMessage)
     }
 
+    func testRestoreClearsLoadingWhenVerifiedTrialSurvivesTimeouts() async {
+        let state = StorefrontState()
+        let product = AppDistribution.trialProductIdentifier
+        let manager = makeManager(state: state, current: { identifier in
+            guard identifier == product else { return .notEntitled }
+            try? await Task.sleep(for: .seconds(1))
+            return .notEntitled
+        }, latest: { identifier in
+            guard identifier == product else { return .notEntitled }
+            try? await Task.sleep(for: .seconds(1))
+            return .notEntitled
+        }, lookupTimeout: .milliseconds(25))
+
+        await manager.receiveVerifiedTransaction(
+            productIdentifier: product, purchaseDate: purchaseDate, transactionID: 1, isRevoked: false
+        )
+        await manager.restorePurchases()
+
+        XCTAssertTrue(manager.canStartImport)
+        XCTAssertEqual(manager.accessState.purchaseStatus, .available)
+        XCTAssertNil(manager.statusMessage)
+    }
+
+    func testVerifiedRevocationWinsOverPendingGrantAndInconclusiveLookup() async {
+        let state = StorefrontState()
+        let product = AppDistribution.lifetimeProductIdentifier
+        state.heldLookupSource = .current
+        let manager = makeManager(state: state, current: { identifier in
+            guard identifier == product else { return .notEntitled }
+            if state.heldLookupSource == .current {
+                state.heldLookupSource = nil
+                return await withCheckedContinuation { state.lookupContinuation = $0 }
+            }
+            return .verificationFailed
+        })
+
+        let pending = Task { await manager.refreshLifetimeEntitlement(restored: false) }
+        let started = await waitUntil { state.lookupContinuation != nil }
+        XCTAssertTrue(started)
+        await manager.receiveVerifiedTransaction(
+            productIdentifier: product, purchaseDate: purchaseDate, transactionID: 1, isRevoked: true
+        )
+        state.finishLookup(with: .entitled(purchaseDate: purchaseDate, transactionID: 1))
+        let outcome = await pending.value
+        XCTAssertEqual(outcome, .superseded)
+        XCTAssertFalse(manager.hasLifetimeUnlock)
+
+        await manager.receiveVerifiedTransaction(
+            productIdentifier: product, purchaseDate: purchaseDate, transactionID: 2, isRevoked: false
+        )
+        await manager.receiveVerifiedTransaction(
+            productIdentifier: product, purchaseDate: purchaseDate, transactionID: 1, isRevoked: true
+        )
+        XCTAssertTrue(manager.hasLifetimeUnlock)
+    }
+
     func testActiveTrialKeepsRestoreBusyUntilSyncFinishes() async {
         await assertRestoreStaysBusy(trialAgeInDays: 1)
     }
