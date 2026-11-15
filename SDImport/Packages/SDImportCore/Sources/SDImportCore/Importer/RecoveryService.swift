@@ -48,7 +48,7 @@ public struct RecoveryService {
         var removedPartFiles = 0
         var unavailableFileID: Int64?
         var needsReview = false
-        var unverifiedDestinationPath: String?
+        var resumedReviewedCopy = false
         var portableReceiptPending = false
         var copiedSourcePaths: [String] = []
     }
@@ -65,6 +65,7 @@ public struct RecoveryService {
                 if !replayPortableReceipt(attempt) { outcome.portableReceiptPending = true }
                 continue
             }
+            outcome.resumedReviewedCopy = outcome.resumedReviewedCopy || attempt.requiresDestinationReview
             let disposition: CopyRecoveryDisposition
             do {
                 disposition = try inspectInterruptedCopy(attempt)
@@ -76,8 +77,8 @@ public struct RecoveryService {
             case .unavailable:
                 outcome.unavailableFileID = attempt.fileID
             case .unverifiedDestination:
-                outcome.unverifiedDestinationPath = attempt.destinationPath
                 outcome.needsReview = outcome.needsReview || attempt.requiresDestinationReview
+                try jobRepository.rejectUnverifiedCopy(attempt)
             case .published:
                 try jobRepository.commitCopyAttempt(attempt)
                 outcome.copiedSourcePaths.append(attempt.sourcePath)
@@ -95,7 +96,6 @@ public struct RecoveryService {
         let files = try jobRepository.fetchJobFiles(jobID: jobID)
         let fullyCopied = outcome.unavailableFileID == nil
             && !outcome.needsReview
-            && outcome.unverifiedDestinationPath == nil
             && files.contains { $0.copyStatus == .copied }
             && !files.contains(where: \.isPendingImport)
         try jobRepository.refreshImportTotals(
@@ -137,13 +137,6 @@ public struct RecoveryService {
                     try CopyEngine.restoreCopyDate(date, at: attempt.destination, identity: ImportCopyFileIdentity(final))
                 }
                 return .published
-            }
-
-            if attempt.staged == nil, let reservation = attempt.reservedDestination,
-               reservation.matches(final), final.st_size < attempt.fingerprint.size,
-               try CopyEngine.partialCopyMatchesSource(attempt, identity: reservation, observed: final) {
-                try fileManager.removeItem(at: attempt.destination)
-                return .retry(removedStaging: false, needsReview: false)
             }
 
             // Retain negative verification so a later metadata-only check cannot accept this file.

@@ -67,7 +67,7 @@ public struct ImportEngine {
 
     private func importFilesWhileLocked(
         jobID: String,
-        requiresReviewedDestinations: Bool,
+        requiresReviewedDestinations userReviewedDestinations: Bool,
         prepare: () throws -> Void,
         onProgress: ((ImportProgress) -> Void)?,
         shouldCancel: () -> Bool
@@ -78,9 +78,6 @@ public struct ImportEngine {
         if let unavailableFileID = recovery.unavailableFileID {
             throw SDImportError.missingDestinationDirectory(unavailableFileID)
         }
-        if let path = recovery.unverifiedDestinationPath {
-            throw SDImportError.destinationFilenameConflict(path)
-        }
         if recovery.needsReview {
             throw SDImportError.reviewedDestinationChanged
         }
@@ -88,10 +85,11 @@ public struct ImportEngine {
             throw SDImportError.jobNotFound(jobID)
         }
 
-        if !requiresReviewedDestinations, try jobRepository.needsDestinationReview(jobID: jobID) {
+        if !userReviewedDestinations, try jobRepository.needsDestinationReview(jobID: jobID) {
             throw SDImportError.reviewedDestinationChanged
         }
 
+        let requiresReviewedDestinations = userReviewedDestinations || recovery.resumedReviewedCopy
         try prepare()
         let allFilesAtStart = try jobRepository.fetchJobFiles(jobID: jobID)
         let files = allFilesAtStart.filter(\.isPendingImport)
@@ -248,7 +246,8 @@ public struct ImportEngine {
                 guard case .skip = conflictResolver.resolveDestination(
                     candidate: candidate,
                     expectedFingerprint: fingerprint,
-                    allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file)
+                    allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file),
+                    rejectingMatchesAt: file.unverifiedDestinationPaths ?? []
                 ) else {
                     try stopForDestinationChange()
                 }
@@ -275,7 +274,8 @@ public struct ImportEngine {
                 if case .blocked = conflictResolver.resolveDestination(
                     candidate: candidate,
                     expectedFingerprint: memberFingerprint,
-                    allowsRename: false
+                    allowsRename: false,
+                    rejectingMatchesAt: member.unverifiedDestinationPaths ?? []
                 ) {
                     if requiresReviewedDestinations { try stopForDestinationChange() }
                     throw SDImportError.destinationFilenameConflict(candidate.path)
@@ -306,7 +306,8 @@ public struct ImportEngine {
             switch conflictResolver.resolveDestination(
                 candidate: candidate,
                 expectedFingerprint: fingerprint,
-                allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file)
+                allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file),
+                rejectingMatchesAt: file.unverifiedDestinationPaths ?? []
             ) {
             case .skip:
                 if requiresReviewedDestinations { try stopForDestinationChange() }
@@ -571,7 +572,8 @@ public struct ImportEngine {
             switch conflictResolver.resolveDestination(
                 candidate: candidate,
                 expectedFingerprint: fingerprint,
-                allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file)
+                allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file),
+                rejectingMatchesAt: file.unverifiedDestinationPaths ?? []
             ) {
             case .skip(let reason):
                 if requiresReviewedDestinations { try stopForDestinationChange() }
@@ -637,17 +639,29 @@ public struct ImportEngine {
                     continue
                 }
 
+                let verified: Bool
                 do {
-                    guard let info = try CopyEngine.fileInfo(at: published.destination),
-                          published.staged?.matches(info) == true,
-                          published.reservedDestination?.matches(info) != false else {
-                        throw SDImportError.reviewedDestinationChanged
+                    guard published.destinationIsAccessible() else {
+                        throw SDImportError.missingDestinationDirectory(fileID)
                     }
-                    try jobRepository.commitCopyAttempt(published)
+                    let info = try CopyEngine.fileInfo(at: published.destination)
+                    let verifiedIdentity = info.map { published.staged?.matches($0) == true } == true
+                    let verifiedBytes = try published.reservedDestination == nil || CopyEngine.publishedFileMatches(published)
+                    verified = verifiedIdentity && verifiedBytes
+                    if verified {
+                        try jobRepository.commitCopyAttempt(published)
+                    } else {
+                        try jobRepository.rejectUnverifiedCopy(published)
+                    }
                 } catch {
-                    // Publication already succeeded. Keep the journal intact for recovery.
+                    // Keep the journal for recovery when verification or bookkeeping cannot finish.
                     try? jobRepository.refreshImportTotals(jobID: jobID, finalStatus: .failed)
                     throw error
+                }
+                guard verified else {
+                    if requiresReviewedDestinations { try stopForDestinationChange() }
+                    try jobRepository.refreshImportTotals(jobID: jobID, finalStatus: .failed)
+                    throw SDImportError.destinationFilenameConflict(published.destinationPath)
                 }
                 markDone(file, status: .copied)
                 processedBytes += file.size
@@ -762,9 +776,8 @@ public struct ImportEngine {
             try jobRepository.markCopyStaged(attempt)
         } catch {
             // If the directory disappeared or the write completed, preserve its journal for recovery.
-            if attempt.destinationIsAccessible(), attempt.reservedDestination == nil || attempt.staged == nil {
+            if attempt.destinationIsAccessible(), attempt.reservedDestination == nil {
                 try removeOwnedCopy(at: attempt.staging, identity: attempt.stagingIdentity)
-                try removeOwnedCopy(at: attempt.destination, identity: attempt.reservedDestination)
                 try jobRepository.discardCopyAttempt(attempt)
             }
             throw error

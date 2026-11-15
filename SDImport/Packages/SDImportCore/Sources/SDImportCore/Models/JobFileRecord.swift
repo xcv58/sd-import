@@ -22,6 +22,7 @@ public struct JobFileRecord: Identifiable, Hashable, Codable, Sendable {
     public let error: String?
     public let portableReceiptOverride: Bool?
     public let completedAt: Date?
+    public let unverifiedDestinationPaths: [String]?
 
     public var isPendingImport: Bool {
         (decision == .new || decision == .conflict) && (copyStatus == .pending || copyStatus == .failed)
@@ -48,7 +49,8 @@ public struct JobFileRecord: Identifiable, Hashable, Codable, Sendable {
         copyStatus: CopyStatus,
         error: String? = nil,
         portableReceiptOverride: Bool? = nil,
-        completedAt: Date? = nil
+        completedAt: Date? = nil,
+        unverifiedDestinationPaths: [String]? = nil
     ) {
         self.id = id
         self.jobID = jobID
@@ -71,5 +73,6 @@ public struct JobFileRecord: Identifiable, Hashable, Codable, Sendable {
         self.error = error
         self.portableReceiptOverride = portableReceiptOverride
         self.completedAt = completedAt
+        self.unverifiedDestinationPaths = unverifiedDestinationPaths
     }
 }

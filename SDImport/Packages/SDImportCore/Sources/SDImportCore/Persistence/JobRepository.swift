@@ -123,6 +123,10 @@ public struct JobRepository {
         }
     }
 
+    public func hasUnresolvedReviewedCopy(jobID: String) throws -> Bool {
+        try copyAttempts(jobID: jobID).contains { !$0.localCopyCommitted && $0.requiresDestinationReview }
+    }
+
     public func needsDestinationReview(jobID: String) throws -> Bool {
         try pool.read { db in
             try Bool.fetchOne(
@@ -369,6 +373,26 @@ public struct JobRepository {
     func discardCopyAttempt(_ attempt: ImportCopyAttempt, needsDestinationReview: Bool = false) throws {
         try pool.write { db in
             if needsDestinationReview {
+                try db.execute(
+                    sql: "UPDATE jobs SET needs_destination_review = 1 WHERE job_id = ?",
+                    arguments: [attempt.jobID]
+                )
+            }
+            try Self.removeCopyAttempt(fileID: attempt.fileID, db: db)
+        }
+    }
+
+    func rejectUnverifiedCopy(_ attempt: ImportCopyAttempt) throws {
+        try pool.write { db in
+            try db.execute(
+                sql: """
+                UPDATE job_files
+                SET unverified_destinations = json_insert(COALESCE(unverified_destinations, '[]'), '$[#]', ?)
+                WHERE id = ?
+                """,
+                arguments: [attempt.destination.standardizedFileURL.path, attempt.fileID]
+            )
+            if attempt.requiresDestinationReview {
                 try db.execute(
                     sql: "UPDATE jobs SET needs_destination_review = 1 WHERE job_id = ?",
                     arguments: [attempt.jobID]
@@ -637,6 +661,11 @@ public struct JobRepository {
             throw SDImportError.invalidDatabaseValue(column: "copy_status", value: copyStatusValue)
         }
 
+        let unverifiedJSON: String? = row["unverified_destinations"]
+        let unverifiedDestinationPaths = try unverifiedJSON.map {
+            try JSONDecoder().decode([String].self, from: Data($0.utf8))
+        }
+
         return JobFileRecord(
             id: row["id"],
             jobID: row["job_id"],
@@ -658,7 +687,8 @@ public struct JobRepository {
             copyStatus: copyStatus,
             error: row["error"],
             portableReceiptOverride: row["portable_receipt_override"],
-            completedAt: DateCoding.date(from: row["completed_at"])
+            completedAt: DateCoding.date(from: row["completed_at"]),
+            unverifiedDestinationPaths: unverifiedDestinationPaths
         )
     }
 }

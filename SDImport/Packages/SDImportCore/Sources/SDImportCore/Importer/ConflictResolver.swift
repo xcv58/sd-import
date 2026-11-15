@@ -17,13 +17,15 @@ public struct ConflictResolver {
     public func resolveDestination(
         candidate: URL,
         expectedFingerprint: FileFingerprint,
-        allowsRename: Bool = true
+        allowsRename: Bool = true,
+        rejectingMatchesAt unverifiedPaths: [String] = []
     ) -> ConflictResolution {
         if !Self.destinationEntryExists(at: candidate) {
             return .copy(to: candidate)
         }
 
-        if existingFileMatches(candidate, expectedFingerprint: expectedFingerprint) {
+        if !unverifiedPaths.contains(candidate.standardizedFileURL.path),
+           existingFileMatches(candidate, expectedFingerprint: expectedFingerprint) {
             return .skip(reason: "already_exists_same_fingerprint")
         }
 
@@ -42,7 +44,8 @@ public struct ConflictResolver {
             if !Self.destinationEntryExists(at: next) {
                 return .copy(to: next)
             }
-            if existingFileMatches(next, expectedFingerprint: expectedFingerprint) {
+            if !unverifiedPaths.contains(next.standardizedFileURL.path),
+               existingFileMatches(next, expectedFingerprint: expectedFingerprint) {
                 return .skip(reason: "already_exists_same_fingerprint")
             }
             counter += 1

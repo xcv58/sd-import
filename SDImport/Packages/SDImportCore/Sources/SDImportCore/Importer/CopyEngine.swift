@@ -25,18 +25,12 @@ public struct CopyEngine {
 
         if !replacesExisting || !fileManager.fileExists(atPath: destinationURL.path),
            Self.supportsExclusiveRename(in: destinationDirectory) == false {
-            var reservation: ImportCopyFileIdentity?
-            do {
-                _ = try stageFile(
-                    from: sourceURL, to: destinationURL, expectedSize: expectedSize,
-                    modificationDate: modificationDate, onChunk: onChunk, shouldCancel: shouldCancel,
-                    didCreate: { reservation = $0 }
-                )
-            } catch {
-                if let reservation, let info = try? Self.fileInfo(at: destinationURL), reservation.matches(info) {
-                    try? fileManager.removeItem(at: destinationURL)
-                }
-                throw error
+            let staged = try stageFile(
+                from: sourceURL, to: destinationURL, expectedSize: expectedSize,
+                modificationDate: modificationDate, onChunk: onChunk, shouldCancel: shouldCancel
+            )
+            guard try Self.readDigest(at: destinationURL, identity: staged.identity) == staged.digest else {
+                throw SDImportError.reviewedDestinationChanged
             }
             return
         }
@@ -140,27 +134,6 @@ public struct CopyEngine {
             return false
         }
         return try readDigest(at: attempt.destination, identity: ImportCopyFileIdentity(info)) == expected
-    }
-
-    static func partialCopyMatchesSource(
-        _ attempt: ImportCopyAttempt, identity: ImportCopyFileIdentity, observed: stat
-    ) throws -> Bool {
-        guard let expectedDigest = attempt.directCopyDigest else { return false }
-        let sourceURL = URL(fileURLWithPath: attempt.sourcePath)
-        guard try readDigest(at: sourceURL) == expectedDigest else { return false }
-        let source = try FileHandle(forReadingFrom: sourceURL)
-        defer { try? source.close() }
-        let output = try openVerifiedCopy(at: attempt.destination, identity: identity)
-        defer { try? output.close() }
-        var remaining = observed.st_size
-        while remaining > 0 {
-            let count = Int(min(remaining, 1024 * 1024))
-            guard let bytes = try output.read(upToCount: count), bytes.count == count,
-                  try source.read(upToCount: count) == bytes else { return false }
-            remaining -= Int64(count)
-        }
-        guard let info = try fileInfo(at: attempt.destination), identity.matches(info) else { return false }
-        return unchangedFileContents(observed, info)
     }
 
     static func restoreCopyDate(_ date: Date, at url: URL, identity: ImportCopyFileIdentity) throws {

@@ -2226,7 +2226,7 @@ final class AppModel: ObservableObject {
         case .currentReview:
             if let jobID = currentSummary?.jobID,
                (try? jobRepository?.hasUnresolvedCopies(jobID: jobID)) == true {
-                retryExistingJob(id: jobID)
+                retryExistingJob(id: jobID, forceReview: true)
                 return
             }
             transitionImportWorkspace(.recover(hasScannedJob: true))
@@ -3142,7 +3142,7 @@ final class AppModel: ObservableObject {
         retryExistingJob(id: selectedJobID)
     }
 
-    private func retryExistingJob(id jobID: String) {
+    private func retryExistingJob(id jobID: String, forceReview: Bool = false) {
         guard !isWorking, !isEjectingSource else {
             statusMessage = L10n.tr("Finish the current scan or import first")
             return
@@ -3165,7 +3165,8 @@ final class AppModel: ObservableObject {
                 throw SDImportError.jobNotFound(jobID)
             }
             job = storedJob
-            needsReview = try jobRepository.needsDestinationReview(jobID: jobID)
+            needsReview = try forceReview || jobRepository.needsDestinationReview(jobID: jobID)
+                || jobRepository.hasUnresolvedReviewedCopy(jobID: jobID)
             files = needsReview
                 ? try jobRepository.fetchJobFiles(jobID: jobID)
                 : try jobRepository.pendingFilesForImport(jobID: jobID)

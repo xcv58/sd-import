@@ -440,7 +440,8 @@ public struct ImportPlanBuilder: Sendable {
         switch resolver.resolveDestination(
             candidate: destinationURL,
             expectedFingerprint: fingerprint,
-            allowsRename: !preservesProprietaryFilename
+            allowsRename: !preservesProprietaryFilename,
+            rejectingMatchesAt: file.unverifiedDestinationPaths ?? []
         ) {
         case .skip(let reason):
             return ImportFilePlan(

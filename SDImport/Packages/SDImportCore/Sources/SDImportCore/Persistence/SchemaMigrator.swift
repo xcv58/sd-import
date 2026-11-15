@@ -87,6 +87,9 @@ public enum SchemaMigrator {
         }
 
         migrator.registerMigration(copyAttemptMigrationIdentifier) { db in
+            try db.alter(table: "job_files") { table in
+                table.add(column: "unverified_destinations", .text)
+            }
             try db.execute(sql: """
                 CREATE TABLE import_copy_attempts (
                     file_id INTEGER PRIMARY KEY NOT NULL REFERENCES job_files(id) ON DELETE CASCADE,

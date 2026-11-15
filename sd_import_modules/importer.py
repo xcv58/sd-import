@@ -13,7 +13,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Set, Tuple
 
 from .common import (
     ensure_dir,
@@ -50,11 +50,14 @@ def existing_hash_matches(path: Path, expected_hash: str, expected_size: int) ->
     return metadata_fingerprint(st.st_size, existing_mtime) == expected_hash
 
 
-def resolve_destination_path(candidate: Path, expected_hash: str, expected_size: int) -> Tuple[Optional[Path], Optional[str]]:
+def resolve_destination_path(
+    candidate: Path, expected_hash: str, expected_size: int, unverified_paths: Optional[Set[str]] = None
+) -> Tuple[Optional[Path], Optional[str]]:
+    unverified_paths = unverified_paths or set()
     if not os.path.lexists(candidate):
         return candidate, None
 
-    if existing_hash_matches(candidate, expected_hash, expected_size):
+    if os.path.abspath(candidate) not in unverified_paths and existing_hash_matches(candidate, expected_hash, expected_size):
         return None, "already_exists_same_hash"
 
     stem = candidate.stem
@@ -66,7 +69,7 @@ def resolve_destination_path(candidate: Path, expected_hash: str, expected_size:
         nxt = parent / f"{stem}-copy-{counter}{suffix}"
         if not os.path.lexists(nxt):
             return nxt, None
-        if existing_hash_matches(nxt, expected_hash, expected_size):
+        if os.path.abspath(nxt) not in unverified_paths and existing_hash_matches(nxt, expected_hash, expected_size):
             return None, "already_exists_same_hash"
         counter += 1
 
@@ -229,46 +232,40 @@ def copy_to_exclusive_destination(
     expected_digest: Optional[str] = None,
 ) -> None:
     # ExFAT and similar volumes may lack both exclusive rename and hard links.
-    with source.open("rb") as input_file, target.open("xb") as output:
+    with source.open("rb") as input_file, target.open("x+b") as output:
         owned = os.fstat(output.fileno())
-        try:
-            if did_create:
-                did_create(owned)
-            digest = hashlib.sha256()
-            has_allocated_data = False
-            for chunk in iter(lambda: input_file.read(1024 * 1024), b""):
-                output.write(chunk)
-                digest.update(chunk)
-                if did_create and not has_allocated_data:
-                    output.flush()
-                    allocated = os.fstat(output.fileno())
-                    if entry_identity(allocated) != entry_identity(owned):
-                        did_create(allocated)
-                    has_allocated_data = True
-            output.flush()
-            if os.fstat(output.fileno()).st_size != expected_size:
-                raise RuntimeError("size mismatch after copy")
-            if expected_digest is not None and digest.hexdigest() != expected_digest:
-                raise RuntimeError("source changed during import")
-            original = os.fstat(input_file.fileno())
-            set_copy_metadata(output.fileno(), original)
-            # On macOS setting an older modification time can adjust birth time.
-            completed = os.fstat(output.fileno())
-            if entry_inode(target.lstat()) != entry_inode(completed):
-                raise RuntimeError("destination changed during import")
-            if did_create and entry_identity(completed) != entry_identity(owned):
-                did_create(completed)
-        except Exception:
-            try:
-                if entry_inode(target.lstat()) == entry_inode(os.fstat(output.fileno())):
-                    target.unlink()
-            except FileNotFoundError:
-                pass
-            raise
+        if did_create:
+            did_create(owned)
+        digest = hashlib.sha256()
+        has_allocated_data = False
+        for chunk in iter(lambda: input_file.read(1024 * 1024), b""):
+            output.write(chunk)
+            digest.update(chunk)
+            if did_create and not has_allocated_data:
+                output.flush()
+                allocated = os.fstat(output.fileno())
+                if entry_identity(allocated) != entry_identity(owned):
+                    did_create(allocated)
+                has_allocated_data = True
+        output.flush()
+        if os.fstat(output.fileno()).st_size != expected_size:
+            raise RuntimeError("size mismatch after copy")
+        if expected_digest is not None and digest.hexdigest() != expected_digest:
+            raise RuntimeError("source changed during import")
+        original = os.fstat(input_file.fileno())
+        set_copy_metadata(output.fileno(), original)
+        # On macOS setting an older modification time can adjust birth time.
+        completed = os.fstat(output.fileno())
+        if entry_inode(target.lstat()) != entry_inode(completed):
+            raise RuntimeError("destination changed during import")
+        if file_digest(target, output.fileno()) != digest.hexdigest():
+            raise RuntimeError("destination changed during import")
+        if did_create and entry_identity(completed) != entry_identity(owned):
+            did_create(completed)
 
 
 def recover_exclusive_destination(
-    conn: sqlite3.Connection, file_id: int, source: Path, expected_size: int
+    conn: sqlite3.Connection, file_id: int, expected_size: int, replanned_directory: Optional[Path]
 ) -> Optional[Path]:
     attempt = conn.execute(
         "SELECT * FROM exclusive_copy_attempts WHERE file_id=?", (file_id,)
@@ -276,13 +273,25 @@ def recover_exclusive_destination(
     if not attempt:
         return None
     target = Path(attempt["target"])
-    if parent_identity(target.parent) != attempt["parent_identity"]:
-        raise OSError(errno.ENODEV, "The original destination directory is unavailable", str(target.parent))
+    try:
+        same_parent = parent_identity(target.parent) == attempt["parent_identity"]
+    except FileNotFoundError:
+        same_parent = False
+    if not same_parent:
+        if replanned_directory is None or os.path.abspath(replanned_directory) == os.path.abspath(target.parent):
+            raise OSError(errno.ENODEV, "The original destination directory is unavailable", str(target.parent))
+        reject_unverified_destination(conn, file_id, target)
+        return None
 
     try:
         descriptor = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
         conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
+        return None
+    except OSError as exc:
+        if exc.errno != errno.ELOOP:
+            raise
+        reject_unverified_destination(conn, file_id, target)
         return None
     try:
         info = os.fstat(descriptor)
@@ -293,27 +302,18 @@ def recover_exclusive_destination(
                 os.fchmod(descriptor, attempt["mode"])
                 if entry_inode(target.lstat()) == entry_inode(info):
                     return target
-
-        if (
-            stat.S_ISREG(info.st_mode)
-            and entry_identity(info) == attempt["file_identity"]
-            and info.st_size < expected_size
-            and file_digest(source) == attempt["content_digest"]
-        ):
-            with source.open("rb") as original, os.fdopen(os.dup(descriptor), "rb") as partial:
-                partial.seek(0)
-                for data in iter(lambda: partial.read(1024 * 1024), b""):
-                    if original.read(len(data)) != data:
-                        break
-                else:
-                    current = target.lstat()
-                    if entry_identity(current) == entry_identity(info) and current.st_mtime_ns == info.st_mtime_ns:
-                        target.unlink()
-                        conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
-                        return None
     finally:
         os.close(descriptor)
-    raise FileExistsError(errno.EEXIST, "The destination cannot be verified", str(target))
+    reject_unverified_destination(conn, file_id, target)
+    return None
+
+
+def reject_unverified_destination(conn: sqlite3.Connection, file_id: int, target: Path) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO unverified_copy_destinations VALUES (?, ?)", (file_id, os.path.abspath(target))
+    )
+    conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
+    conn.commit()
 
 
 def progress_path_for_job(state_dir: Path, job_id: str) -> Path:
@@ -486,8 +486,8 @@ def import_new_files(
         nonlocal imported_files, done_files, processed_bytes_done, copied_bytes_done
         nonlocal current_file, current_source_path, active_file_bytes
         conn.execute(
-            "UPDATE job_files SET copy_status='COPIED', dest_path=?, error=NULL WHERE id=?",
-            (str(target), file_id),
+            "UPDATE job_files SET copy_status='COPIED', dest_dir=?, dest_path=?, error=NULL WHERE id=?",
+            (str(target.parent), str(target), file_id),
         )
         conn.execute(
             "INSERT OR IGNORE INTO items (hash, size, first_seen_at, first_job_id, first_source_path) VALUES (?, ?, ?, ?, ?)",
@@ -510,7 +510,8 @@ def import_new_files(
         filename = row["filename"]
         expected_size = int(row["size"])
         try:
-            recovered = recover_exclusive_destination(conn, row["id"], src, expected_size)
+            replanned_directory = Path(row["dest_dir"]) if photos_base is not None and row["dest_dir"] else None
+            recovered = recover_exclusive_destination(conn, row["id"], expected_size, replanned_directory)
         except OSError as exc:
             failed_files += 1
             done_files += 1
@@ -580,7 +581,10 @@ def import_new_files(
 
         ensure_dir(dest_dir)
         candidate = dest_dir / filename
-        target, skip_reason = resolve_destination_path(candidate, expected_hash, expected_size)
+        rejected = conn.execute(
+            "SELECT path FROM unverified_copy_destinations WHERE file_id=?", (row["id"],)
+        )
+        target, skip_reason = resolve_destination_path(candidate, expected_hash, expected_size, {entry[0] for entry in rejected})
 
         if target is None:
             skipped_files += 1

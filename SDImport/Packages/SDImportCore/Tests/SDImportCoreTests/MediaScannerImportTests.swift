@@ -1926,7 +1926,7 @@ struct MediaScannerImportTests {
         let parent = attempt.destination.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         try fixture.jobRepository.updateJobStatus(id: jobID, status: .importing)
-        attempt.destinationDirectory = try #require(ImportCopyDirectoryIdentity(at: parent))
+        attempt.destinationDirectory = ImportCopyDirectoryIdentity(at: parent)
         attempt.requiresDestinationReview = reviewed
         try fixture.jobRepository.beginCopyAttempt(attempt)
         try bytes.write(to: attempt.staging)
@@ -1962,11 +1962,12 @@ struct MediaScannerImportTests {
         }
     }
 
-    @Test("partial exclusive recovery also verifies bytes before cleanup", arguments: [false, true])
+    @Test("partial exclusive recovery preserves final files and plans a new path", arguments: [false, true])
     func recoverInterruptedExclusiveCreate(edited: Bool) throws {
         let fixture = try Fixture()
         let source = fixture.mountURL.appendingPathComponent("IMG_EXCLUSIVE.JPG")
-        try fixture.writeFile(source, bytes: Data("source bytes".utf8))
+        let bytes = Data("source bytes".utf8)
+        try fixture.writeFile(source, bytes: bytes)
         let jobID = "job-exclusive-create"
         _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
         let file = try #require(fixture.jobRepository.fetchJobFiles(jobID: jobID).first)
@@ -1979,9 +1980,7 @@ struct MediaScannerImportTests {
             at: attempt.destination.deletingLastPathComponent(), withIntermediateDirectories: true
         )
         try fixture.jobRepository.updateJobStatus(id: jobID, status: .importing)
-        attempt.destinationDirectory = try #require(
-            ImportCopyDirectoryIdentity(at: attempt.destination.deletingLastPathComponent())
-        )
+        attempt.destinationDirectory = ImportCopyDirectoryIdentity(at: attempt.destination.deletingLastPathComponent())
         attempt.directCopyDigest = try CopyEngine.readDigest(at: source)
         try fixture.jobRepository.beginCopyAttempt(attempt)
         let partial = Data((edited ? "USER" : "sour").utf8)
@@ -1992,16 +1991,13 @@ struct MediaScannerImportTests {
         let recovery = RecoveryService(jobRepository: fixture.jobRepository)
         #expect(try recovery.recoverInterruptedImports().recoveredJobs == 1)
         #expect(try fixture.jobRepository.fetchJobFiles(jobID: jobID).first?.copyStatus == .pending)
-        if edited {
-            #expect(try Data(contentsOf: attempt.destination) == partial)
-            #expect(try fixture.jobRepository.hasUnresolvedCopies(jobID: jobID))
-            #expect(throws: SDImportError.destinationFilenameConflict(attempt.destinationPath)) {
-                try fixture.importEngine.importFiles(jobID: jobID)
-            }
-        } else {
-            #expect(!FileManager.default.fileExists(atPath: attempt.destination.path))
-            #expect(try fixture.importEngine.importFiles(jobID: jobID).importedFiles == 1)
-        }
+        #expect(try Data(contentsOf: attempt.destination) == partial)
+        #expect(try !fixture.jobRepository.hasUnresolvedCopies(jobID: jobID))
+        #expect(try fixture.importEngine.importFiles(jobID: jobID).importedFiles == 1)
+        #expect(try Data(contentsOf: attempt.destination) == partial)
+        let copiedPath = try #require(fixture.jobRepository.fetchJobFiles(jobID: jobID).first?.finalDestinationPath)
+        #expect(copiedPath != attempt.destinationPath)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: copiedPath)) == bytes)
     }
 
     @Test("recovery preserves an edited exclusive destination even if it owns the original inode")
@@ -2030,14 +2026,33 @@ struct MediaScannerImportTests {
         attempt.staged = staged
         attempt.reservedDestination = staged.identity
         try fixture.jobRepository.markCopyStaged(attempt)
+        let edited = Data(repeating: 0x41, count: Int(file.size))
         let output = try FileHandle(forWritingTo: attempt.destination)
-        try output.seekToEnd()
-        try output.write(contentsOf: Data(" edited".utf8))
+        try output.write(contentsOf: edited)
         try output.close()
+        // Preserve size and mtime so only persisted negative verification can distinguish it.
+        try FileManager.default.setAttributes(
+            [.modificationDate: try source.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                ?? Date(timeIntervalSince1970: 1_700_000_000)],
+            ofItemAtPath: attempt.destinationPath
+        )
 
         #expect(try RecoveryService(jobRepository: fixture.jobRepository).recoverInterruptedImports().recoveredJobs == 1)
         #expect(try fixture.jobRepository.needsDestinationReview(jobID: jobID))
-        #expect(try Data(contentsOf: attempt.destination) == Data("original shot edited".utf8))
+        #expect(try Data(contentsOf: attempt.destination) == edited)
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+        let plans = ImportPlanBuilder.plansForStoredImport(files: files)
+        let alternate = try #require(plans.first?.destinationPath)
+        #expect(alternate != attempt.destinationPath)
+        let copied = try fixture.importEngine.importFiles(
+            preparing: {
+                try fixture.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: plans.compactMap(\.update))
+            },
+            jobID: jobID, requiresReviewedDestinations: true
+        )
+        #expect(copied.importedFiles == 1)
+        #expect(try Data(contentsOf: attempt.destination) == edited)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: alternate)) == Data("original shot".utf8))
     }
 
     @Test("recovery marks an interrupted job failed and preserves unowned part paths")

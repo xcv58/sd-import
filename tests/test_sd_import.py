@@ -403,7 +403,7 @@ class MetadataDedupeTests(unittest.TestCase):
         self.assertEqual(result["imported_files"], 1)
         self.assertEqual(Path(row["dest_path"]).stat().st_mtime_ns, source.stat().st_mtime_ns)
 
-    def test_retry_recovers_owned_partial_exclusive_destination(self) -> None:
+    def test_retry_preserves_unverified_exclusive_destination_and_replans(self) -> None:
         source = self.mount / "IMG_INTERRUPTED.JPG"
         source.write_bytes(b"complete data")
         summary = sd_import.scan_mount(
@@ -433,8 +433,10 @@ class MetadataDedupeTests(unittest.TestCase):
             result = sd_import.import_new_files(self.conn, job_id)
 
         self.assertEqual(result["imported_files"], 1)
-        self.assertEqual(target.read_bytes(), source.read_bytes())
-        self.assertEqual(list(target.parent.iterdir()), [target])
+        self.assertEqual(target.read_bytes(), b"complete")
+        copied = self.conn.execute("SELECT dest_path FROM job_files WHERE job_id=?", (job_id,)).fetchone()
+        self.assertNotEqual(Path(copied["dest_path"]), target)
+        self.assertEqual(Path(copied["dest_path"]).read_bytes(), source.read_bytes())
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM exclusive_copy_attempts").fetchone()[0], 0)
 
     def test_import_replans_pending_destinations_after_scan(self) -> None:
@@ -702,17 +704,35 @@ class DestinationResolutionTests(unittest.TestCase):
                 importer_mod.copy_to_exclusive_destination(source, target, source.stat().st_size)
             self.assertEqual(target.read_bytes(), b"existing destination")
 
-    def test_exclusive_copy_fallback_removes_its_own_partial_file(self) -> None:
+    def test_exclusive_copy_fallback_preserves_unverified_final_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source, target = root / "source.jpg", root / "target.jpg"
             source.write_bytes(b"test source")
             with self.assertRaisesRegex(RuntimeError, "size mismatch"):
                 importer_mod.copy_to_exclusive_destination(source, target, 99)
-            self.assertFalse(target.exists())
-            importer_mod.copy_to_exclusive_destination(source, target, source.stat().st_size)
             self.assertEqual(target.read_bytes(), source.read_bytes())
-            self.assertEqual(target.stat().st_mtime_ns, source.stat().st_mtime_ns)
+            alternate = root / "alternate.jpg"
+            importer_mod.copy_to_exclusive_destination(source, alternate, source.stat().st_size)
+            self.assertEqual(alternate.read_bytes(), source.read_bytes())
+            self.assertEqual(alternate.stat().st_mtime_ns, source.stat().st_mtime_ns)
+
+    def test_exclusive_copy_verifies_bytes_written_to_the_visible_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, target = root / "source.jpg", root / "target.jpg"
+            source.write_bytes(b"source")
+            original_metadata = importer_mod.set_copy_metadata
+
+            def edit_destination(descriptor, info):
+                with target.open("r+b") as output:
+                    output.write(b"edited")
+                original_metadata(descriptor, info)
+
+            with mock.patch.object(importer_mod, "set_copy_metadata", side_effect=edit_destination):
+                with self.assertRaisesRegex(RuntimeError, "destination changed"):
+                    importer_mod.copy_to_exclusive_destination(source, target, source.stat().st_size)
+            self.assertEqual(target.read_bytes(), b"edited")
 
     def test_returns_candidate_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
