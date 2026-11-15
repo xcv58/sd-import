@@ -85,7 +85,8 @@ struct LoginItemController {
     @discardableResult
     func reconcile(
         desiredEnabled: Bool,
-        allowNotFoundRegistration: Bool
+        allowNotFoundRegistration: Bool,
+        didRegister: () -> Void
     ) async throws -> BackgroundPromptServiceStatus {
         try requireAuthoritativeApplication()
         let action = BackgroundPromptRegistrationPolicy.action(
@@ -100,6 +101,7 @@ struct LoginItemController {
                 throw LoginItemControllerError.missingEmbeddedHelper
             }
             try register()
+            didRegister()
         case .unregister:
             try await unregister()
         case .none, .requestApproval, .reportMissingHelper:
@@ -111,6 +113,7 @@ struct LoginItemController {
     @discardableResult
     @MainActor
     func repair(
+        didRegister: () -> Void = {},
         requireLaunchAfter: (Date) -> Void,
         shouldRegister: @escaping @MainActor () -> Bool = { true }
     ) async throws -> BackgroundPromptServiceStatus {
@@ -130,6 +133,7 @@ struct LoginItemController {
                 requireLaunchAfter(registrationStartedAt)
                 if status != .enabled {
                     try register()
+                    didRegister()
                 }
             }
         )

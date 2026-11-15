@@ -285,6 +285,48 @@ struct BackgroundPromptRepairTests {
         #expect(!fixture.model.isRepairingBackgroundPrompt)
         #expect(fixture.model.backgroundPromptStatusDetail == diagnosticsWarning)
     }
+
+    @Test(
+        "a successful automatic registration clears the previous Repair error",
+        arguments: [BackgroundPromptServiceStatus.notRegistered, .notFound]
+    )
+    func automaticRegistrationRetryClearsPreviousRepairError(
+        serviceStatus: BackgroundPromptServiceStatus
+    ) async throws {
+        let fixture = try Fixture(serviceStatus: serviceStatus)
+        defer { fixture.cleanUp() }
+        fixture.model.hasCompletedOnboarding = true
+        fixture.service.registerError = FixtureError.registrationFailed
+        let unreadableState = Data("{".utf8)
+        try unreadableState.write(to: fixture.store.fileURL, options: .atomic)
+        fixture.model.refreshBackgroundPromptHealth()
+        fixture.model.repairBackgroundPrompt()
+        let failedRepair = try #require(fixture.model.backgroundPromptOperationTask)
+        await failedRepair.value
+
+        let failure = FixtureError.registrationFailed.localizedDescription
+        let repairError = L10n.tr("Could not repair background prompt: \(failure)")
+        #expect(fixture.service.registerCalls == 1)
+        #expect(fixture.model.backgroundPromptStatusDetail == repairError)
+
+        fixture.service.registerError = nil
+        try unreadableState.write(to: fixture.store.fileURL, options: .atomic)
+        fixture.model.applicationDidBecomeActive()
+        let statusRefresh = try #require(fixture.model.backgroundPromptOperationTask)
+        await statusRefresh.value
+
+        #expect(fixture.service.registerCalls == 1)
+        #expect(fixture.model.backgroundPromptStatusDetail == repairError)
+
+        try await fixture.advanceRetryDelay()
+        try await waitUntil { fixture.service.registerCalls == 2 }
+        let retry = try #require(fixture.model.backgroundPromptOperationTask)
+        await retry.value
+
+        #expect(fixture.model.backgroundPromptServiceStatus == .enabled)
+        #expect(fixture.model.backgroundPromptLastError == nil)
+        #expect(fixture.model.backgroundPromptStatusDetail == L10n.tr("Could not read background helper diagnostics"))
+    }
 }
 
 private enum FixtureError: LocalizedError {
@@ -303,7 +345,7 @@ private final class Fixture {
         .standardizedFileURL.path
     let service: TestLoginItem
     let sleeps = TestSleeps()
-    private let healthClock = HealthRetryClock()
+    private let retryClock = RetryClock()
     private let suiteName = "SDImportAppTests.backgroundPrompt.\(UUID())"
     private let defaults: UserDefaults
     private let directory: URL
@@ -321,7 +363,7 @@ private final class Fixture {
             loginItem: service.controller,
             backgroundPromptStateStore: { store },
             backgroundPromptSleep: { [sleeps] in try await sleeps.sleep(for: $0) },
-            backgroundPromptHealthNow: { [healthClock] in healthClock.now },
+            backgroundPromptRetryNow: { [retryClock] in retryClock.now },
             startsBootstrap: false
         )
         model.autoPromptEnabled = enabled
@@ -359,14 +401,14 @@ private final class Fixture {
     func advanceRetryDelay() async throws {
         try await waitUntil { await self.sleeps.hasRetryDelay() }
         let delay = try #require(await sleeps.retryDelay())
-        healthClock.advance(by: delay)
+        retryClock.advance(by: delay)
         let resumed = await sleeps.resume(delay)
         try #require(resumed)
     }
 }
 
 @MainActor
-private final class HealthRetryClock {
+private final class RetryClock {
     private(set) var now = Date(timeIntervalSince1970: 1_800_000_000)
 
     func advance(by duration: Duration) {
