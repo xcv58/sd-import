@@ -3,7 +3,7 @@ import Foundation
 
 public enum ConflictResolution: Equatable, Sendable {
     case copy(to: URL)
-    case skip(reason: String)
+    case skip(at: URL, reason: String)
     case blocked(reason: String)
 }
 
@@ -18,15 +18,15 @@ public struct ConflictResolver {
         candidate: URL,
         expectedFingerprint: FileFingerprint,
         allowsRename: Bool = true,
-        rejectingMatchesAt unverifiedPaths: [String] = []
+        rejectingMatchesAt unverifiedPaths: Set<String> = []
     ) -> ConflictResolution {
         if !Self.destinationEntryExists(at: candidate) {
             return .copy(to: candidate)
         }
 
-        if !unverifiedPaths.contains(candidate.standardizedFileURL.path),
+        if !unverifiedPaths.contains(Self.destinationKey(candidate)),
            existingFileMatches(candidate, expectedFingerprint: expectedFingerprint) {
-            return .skip(reason: "already_exists_same_fingerprint")
+            return .skip(at: candidate, reason: "already_exists_same_fingerprint")
         }
 
         guard allowsRename else {
@@ -44,12 +44,18 @@ public struct ConflictResolver {
             if !Self.destinationEntryExists(at: next) {
                 return .copy(to: next)
             }
-            if !unverifiedPaths.contains(next.standardizedFileURL.path),
+            if !unverifiedPaths.contains(Self.destinationKey(next)),
                existingFileMatches(next, expectedFingerprint: expectedFingerprint) {
-                return .skip(reason: "already_exists_same_fingerprint")
+                return .skip(at: next, reason: "already_exists_same_fingerprint")
             }
             counter += 1
         }
+    }
+
+    static func destinationKey(_ url: URL) -> String {
+        url.deletingLastPathComponent().resolvingSymlinksInPath()
+            .appendingPathComponent(url.lastPathComponent).standardizedFileURL.path
+            .precomposedStringWithCanonicalMapping.lowercased()
     }
 
     static func destinationEntryExists(at url: URL) -> Bool {

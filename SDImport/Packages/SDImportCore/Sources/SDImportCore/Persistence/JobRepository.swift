@@ -103,8 +103,25 @@ public struct JobRepository {
                 sql: "SELECT * FROM job_files WHERE job_id = ? ORDER BY id",
                 arguments: [jobID]
             )
-            return try rows.map(decodeJobFile)
+            let paths = try Self.unverifiedDestinationPaths(db)
+            return try rows.map { row in
+                var file = try decodeJobFile(row)
+                file.unverifiedDestinationPaths = paths
+                return file
+            }
         }
+    }
+
+    func unverifiedDestinationPaths() throws -> Set<String> {
+        try pool.read(Self.unverifiedDestinationPaths)
+    }
+
+    private static func unverifiedDestinationPaths(_ db: Database) throws -> Set<String> {
+        Set(try String.fetchAll(db, sql: """
+            SELECT key FROM unverified_copy_paths
+            UNION
+            SELECT destination_key FROM import_copy_attempts WHERE copy_committed = 0
+            """))
     }
 
     public func hasUnresolvedCopies(jobID: String) throws -> Bool {
@@ -335,8 +352,8 @@ public struct JobRepository {
         let data = try JSONEncoder().encode(attempt)
         try pool.write { db in
             try db.execute(
-                sql: "INSERT INTO import_copy_attempts (file_id, attempt_json) VALUES (?, ?)",
-                arguments: [attempt.fileID, data]
+                sql: "INSERT INTO import_copy_attempts (file_id, attempt_json, destination_key) VALUES (?, ?, ?)",
+                arguments: [attempt.fileID, data, ConflictResolver.destinationKey(attempt.destination)]
             )
         }
     }
@@ -385,12 +402,8 @@ public struct JobRepository {
     func rejectUnverifiedCopy(_ attempt: ImportCopyAttempt) throws {
         try pool.write { db in
             try db.execute(
-                sql: """
-                UPDATE job_files
-                SET unverified_destinations = json_insert(COALESCE(unverified_destinations, '[]'), '$[#]', ?)
-                WHERE id = ?
-                """,
-                arguments: [attempt.destination.standardizedFileURL.path, attempt.fileID]
+                sql: "INSERT OR IGNORE INTO unverified_copy_paths VALUES (?)",
+                arguments: [ConflictResolver.destinationKey(attempt.destination)]
             )
             if attempt.requiresDestinationReview {
                 try db.execute(
@@ -402,7 +415,7 @@ public struct JobRepository {
         }
     }
 
-    func commitCopyAttempt(_ attempt: ImportCopyAttempt) throws {
+    func commitCopyAttempt(_ attempt: ImportCopyAttempt, requireReviewForRemainingFiles: Bool = false) throws {
         try pool.write { db in
             try Self.writeFileCopyStatus(
                 id: attempt.fileID, status: .copied, finalDestinationPath: attempt.destinationPath,
@@ -411,6 +424,22 @@ public struct JobRepository {
             try DedupeRepository.recordImported(
                 attempt.fingerprint, jobID: attempt.jobID, sourcePath: attempt.sourcePath, db: db
             )
+            try db.execute(
+                sql: "DELETE FROM unverified_copy_paths WHERE key = ?",
+                arguments: [ConflictResolver.destinationKey(attempt.destination)]
+            )
+            if requireReviewForRemainingFiles {
+                try db.execute(
+                    sql: """
+                    UPDATE jobs SET needs_destination_review = 1
+                    WHERE job_id = ? AND EXISTS (
+                        SELECT 1 FROM job_files
+                        WHERE job_id = ? AND decision IN ('NEW', 'CONFLICT') AND copy_status IN ('PENDING', 'FAILED')
+                    )
+                    """,
+                    arguments: [attempt.jobID, attempt.jobID]
+                )
+            }
             if attempt.portableReceipt != nil {
                 var pending = attempt
                 pending.localCopyCommitted = true
@@ -430,9 +459,14 @@ public struct JobRepository {
         jobID: String,
         sourcePath: String,
         fingerprint: FileFingerprint,
+        destination: URL,
         reason: String
     ) throws {
         try pool.write { db in
+            try db.execute(
+                sql: "UPDATE job_files SET dest_dir = ?, dest_path = ? WHERE id = ?",
+                arguments: [destination.deletingLastPathComponent().path, destination.path, fileID]
+            )
             try Self.writeFileCopyStatus(
                 id: fileID, status: .skipped, finalDestinationPath: nil, error: reason,
                 decision: .known, knownSource: .destination, completedAt: Date(), db: db
@@ -661,11 +695,6 @@ public struct JobRepository {
             throw SDImportError.invalidDatabaseValue(column: "copy_status", value: copyStatusValue)
         }
 
-        let unverifiedJSON: String? = row["unverified_destinations"]
-        let unverifiedDestinationPaths = try unverifiedJSON.map {
-            try JSONDecoder().decode([String].self, from: Data($0.utf8))
-        }
-
         return JobFileRecord(
             id: row["id"],
             jobID: row["job_id"],
@@ -687,8 +716,7 @@ public struct JobRepository {
             copyStatus: copyStatus,
             error: row["error"],
             portableReceiptOverride: row["portable_receipt_override"],
-            completedAt: DateCoding.date(from: row["completed_at"]),
-            unverifiedDestinationPaths: unverifiedDestinationPaths
+            completedAt: DateCoding.date(from: row["completed_at"])
         )
     }
 }

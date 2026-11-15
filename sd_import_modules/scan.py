@@ -17,7 +17,7 @@ from .common import (
     safe_destination_component,
 )
 from .db import begin_job, finalize_job_scan, get_diskutil_info, get_state_dir_from_conn
-from .importer import existing_hash_matches
+from .importer import destination_key, existing_hash_matches, unverified_destination_paths
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
 PHOTO_EXTENSIONS = {
@@ -293,6 +293,7 @@ def scan_mount(
     conflict_files = 0
 
     rows_for_report: List[Dict[str, Any]] = []
+    unverified_paths = unverified_destination_paths(conn)
     indexed_files: List[Tuple[Path, os.stat_result, str, Optional[str], str, str, str]] = []
     media_for_batch: List[Tuple[Path, str]] = []
 
@@ -373,7 +374,9 @@ def scan_mount(
         dest_path = str(dest_dir / filename)
 
         if decision == "NEW" and Path(dest_path).exists():
-            if not existing_hash_matches(Path(dest_path), content_hash, st.st_size):
+            if destination_key(Path(dest_path)) in unverified_paths or not existing_hash_matches(
+                Path(dest_path), content_hash, st.st_size
+            ):
                 decision = "CONFLICT"
                 conflict_files += 1
                 copy_status = "PENDING"

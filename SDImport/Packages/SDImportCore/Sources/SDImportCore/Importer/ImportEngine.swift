@@ -247,7 +247,7 @@ public struct ImportEngine {
                     candidate: candidate,
                     expectedFingerprint: fingerprint,
                     allowsRename: !Insta360ClipDetector.isProprietaryRecordingFile(file),
-                    rejectingMatchesAt: file.unverifiedDestinationPaths ?? []
+                    rejectingMatchesAt: file.unverifiedDestinationPaths
                 ) else {
                     try stopForDestinationChange()
                 }
@@ -275,7 +275,7 @@ public struct ImportEngine {
                     candidate: candidate,
                     expectedFingerprint: memberFingerprint,
                     allowsRename: false,
-                    rejectingMatchesAt: member.unverifiedDestinationPaths ?? []
+                    rejectingMatchesAt: member.unverifiedDestinationPaths
                 ) {
                     if requiresReviewedDestinations { try stopForDestinationChange() }
                     throw SDImportError.destinationFilenameConflict(candidate.path)
@@ -307,7 +307,7 @@ public struct ImportEngine {
                 candidate: candidate,
                 expectedFingerprint: fingerprint,
                 allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file),
-                rejectingMatchesAt: file.unverifiedDestinationPaths ?? []
+                rejectingMatchesAt: file.unverifiedDestinationPaths
             ) {
             case .skip:
                 if requiresReviewedDestinations { try stopForDestinationChange() }
@@ -573,13 +573,13 @@ public struct ImportEngine {
                 candidate: candidate,
                 expectedFingerprint: fingerprint,
                 allowsRename: !requiresReviewedDestinations && !Insta360ClipDetector.isProprietaryRecordingFile(file),
-                rejectingMatchesAt: file.unverifiedDestinationPaths ?? []
+                rejectingMatchesAt: file.unverifiedDestinationPaths
             ) {
-            case .skip(let reason):
+            case .skip(let matchedURL, let reason):
                 if requiresReviewedDestinations { try stopForDestinationChange() }
                 try jobRepository.recordDestinationSkip(
                     fileID: fileID, jobID: jobID, sourcePath: file.sourcePath,
-                    fingerprint: fingerprint, reason: reason
+                    fingerprint: fingerprint, destination: matchedURL, reason: reason
                 )
                 markDone(file, status: .skipped)
                 processedBytes += file.size
@@ -588,7 +588,7 @@ public struct ImportEngine {
                     file: file,
                     status: .skipped,
                     detail: reason,
-                    destinationPath: candidate.path
+                    destinationPath: matchedURL.path
                 )
             case .blocked:
                 if requiresReviewedDestinations { try stopForDestinationChange() }

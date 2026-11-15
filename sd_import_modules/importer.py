@@ -12,6 +12,7 @@ import stat
 import sys
 import tempfile
 import time
+import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Set, Tuple
 
@@ -50,15 +51,31 @@ def existing_hash_matches(path: Path, expected_hash: str, expected_size: int) ->
     return metadata_fingerprint(st.st_size, existing_mtime) == expected_hash
 
 
+def destination_key(path: Path) -> str:
+    return unicodedata.normalize("NFC", str(path.parent.resolve() / path.name)).lower()
+
+
+def unverified_destination_paths(conn: sqlite3.Connection) -> Set[str]:
+    rejected = {row[0] for row in conn.execute("SELECT key FROM unverified_copy_paths")}
+    rejected.update(destination_key(Path(row[0])) for row in conn.execute("SELECT target FROM exclusive_copy_attempts"))
+    return rejected
+
+
 def resolve_destination_path(
     candidate: Path, expected_hash: str, expected_size: int, unverified_paths: Optional[Set[str]] = None
 ) -> Tuple[Optional[Path], Optional[str]]:
-    unverified_paths = unverified_paths or set()
+    path, reason = destination_resolution(candidate, expected_hash, expected_size, unverified_paths or set())
+    return (None if reason else path), reason
+
+
+def destination_resolution(
+    candidate: Path, expected_hash: str, expected_size: int, unverified_paths: Set[str]
+) -> Tuple[Path, Optional[str]]:
     if not os.path.lexists(candidate):
         return candidate, None
 
-    if os.path.abspath(candidate) not in unverified_paths and existing_hash_matches(candidate, expected_hash, expected_size):
-        return None, "already_exists_same_hash"
+    if destination_key(candidate) not in unverified_paths and existing_hash_matches(candidate, expected_hash, expected_size):
+        return candidate, "already_exists_same_hash"
 
     stem = candidate.stem
     suffix = candidate.suffix
@@ -69,8 +86,8 @@ def resolve_destination_path(
         nxt = parent / f"{stem}-copy-{counter}{suffix}"
         if not os.path.lexists(nxt):
             return nxt, None
-        if os.path.abspath(nxt) not in unverified_paths and existing_hash_matches(nxt, expected_hash, expected_size):
-            return None, "already_exists_same_hash"
+        if destination_key(nxt) not in unverified_paths and existing_hash_matches(nxt, expected_hash, expected_size):
+            return nxt, "already_exists_same_hash"
         counter += 1
 
 
@@ -219,6 +236,23 @@ def file_digest(path: Path, descriptor: Optional[int] = None) -> str:
     return digest.hexdigest()
 
 
+def verified_destination_digest(path: Path, descriptor: int) -> Optional[str]:
+    before = os.fstat(descriptor)
+    digest = file_digest(path, descriptor)
+    after = os.fstat(descriptor)
+    try:
+        named = path.lstat()
+    except FileNotFoundError:
+        return None
+    if entry_inode(named) != entry_inode(after):
+        return None
+    if (before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
+        after.st_size, after.st_mtime_ns, after.st_ctime_ns
+    ):
+        return None
+    return digest
+
+
 def set_copy_metadata(descriptor: int, source: os.stat_result) -> None:
     os.utime(descriptor, ns=(source.st_atime_ns, source.st_mtime_ns))
     os.fchmod(descriptor, stat.S_IMODE(source.st_mode))
@@ -256,9 +290,7 @@ def copy_to_exclusive_destination(
         set_copy_metadata(output.fileno(), original)
         # On macOS setting an older modification time can adjust birth time.
         completed = os.fstat(output.fileno())
-        if entry_inode(target.lstat()) != entry_inode(completed):
-            raise RuntimeError("destination changed during import")
-        if file_digest(target, output.fileno()) != digest.hexdigest():
+        if verified_destination_digest(target, output.fileno()) != digest.hexdigest():
             raise RuntimeError("destination changed during import")
         if did_create and entry_identity(completed) != entry_identity(owned):
             did_create(completed)
@@ -297,7 +329,7 @@ def recover_exclusive_destination(
         info = os.fstat(descriptor)
         expected_inode = attempt["file_identity"].split(":", 1)[0]
         if stat.S_ISREG(info.st_mode) and str(info.st_ino) == expected_inode and info.st_size == expected_size:
-            if file_digest(target, descriptor) == attempt["content_digest"]:
+            if verified_destination_digest(target, descriptor) == attempt["content_digest"]:
                 os.utime(descriptor, ns=(attempt["atime_ns"], attempt["mtime_ns"]))
                 os.fchmod(descriptor, attempt["mode"])
                 if entry_inode(target.lstat()) == entry_inode(info):
@@ -310,7 +342,7 @@ def recover_exclusive_destination(
 
 def reject_unverified_destination(conn: sqlite3.Connection, file_id: int, target: Path) -> None:
     conn.execute(
-        "INSERT OR IGNORE INTO unverified_copy_destinations VALUES (?, ?)", (file_id, os.path.abspath(target))
+        "INSERT OR IGNORE INTO unverified_copy_paths VALUES (?)", (destination_key(target),)
     )
     conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
     conn.commit()
@@ -494,6 +526,7 @@ def import_new_files(
             (fingerprint, size, now_local_iso(), job_id, str(source)),
         )
         conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
+        conn.execute("DELETE FROM unverified_copy_paths WHERE key=?", (destination_key(target),))
         imported_files += 1
         done_files += 1
         processed_bytes_done += size
@@ -581,18 +614,17 @@ def import_new_files(
 
         ensure_dir(dest_dir)
         candidate = dest_dir / filename
-        rejected = conn.execute(
-            "SELECT path FROM unverified_copy_destinations WHERE file_id=?", (row["id"],)
+        target, skip_reason = destination_resolution(
+            candidate, expected_hash, expected_size, unverified_destination_paths(conn)
         )
-        target, skip_reason = resolve_destination_path(candidate, expected_hash, expected_size, {entry[0] for entry in rejected})
 
-        if target is None:
+        if skip_reason:
             skipped_files += 1
             done_files += 1
             processed_bytes_done += expected_size
             conn.execute(
-                "UPDATE job_files SET copy_status='SKIPPED', error=? WHERE id=?",
-                (skip_reason, row["id"]),
+                "UPDATE job_files SET copy_status='SKIPPED', dest_dir=?, dest_path=?, error=? WHERE id=?",
+                (str(target.parent), str(target), skip_reason, row["id"]),
             )
             conn.execute(
                 "INSERT OR IGNORE INTO items (hash, size, first_seen_at, first_job_id, first_source_path) VALUES (?, ?, ?, ?, ?)",

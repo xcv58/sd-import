@@ -104,10 +104,8 @@ def connect_db(db_path: Path) -> sqlite3.Connection:
             mode INTEGER NOT NULL
         );
 
-        CREATE TABLE IF NOT EXISTS unverified_copy_destinations (
-            file_id INTEGER NOT NULL REFERENCES job_files(id) ON DELETE CASCADE,
-            path TEXT NOT NULL,
-            PRIMARY KEY (file_id, path)
+        CREATE TABLE IF NOT EXISTS unverified_copy_paths (
+            key TEXT PRIMARY KEY NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS idx_job_files_job_decision

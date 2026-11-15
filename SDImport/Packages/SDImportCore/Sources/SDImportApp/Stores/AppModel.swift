@@ -3226,7 +3226,7 @@ final class AppModel: ObservableObject {
 
     func refreshStoredImportReview() {
         guard let storedImportReview else { return }
-        retryExistingJob(id: storedImportReview.job.id)
+        retryExistingJob(id: storedImportReview.job.id, forceReview: true)
     }
 
     func closeStoredImportReview() {

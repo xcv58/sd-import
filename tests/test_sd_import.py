@@ -439,6 +439,29 @@ class MetadataDedupeTests(unittest.TestCase):
         self.assertEqual(Path(copied["dest_path"]).read_bytes(), source.read_bytes())
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM exclusive_copy_attempts").fetchone()[0], 0)
 
+    def test_new_scan_keeps_unverified_destination_out_of_dedupe(self) -> None:
+        source = self.mount / "IMG_UNVERIFIED.JPG"
+        source.write_bytes(b"source")
+        first_job = sd_import.scan_mount(
+            self.conn, self.mount, "TEST", self.photos, self.videos,
+        )["job_id"]
+        row = self.conn.execute("SELECT id, dest_path FROM job_files WHERE job_id=?", (first_job,)).fetchone()
+        target = Path(row["dest_path"])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"edited")
+        original = source.stat()
+        os.utime(target, ns=(original.st_atime_ns, original.st_mtime_ns))
+        importer_mod.reject_unverified_destination(self.conn, row["id"], target)
+
+        job = sd_import.scan_mount(self.conn, self.mount, "TEST", self.photos, self.videos)
+        rescanned = self.conn.execute("SELECT decision FROM job_files WHERE job_id=?", (job["job_id"],)).fetchone()
+        self.assertEqual(rescanned["decision"], "CONFLICT")
+        result = sd_import.import_new_files(self.conn, job["job_id"])
+        self.assertEqual(result["imported_files"], 1)
+        copied = self.conn.execute("SELECT dest_path FROM job_files WHERE job_id=?", (job["job_id"],)).fetchone()
+        self.assertEqual(Path(copied["dest_path"]).read_bytes(), b"source")
+        self.assertEqual(target.read_bytes(), b"edited")
+
     def test_import_replans_pending_destinations_after_scan(self) -> None:
         original_photos = self.root / "photos-a"
         original_videos = self.root / "videos-a"
@@ -730,6 +753,23 @@ class DestinationResolutionTests(unittest.TestCase):
                 original_metadata(descriptor, info)
 
             with mock.patch.object(importer_mod, "set_copy_metadata", side_effect=edit_destination):
+                with self.assertRaisesRegex(RuntimeError, "destination changed"):
+                    importer_mod.copy_to_exclusive_destination(source, target, source.stat().st_size)
+            self.assertEqual(target.read_bytes(), b"edited")
+
+    def test_exclusive_copy_rechecks_destination_after_readback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, target = root / "source.jpg", root / "target.jpg"
+            source.write_bytes(b"source")
+            original_digest = importer_mod.file_digest
+
+            def replace_target(path, descriptor):
+                target.rename(root / "original.jpg")
+                target.write_bytes(b"edited")
+                return original_digest(path, descriptor)
+
+            with mock.patch.object(importer_mod, "file_digest", side_effect=replace_target):
                 with self.assertRaisesRegex(RuntimeError, "destination changed"):
                     importer_mod.copy_to_exclusive_destination(source, target, source.stat().st_size)
             self.assertEqual(target.read_bytes(), b"edited")

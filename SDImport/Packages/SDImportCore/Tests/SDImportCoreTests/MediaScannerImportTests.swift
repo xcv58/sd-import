@@ -1951,12 +1951,16 @@ struct MediaScannerImportTests {
         try FileManager.default.removeItem(at: parent)
         try FileManager.default.moveItem(at: offline, to: parent)
         let unrelated = Data("unrelated arrival".utf8)
-        try unrelated.write(to: attempt.destination)
         #expect(try recovery.recoverInterruptedImports().removedPartFiles == 1)
+        try unrelated.write(to: attempt.destination)
         #expect(try fixture.jobRepository.copyAttempts(jobID: jobID).isEmpty)
         #expect(try fixture.jobRepository.needsDestinationReview(jobID: jobID) == reviewed)
         #expect(try Data(contentsOf: attempt.destination) == unrelated)
-        if !reviewed {
+        if reviewed {
+            #expect(throws: SDImportError.reviewedDestinationChanged) {
+                try fixture.importEngine.importFiles(jobID: jobID)
+            }
+        } else {
             #expect(try fixture.importEngine.importFiles(jobID: jobID).importedFiles == 1)
             #expect(try Data(contentsOf: attempt.destination) == unrelated)
         }
@@ -2037,7 +2041,15 @@ struct MediaScannerImportTests {
             ofItemAtPath: attempt.destinationPath
         )
 
-        #expect(try RecoveryService(jobRepository: fixture.jobRepository).recoverInterruptedImports().recoveredJobs == 1)
+        for scanID in ["job-unresolved-scan", "job-recovered-scan"] {
+            if scanID == "job-recovered-scan" {
+                let recovery = RecoveryService(jobRepository: fixture.jobRepository)
+                #expect(try recovery.recoverInterruptedImports().recoveredJobs == 1)
+            }
+            let summary = try fixture.scanner.scan(fixture.scanRequest(jobID: scanID))
+            #expect(summary.knownFiles == 0)
+            #expect(summary.conflictFiles == 1)
+        }
         #expect(try fixture.jobRepository.needsDestinationReview(jobID: jobID))
         #expect(try Data(contentsOf: attempt.destination) == edited)
         let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)

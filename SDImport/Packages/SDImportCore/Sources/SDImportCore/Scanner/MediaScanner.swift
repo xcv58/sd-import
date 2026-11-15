@@ -69,6 +69,7 @@ public struct MediaScanner {
         _ request: ScanRequest,
         shouldCancel: () -> Bool = { false }
     ) throws -> ScanSummary {
+        let unverifiedPaths = try jobRepository.unverifiedDestinationPaths()
         var files: [JobFileRecord] = []
         var portableFingerprints: Set<String> = []
         var portableIdentitiesToBackfill: [(sourcePath: String, identity: PortableFileIdentity)] = []
@@ -171,31 +172,32 @@ public struct MediaScanner {
                 mediaKind: mediaKind,
                 attributes: attributes
             )
-            let destinationURL = destinationPlanner.destinationURL(
+            var destinationURL = destinationPlanner.destinationURL(
                 filename: fileURL.lastPathComponent,
                 mediaKind: mediaKind,
                 captureDate: captureDate,
                 location: request.location,
                 roots: request.roots
             )
-            let destinationDirectory = destinationURL?.deletingLastPathComponent()
 
             var decision: FileDecision = alreadyImported ? .known : .new
             var copyStatus: CopyStatus = alreadyImported ? .skipped : .pending
             var error: String?
 
-            if decision == .new, let destinationURL, ConflictResolver.destinationEntryExists(at: destinationURL) {
+            if decision == .new, let candidate = destinationURL, ConflictResolver.destinationEntryExists(at: candidate) {
                 switch conflictResolver.resolveDestination(
-                    candidate: destinationURL,
+                    candidate: candidate,
                     expectedFingerprint: fingerprint,
-                    allowsRename: ![".insv", ".lrv"].contains(ext.lowercased())
+                    allowsRename: ![".insv", ".lrv"].contains(ext.lowercased()),
+                    rejectingMatchesAt: unverifiedPaths
                 ) {
-                case .skip:
+                case .skip(let matchedURL, _):
+                    destinationURL = matchedURL
                     decision = .known
                     copyStatus = .skipped
                     knownSource = .destination
                 case .copy(let resolvedURL):
-                    if resolvedURL != destinationURL {
+                    if resolvedURL != candidate {
                         decision = .conflict
                         copyStatus = .pending
                         error = "destination file exists with different content"
@@ -222,7 +224,7 @@ public struct MediaScanner {
                     captureDate: captureDate,
                     decision: decision,
                     knownSource: knownSource,
-                    destinationDirectory: destinationDirectory?.path,
+                    destinationDirectory: destinationURL?.deletingLastPathComponent().path,
                     plannedDestinationPath: destinationURL?.path,
                     copyStatus: copyStatus,
                     error: error

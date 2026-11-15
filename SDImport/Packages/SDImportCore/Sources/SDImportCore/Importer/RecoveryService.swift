@@ -76,16 +76,19 @@ public struct RecoveryService {
             switch disposition {
             case .unavailable:
                 outcome.unavailableFileID = attempt.fileID
-            case .unverifiedDestination:
+            case .unverifiedDestination(let removedStaging):
+                outcome.removedPartFiles += removedStaging ? 1 : 0
                 outcome.needsReview = outcome.needsReview || attempt.requiresDestinationReview
                 try jobRepository.rejectUnverifiedCopy(attempt)
             case .published:
-                try jobRepository.commitCopyAttempt(attempt)
+                try jobRepository.commitCopyAttempt(
+                    attempt, requireReviewForRemainingFiles: attempt.requiresDestinationReview
+                )
                 outcome.copiedSourcePaths.append(attempt.sourcePath)
                 if !replayPortableReceipt(attempt) { outcome.portableReceiptPending = true }
-            case .retry(let removedStaging, let needsReview):
+            case .retry(let removedStaging):
                 outcome.removedPartFiles += removedStaging ? 1 : 0
-                let reviewRequired = needsReview && attempt.requiresDestinationReview
+                let reviewRequired = attempt.requiresDestinationReview
                 outcome.needsReview = outcome.needsReview || reviewRequired
                 try jobRepository.discardCopyAttempt(attempt, needsDestinationReview: reviewRequired)
             }
@@ -121,9 +124,9 @@ public struct RecoveryService {
 
     private enum CopyRecoveryDisposition {
         case unavailable
-        case unverifiedDestination
+        case unverifiedDestination(removedStaging: Bool)
         case published
-        case retry(removedStaging: Bool, needsReview: Bool)
+        case retry(removedStaging: Bool)
     }
 
     private func inspectInterruptedCopy(_ attempt: ImportCopyAttempt) throws -> CopyRecoveryDisposition {
@@ -141,17 +144,20 @@ public struct RecoveryService {
 
             // Retain negative verification so a later metadata-only check cannot accept this file.
             if attempt.staged != nil || attempt.reservedDestination != nil {
-                return .unverifiedDestination
+                return .unverifiedDestination(removedStaging: false)
             }
         }
 
         if let staging, let final, let verified = attempt.staged {
-            guard attempt.stagingIdentity?.matches(staging) == true else { return .unverifiedDestination }
+            guard attempt.stagingIdentity?.matches(staging) == true else {
+                return .unverifiedDestination(removedStaging: false)
+            }
             if case .skip = ConflictResolver(fileManager: fileManager).resolveDestination(
                 candidate: attempt.destination, expectedFingerprint: attempt.fingerprint, allowsRename: false
             ), try CopyEngine.readDigest(at: attempt.destination, identity: ImportCopyFileIdentity(final))
                 != verified.digest {
-                return .unverifiedDestination
+                try fileManager.removeItem(at: attempt.staging)
+                return .unverifiedDestination(removedStaging: true)
             }
         }
 
@@ -159,11 +165,11 @@ public struct RecoveryService {
             // A journal can name a staging path before the file exists.
             // Leave a replaced entry alone if its identity no longer matches.
             guard attempt.stagingIdentity?.matches(staging) == true else {
-                return .retry(removedStaging: false, needsReview: true)
+                return .retry(removedStaging: false)
             }
             try fileManager.removeItem(at: attempt.staging)
         }
-        return .retry(removedStaging: staging != nil, needsReview: final != nil)
+        return .retry(removedStaging: staging != nil)
     }
 
 }
