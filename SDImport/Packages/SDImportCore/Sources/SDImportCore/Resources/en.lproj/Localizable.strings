@@ -593,6 +593,7 @@
 "Start Trial or Unlock" = "Start Trial or Unlock";
 "Start a 14-day trial with unlimited imports. When it ends, importing is locked until you buy lifetime access. The trial does not renew and you will not be charged automatically." = "Start a 14-day trial with unlimited imports. When it ends, importing is locked until you buy lifetime access. The trial does not renew and you will not be charged automatically.";
 "Start your 14-day trial or unlock unlimited imports to continue" = "Start your 14-day trial or unlock unlimited imports to continue";
+"Starting background helper…" = "Starting background helper…";
 "Starting trial…" = "Starting trial…";
 "Trial & Purchase…" = "Trial & Purchase…";
 "Trial active until %@" = "Trial active until %@";

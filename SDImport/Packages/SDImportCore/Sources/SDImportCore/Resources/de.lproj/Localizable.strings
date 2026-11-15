@@ -593,6 +593,7 @@
 "Start Trial or Unlock" = "Testen oder freischalten";
 "Start a 14-day trial with unlimited imports. When it ends, importing is locked until you buy lifetime access. The trial does not renew and you will not be charged automatically." = "Starte eine 14-tägige Testversion mit unbegrenzten Importen. Danach sind Importe gesperrt, bis du dauerhaften Zugriff kaufst. Die Testversion verlängert sich nicht und es erfolgt keine automatische Abbuchung.";
 "Start your 14-day trial or unlock unlimited imports to continue" = "Starte deine 14-tägige Testversion oder schalte unbegrenzte Importe frei, um fortzufahren";
+"Starting background helper…" = "Hintergrundassistent wird gestartet…";
 "Starting trial…" = "Testversion wird gestartet…";
 "Trial & Purchase…" = "Testversion & Kauf…";
 "Trial active until %@" = "Testversion aktiv bis %@";

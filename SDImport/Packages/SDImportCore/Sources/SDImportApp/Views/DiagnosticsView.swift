@@ -43,7 +43,7 @@ struct DiagnosticsView: View {
                 BackgroundPromptStatusLabel()
                     .font(.callout)
 
-                if !model.isRepairingBackgroundPrompt {
+                if !model.isRepairingBackgroundPrompt && !model.isStartingBackgroundPrompt {
                     Text(model.backgroundPromptStatusDetail)
                         .font(.callout)
                         .foregroundStyle(.secondary)
