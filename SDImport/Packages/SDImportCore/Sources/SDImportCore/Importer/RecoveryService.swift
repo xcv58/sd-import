@@ -78,8 +78,9 @@ public struct RecoveryService {
                 outcome.unavailableFileID = attempt.fileID
             case .unverifiedDestination(let removedStaging):
                 outcome.removedPartFiles += removedStaging ? 1 : 0
-                outcome.needsReview = outcome.needsReview || attempt.requiresDestinationReview == true
-                try jobRepository.rejectUnverifiedCopy(attempt)
+                let needsReview = attempt.destinationDirectory == nil || attempt.requiresDestinationReview == true
+                outcome.needsReview = outcome.needsReview || needsReview
+                try jobRepository.rejectUnverifiedCopy(attempt, needsDestinationReview: needsReview)
             case .published:
                 try jobRepository.commitCopyAttempt(
                     attempt, requireReviewForRemainingFiles: attempt.requiresDestinationReview == true
@@ -130,6 +131,8 @@ public struct RecoveryService {
     }
 
     private func inspectInterruptedCopy(_ attempt: ImportCopyAttempt) throws -> CopyRecoveryDisposition {
+        // Early journal entries lack the parent identity needed for safe file operations.
+        guard attempt.destinationDirectory != nil else { return .unverifiedDestination(removedStaging: false) }
         guard attempt.destinationIsAccessible() else { return .unavailable }
 
         let staging = try CopyEngine.fileInfo(at: attempt.staging)
@@ -156,25 +159,23 @@ public struct RecoveryService {
                 candidate: attempt.destination, expectedFingerprint: attempt.fingerprint, allowsRename: false
             ), try CopyEngine.readDigest(at: attempt.destination, identity: ImportCopyFileIdentity(final))
                 != verified.digest {
-                guard attempt.destinationIsAccessible() else { return .unavailable }
-                let latestStaging = try CopyEngine.fileInfo(at: attempt.staging)
-                let stillOwned = latestStaging.map { attempt.stagingIdentity?.matches($0) == true } ?? false
-                if stillOwned {
-                    try fileManager.removeItem(at: attempt.staging)
-                }
-                return .unverifiedDestination(removedStaging: stillOwned)
+                return .unverifiedDestination(removedStaging: try removeOwnedStaging(attempt))
             }
         }
 
-        if let staging {
-            // A journal can name a staging path before the file exists.
-            // Leave a replaced entry alone if its identity no longer matches.
-            guard attempt.stagingIdentity?.matches(staging) == true else {
-                return .retry(removedStaging: false)
-            }
-            try fileManager.removeItem(at: attempt.staging)
-        }
-        return .retry(removedStaging: staging != nil)
+        return .retry(removedStaging: try removeOwnedStaging(attempt))
     }
 
+    private func removeOwnedStaging(_ attempt: ImportCopyAttempt) throws -> Bool {
+        guard attempt.destinationIsAccessible() else {
+            throw SDImportError.missingDestinationDirectory(attempt.fileID)
+        }
+        guard let identity = attempt.stagingIdentity,
+              let current = try CopyEngine.fileInfo(at: attempt.staging),
+              identity.matches(current) else {
+            return false
+        }
+        try fileManager.removeItem(at: attempt.staging)
+        return true
+    }
 }

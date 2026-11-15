@@ -112,6 +112,13 @@ struct SchemaMigratorTests {
         #expect(try repository.hasUnresolvedCopies(jobID: "draft-job"))
         #expect(try repository.isUnverifiedDestination(destination))
         #expect(try repository.copyAttempts(jobID: "draft-job").count == 1)
+        let existingBytes = Data("existing destination".utf8)
+        try existingBytes.write(to: destination)
+        #expect(try RecoveryService(jobRepository: repository).recoverInterruptedImports().recoveredJobs == 1)
+        #expect(try !repository.hasUnresolvedCopies(jobID: "draft-job"))
+        #expect(try repository.needsDestinationReview(jobID: "draft-job"))
+        #expect(try repository.isUnverifiedDestination(destination))
+        #expect(try Data(contentsOf: destination) == existingBytes)
     }
 
 }

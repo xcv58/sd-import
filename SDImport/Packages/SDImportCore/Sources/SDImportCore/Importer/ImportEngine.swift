@@ -654,7 +654,7 @@ public struct ImportEngine {
                     if verified {
                         try jobRepository.commitCopyAttempt(published)
                     } else {
-                        try jobRepository.rejectUnverifiedCopy(published)
+                        try jobRepository.rejectUnverifiedCopy(published, needsDestinationReview: requiresReviewedDestinations)
                     }
                 } catch {
                     // Keep the journal for recovery when verification or bookkeeping cannot finish.

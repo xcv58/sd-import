@@ -417,13 +417,16 @@ public struct JobRepository {
         }
     }
 
-    func rejectUnverifiedCopy(_ attempt: ImportCopyAttempt) throws {
+    func rejectUnverifiedCopy(_ attempt: ImportCopyAttempt, needsDestinationReview: Bool) throws {
         try pool.write { db in
             try db.execute(
-                sql: "INSERT OR IGNORE INTO unverified_copy_paths VALUES (?)",
-                arguments: [ConflictResolver.destinationKey(attempt.destination)]
+                sql: """
+                INSERT OR IGNORE INTO unverified_copy_paths
+                SELECT destination_key FROM import_copy_attempts WHERE file_id = ?
+                """,
+                arguments: [attempt.fileID]
             )
-            if attempt.requiresDestinationReview == true {
+            if needsDestinationReview {
                 try db.execute(
                     sql: "UPDATE jobs SET needs_destination_review = 1 WHERE job_id = ?",
                     arguments: [attempt.jobID]
