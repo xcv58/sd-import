@@ -152,16 +152,20 @@ struct BackgroundPromptStatusLabel: View {
     var showHelperName = false
 
     var body: some View {
-        if model.isRepairingBackgroundPrompt {
+        if model.isRepairingBackgroundPrompt || model.isStartingBackgroundPrompt {
             HStack(spacing: 6) {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .controlSize(.small)
                     .accessibilityHidden(true)
-                Text(L10n.tr("Repairing background helper…"))
+                Text(model.isRepairingBackgroundPrompt
+                     ? L10n.tr("Repairing background helper…")
+                     : model.backgroundPromptStatusTitle)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("backgroundHelper.repairProgress")
+            .accessibilityIdentifier(model.isRepairingBackgroundPrompt
+                                     ? "backgroundHelper.repairProgress"
+                                     : "backgroundHelper.startProgress")
         } else {
             AppStatusLabel(title: title, systemImage: systemImage, role: role)
         }

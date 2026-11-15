@@ -593,6 +593,7 @@
 "Start Trial or Unlock" = "Probar o desbloquear";
 "Start a 14-day trial with unlimited imports. When it ends, importing is locked until you buy lifetime access. The trial does not renew and you will not be charged automatically." = "Inicia una prueba de 14 días con importaciones ilimitadas. Cuando termine, las importaciones se bloquearán hasta que compres el acceso de por vida. La prueba no se renueva y no se te cobrará automáticamente.";
 "Start your 14-day trial or unlock unlimited imports to continue" = "Inicia tu prueba de 14 días o desbloquea las importaciones ilimitadas para continuar";
+"Starting background helper…" = "Iniciando el asistente en segundo plano…";
 "Starting trial…" = "Iniciando la prueba…";
 "Trial & Purchase…" = "Prueba y compra…";
 "Trial active until %@" = "Prueba activa hasta el %@";

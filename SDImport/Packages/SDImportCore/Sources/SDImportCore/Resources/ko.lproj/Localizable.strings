@@ -593,6 +593,7 @@
 "Start Trial or Unlock" = "체험 또는 잠금 해제";
 "Start a 14-day trial with unlimited imports. When it ends, importing is locked until you buy lifetime access. The trial does not renew and you will not be charged automatically." = "14일 동안 가져오기를 무제한으로 이용해 보세요. 체험이 끝나면 평생 이용권을 구매할 때까지 가져오기가 잠깁니다. 체험은 갱신되지 않으며 자동으로 결제되지 않습니다.";
 "Start your 14-day trial or unlock unlimited imports to continue" = "계속하려면 14일 체험을 시작하거나 무제한 가져오기를 잠금 해제하세요";
+"Starting background helper…" = "백그라운드 도우미 시작 중…";
 "Starting trial…" = "체험 시작 중…";
 "Trial & Purchase…" = "체험 및 구매…";
 "Trial active until %@" = "%@까지 체험 사용 가능";

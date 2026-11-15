@@ -593,6 +593,7 @@
 "Start Trial or Unlock" = "試す／制限を解除";
 "Start a 14-day trial with unlimited imports. When it ends, importing is locked until you buy lifetime access. The trial does not renew and you will not be charged automatically." = "14日間、回数無制限で読み込めるトライアルを開始します。終了後は買い切り版を購入するまで読み込みがロックされます。自動更新や自動課金はありません。";
 "Start your 14-day trial or unlock unlimited imports to continue" = "14日間のトライアルを開始するか、無制限の読み込みを購入して続けてください";
+"Starting background helper…" = "バックグラウンドヘルパーを起動中…";
 "Starting trial…" = "トライアルを開始しています…";
 "Trial & Purchase…" = "トライアルと購入…";
 "Trial active until %@" = "トライアルの有効期限：%@";

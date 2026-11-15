@@ -7,6 +7,101 @@ import Testing
 
 @MainActor
 struct BackgroundPromptRepairTests {
+    @Test("enabling card prompts shows startup until a fresh helper launch")
+    func enableShowsStartupUntilFreshLaunch() async throws {
+        let fixture = try Fixture(enabled: false, serviceStatus: .notRegistered)
+        defer { fixture.cleanUp() }
+        try fixture.recordLaunch(offset: -60)
+
+        #expect(fixture.model.setAutoPromptEnabled(true))
+        #expect(fixture.model.backgroundPromptStatusTitle == L10n.tr("Starting background helper…"))
+        #expect(!fixture.model.backgroundPromptNeedsAttention)
+        #expect(!fixture.model.backgroundPromptCanRepair)
+
+        let enable = try #require(fixture.model.backgroundPromptOperationTask)
+        try await fixture.waitForSleep(.milliseconds(500))
+        #expect(fixture.service.registerCalls == 1)
+        #expect(fixture.model.backgroundPromptStatusTitle == L10n.tr("Starting background helper…"))
+        #expect(!fixture.model.backgroundPromptNeedsAttention)
+        #expect(!fixture.model.backgroundPromptCanRepair)
+
+        try fixture.recordLaunch()
+        try await fixture.advance(.milliseconds(500))
+        await enable.value
+        #expect(fixture.model.backgroundPromptStatusTitle == L10n.tr("Running"))
+        #expect(!fixture.model.backgroundPromptNeedsAttention)
+    }
+
+    @Test("enable timeout exposes Repair only after the polling window")
+    func enableTimeoutExposesRepair() async throws {
+        let fixture = try Fixture(enabled: false, serviceStatus: .notRegistered)
+        defer { fixture.cleanUp() }
+
+        #expect(fixture.model.setAutoPromptEnabled(true))
+        let enable = try #require(fixture.model.backgroundPromptOperationTask)
+        try await fixture.waitForSleep(.milliseconds(500))
+        #expect(fixture.model.isStartingBackgroundPrompt)
+        #expect(!fixture.model.backgroundPromptNeedsAttention)
+        #expect(!fixture.model.backgroundPromptCanRepair)
+
+        try await fixture.advancePollingWindow()
+        await enable.value
+        #expect(fixture.model.backgroundPromptStatusTitle == L10n.tr("Needs attention"))
+        #expect(fixture.model.backgroundPromptStatusDetail == BackgroundPromptHealth.missingLaunchError)
+        #expect(fixture.model.backgroundPromptCanRepair)
+    }
+
+    @Test("registration failure and macOS approval expose different actions", arguments: [false, true])
+    func enableFailureOrApproval(requiresApproval: Bool) async throws {
+        let fixture = try Fixture(enabled: false, serviceStatus: requiresApproval ? .requiresApproval : .notRegistered)
+        defer { fixture.cleanUp() }
+        if !requiresApproval {
+            fixture.service.registerError = .registrationFailed
+        }
+
+        #expect(fixture.model.setAutoPromptEnabled(true))
+        let enable = try #require(fixture.model.backgroundPromptOperationTask)
+        await enable.value
+
+        #expect(fixture.model.backgroundPromptStatusTitle == L10n.tr(requiresApproval ? "Needs approval" : "Needs attention"))
+        #expect(fixture.model.backgroundPromptNeedsAttention)
+        #expect(fixture.model.backgroundPromptCanRepair == !requiresApproval)
+    }
+
+    @Test("disabling card prompts cancels the preceding enable wait")
+    func disableCancelsEnableWait() async throws {
+        let fixture = try Fixture(enabled: false, serviceStatus: .notRegistered)
+        defer { fixture.cleanUp() }
+
+        #expect(fixture.model.setAutoPromptEnabled(true))
+        try await fixture.waitForSleep(.milliseconds(500))
+        #expect(fixture.model.setAutoPromptEnabled(false))
+        let disable = try #require(fixture.model.backgroundPromptOperationTask)
+        await disable.value
+
+        #expect(fixture.service.unregisterCalls == 1)
+        #expect(fixture.model.backgroundPromptStatusTitle == L10n.tr("Off"))
+        #expect(!fixture.model.backgroundPromptNeedsAttention)
+        #expect(!fixture.model.backgroundPromptCanRepair)
+    }
+
+    @Test("a superseded disable leaves the current healthy registration running")
+    func rapidToggleKeepsHealthyRegistration() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        try fixture.recordLaunch(offset: -60)
+
+        #expect(fixture.model.setAutoPromptEnabled(false))
+        #expect(fixture.model.setAutoPromptEnabled(true))
+        let enable = try #require(fixture.model.backgroundPromptOperationTask)
+        await enable.value
+
+        #expect(fixture.service.unregisterCalls == 0)
+        #expect(fixture.service.registerCalls == 0)
+        #expect(fixture.model.backgroundPromptStatusTitle == L10n.tr("Running"))
+        #expect(!fixture.model.backgroundPromptNeedsAttention)
+    }
+
     @Test("concurrent registration still requires new launch evidence")
     func concurrentRegistrationRejectsOldLaunch() async throws {
         let fixture = try Fixture()

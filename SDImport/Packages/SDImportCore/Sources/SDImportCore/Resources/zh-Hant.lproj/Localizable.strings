@@ -593,6 +593,7 @@
 "Start Trial or Unlock" = "試用或解鎖";
 "Start a 14-day trial with unlimited imports. When it ends, importing is locked until you buy lifetime access. The trial does not renew and you will not be charged automatically." = "開始 14 天試用，期間可不限次數匯入。試用結束後，匯入功能將鎖定，直到你購買終身使用權。試用不會續期，也不會自動扣款。";
 "Start your 14-day trial or unlock unlimited imports to continue" = "開始 14 天試用或解鎖無限次匯入以繼續";
+"Starting background helper…" = "正在啟動背景輔助程式…";
 "Starting trial…" = "正在開始試用…";
 "Trial & Purchase…" = "試用與購買…";
 "Trial active until %@" = "試用有效期至 %@";

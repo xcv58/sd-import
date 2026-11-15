@@ -260,6 +260,12 @@ final class AppModel: ObservableObject {
     @Published var autoPromptEnabled: Bool
     @Published private(set) var backgroundPromptServiceStatus: BackgroundPromptServiceStatus = .notRegistered
     var isRepairingBackgroundPrompt: Bool { backgroundPrompt.isRepairingManually }
+    @Published private var backgroundPromptPreferenceChange: (id: UUID, enablesPrompt: Bool)?
+
+    var isStartingBackgroundPrompt: Bool {
+        autoPromptEnabled && backgroundPromptCanConfigure
+            && backgroundPromptPreferenceChange?.enablesPrompt == true
+    }
     @Published private(set) var backgroundPromptAgentState: BackgroundPromptAgentState?
     @Published private(set) var backgroundPromptLastError: String? {
         didSet {
@@ -2388,20 +2394,29 @@ final class AppModel: ObservableObject {
             return false
         }
 
+        let changeID = UUID()
+        backgroundPromptPreferenceChange = (changeID, enabled)
+        backgroundPrompt.cancelPoll()
         enqueueBackgroundPromptOperation { model in
-            await model.performAutoPromptPreferenceChange(enabled)
+            await model.performAutoPromptPreferenceChange(enabled, changeID: changeID)
         }
         return true
     }
 
-    private func performAutoPromptPreferenceChange(_ enabled: Bool) async {
+    private func performAutoPromptPreferenceChange(_ enabled: Bool, changeID: UUID) async {
+        guard backgroundPromptPreferenceChange?.id == changeID else { return }
+        defer {
+            if backgroundPromptPreferenceChange?.id == changeID {
+                backgroundPromptPreferenceChange = nil
+            }
+        }
         guard enabled == autoPromptEnabled else { return }
+
         backgroundPrompt.cancelPoll()
         loginItem.invalidateApplicationOwnershipCache()
         clearBackgroundPromptRuntimeError()
-        if !enabled {
-            backgroundPromptLaunchTimeout = nil
-        }
+        backgroundPromptLaunchTimeout = nil
+        var failure: Error?
         do {
             try authorizeCurrentBackgroundPromptHelperIfNeeded()
             if enabled {
@@ -2409,40 +2424,45 @@ final class AppModel: ObservableObject {
                 if statusBeforeEnable == .notFound || statusBeforeEnable == .notRegistered {
                     backgroundPrompt.recordRegistrationAttempt()
                 }
-                backgroundPrompt.requireLaunch(after: Date())
+                // A superseded disable may leave the existing registration running.
+                if statusBeforeEnable != .enabled {
+                    backgroundPrompt.requireLaunch(after: Date())
+                }
             }
             try await loginItem.setEnabled(enabled)
-            guard enabled == autoPromptEnabled else { return }
-            refreshBackgroundPromptHealth()
+            guard backgroundPromptPreferenceChange?.id == changeID, enabled == autoPromptEnabled else { return }
+            let health = refreshBackgroundPromptHealth()
             if enabled, backgroundPromptServiceStatus == .enabled {
                 recordCurrentRepairIdentity()
                 backgroundPrompt.clearRegistrationAttempt()
+                if health == .waiting {
+                    await scheduleBackgroundPromptHealthRefresh().value
+                }
             } else if !enabled {
                 backgroundPrompt.cancelRetry(resetAttempts: true)
             }
-            if enabled, backgroundPromptServiceStatus == .enabled {
-                scheduleBackgroundPromptHealthRefresh()
-            } else if enabled,
-                      backgroundPromptServiceStatus == .notFound
-                        || backgroundPromptServiceStatus == .notRegistered {
-                scheduleRegistrationRetry()
-            }
-            if enabled, backgroundPromptNeedsAttention {
-                setBackgroundPromptFeedback { [weak self] in self?.backgroundPromptStatusDetail ?? "" }
-            } else {
-                setBackgroundPromptFeedback(role: .information) {
-                    enabled ? L10n.tr("Background prompt enabled") : L10n.tr("Background prompt disabled")
-                }
-            }
         } catch {
+            guard backgroundPromptPreferenceChange?.id == changeID, enabled == autoPromptEnabled else { return }
             refreshBackgroundPromptHealth()
             recordBackgroundPromptError(error)
-            if enabled,
-               backgroundPromptServiceStatus == .notFound
-                || backgroundPromptServiceStatus == .notRegistered {
-                scheduleRegistrationRetry()
+            failure = error
+        }
+
+        guard backgroundPromptPreferenceChange?.id == changeID, enabled == autoPromptEnabled else { return }
+        backgroundPromptPreferenceChange = nil
+        if enabled, backgroundPromptServiceStatus == .notFound || backgroundPromptServiceStatus == .notRegistered {
+            scheduleRegistrationRetry()
+        }
+        if let failure {
+            setBackgroundPromptFeedback(role: .error) {
+                L10n.tr("Could not update background prompt: \(Self.errorMessage(for: failure))")
             }
-            setBackgroundPromptFeedback(role: .error) { L10n.tr("Could not update background prompt: \(Self.errorMessage(for: error))") }
+        } else if enabled, backgroundPromptNeedsAttention {
+            setBackgroundPromptFeedback { [weak self] in self?.backgroundPromptStatusDetail ?? "" }
+        } else {
+            setBackgroundPromptFeedback(role: .information) {
+                enabled ? L10n.tr("Background prompt enabled") : L10n.tr("Background prompt disabled")
+            }
         }
     }
 
@@ -2508,6 +2528,9 @@ final class AppModel: ObservableObject {
         guard autoPromptEnabled else {
             return L10n.tr("Off")
         }
+        if isStartingBackgroundPrompt {
+            return L10n.tr("Starting background helper…")
+        }
         if backgroundPromptEffectiveError != nil {
             return L10n.tr("Needs attention")
         }
@@ -2534,6 +2557,9 @@ final class AppModel: ObservableObject {
                 return L10n.tr("Background prompts are managed by the installed copy at \(path). Open that copy to change this setting.")
             }
             return L10n.tr("Move \(AppDistribution.current.displayName) to /Applications or ~/Applications before enabling background prompts.")
+        }
+        if isStartingBackgroundPrompt {
+            return backgroundPromptStatusTitle
         }
         if let backgroundPromptEffectiveError {
             return backgroundPromptEffectiveError
@@ -2563,6 +2589,7 @@ final class AppModel: ObservableObject {
     var backgroundPromptNeedsAttention: Bool {
         !backgroundPromptCanConfigure
             || (autoPromptEnabled
+            && !isStartingBackgroundPrompt
             && (!backgroundPromptOwnsCurrentRegistration
                 || backgroundPromptEffectiveError != nil))
     }
@@ -2571,6 +2598,7 @@ final class AppModel: ObservableObject {
         backgroundPromptCanConfigure
             && autoPromptEnabled
             && !isRepairingBackgroundPrompt
+            && !isStartingBackgroundPrompt
             && backgroundPromptServiceStatus != .requiresApproval
     }
 
