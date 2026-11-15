@@ -609,6 +609,28 @@ class MountDebounceTests(unittest.TestCase):
 
 
 class DestinationResolutionTests(unittest.TestCase):
+    def test_exclusive_copy_fallback_preserves_a_late_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, target = root / "source.jpg", root / "target.jpg"
+            source.write_bytes(b"test source")
+            target.write_bytes(b"existing destination")
+            with self.assertRaises(FileExistsError):
+                importer_mod.copy_to_exclusive_destination(source, target, source.stat().st_size)
+            self.assertEqual(target.read_bytes(), b"existing destination")
+
+    def test_exclusive_copy_fallback_removes_its_own_partial_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, target = root / "source.jpg", root / "target.jpg"
+            source.write_bytes(b"test source")
+            with self.assertRaisesRegex(RuntimeError, "size mismatch"):
+                importer_mod.copy_to_exclusive_destination(source, target, 99)
+            self.assertFalse(target.exists())
+            importer_mod.copy_to_exclusive_destination(source, target, source.stat().st_size)
+            self.assertEqual(target.read_bytes(), source.read_bytes())
+            self.assertEqual(target.stat().st_mtime_ns, source.stat().st_mtime_ns)
+
     def test_returns_candidate_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "IMG_0001.JPG"

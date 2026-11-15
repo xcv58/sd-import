@@ -160,17 +160,44 @@ def copy_file_with_progress(
     shutil.copystat(src, dst)
 
 
-def publish_without_replacing(staging: Path, target: Path) -> None:
+def publish_without_replacing(staging: Path, target: Path) -> bool:
     if _darwin_rename is not None:
         if _darwin_rename(os.fsencode(staging), os.fsencode(target), _RENAME_EXCL) == 0:
-            return
+            return True
         code = ctypes.get_errno()
         if code not in (errno.ENOTSUP, errno.EOPNOTSUPP):
             raise OSError(code, os.strerror(code), str(target))
 
-    # An exclusive hard link also publishes the complete file in one step.
-    # The caller owns staging and removes its name after publication.
-    os.link(staging, target)
+    # The caller owns staging and removes its name after an exclusive link.
+    try:
+        os.link(staging, target)
+    except OSError as exc:
+        if exc.errno not in (errno.ENOTSUP, errno.EOPNOTSUPP):
+            raise
+        return False
+    return True
+
+
+def copy_to_exclusive_destination(source: Path, target: Path, expected_size: int) -> None:
+    # ExFAT and similar volumes may lack both exclusive rename and hard links.
+    with source.open("rb") as input_file, target.open("xb") as output:
+        owned = os.fstat(output.fileno())
+        try:
+            shutil.copyfileobj(input_file, output, length=1024 * 1024)
+            output.flush()
+            if os.fstat(output.fileno()).st_size != expected_size:
+                raise RuntimeError("size mismatch after copy")
+            original = os.fstat(input_file.fileno())
+            os.utime(output.fileno(), ns=(original.st_atime_ns, original.st_mtime_ns))
+            os.fchmod(output.fileno(), stat.S_IMODE(original.st_mode))
+        except Exception:
+            try:
+                current = target.lstat()
+                if (current.st_dev, current.st_ino) == (owned.st_dev, owned.st_ino):
+                    target.unlink()
+            except FileNotFoundError:
+                pass
+            raise
 
 
 def progress_path_for_job(state_dir: Path, job_id: str) -> Path:
@@ -439,7 +466,9 @@ def import_new_files(
             copied_size = tmp_target.stat().st_size
             if copied_size != expected_size:
                 raise RuntimeError("size mismatch after copy")
-            publish_without_replacing(tmp_target, target)
+            if not publish_without_replacing(tmp_target, target):
+                tmp_target.unlink()
+                copy_to_exclusive_destination(src, target, expected_size)
         except Exception as exc:
             failed_files += 1
             done_files += 1
