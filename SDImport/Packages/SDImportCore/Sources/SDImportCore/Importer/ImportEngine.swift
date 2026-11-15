@@ -72,8 +72,9 @@ public struct ImportEngine {
         onProgress: ((ImportProgress) -> Void)?,
         shouldCancel: () -> Bool
     ) throws -> ImportResult {
-        let recovery = try RecoveryService(fileManager: fileManager, jobRepository: jobRepository)
-            .recoverJobWhileLocked(jobID: jobID)
+        let recovery = try RecoveryService(
+            fileManager: fileManager, jobRepository: jobRepository, portableReceiptsEnabled: portableReceiptsEnabled
+        ).recoverJobWhileLocked(jobID: jobID)
         if let unavailableFileID = recovery.unavailableFileID {
             throw SDImportError.missingDestinationDirectory(unavailableFileID)
         }
@@ -119,7 +120,9 @@ public struct ImportEngine {
         )
         var portableFingerprints: Set<String> = []
         var portableLedgerRevision: PortableImportReceiptLedgerRevision?
-        var portableReceiptWarning: String?
+        var portableReceiptWarning: String? = recovery.portableReceiptPending
+            ? L10n.tr("Portable import history could not be updated: \(SDImportError.sourceFileMissing(URL(fileURLWithPath: job.mountPath)).localizedDescription)")
+            : nil
         var portableReceiptSizeWarning: PortableReceiptSizeWarning?
         var portableWritesAvailable = portableReceiptsEnabled
 
@@ -174,23 +177,23 @@ public struct ImportEngine {
             return portableFingerprints.contains(portableFingerprint)
         }
 
-        func recordPortableReceipt(_ identity: PortableFileIdentity?, file: JobFileRecord) {
+        func recordPortableReceipt(_ identity: PortableFileIdentity?, file: JobFileRecord) -> Bool {
             guard
                 portableWritesAvailable,
                 let identity
             else {
-                return
+                return false
             }
             guard validatedPortableIdentity(for: file) == identity else {
                 portableReceiptSizeWarning = nil
                 portableReceiptWarning = L10n.tr("Portable import history was not updated because the source changed during import")
-                return
+                return false
             }
             let portableFingerprint = PortableImportReceiptLedger.portableFingerprint(for: identity)
             guard
                 !portableFingerprints.contains(portableFingerprint)
             else {
-                return
+                return true
             }
             do {
                 let appendResult = try portableLedger.appendReturningRevision(
@@ -212,10 +215,12 @@ public struct ImportEngine {
                         portableReceiptSizeWarning = nil
                     }
                 }
+                return true
             } catch {
                 portableWritesAvailable = false
                 portableReceiptSizeWarning = PortableReceiptSizeWarning(error: error)
                 portableReceiptWarning = L10n.tr("Portable import history could not be updated: \(error.localizedDescription)")
+                return false
             }
         }
 
@@ -567,13 +572,13 @@ public struct ImportEngine {
             ) {
             case .skip(let reason):
                 if requiresReviewedDestinations { try stopForDestinationChange() }
-                try jobRepository.recordDestinationOutcome(
+                try jobRepository.recordDestinationSkip(
                     fileID: fileID, jobID: jobID, sourcePath: file.sourcePath,
-                    fingerprint: fingerprint, skipReason: reason
+                    fingerprint: fingerprint, reason: reason
                 )
                 markDone(file, status: .skipped)
                 processedBytes += file.size
-                recordPortableReceipt(portableIdentity, file: file)
+                _ = recordPortableReceipt(portableIdentity, file: file)
                 recordFileEvent(
                     file: file,
                     status: .skipped,
@@ -584,10 +589,17 @@ public struct ImportEngine {
                 if requiresReviewedDestinations { try stopForDestinationChange() }
                 throw SDImportError.destinationFilenameConflict(candidate.path)
             case .copy(let destinationURL):
-                let attempt = ImportCopyAttempt(
+                var attempt = ImportCopyAttempt(
                     id: UUID(), fileID: fileID, jobID: jobID, sourcePath: file.sourcePath,
-                    destinationPath: destinationURL.path, fingerprint: fingerprint
+                    destinationPath: destinationURL.path, fingerprint: fingerprint,
+                    requiresDestinationReview: requiresReviewedDestinations
                 )
+                if let portableIdentity,
+                   let rootIdentity = ImportCopyDirectoryIdentity(at: URL(fileURLWithPath: job.mountPath)) {
+                    attempt.portableReceipt = CopyPortableReceipt(
+                        rootPath: job.mountPath, rootIdentity: rootIdentity, fileIdentity: portableIdentity
+                    )
+                }
                 currentDestinationPath = destinationURL.path
                 emit(status: "copying")
                 let published: ImportCopyAttempt
@@ -624,8 +636,8 @@ public struct ImportEngine {
 
                 do {
                     guard let info = try CopyEngine.fileInfo(at: published.destination),
-                          try published.staged?.matches(info) == true
-                            || CopyEngine.publishedFileMatches(published) else {
+                          published.staged?.matches(info) == true,
+                          published.reservedDestination?.matches(info) != false else {
                         throw SDImportError.reviewedDestinationChanged
                     }
                     try jobRepository.commitCopyAttempt(published)
@@ -637,7 +649,9 @@ public struct ImportEngine {
                 markDone(file, status: .copied)
                 processedBytes += file.size
                 copiedBytes += file.size
-                recordPortableReceipt(portableIdentity, file: file)
+                if recordPortableReceipt(portableIdentity, file: file), published.portableReceipt != nil {
+                    try? jobRepository.discardCopyAttempt(published)
+                }
                 recordFileEvent(
                     file: file, status: .copied, detail: "Size checked", destinationPath: destinationURL.path
                 )
@@ -657,7 +671,7 @@ public struct ImportEngine {
             completedAt: Date(),
             needsDestinationReview: failedFiles == 0 ? false : nil
         )
-        rewriteReportIfPossible(jobID: jobID)
+        reportWriter.rewriteIfPossible(jobID: jobID, jobRepository: jobRepository)
         emit(status: terminalStatus, forceProcessedBytes: totalBytes)
 
         let finalFiles = try jobRepository.fetchJobFiles(jobID: jobID)
@@ -693,16 +707,23 @@ public struct ImportEngine {
     ) throws -> ImportCopyAttempt {
         let directory = pending.destination.deletingLastPathComponent()
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        try jobRepository.beginCopyAttempt(pending)
         var attempt = pending
-        var stagingIdentity: ImportCopyFileIdentity?
+        guard let identity = ImportCopyDirectoryIdentity(at: directory) else {
+            throw SDImportError.missingDestinationDirectory(attempt.fileID)
+        }
+        attempt.destinationDirectory = identity
+        try jobRepository.beginCopyAttempt(attempt)
         do {
             if CopyEngine.supportsExclusiveRename(in: directory) != false {
                 attempt.staged = try copyEngine.stageFile(
                     from: source, to: attempt.staging, expectedSize: attempt.fingerprint.size,
                     modificationDate: modificationDate, onChunk: onChunk, shouldCancel: shouldCancel,
-                    didCreate: { stagingIdentity = $0 }
+                    didCreate: { identity in
+                        attempt.stagingIdentity = identity
+                        try jobRepository.markCopyStaged(attempt)
+                    }
                 )
+                attempt.stagingIdentity = attempt.staged?.identity
                 try jobRepository.markCopyStaged(attempt)
                 if shouldCancel() { throw SDImportError.cancelled }
                 do {
@@ -710,11 +731,16 @@ public struct ImportEngine {
                     return attempt
                 } catch SDImportError.fileSystemError(_, _, let code) where code == ENOTSUP || code == EOPNOTSUPP {
                     // Some volumes cannot rename without replacement. Use their exclusive create instead.
-                    try removeOwnedCopy(at: attempt.staging, identity: stagingIdentity)
-                    stagingIdentity = nil
+                    attempt.directCopyDigest = attempt.staged?.digest
+                    try removeOwnedCopy(at: attempt.staging, identity: attempt.stagingIdentity)
+                    attempt.stagingIdentity = nil
                     attempt.staged = nil
                     try jobRepository.markCopyStaged(attempt)
                 }
+            }
+            if attempt.directCopyDigest == nil {
+                attempt.directCopyDigest = try CopyEngine.readDigest(at: source)
+                try jobRepository.markCopyStaged(attempt)
             }
             attempt.staged = try copyEngine.stageFile(
                 from: source, to: attempt.destination, expectedSize: attempt.fingerprint.size,
@@ -724,11 +750,19 @@ public struct ImportEngine {
                     try jobRepository.markCopyStaged(attempt)
                 }
             )
+            attempt.reservedDestination = attempt.staged?.identity
+            guard attempt.staged?.digest == attempt.directCopyDigest else {
+                attempt.staged = nil
+                throw SDImportError.invalidArgument(L10n.tr("Source changed since scan; scan again"))
+            }
             try jobRepository.markCopyStaged(attempt)
         } catch {
-            try removeOwnedCopy(at: attempt.staging, identity: stagingIdentity)
-            try removeOwnedCopy(at: attempt.destination, identity: attempt.reservedDestination)
-            try jobRepository.discardCopyAttempt(attempt)
+            // If the directory disappeared or the write completed, preserve its journal for recovery.
+            if attempt.destinationIsAccessible(), attempt.reservedDestination == nil || attempt.staged == nil {
+                try removeOwnedCopy(at: attempt.staging, identity: attempt.stagingIdentity)
+                try removeOwnedCopy(at: attempt.destination, identity: attempt.reservedDestination)
+                try jobRepository.discardCopyAttempt(attempt)
+            }
             throw error
         }
         return attempt
@@ -817,28 +851,4 @@ public struct ImportEngine {
         return identity
     }
 
-    private func rewriteReportIfPossible(jobID: String) {
-        guard
-            let job = try? jobRepository.fetchJob(id: jobID),
-            let reportPath = job.summaryMarkdownPath ?? job.summaryJSONPath
-        else {
-            return
-        }
-
-        let files = (try? jobRepository.fetchJobFiles(jobID: jobID)) ?? []
-        let summary = ScanSummary(
-            jobID: job.id,
-            mountPath: job.mountPath,
-            volumeName: job.volumeName,
-            volumeUUID: job.volumeUUID,
-            location: job.location,
-            scannedFiles: job.scannedFiles,
-            newFiles: job.newFiles,
-            knownFiles: job.knownFiles,
-            unsupportedFiles: job.unsupportedFiles,
-            conflictFiles: job.conflictFiles
-        )
-        let baseURL = URL(fileURLWithPath: reportPath, isDirectory: false).deletingPathExtension()
-        _ = try? reportWriter.writeReport(summary: summary, files: files, baseURL: baseURL)
-    }
 }

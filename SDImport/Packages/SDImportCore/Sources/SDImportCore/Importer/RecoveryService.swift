@@ -14,10 +14,14 @@ public struct RecoverySummary: Hashable, Codable, Sendable {
 public struct RecoveryService {
     private let fileManager: FileManager
     private let jobRepository: JobRepository
+    private let portableReceiptsEnabled: Bool
 
-    public init(fileManager: FileManager = .default, jobRepository: JobRepository) {
+    public init(
+        fileManager: FileManager = .default, jobRepository: JobRepository, portableReceiptsEnabled: Bool = false
+    ) {
         self.fileManager = fileManager
         self.jobRepository = jobRepository
+        self.portableReceiptsEnabled = portableReceiptsEnabled
     }
 
     @discardableResult
@@ -44,6 +48,7 @@ public struct RecoveryService {
         var removedPartFiles = 0
         var unavailableFileID: Int64?
         var needsReview = false
+        var portableReceiptPending = false
         var copiedSourcePaths: [String] = []
     }
 
@@ -52,16 +57,13 @@ public struct RecoveryService {
         guard let job = try jobRepository.fetchJob(id: jobID) else { return outcome }
         let attempts = try jobRepository.copyAttempts(jobID: jobID)
         guard job.status == .importing || !attempts.isEmpty else { return outcome }
-        outcome.recovered = true
+        outcome.recovered = job.status == .importing || attempts.contains { !$0.localCopyCommitted }
 
-        if attempts.isEmpty {
-            // Rows from before the journal only recorded candidate and final paths.
-            for file in try jobRepository.fetchJobFiles(jobID: jobID) {
-                outcome.removedPartFiles += removePartFileIfPresent(for: file.plannedDestinationPath)
-                outcome.removedPartFiles += removePartFileIfPresent(for: file.finalDestinationPath)
-            }
-        }
         for attempt in attempts {
+            if attempt.localCopyCommitted {
+                if !replayPortableReceipt(attempt) { outcome.portableReceiptPending = true }
+                continue
+            }
             let disposition: CopyRecoveryDisposition
             do {
                 disposition = try inspectInterruptedCopy(attempt)
@@ -75,13 +77,16 @@ public struct RecoveryService {
             case .published:
                 try jobRepository.commitCopyAttempt(attempt)
                 outcome.copiedSourcePaths.append(attempt.sourcePath)
+                if !replayPortableReceipt(attempt) { outcome.portableReceiptPending = true }
             case .retry(let removedStaging, let needsReview):
                 outcome.removedPartFiles += removedStaging ? 1 : 0
-                outcome.needsReview = outcome.needsReview || needsReview
-                try jobRepository.discardCopyAttempt(attempt, needsDestinationReview: needsReview)
+                let reviewRequired = needsReview && attempt.requiresDestinationReview
+                outcome.needsReview = outcome.needsReview || reviewRequired
+                try jobRepository.discardCopyAttempt(attempt, needsDestinationReview: reviewRequired)
             }
         }
 
+        guard outcome.recovered else { return outcome }
         try jobRepository.resetPendingFilesAfterInterruption(jobID: jobID)
         let files = try jobRepository.fetchJobFiles(jobID: jobID)
         let fullyCopied = outcome.unavailableFileID == nil
@@ -91,7 +96,19 @@ public struct RecoveryService {
         try jobRepository.refreshImportTotals(
             jobID: jobID, finalStatus: fullyCopied ? .imported : .failed, completedAt: Date()
         )
+        ReportWriter(fileManager: fileManager).rewriteIfPossible(jobID: jobID, jobRepository: jobRepository)
         return outcome
+    }
+
+    private func replayPortableReceipt(_ attempt: ImportCopyAttempt) -> Bool {
+        guard portableReceiptsEnabled, let receipt = attempt.portableReceipt else { return true }
+        do {
+            guard try receipt.replay(sourcePath: attempt.sourcePath) else { return false }
+            try jobRepository.discardCopyAttempt(attempt)
+            return true
+        } catch {
+            return false
+        }
     }
 
     private enum CopyRecoveryDisposition {
@@ -109,7 +126,8 @@ public struct RecoveryService {
             return .published
         }
 
-        if let reservation = attempt.reservedDestination, let final, reservation.matches(final) {
+        if attempt.staged == nil, let reservation = attempt.reservedDestination,
+           let final, reservation.matches(final), final.st_size < attempt.fingerprint.size {
             // Exclusive creation claims the final name before bytes are written on volumes
             // that lack exclusive rename. Only remove a partial file this attempt owns.
             try fileManager.removeItem(at: attempt.destination)
@@ -119,8 +137,7 @@ public struct RecoveryService {
         if let staging {
             // A journal can name a staging path before the file exists.
             // Leave a replaced entry alone if its identity no longer matches.
-            guard staging.st_mode & S_IFMT == S_IFREG,
-                  attempt.staged?.matches(staging) != false else {
+            guard attempt.stagingIdentity?.matches(staging) == true else {
                 return .retry(removedStaging: false, needsReview: true)
             }
             try fileManager.removeItem(at: attempt.staging)
@@ -128,21 +145,4 @@ public struct RecoveryService {
         return .retry(removedStaging: staging != nil, needsReview: final != nil)
     }
 
-    private func removePartFileIfPresent(for path: String?) -> Int {
-        guard let path else {
-            return 0
-        }
-
-        let partURL = URL(fileURLWithPath: path + ".part", isDirectory: false)
-        guard fileManager.fileExists(atPath: partURL.path) else {
-            return 0
-        }
-
-        do {
-            try fileManager.removeItem(at: partURL)
-            return 1
-        } catch {
-            return 0
-        }
-    }
 }

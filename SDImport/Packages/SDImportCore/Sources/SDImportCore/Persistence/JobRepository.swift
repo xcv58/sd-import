@@ -363,31 +363,41 @@ public struct JobRepository {
     }
 
     func commitCopyAttempt(_ attempt: ImportCopyAttempt) throws {
-        try recordDestinationOutcome(
-            fileID: attempt.fileID, jobID: attempt.jobID, sourcePath: attempt.sourcePath,
-            fingerprint: attempt.fingerprint, copiedTo: attempt.destinationPath
-        )
+        try pool.write { db in
+            try Self.writeFileCopyStatus(
+                id: attempt.fileID, status: .copied, finalDestinationPath: attempt.destinationPath,
+                error: nil, decision: nil, knownSource: nil, completedAt: Date(), db: db
+            )
+            try DedupeRepository.recordImported(
+                attempt.fingerprint, jobID: attempt.jobID, sourcePath: attempt.sourcePath, db: db
+            )
+            if attempt.portableReceipt != nil {
+                var pending = attempt
+                pending.localCopyCommitted = true
+                let data = try JSONEncoder().encode(pending)
+                try db.execute(
+                    sql: "UPDATE import_copy_attempts SET attempt_json = ? WHERE file_id = ?",
+                    arguments: [data, attempt.fileID]
+                )
+            } else {
+                try Self.removeCopyAttempt(fileID: attempt.fileID, db: db)
+            }
+        }
     }
 
-    func recordDestinationOutcome(
+    func recordDestinationSkip(
         fileID: Int64,
         jobID: String,
         sourcePath: String,
         fingerprint: FileFingerprint,
-        copiedTo: String? = nil,
-        skipReason: String? = nil
+        reason: String
     ) throws {
         try pool.write { db in
-            let copied = copiedTo != nil
             try Self.writeFileCopyStatus(
-                id: fileID, status: copied ? .copied : .skipped, finalDestinationPath: copiedTo,
-                error: skipReason, decision: copied ? nil : .known,
-                knownSource: copied ? nil : .destination, completedAt: Date(), db: db
+                id: fileID, status: .skipped, finalDestinationPath: nil, error: reason,
+                decision: .known, knownSource: .destination, completedAt: Date(), db: db
             )
             try DedupeRepository.recordImported(fingerprint, jobID: jobID, sourcePath: sourcePath, db: db)
-            if copied {
-                try Self.removeCopyAttempt(fileID: fileID, db: db)
-            }
         }
     }
 

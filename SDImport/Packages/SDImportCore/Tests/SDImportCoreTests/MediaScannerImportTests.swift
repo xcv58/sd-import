@@ -1869,7 +1869,11 @@ struct MediaScannerImportTests {
         let source = fixture.mountURL.appendingPathComponent("IMG_PUBLISHED.JPG")
         try fixture.writeFile(source, bytes: bytes)
         let jobID = "job-published"
-        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID, portableReceiptsEnabled: true))
+        let importer = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+            portableReceiptsEnabled: true
+        )
         try fixture.pool.write { db in
             try db.execute(sql: """
                 CREATE TRIGGER force_dedupe_failure BEFORE INSERT ON items
@@ -1877,7 +1881,7 @@ struct MediaScannerImportTests {
                 """)
         }
         #expect(throws: DatabaseError.self) {
-            try fixture.importEngine.importFiles(jobID: jobID)
+            try importer.importFiles(jobID: jobID)
         }
         let attempts = try fixture.jobRepository.copyAttempts(jobID: jobID)
         let attempt = try #require(attempts.first)
@@ -1888,7 +1892,7 @@ struct MediaScannerImportTests {
         try fixture.pool.write { db in
             try db.execute(sql: "DROP TRIGGER force_dedupe_failure")
         }
-        let recovery = RecoveryService(jobRepository: fixture.jobRepository)
+        let recovery = RecoveryService(jobRepository: fixture.jobRepository, portableReceiptsEnabled: true)
         #expect(try recovery.recoverInterruptedImports().recoveredJobs == 1)
         #expect(try recovery.recoverInterruptedImports().recoveredJobs == 0)
         #expect(try fixture.jobRepository.copyAttempts(jobID: jobID).isEmpty)
@@ -1897,10 +1901,16 @@ struct MediaScannerImportTests {
         #expect(recovered.copyStatus == .copied)
         #expect(recovered.finalDestinationPath == attempt.destinationPath)
         #expect(try fixture.dedupeRepository.contains(attempt.fingerprint))
+        let receipt = try #require(attempt.portableReceipt)
+        let ledger = try PortableImportReceiptLedger(sourceRootURL: fixture.mountURL).load()
+        #expect(ledger.fingerprints.contains(PortableImportReceiptLedger.portableFingerprint(for: receipt.fileIdentity)))
+        let reportPath = try #require(fixture.jobRepository.fetchJob(id: jobID)?.summaryJSONPath)
+        let report = try ImportReportLoader().loadJSON(from: URL(fileURLWithPath: reportPath))
+        #expect(report.files.first?.copyStatus == .copied)
     }
 
-    @Test("recovery respects a live job lock and keeps inaccessible attempts")
-    func recoverInterruptedAttemptAfterDestinationIsAvailable() throws {
+    @Test("recovery respects a live job lock and keeps inaccessible attempts", arguments: [false, true])
+    func recoverInterruptedAttemptAfterDestinationIsAvailable(reviewed: Bool) throws {
         let fixture = try Fixture()
         let source = fixture.mountURL.appendingPathComponent("IMG_STAGED.JPG")
         let bytes = Data("staged".utf8)
@@ -1908,7 +1918,7 @@ struct MediaScannerImportTests {
         let jobID = "job-staging"
         _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
         let file = try #require(fixture.jobRepository.fetchJobFiles(jobID: jobID).first)
-        let attempt = ImportCopyAttempt(
+        var attempt = ImportCopyAttempt(
             id: UUID(), fileID: try #require(file.id), jobID: jobID, sourcePath: source.path,
             destinationPath: try #require(file.plannedDestinationPath),
             fingerprint: .compute(size: file.size, modificationDateString: file.modificationDateString)
@@ -1916,8 +1926,12 @@ struct MediaScannerImportTests {
         let parent = attempt.destination.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         try fixture.jobRepository.updateJobStatus(id: jobID, status: .importing)
+        attempt.destinationDirectory = try #require(ImportCopyDirectoryIdentity(at: parent))
+        attempt.requiresDestinationReview = reviewed
         try fixture.jobRepository.beginCopyAttempt(attempt)
         try bytes.write(to: attempt.staging)
+        attempt.stagingIdentity = ImportCopyFileIdentity(try #require(try CopyEngine.fileInfo(at: attempt.staging)))
+        try fixture.jobRepository.markCopyStaged(attempt)
         let recovery = RecoveryService(jobRepository: fixture.jobRepository)
         let checked = try fixture.jobRepository.withImportLock(jobID: jobID) { () throws -> Bool in
             let active = try recovery.recoverInterruptedImports()
@@ -1931,13 +1945,21 @@ struct MediaScannerImportTests {
         try FileManager.default.moveItem(at: parent, to: offline)
         #expect(try recovery.recoverInterruptedImports().removedPartFiles == 0)
         #expect(try fixture.jobRepository.copyAttempts(jobID: jobID).count == 1)
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        #expect(try recovery.recoverInterruptedImports().removedPartFiles == 0)
+        #expect(try fixture.jobRepository.copyAttempts(jobID: jobID).count == 1)
+        try FileManager.default.removeItem(at: parent)
         try FileManager.default.moveItem(at: offline, to: parent)
         let unrelated = Data("unrelated arrival".utf8)
         try unrelated.write(to: attempt.destination)
         #expect(try recovery.recoverInterruptedImports().removedPartFiles == 1)
         #expect(try fixture.jobRepository.copyAttempts(jobID: jobID).isEmpty)
-        #expect(try fixture.jobRepository.needsDestinationReview(jobID: jobID))
+        #expect(try fixture.jobRepository.needsDestinationReview(jobID: jobID) == reviewed)
         #expect(try Data(contentsOf: attempt.destination) == unrelated)
+        if !reviewed {
+            #expect(try fixture.importEngine.importFiles(jobID: jobID).importedFiles == 1)
+            #expect(try Data(contentsOf: attempt.destination) == unrelated)
+        }
     }
 
     @Test("recovery removes a partial exclusive destination only when the journal owns it")
@@ -1957,9 +1979,12 @@ struct MediaScannerImportTests {
             at: attempt.destination.deletingLastPathComponent(), withIntermediateDirectories: true
         )
         try fixture.jobRepository.updateJobStatus(id: jobID, status: .importing)
+        attempt.destinationDirectory = try #require(
+            ImportCopyDirectoryIdentity(at: attempt.destination.deletingLastPathComponent())
+        )
         try fixture.jobRepository.beginCopyAttempt(attempt)
         try Data("part".utf8).write(to: attempt.destination)
-        attempt.reservedDestination = ImportCopyFileIdentity(try #require(CopyEngine.fileInfo(at: attempt.destination)))
+        attempt.reservedDestination = ImportCopyFileIdentity(try #require(try CopyEngine.fileInfo(at: attempt.destination)))
         try fixture.jobRepository.markCopyStaged(attempt)
 
         let recovery = RecoveryService(jobRepository: fixture.jobRepository)
@@ -1970,7 +1995,43 @@ struct MediaScannerImportTests {
         #expect(try fixture.importEngine.importFiles(jobID: jobID).importedFiles == 1)
     }
 
-    @Test("recovery marks interrupted import failed and removes known part files")
+    @Test("recovery preserves an edited exclusive destination even if it owns the original inode")
+    func recoveryPreservesEditedExclusiveDestination() throws {
+        let fixture = try Fixture()
+        let source = fixture.mountURL.appendingPathComponent("IMG_EDITED.JPG")
+        try fixture.writeFile(source, bytes: Data("original shot".utf8))
+        let jobID = "job-edited-copy"
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
+        let file = try #require(fixture.jobRepository.fetchJobFiles(jobID: jobID).first)
+        var attempt = ImportCopyAttempt(
+            id: UUID(), fileID: try #require(file.id), jobID: jobID, sourcePath: source.path,
+            destinationPath: try #require(file.plannedDestinationPath),
+            fingerprint: .compute(size: file.size, modificationDateString: file.modificationDateString),
+            requiresDestinationReview: true
+        )
+        let directory = attempt.destination.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        attempt.destinationDirectory = ImportCopyDirectoryIdentity(at: directory)
+        try fixture.jobRepository.updateJobStatus(id: jobID, status: .importing)
+        try fixture.jobRepository.beginCopyAttempt(attempt)
+        let staged = try CopyEngine().stageFile(
+            from: source, to: attempt.destination, expectedSize: file.size,
+            modificationDate: nil, onChunk: nil, shouldCancel: { false }
+        )
+        attempt.staged = staged
+        attempt.reservedDestination = staged.identity
+        try fixture.jobRepository.markCopyStaged(attempt)
+        let output = try FileHandle(forWritingTo: attempt.destination)
+        try output.seekToEnd()
+        try output.write(contentsOf: Data(" edited".utf8))
+        try output.close()
+
+        #expect(try RecoveryService(jobRepository: fixture.jobRepository).recoverInterruptedImports().recoveredJobs == 1)
+        #expect(try fixture.jobRepository.needsDestinationReview(jobID: jobID))
+        #expect(try Data(contentsOf: attempt.destination) == Data("original shot edited".utf8))
+    }
+
+    @Test("recovery marks an interrupted job failed and preserves unowned part paths")
     func recoveryMarksInterruptedImportFailed() throws {
         let fixture = try Fixture()
         let source = fixture.mountURL.appendingPathComponent("IMG_RECOVER.JPG")
@@ -1987,7 +2048,9 @@ struct MediaScannerImportTests {
             at: partURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try Data("partial".utf8).write(to: partURL)
+        try FileManager.default.createDirectory(at: partURL, withIntermediateDirectories: false)
+        let unrelated = partURL.appendingPathComponent("unrelated.txt")
+        try Data("preserved".utf8).write(to: unrelated)
         try fixture.jobRepository.updateJobStatus(
             id: "job-recover",
             status: .importing,
@@ -2002,8 +2065,8 @@ struct MediaScannerImportTests {
         let recoveredFile = try #require(recoveredFiles.first)
 
         #expect(summary.recoveredJobs == 1)
-        #expect(summary.removedPartFiles == 1)
-        #expect(FileManager.default.fileExists(atPath: partURL.path) == false)
+        #expect(summary.removedPartFiles == 0)
+        #expect(try Data(contentsOf: unrelated) == Data("preserved".utf8))
         #expect(recoveredJob.status == .failed)
         #expect(recoveredFile.copyStatus == .pending)
         #expect(recoveredFile.error == "interrupted import")
@@ -2047,14 +2110,15 @@ private struct Fixture {
         )
     }
 
-    func scanRequest(jobID: String) -> ScanRequest {
+    func scanRequest(jobID: String, portableReceiptsEnabled: Bool = false) -> ScanRequest {
         ScanRequest(
             mountURL: mountURL,
             volumeName: "CARD",
             location: "TEST",
             roots: DestinationRoots(photosURL: photosURL, videosURL: videosURL),
             reportsDirectoryURL: reportsURL,
-            jobID: jobID
+            jobID: jobID,
+            portableReceiptsEnabled: portableReceiptsEnabled
         )
     }
 

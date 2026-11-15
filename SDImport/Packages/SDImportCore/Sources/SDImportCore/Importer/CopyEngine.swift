@@ -42,18 +42,21 @@ public struct CopyEngine {
         }
 
         let temporaryURL = destinationDirectory.appendingPathComponent(".sdimport-\(UUID().uuidString).part")
-
+        var stageIdentity: ImportCopyFileIdentity?
         do {
-            _ = try stageFile(
+            let staged = try stageFile(
                 from: sourceURL, to: temporaryURL, expectedSize: expectedSize,
-                modificationDate: modificationDate, onChunk: onChunk, shouldCancel: shouldCancel
+                modificationDate: modificationDate, onChunk: onChunk, shouldCancel: shouldCancel,
+                didCreate: { stageIdentity = $0 }
             )
             try publishFile(
                 from: temporaryURL, to: destinationURL, replacesExisting: replacesExisting
             )
-            try verifyFinalCopy(at: destinationURL, expectedSize: expectedSize)
+            guard let info = try Self.fileInfo(at: destinationURL), staged.matches(info) else {
+                throw SDImportError.reviewedDestinationChanged
+            }
         } catch {
-            if fileManager.fileExists(atPath: temporaryURL.path) {
+            if let stageIdentity, let info = try? Self.fileInfo(at: temporaryURL), stageIdentity.matches(info) {
                 try? fileManager.removeItem(at: temporaryURL)
             }
             throw error
@@ -69,19 +72,14 @@ public struct CopyEngine {
         shouldCancel: () -> Bool,
         didCreate: (ImportCopyFileIdentity) throws -> Void = { _ in }
     ) throws -> StagedImportCopy {
-        let digest = try copyWithBoundedBuffer(
-            from: source, to: staging, shouldCancel: shouldCancel, onChunk: onChunk, didCreate: didCreate
+        let verified = try copyWithBoundedBuffer(
+            from: source, to: staging, expectedSize: expectedSize, modificationDate: modificationDate,
+            shouldCancel: shouldCancel, onChunk: onChunk, didCreate: didCreate
         )
-        if let modificationDate {
-            try fileManager.setAttributes([.modificationDate: modificationDate], ofItemAtPath: staging.path)
+        guard let info = try Self.fileInfo(at: staging), verified.matches(info) else {
+            throw SDImportError.reviewedDestinationChanged
         }
-        guard let info = try Self.fileInfo(at: staging), info.st_mode & S_IFMT == S_IFREG else {
-            throw SDImportError.missingFileAttributes(staging)
-        }
-        guard info.st_size == expectedSize else {
-            throw SDImportError.copySizeMismatch(expected: expectedSize, actual: info.st_size)
-        }
-        return StagedImportCopy(info: info, digest: digest)
+        return verified
     }
 
     static func supportsExclusiveRename(in directory: URL) -> Bool? {
@@ -127,57 +125,54 @@ public struct CopyEngine {
     }
 
     static func publishedFileMatches(_ attempt: ImportCopyAttempt) throws -> Bool {
-        guard let staged = attempt.staged,
-              let info = try fileInfo(at: attempt.destination),
-              info.st_mode & S_IFMT == S_IFREG, staged.size == info.st_size,
-              attempt.reservedDestination?.matches(info) != false else {
+        guard let info = try fileInfo(at: attempt.destination),
+              info.st_size == attempt.fingerprint.size else {
             return false
         }
 
-        let descriptor = open(attempt.destinationPath, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK)
+        let expected: Data
+        if let staged = attempt.staged, staged.matches(info) {
+            expected = staged.digest
+        } else if let reservation = attempt.reservedDestination, reservation.matchesInode(info),
+                  let digest = attempt.directCopyDigest {
+            expected = digest
+        } else {
+            return false
+        }
+        return try readDigest(at: attempt.destination, identity: ImportCopyFileIdentity(info)) == expected
+    }
+
+    static func readDigest(at url: URL, identity: ImportCopyFileIdentity? = nil) throws -> Data {
+        let flags = O_RDONLY | O_CLOEXEC | O_NONBLOCK | (identity == nil ? 0 : O_NOFOLLOW)
+        let descriptor = open(url.path, flags)
         guard descriptor >= 0 else {
-            throw SDImportError.fileSystemError(
-                operation: "open published copy", path: attempt.destinationPath, code: errno
-            )
+            throw SDImportError.fileSystemError(operation: "open copy for verification", path: url.path, code: errno)
         }
         let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? file.close() }
         var opened = stat()
-        guard fstat(descriptor, &opened) == 0,
-              ImportCopyFileIdentity(info).matches(opened), opened.st_size == staged.size else { return false }
-        var digest = SHA256()
-        while let bytes = try file.read(upToCount: 1024 * 1024), !bytes.isEmpty {
-            digest.update(data: bytes)
-        }
-        return Data(digest.finalize()) == staged.digest
-    }
-
-    private func fileSize(at url: URL) throws -> Int64 {
-        let attributes = try fileManager.attributesOfItem(atPath: url.path)
-        guard let size = attributes[.size] as? NSNumber else {
+        guard fstat(descriptor, &opened) == 0, opened.st_mode & S_IFMT == S_IFREG,
+              identity?.matches(opened) != false else {
             throw SDImportError.missingFileAttributes(url)
         }
-        return size.int64Value
-    }
-
-    private func verifyFinalCopy(at destinationURL: URL, expectedSize: Int64) throws {
-        guard fileManager.fileExists(atPath: destinationURL.path) else {
-            throw SDImportError.fileSystemError(operation: "verify destination", path: destinationURL.path, code: ENOENT)
+        var digest = SHA256()
+        while let bytes = try file.read(upToCount: 1024 * 1024), !bytes.isEmpty {
+            if Task.isCancelled { throw SDImportError.cancelled }
+            digest.update(data: bytes)
         }
-
-        let finalSize = try fileSize(at: destinationURL)
-        guard finalSize == expectedSize else {
-            throw SDImportError.copySizeMismatch(expected: expectedSize, actual: finalSize)
-        }
+        return Data(digest.finalize())
     }
 
     private func copyWithBoundedBuffer(
         from sourceURL: URL,
         to temporaryURL: URL,
+        expectedSize: Int64,
+        modificationDate: Date?,
         shouldCancel: () -> Bool,
         onChunk: ((Int) -> Void)?,
         didCreate: (ImportCopyFileIdentity) throws -> Void
-    ) throws -> Data {
+    ) throws -> StagedImportCopy {
+        if shouldCancel() { throw SDImportError.cancelled }
         let sourcePath = sourceURL.path
         let destinationPath = temporaryURL.path
         let inputFD = open(sourcePath, O_RDONLY)
@@ -244,6 +239,24 @@ public struct CopyEngine {
             digest.update(bufferPointer: UnsafeRawBufferPointer(start: buffer, count: bytesRead))
             onChunk?(bytesRead)
         }
-        return Data(digest.finalize())
+        if let modificationDate {
+            let interval = modificationDate.timeIntervalSince1970
+            let seconds = floor(interval)
+            let times = [
+                timespec(tv_sec: 0, tv_nsec: Int(UTIME_OMIT)),
+                timespec(tv_sec: Int(seconds), tv_nsec: Int((interval - seconds) * 1_000_000_000))
+            ]
+            guard futimens(outputFD, times) == 0 else {
+                throw SDImportError.fileSystemError(operation: "set copy date", path: destinationPath, code: errno)
+            }
+        }
+        var finished = stat()
+        guard fstat(outputFD, &finished) == 0 else {
+            throw SDImportError.fileSystemError(operation: "verify new copy", path: destinationPath, code: errno)
+        }
+        guard finished.st_size == expectedSize else {
+            throw SDImportError.copySizeMismatch(expected: expectedSize, actual: finished.st_size)
+        }
+        return StagedImportCopy(info: finished, digest: Data(digest.finalize()))
     }
 }

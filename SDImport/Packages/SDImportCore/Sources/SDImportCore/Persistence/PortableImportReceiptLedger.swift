@@ -2,7 +2,7 @@ import CryptoKit
 import Darwin
 import Foundation
 
-public struct PortableFileIdentity: Hashable, Sendable {
+public struct PortableFileIdentity: Hashable, Codable, Sendable {
     public let size: Int64
     public let modificationTimeEpochSeconds: Int64
     public let relativePath: String

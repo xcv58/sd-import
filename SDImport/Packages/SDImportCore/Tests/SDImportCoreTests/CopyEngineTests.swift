@@ -76,6 +76,30 @@ struct CopyEngineTests {
         #expect(!FileManager.default.fileExists(atPath: destination.path + ".part"))
     }
 
+    @Test("a different file at the staging path cannot be published or removed")
+    func preservesReplacedStagingEntry() throws {
+        let folder = try temporaryDirectory()
+        let source = folder.appendingPathComponent("source.bin")
+        let destination = folder.appendingPathComponent("destination.bin")
+        let original = Data(repeating: 1, count: 400_000)
+        let replacement = Data(repeating: 2, count: original.count)
+        try original.write(to: source)
+        var stage: URL?
+        #expect(throws: SDImportError.reviewedDestinationChanged) {
+            try CopyEngine(chunkSize: 65_536).copyFile(
+                from: source, to: destination, expectedSize: Int64(original.count), modificationDate: nil
+            ) { _ in
+                guard stage == nil else { return }
+                stage = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+                    .first { $0.pathExtension == "part" }
+                if let stage { try? replacement.write(to: stage, options: .atomic) }
+            }
+        }
+        let changed = try #require(stage)
+        #expect(try Data(contentsOf: changed) == replacement)
+        #expect(!FileManager.default.fileExists(atPath: destination.path))
+    }
+
     @Test("fails when copied size does not match expected size")
     func failsWhenCopiedSizeDoesNotMatchExpectedSize() throws {
         let directory = try temporaryDirectory()
