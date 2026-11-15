@@ -33,6 +33,28 @@ struct BackgroundPromptRepairTests {
         #expect(fixture.model.backgroundPromptStatusTitle == L10n.tr("Running"))
     }
 
+    @Test("automatic mismatch repair rechecks intent after unregister", arguments: [false, true])
+    func automaticRepairAbandonsObsoleteRegistration(changeOwnership: Bool) async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        fixture.model.hasCompletedOnboarding = true
+        fixture.service.didUnregister = { [weak service = fixture.service, weak model = fixture.model] in
+            if changeOwnership {
+                service?.isAuthoritative = false
+            } else {
+                model?.autoPromptEnabled = false
+            }
+        }
+
+        fixture.model.updateLoginItemRegistration()
+        let repair = try #require(fixture.model.backgroundPromptOperationTask)
+        await repair.value
+
+        #expect(fixture.service.unregisterCalls == 1)
+        #expect(fixture.service.registerCalls == 0)
+        #expect(fixture.service.status == .notRegistered)
+    }
+
     @Test("a newer agent diagnostic preserves the launch timeout and automatic retry")
     func agentErrorDoesNotEraseLaunchTimeout() async throws {
         let fixture = try Fixture()
@@ -421,6 +443,7 @@ private final class RetryClock {
 private final class TestLoginItem {
     var status: BackgroundPromptServiceStatus
     var registerError: FixtureError?
+    var isAuthoritative = true
     var didUnregister: (() -> Void)?
     private(set) var registerCalls = 0
     private(set) var unregisterCalls = 0
@@ -434,7 +457,10 @@ private final class TestLoginItem {
         return LoginItemController(
             readStatus: { self.status },
             readApplicationOwnership: {
-                BackgroundPromptApplicationOwnership(currentApplicationPath: path, authoritativeApplicationPath: path)
+                BackgroundPromptApplicationOwnership(
+                    currentApplicationPath: path,
+                    authoritativeApplicationPath: self.isAuthoritative ? path : nil
+                )
             },
             invalidateApplicationOwnershipCache: {},
             hasEmbeddedAgent: { true },
