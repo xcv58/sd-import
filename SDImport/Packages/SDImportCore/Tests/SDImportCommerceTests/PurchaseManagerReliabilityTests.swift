@@ -86,6 +86,38 @@ final class PurchaseManagerReliabilityTests: XCTestCase {
         await assertRestoreUsesLatestLifetimeStateWhileCheckingTrial(initiallyEntitled: true)
     }
 
+    func testRestoreUsesNewerVerifiedTrialWhilePostSyncCheckIsSuspended() async {
+        let state = StorefrontState()
+        state.heldLookupSource = .current
+        let manager = makeManager(state: state, current: { identifier in
+            guard state.syncCalls > 0, identifier == AppDistribution.trialProductIdentifier else {
+                return .notEntitled
+            }
+            state.postSyncTrialChecks += 1
+            if state.heldLookupSource == .current {
+                state.heldLookupSource = nil
+                return await withCheckedContinuation { state.lookupContinuation = $0 }
+            }
+            return .entitled(purchaseDate: self.purchaseDate)
+        }, latest: { _ in .notEntitled })
+
+        let restore = Task { await manager.restorePurchases() }
+        let started = await waitUntil { state.lookupContinuation != nil }
+        XCTAssertTrue(started)
+        XCTAssertEqual(state.syncCalls, 1)
+        XCTAssertFalse(manager.hasUsedTrial)
+
+        await manager.refreshTrialEntitlement()
+        state.finishLookup(with: .notEntitled)
+        await restore.value
+
+        XCTAssertEqual(state.postSyncTrialChecks, 2, "Restore must settle without another trial lookup")
+        XCTAssertTrue(manager.hasUsedTrial)
+        XCTAssertTrue(manager.canStartImport)
+        XCTAssertEqual(manager.accessState.purchaseStatus, .available)
+        XCTAssertNil(manager.statusMessage)
+    }
+
     func testActiveTrialKeepsRestoreBusyUntilSyncFinishes() async {
         await assertRestoreStaysBusy(trialAgeInDays: 1)
     }
@@ -560,6 +592,7 @@ private final class StorefrontState {
     var holdProducts = false
     var productContinuations: [CheckedContinuation<StoreProductSnapshot?, Never>] = []
     var syncCalls = 0
+    var postSyncTrialChecks = 0
     var syncFailure: StoreKitError?
     var completedOverlappingOperations = 0
     var holdSync = false
