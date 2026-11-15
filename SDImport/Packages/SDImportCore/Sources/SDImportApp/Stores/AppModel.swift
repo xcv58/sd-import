@@ -638,8 +638,7 @@ final class AppModel: ObservableObject {
             if clearUnauthorizedAppStoreDestinationDefaults() {
                 _ = savePreferences()
             }
-            let recovery = try RecoveryService(jobRepository: JobRepository(pool: pool))
-                .recoverInterruptedImports()
+            recoverInterruptedImports(databaseURL: databaseURL)
             refreshAvailableSourceVolumes()
             validatePaths()
             validateDefaultPaths()
@@ -654,14 +653,36 @@ final class AppModel: ObservableObject {
             }
             startMountObserver()
             reconcileBackgroundPromptRegistration()
-            statusMessage = legacyImportMessage
-                ?? (recovery.recoveredJobs > 0 ? L10n.tr("Recovered interrupted import") : L10n.tr("Ready"))
+            statusMessage = legacyImportMessage ?? L10n.tr("Ready")
         } catch {
             let render = { Self.errorMessage(for: error) }
             let content = RelocalizableMessage(render(), render: render)
             setupErrorContent = content
             setupError = content.text
             statusMessage = L10n.tr("Setup failed")
+        }
+    }
+
+    private func recoverInterruptedImports(databaseURL: URL) {
+        let access = folderAccesses.values.filter(\.isActive)
+        let portable = portableImportReceiptsEnabled
+        Task.detached(priority: .utility) { [weak self] in
+            defer { withExtendedLifetime(access) {} }
+            do {
+                let repository = try Self.makeRepositories(databaseURL: databaseURL).jobRepository
+                let recovery = try RecoveryService(jobRepository: repository, portableReceiptsEnabled: portable)
+                    .recoverInterruptedImports()
+                guard recovery.recoveredJobs > 0 else { return }
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.refreshHistory()
+                    if self.importAttempt == nil, self.statusMessage == L10n.tr("Ready") {
+                        self.statusMessage = L10n.tr("Recovered interrupted import")
+                    }
+                }
+            } catch {
+                importLogger.error("Import recovery failed errorType=\(String(describing: type(of: error)), privacy: .public)")
+            }
         }
     }
 
@@ -2268,6 +2289,11 @@ final class AppModel: ObservableObject {
         guard let volume = pendingMountedVolume else {
             return
         }
+        guard Self.isCurrentPromptVolume(volume) else {
+            pendingMountedVolume = nil
+            statusMessage = L10n.tr("Card scan cancelled")
+            return
+        }
         let sourceURL: URL
         if AppDistribution.current == .macAppStore {
             if let authorizedURL = authorizedSourceURL(for: volume) {
@@ -2286,6 +2312,11 @@ final class AppModel: ObservableObject {
                 guard Self.isSameOrDescendant(selectedURL, of: volume.mountURL) else {
                     let name = volume.name
                     setLocalizedStatusMessage { L10n.tr("Choose \(name) or a folder on that card") }
+                    return
+                }
+                guard Self.isCurrentPromptVolume(volume) else {
+                    pendingMountedVolume = nil
+                    statusMessage = L10n.tr("Card scan cancelled")
                     return
                 }
                 guard retainSelectedFolderAccess(
@@ -2312,6 +2343,17 @@ final class AppModel: ObservableObject {
         sourcePathDidChange()
         savePreferences()
         scan()
+    }
+
+    nonisolated private static func isCurrentPromptVolume(_ expected: MountedVolume) -> Bool {
+        let url = URL(fileURLWithPath: expected.mountURL.path, isDirectory: true)
+        guard let values = try? url.resourceValues(forKeys: [.volumeURLKey, .volumeUUIDStringKey]),
+              values.volume?.standardizedFileURL.path == url.standardizedFileURL.path else {
+            return false
+        }
+        return MountHandoffVolumeIdentity.matchesCurrentVolume(
+            expectedUUID: expected.volumeUUID, currentUUID: values.volumeUUIDString
+        )
     }
 
     func skipMountedVolumePrompt() {
@@ -2740,6 +2782,7 @@ final class AppModel: ObservableObject {
 
     private func performBackgroundPromptReconciliation(showFeedback: Bool) async {
         backgroundPrompt.cancelPoll()
+        loginItem.invalidateApplicationOwnershipCache()
         refreshBackgroundPromptHealth()
         guard hasCompletedOnboarding else {
             backgroundPrompt.cancelRetry(resetAttempts: false)
@@ -4339,6 +4382,11 @@ final class AppModel: ObservableObject {
                 self.refreshBackgroundPromptHealth()
                 return .accepted
             },
+            unmountHandler: { [weak self] url in
+                if self?.pendingMountedVolume?.mountURL.standardizedFileURL.path == url.standardizedFileURL.path {
+                    self?.pendingMountedVolume = nil
+                }
+            },
             shouldHandleDirectMount: { [weak self] in
                 guard let self else {
                     return false
@@ -4526,6 +4574,7 @@ final class AppModel: ObservableObject {
         let ejectionVolumes = grouper.ejectionVolumes(for: sourceVolume, among: mountedVolumes)
         guard
             !ejectionVolumes.isEmpty,
+            ejectionVolumes.allSatisfy({ $0.volumeUUID?.isEmpty == false }),
             !destinationPaths.contains(where: {
                 Self.destination($0, sharesDeviceWith: group.volumes)
             })

@@ -55,6 +55,23 @@ struct BackgroundPromptRepairTests {
         #expect(fixture.service.status == .notRegistered)
     }
 
+    @Test("queued registration bypasses stale cached app ownership")
+    func queuedRegistrationChecksCurrentOwner() async throws {
+        let fixture = try Fixture(serviceStatus: .notRegistered)
+        defer { fixture.cleanUp() }
+        fixture.model.hasCompletedOnboarding = true
+        fixture.model.refreshBackgroundPromptHealth()
+        #expect(fixture.model.backgroundPromptCanConfigure)
+
+        fixture.service.isAuthoritative = false
+        fixture.model.updateLoginItemRegistration()
+        let task = try #require(fixture.model.backgroundPromptOperationTask)
+        await task.value
+
+        #expect(!fixture.model.backgroundPromptCanConfigure)
+        #expect(fixture.service.registerCalls == 0)
+    }
+
     @Test("a newer agent diagnostic preserves the launch timeout and automatic retry")
     func agentErrorDoesNotEraseLaunchTimeout() async throws {
         let fixture = try Fixture()
@@ -444,6 +461,7 @@ private final class TestLoginItem {
     var status: BackgroundPromptServiceStatus
     var registerError: FixtureError?
     var isAuthoritative = true
+    private var cachedAuthority: Bool?
     var didUnregister: (() -> Void)?
     private(set) var registerCalls = 0
     private(set) var unregisterCalls = 0
@@ -457,12 +475,14 @@ private final class TestLoginItem {
         return LoginItemController(
             readStatus: { self.status },
             readApplicationOwnership: {
-                BackgroundPromptApplicationOwnership(
+                let authority = self.cachedAuthority ?? self.isAuthoritative
+                self.cachedAuthority = authority
+                return BackgroundPromptApplicationOwnership(
                     currentApplicationPath: path,
-                    authoritativeApplicationPath: self.isAuthoritative ? path : nil
+                    authoritativeApplicationPath: authority ? path : nil
                 )
             },
-            invalidateApplicationOwnershipCache: {},
+            invalidateApplicationOwnershipCache: { self.cachedAuthority = nil },
             hasEmbeddedAgent: { true },
             register: {
                 self.registerCalls += 1

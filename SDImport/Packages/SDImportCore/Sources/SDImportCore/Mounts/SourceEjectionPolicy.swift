@@ -28,7 +28,7 @@ public struct SourceEjectionPolicy: Sendable {
               current.mountURL.standardizedFileURL.path == expected.mountURL.standardizedFileURL.path else {
             return false
         }
-        if let uuid = expected.volumeUUID, !uuid.isEmpty, current.volumeUUID != uuid { return false }
+        guard let uuid = expected.volumeUUID, !uuid.isEmpty, current.volumeUUID == uuid else { return false }
         if let device = expected.deviceGroupIdentifier, current.deviceGroupIdentifier != device { return false }
         if let disk = expected.wholeDiskIdentifier, current.wholeDiskIdentifier != disk { return false }
         return true
