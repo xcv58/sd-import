@@ -37,6 +37,31 @@ public struct ReportWriter {
         return ReportPaths(jsonURL: jsonURL, markdownURL: markdownURL)
     }
 
+    func rewriteIfPossible(jobID: String, jobRepository: JobRepository) {
+        guard
+            let job = try? jobRepository.fetchJob(id: jobID),
+            let reportPath = job.summaryMarkdownPath ?? job.summaryJSONPath
+        else {
+            return
+        }
+
+        let files = (try? jobRepository.fetchJobFiles(jobID: jobID)) ?? []
+        let summary = ScanSummary(
+            jobID: job.id,
+            mountPath: job.mountPath,
+            volumeName: job.volumeName,
+            volumeUUID: job.volumeUUID,
+            location: job.location,
+            scannedFiles: job.scannedFiles,
+            newFiles: job.newFiles,
+            knownFiles: job.knownFiles,
+            unsupportedFiles: job.unsupportedFiles,
+            conflictFiles: job.conflictFiles
+        )
+        let baseURL = URL(fileURLWithPath: reportPath, isDirectory: false).deletingPathExtension()
+        _ = try? writeReport(summary: summary, files: files, baseURL: baseURL)
+    }
+
     private func markdown(summary: ScanSummary, files: [JobFileRecord]) -> String {
         let receiptTotals = ImportReceiptTotals(files: files)
         var lines: [String] = [

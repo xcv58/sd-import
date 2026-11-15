@@ -10,6 +10,7 @@ final class MountEventObserver {
     private var unmountToken: NSObjectProtocol?
     private var distributedToken: NSObjectProtocol?
     private let handler: (MountedVolume) -> MountEventHandlingDisposition
+    private let unmountHandler: (URL) -> Void
     private let errorHandler: (String, UInt64?) -> Void
     private let handoffAcknowledgedHandler: (MountHandoffEvent) -> Void
     private let shouldHandleDirectMount: () -> Bool
@@ -23,6 +24,7 @@ final class MountEventObserver {
         applicationURL: URL = Bundle.main.bundleURL,
         distribution: AppDistribution = .current,
         handler: @escaping (MountedVolume) -> MountEventHandlingDisposition,
+        unmountHandler: @escaping (URL) -> Void = { _ in },
         shouldHandleDirectMount: @escaping () -> Bool,
         shouldHandleHandoff: @escaping (MountHandoffEvent) -> Bool,
         handoffAcknowledgedHandler: @escaping (MountHandoffEvent) -> Void = { _ in },
@@ -30,6 +32,7 @@ final class MountEventObserver {
     ) {
         mountPrivacyPolicy = distribution.mountPrivacyPolicy
         self.handler = handler
+        self.unmountHandler = unmountHandler
         self.shouldHandleDirectMount = shouldHandleDirectMount
         self.shouldHandleHandoff = shouldHandleHandoff
         self.handoffAcknowledgedHandler = handoffAcknowledgedHandler
@@ -68,6 +71,7 @@ final class MountEventObserver {
             }
             Task { @MainActor in
                 self?.deliveryController.forget(mountURL: mountURL)
+                self?.unmountHandler(mountURL)
             }
         }
 

@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public struct RecoverySummary: Hashable, Codable, Sendable {
@@ -13,10 +14,14 @@ public struct RecoverySummary: Hashable, Codable, Sendable {
 public struct RecoveryService {
     private let fileManager: FileManager
     private let jobRepository: JobRepository
+    private let portableReceiptsEnabled: Bool
 
-    public init(fileManager: FileManager = .default, jobRepository: JobRepository) {
+    public init(
+        fileManager: FileManager = .default, jobRepository: JobRepository, portableReceiptsEnabled: Bool = false
+    ) {
         self.fileManager = fileManager
         self.jobRepository = jobRepository
+        self.portableReceiptsEnabled = portableReceiptsEnabled
     }
 
     @discardableResult
@@ -24,42 +29,153 @@ public struct RecoveryService {
         let interruptedJobs = try jobRepository.interruptedImportJobs()
         var removedPartFiles = 0
 
+        var recoveredJobs = 0
         for job in interruptedJobs {
-            let files = try jobRepository.fetchJobFiles(jobID: job.id)
-            for file in files {
-                removedPartFiles += removePartFileIfPresent(for: file.plannedDestinationPath)
-                removedPartFiles += removePartFileIfPresent(for: file.finalDestinationPath)
+            guard let outcome = try jobRepository.withImportLock(jobID: job.id, {
+                try recoverJobWhileLocked(jobID: job.id)
+            }), outcome.recovered else {
+                continue
             }
-
-            try jobRepository.resetPendingFilesAfterInterruption(jobID: job.id)
-            try jobRepository.refreshImportTotals(
-                jobID: job.id,
-                finalStatus: .failed,
-                completedAt: Date()
-            )
+            recoveredJobs += 1
+            removedPartFiles += outcome.removedPartFiles
         }
 
-        return RecoverySummary(
-            recoveredJobs: interruptedJobs.count,
-            removedPartFiles: removedPartFiles
-        )
+        return RecoverySummary(recoveredJobs: recoveredJobs, removedPartFiles: removedPartFiles)
     }
 
-    private func removePartFileIfPresent(for path: String?) -> Int {
-        guard let path else {
-            return 0
+    struct JobRecovery {
+        var recovered = false
+        var removedPartFiles = 0
+        var unavailableFileID: Int64?
+        var needsReview = false
+        var resumedReviewedCopy = false
+        var portableReceiptPending = false
+        var copiedSourcePaths: [String] = []
+    }
+
+    func recoverJobWhileLocked(jobID: String) throws -> JobRecovery {
+        var outcome = JobRecovery()
+        guard let job = try jobRepository.fetchJob(id: jobID) else { return outcome }
+        let attempts = try jobRepository.copyAttempts(jobID: jobID)
+        guard job.status == .importing || !attempts.isEmpty else { return outcome }
+        outcome.recovered = job.status == .importing || attempts.contains { $0.localCopyCommitted != true }
+
+        for attempt in attempts {
+            if attempt.localCopyCommitted == true {
+                if !replayPortableReceipt(attempt) { outcome.portableReceiptPending = true }
+                continue
+            }
+            outcome.resumedReviewedCopy = outcome.resumedReviewedCopy || attempt.requiresDestinationReview == true
+            let disposition: CopyRecoveryDisposition
+            do {
+                disposition = try inspectInterruptedCopy(attempt)
+            } catch {
+                outcome.unavailableFileID = attempt.fileID
+                continue
+            }
+            switch disposition {
+            case .unavailable:
+                outcome.unavailableFileID = attempt.fileID
+            case .unverifiedDestination(let removedStaging):
+                outcome.removedPartFiles += removedStaging ? 1 : 0
+                let needsReview = attempt.destinationDirectory == nil || attempt.requiresDestinationReview == true
+                outcome.needsReview = outcome.needsReview || needsReview
+                try jobRepository.rejectUnverifiedCopy(attempt, needsDestinationReview: needsReview)
+            case .published:
+                try jobRepository.commitCopyAttempt(
+                    attempt, requireReviewForRemainingFiles: attempt.requiresDestinationReview == true
+                )
+                outcome.copiedSourcePaths.append(attempt.sourcePath)
+                if !replayPortableReceipt(attempt) { outcome.portableReceiptPending = true }
+            case .retry(let removedStaging):
+                outcome.removedPartFiles += removedStaging ? 1 : 0
+                let reviewRequired = attempt.requiresDestinationReview == true
+                outcome.needsReview = outcome.needsReview || reviewRequired
+                try jobRepository.discardCopyAttempt(attempt, needsDestinationReview: reviewRequired)
+            }
         }
 
-        let partURL = URL(fileURLWithPath: path + ".part", isDirectory: false)
-        guard fileManager.fileExists(atPath: partURL.path) else {
-            return 0
-        }
+        guard outcome.recovered else { return outcome }
+        try jobRepository.resetPendingFilesAfterInterruption(jobID: jobID)
+        let files = try jobRepository.fetchJobFiles(jobID: jobID)
+        let fullyCopied = outcome.unavailableFileID == nil
+            && !outcome.needsReview
+            && files.contains { $0.copyStatus == .copied }
+            && !files.contains(where: \.isPendingImport)
+        try jobRepository.refreshImportTotals(
+            jobID: jobID, finalStatus: fullyCopied ? .imported : .failed, completedAt: Date(),
+            needsDestinationReview: fullyCopied ? false : (outcome.needsReview ? true : nil)
+        )
+        ReportWriter(fileManager: fileManager).rewriteIfPossible(jobID: jobID, jobRepository: jobRepository)
+        return outcome
+    }
 
+    private func replayPortableReceipt(_ attempt: ImportCopyAttempt) -> Bool {
+        guard portableReceiptsEnabled, let receipt = attempt.portableReceipt else { return true }
         do {
-            try fileManager.removeItem(at: partURL)
-            return 1
+            guard try receipt.replay(
+                sourcePath: attempt.sourcePath, copiedDigest: attempt.staged?.digest ?? attempt.directCopyDigest
+            ) else { return false }
+            try jobRepository.discardCopyAttempt(attempt)
+            return true
         } catch {
-            return 0
+            return false
         }
+    }
+
+    private enum CopyRecoveryDisposition {
+        case unavailable
+        case unverifiedDestination(removedStaging: Bool)
+        case published
+        case retry(removedStaging: Bool)
+    }
+
+    private func inspectInterruptedCopy(_ attempt: ImportCopyAttempt) throws -> CopyRecoveryDisposition {
+        // Early journal entries lack the parent identity needed for safe file operations.
+        guard attempt.destinationDirectory != nil else { return .unverifiedDestination(removedStaging: false) }
+        guard attempt.destinationIsAccessible() else { return .unavailable }
+
+        let staging = try CopyEngine.fileInfo(at: attempt.staging)
+        let final = try CopyEngine.fileInfo(at: attempt.destination)
+        if staging == nil, let final {
+            if try CopyEngine.publishedFileMatches(attempt) {
+                if attempt.staged == nil, let date = attempt.modificationDate {
+                    try CopyEngine.restoreCopyDate(date, at: attempt.destination, identity: ImportCopyFileIdentity(final))
+                }
+                return .published
+            }
+
+            // Retain negative verification so a later metadata-only check cannot accept this file.
+            if attempt.staged != nil || attempt.reservedDestination != nil {
+                return .unverifiedDestination(removedStaging: false)
+            }
+        }
+
+        if let staging, let final, let verified = attempt.staged {
+            guard attempt.stagingIdentity?.matches(staging) == true else {
+                return .unverifiedDestination(removedStaging: false)
+            }
+            if case .skip = ConflictResolver(fileManager: fileManager).resolveDestination(
+                candidate: attempt.destination, expectedFingerprint: attempt.fingerprint, allowsRename: false
+            ), try CopyEngine.readDigest(at: attempt.destination, identity: ImportCopyFileIdentity(final))
+                != verified.digest {
+                return .unverifiedDestination(removedStaging: try removeOwnedStaging(attempt))
+            }
+        }
+
+        return .retry(removedStaging: try removeOwnedStaging(attempt))
+    }
+
+    private func removeOwnedStaging(_ attempt: ImportCopyAttempt) throws -> Bool {
+        guard attempt.destinationIsAccessible() else {
+            throw SDImportError.missingDestinationDirectory(attempt.fileID)
+        }
+        guard let identity = attempt.stagingIdentity,
+              let current = try CopyEngine.fileInfo(at: attempt.staging),
+              identity.matches(current) else {
+            return false
+        }
+        try fileManager.removeItem(at: attempt.staging)
+        return true
     }
 }

@@ -259,7 +259,7 @@ final class AppModel: ObservableObject {
     @Published var historyRetention: RetentionPolicy
     @Published var autoPromptEnabled: Bool
     @Published private(set) var backgroundPromptServiceStatus: BackgroundPromptServiceStatus = .notRegistered
-    @Published private(set) var isRepairingBackgroundPrompt = false
+    var isRepairingBackgroundPrompt: Bool { backgroundPrompt.isRepairingManually }
     @Published private(set) var backgroundPromptAgentState: BackgroundPromptAgentState?
     @Published private(set) var backgroundPromptLastError: String? {
         didSet {
@@ -325,11 +325,13 @@ final class AppModel: ObservableObject {
     @Published var defaultVideosValidation: PathValidationResult = .empty(purpose: .destination)
     @Published var pendingMountedVolume: MountedVolume? {
         didSet {
+            pendingMountPromptID = pendingMountedVolume == nil ? nil : UUID()
             if oldValue != nil, pendingMountedVolume == nil {
                 schedulePendingMountHandoffRetry()
             }
         }
     }
+    private var pendingMountPromptID: UUID?
     @Published var reportPresentation: ImportReportPresentation?
     @Published var statusMessage = "" {
         didSet {
@@ -429,20 +431,9 @@ final class AppModel: ObservableObject {
             )
         }
     }
-    @Published var isWorking = false {
-        didSet {
-            if oldValue, !isWorking {
-                schedulePendingMountHandoffRetry()
-            }
-        }
-    }
-    @Published private(set) var isEjectingSource = false {
-        didSet {
-            if oldValue, !isEjectingSource {
-                schedulePendingMountHandoffRetry()
-            }
-        }
-    }
+    @Published private var importAttempt: ImportWorkspaceAttempt?
+    var isWorking: Bool { importAttempt.map { $0.operation != .eject } ?? false }
+    var isEjectingSource: Bool { importAttempt?.operation == .eject }
     @Published private(set) var ejectedSourceJobID: String?
     @Published private(set) var ejectedSourceName: String?
     @Published private(set) var ejectedSourceVolumeCount = 0
@@ -458,8 +449,7 @@ final class AppModel: ObservableObject {
     private let defaults: UserDefaults
     private let loginItem: LoginItemController
     private let backgroundPromptStateStore: () throws -> BackgroundPromptAgentStateStore
-    private let backgroundPromptSleep: BackgroundPromptRetryScheduler.Sleep
-    private let backgroundPromptRetryNow: () -> Date
+    private let backgroundPrompt: BackgroundPromptCoordinator
     private let purchaseManager: PurchaseManager
     private var initialOnboardingSourcePath: String
     private var applicationSupportURL: URL?
@@ -475,10 +465,7 @@ final class AppModel: ObservableObject {
     private var historyDetailTask: Task<Void, Never>?
     private var reportTask: Task<Void, Never>?
     private var sourceEjectionTask: Task<Void, Never>?
-    private(set) var backgroundPromptOperationTask: Task<Void, Never>?
-    private var backgroundPromptHealthRefreshTask: Task<Void, Never>?
-    private var backgroundPromptHealthRefreshGeneration = BackgroundPromptHealthRefreshGeneration()
-    private let backgroundPromptRetryScheduler: BackgroundPromptRetryScheduler
+    var backgroundPromptOperationTask: Task<Void, Never>? { backgroundPrompt.operationTask }
     private var mountedVolumesSnapshot: [MountedVolume] = []
     private var cachedSelectedSourceEjectionTarget: SourceEjectionTarget?
     private var cachedResultSourceEjectionTargets: [String: SourceEjectionTarget] = [:]
@@ -516,9 +503,9 @@ final class AppModel: ObservableObject {
         self.defaults = defaults
         self.loginItem = loginItem
         self.backgroundPromptStateStore = backgroundPromptStateStore
-        self.backgroundPromptSleep = backgroundPromptSleep
-        self.backgroundPromptRetryNow = backgroundPromptRetryNow
-        self.backgroundPromptRetryScheduler = BackgroundPromptRetryScheduler(sleep: backgroundPromptSleep)
+        self.backgroundPrompt = BackgroundPromptCoordinator(
+            defaults: defaults, sleep: backgroundPromptSleep, now: backgroundPromptRetryNow
+        )
         self.backgroundPromptApplicationOwnership = loginItem.applicationOwnership
         let initialConfiguration = AppConfiguration.defaultConfiguration(
             homeDirectory: FileManager.default.homeDirectoryForCurrentUser,
@@ -653,8 +640,7 @@ final class AppModel: ObservableObject {
             if clearUnauthorizedAppStoreDestinationDefaults() {
                 _ = savePreferences()
             }
-            let recovery = try RecoveryService(jobRepository: JobRepository(pool: pool))
-                .recoverInterruptedImports()
+            recoverInterruptedImports(databaseURL: databaseURL)
             refreshAvailableSourceVolumes()
             validatePaths()
             validateDefaultPaths()
@@ -669,14 +655,36 @@ final class AppModel: ObservableObject {
             }
             startMountObserver()
             reconcileBackgroundPromptRegistration()
-            statusMessage = legacyImportMessage
-                ?? (recovery.recoveredJobs > 0 ? L10n.tr("Recovered interrupted import") : L10n.tr("Ready"))
+            statusMessage = legacyImportMessage ?? L10n.tr("Ready")
         } catch {
             let render = { Self.errorMessage(for: error) }
             let content = RelocalizableMessage(render(), render: render)
             setupErrorContent = content
             setupError = content.text
             statusMessage = L10n.tr("Setup failed")
+        }
+    }
+
+    private func recoverInterruptedImports(databaseURL: URL) {
+        let access = folderAccesses.values.filter(\.isActive)
+        let portable = portableImportReceiptsEnabled
+        Task.detached(priority: .utility) { [weak self] in
+            defer { withExtendedLifetime(access) {} }
+            do {
+                let repository = try Self.makeRepositories(databaseURL: databaseURL).jobRepository
+                let recovery = try RecoveryService(jobRepository: repository, portableReceiptsEnabled: portable)
+                    .recoverInterruptedImports()
+                guard recovery.recoveredJobs > 0 else { return }
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.refreshHistory()
+                    if self.importAttempt == nil, self.statusMessage == L10n.tr("Ready") {
+                        self.statusMessage = L10n.tr("Recovered interrupted import")
+                    }
+                }
+            } catch {
+                importLogger.error("Import recovery failed errorType=\(String(describing: type(of: error)), privacy: .public)")
+            }
         }
     }
 
@@ -1222,8 +1230,7 @@ final class AppModel: ObservableObject {
         previewSessions = []
         currentPreviewFiles = []
         clearPreviewPlanCache()
-        isWorking = true
-        transitionImportWorkspace(.beginScan)
+        let attemptID = beginImportAttempt(.scan, event: .beginScan)
         statusMessage = L10n.tr("Scanning...")
         importLogger.info("Scan started")
 
@@ -1273,6 +1280,13 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
 
                 await MainActor.run {
+                    guard let attempt = self.importAttempt, attempt.accepts(attemptID) else { return }
+                    if attempt.cancellationRequested {
+                        self.currentSummary = nil
+                        self.statusMessage = L10n.tr("Scan cancelled")
+                        self.finishImportAttempt(attemptID, event: .cancelled)
+                        return
+                    }
                     self.currentSummary = summary
                     self.selectedJobID = summary.jobID
                     self.jobs = jobs
@@ -1297,41 +1311,38 @@ final class AppModel: ObservableObject {
                     } else {
                         self.statusMessage = L10n.tr("Scan complete")
                     }
-                    self.isWorking = false
-                    self.transitionImportWorkspace(.scanSucceeded)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .scanSucceeded)
                 }
                 importLogger.info(
                     "Scan complete scanned=\(summary.scannedFiles, privacy: .public) new=\(summary.newFiles, privacy: .public) known=\(summary.knownFiles, privacy: .public) sidecars=\(summary.unsupportedFiles, privacy: .public) conflicts=\(summary.conflictFiles, privacy: .public)"
                 )
             } catch is CancellationError {
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentSummary = nil
                     self.previewSessions = []
                     self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
                     self.clearPreviewPlanCache()
                     self.statusMessage = L10n.tr("Scan cancelled")
-                    self.isWorking = false
-                    self.transitionImportWorkspace(.cancelled)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .cancelled)
                 }
                 importLogger.notice("Scan cancelled")
             } catch SDImportError.cancelled {
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentSummary = nil
                     self.previewSessions = []
                     self.currentPreviewFiles = []
                     self.knownImportedPreviewFileIDs = []
                     self.clearPreviewPlanCache()
                     self.statusMessage = L10n.tr("Scan cancelled")
-                    self.isWorking = false
-                    self.transitionImportWorkspace(.cancelled)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .cancelled)
                 }
                 importLogger.notice("Scan cancelled")
             } catch {
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentSummary = nil
                     self.previewSessions = []
                     self.currentPreviewFiles = []
@@ -1340,9 +1351,9 @@ final class AppModel: ObservableObject {
                     let render: () -> String = { L10n.tr("Scan failed: \(Self.errorMessage(for: error))") }
                     self.setLocalizedStatusMessage(render)
                     let message = self.statusMessage
-                    self.isWorking = false
-                    self.transitionImportWorkspace(.failed(operation: .scan, message: message), failureRenderer: render)
-                    self.importTask = nil
+                    self.finishImportAttempt(
+                        attemptID, event: .failed(operation: .scan, message: message), failureRenderer: render
+                    )
                 }
                 importLogger.error("Scan failed errorType=\(String(describing: type(of: error)), privacy: .public)")
             }
@@ -1886,63 +1897,52 @@ final class AppModel: ObservableObject {
             return
         }
 
-        isWorking = true
-        activeImportRetryContext = .portableReceiptOverride
-        failedImportRetryContext = nil
-        transitionImportWorkspace(.beginPreparation(.portableReceiptOverride))
+        let attemptID = beginImportAttempt(
+            .portableReceiptOverride, event: .beginPreparation(.portableReceiptOverride),
+            retryContext: .portableReceiptOverride
+        )
         statusMessage = L10n.tr("Preparing files imported on another Mac...")
         importTask = Task.detached(priority: .userInitiated) {
             do {
                 try Task.checkCancellation()
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
                 try Task.checkCancellation()
-                try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: updates)
-                try Task.checkCancellation()
-                let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                guard let files = try repositories.jobRepository.withImportLock(jobID: jobID, {
+                    try Task.checkCancellation()
+                    try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: updates)
+                    return try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                }) else {
+                    throw SDImportError.invalidArgument(L10n.tr("Finish the current scan or import first"))
+                }
                 let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
-                try Task.checkCancellation()
 
                 await MainActor.run {
-                    guard !Task.isCancelled else {
-                        self.isWorking = false
-                        self.activeImportRetryContext = nil
-                        self.transitionImportWorkspace(.cancelled)
-                        self.importTask = nil
-                        return
-                    }
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentPreviewFiles = files
                     self.selectedJobFiles = files
                     self.jobs = jobs
                     self.rebuildPreviewPlanCache()
                     let count = updates.count
                     self.setLocalizedStatusMessage { L10n.tr("Portable receipt overridden for \(count) files") }
-                    self.isWorking = false
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.scanSucceeded)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .scanSucceeded)
                 }
             } catch is CancellationError {
                 await MainActor.run {
-                    self.isWorking = false
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.cancelled)
-                    self.importTask = nil
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
+                    self.finishImportAttempt(attemptID, event: .cancelled)
                 }
             } catch {
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     let render: () -> String = {
                         L10n.tr("Could not override portable history: \(Self.errorMessage(for: error))")
                     }
                     self.setLocalizedStatusMessage(render)
                     let message = self.statusMessage
-                    self.isWorking = false
-                    self.failedImportRetryContext = self.activeImportRetryContext
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(
-                        .failed(operation: .portableReceiptOverride, message: message),
+                    self.finishImportAttempt(
+                        attemptID, event: .failed(operation: .portableReceiptOverride, message: message),
                         failureRenderer: render
                     )
-                    self.importTask = nil
                 }
             }
         }
@@ -1959,10 +1959,9 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Start your 14-day trial or unlock unlimited imports to continue")
             return
         }
-        isWorking = true
-        activeImportRetryContext = retryContext
-        failedImportRetryContext = nil
-        transitionImportWorkspace(.beginPreparation(.prepareImport))
+        let attemptID = beginImportAttempt(
+            .prepareImport, event: .beginPreparation(.prepareImport), retryContext: retryContext
+        )
         currentResult = nil
         importProgress = nil
         ejectedSourceJobID = nil
@@ -1984,31 +1983,11 @@ final class AppModel: ObservableObject {
             do {
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
                 let requiresReviewedDestinations: Bool
-                switch planMode {
-                case .reviewed(let builder, let plans):
-                    let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
-                    guard builder.plans(files: files) == plans else {
-                        throw SDImportError.reviewedDestinationChanged
-                    }
-                    if Task.isCancelled { throw SDImportError.cancelled }
-                    try repositories.jobRepository.updateJobImportPlan(
-                        jobID: jobID,
-                        destinationRoots: builder.roots,
-                        updates: plans.compactMap(\.update)
-                    )
-                    requiresReviewedDestinations = true
-                case .storedReview(_, let plans):
-                    let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
-                    guard ImportPlanBuilder.plansForStoredImport(files: files) == plans else {
-                        throw SDImportError.reviewedDestinationChanged
-                    }
-                    if Task.isCancelled { throw SDImportError.cancelled }
-                    try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: plans.compactMap(\.update))
-                    requiresReviewedDestinations = true
-                case .existing:
+                if case .existing = planMode {
                     requiresReviewedDestinations = false
+                } else {
+                    requiresReviewedDestinations = true
                 }
-
                 let engine = ImportEngine(
                     jobRepository: repositories.jobRepository,
                     dedupeRepository: repositories.dedupeRepository,
@@ -2018,6 +1997,30 @@ final class AppModel: ObservableObject {
                 let minimumUpdateInterval: TimeInterval = 0.75
 
                 let result = try engine.importFiles(
+                    preparing: {
+                        switch planMode {
+                        case .reviewed(let builder, let plans):
+                            let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                            guard builder.plans(files: files) == plans else {
+                                throw SDImportError.reviewedDestinationChanged
+                            }
+                            if Task.isCancelled { throw SDImportError.cancelled }
+                            try repositories.jobRepository.updateJobImportPlan(
+                                jobID: jobID,
+                                destinationRoots: builder.roots,
+                                updates: plans.compactMap(\.update)
+                            )
+                        case .storedReview(_, let plans):
+                            let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                            guard ImportPlanBuilder.plansForStoredImport(files: files) == plans else {
+                                throw SDImportError.reviewedDestinationChanged
+                            }
+                            if Task.isCancelled { throw SDImportError.cancelled }
+                            try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: plans.compactMap(\.update))
+                        case .existing:
+                            break
+                        }
+                    },
                     jobID: jobID,
                     requiresReviewedDestinations: requiresReviewedDestinations,
                     onProgress: { progress in
@@ -2034,8 +2037,7 @@ final class AppModel: ObservableObject {
 
                         lastPublishedAt = now
                         Task { @MainActor in
-                            guard self.activeImportOperation == .prepareImport
-                                    || self.activeImportOperation == .copy else { return }
+                            guard self.importAttempt?.accepts(attemptID, isProgress: true) == true else { return }
                             self.importProgress = progress
                             self.transitionImportWorkspace(.beginCopy)
                             self.setLocalizedStatusMessage { Self.importStatusMessage(for: progress) }
@@ -2049,9 +2051,7 @@ final class AppModel: ObservableObject {
                 let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
 
                 await MainActor.run {
-                    guard self.importTask != nil else {
-                        return
-                    }
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentResult = result
                     self.importProgress = nil
                     self.jobs = jobs
@@ -2072,10 +2072,7 @@ final class AppModel: ObservableObject {
                     } else {
                         self.statusMessage = L10n.tr("Import finished")
                     }
-                    self.isWorking = false
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.completed)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .completed)
                     if self.ejectAfterSuccessfulImport, self.canEjectSource(for: result) {
                         self.ejectSource(for: result)
                     }
@@ -2086,6 +2083,7 @@ final class AppModel: ObservableObject {
             } catch SDImportError.reviewedDestinationChanged {
                 let snapshot = try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID)
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.validatePaths()
                     if let snapshot {
                         self.jobs = snapshot.jobs
@@ -2095,19 +2093,19 @@ final class AppModel: ObservableObject {
                         self.rebuildPreviewPlanCache()
                     }
                     self.importProgress = nil
-                    self.activeImportRetryContext = nil
-                    self.importTask = nil
-                    self.isWorking = false
+                    self.finishImportAttempt(
+                        attemptID, event: .recover(hasScannedJob: self.currentSummary?.jobID == jobID)
+                    )
                     if case .existing = planMode {
                         self.retryExistingJob(id: jobID)
                     } else {
-                        self.transitionImportWorkspace(.recover(hasScannedJob: self.currentSummary?.jobID == jobID))
                         self.showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
                     }
                 }
             } catch SDImportError.cancelled {
                 let snapshot = try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID)
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     if let snapshot {
                         self.jobs = snapshot.jobs
                         self.selectedJobID = jobID
@@ -2121,28 +2119,22 @@ final class AppModel: ObservableObject {
                     self.currentResult = nil
                     self.importProgress = nil
                     self.statusMessage = L10n.tr("Import cancelled")
-                    self.isWorking = false
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.cancelled)
-                    self.importTask = nil
+                    self.finishImportAttempt(attemptID, event: .cancelled)
                 }
                 importLogger.notice("Import cancelled jobID=\(jobID, privacy: .private)")
             } catch {
                 await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.currentResult = nil
                     self.importProgress = nil
                     let failedOperation = self.activeImportOperation ?? .copy
                     let render: () -> String = { L10n.tr("Import failed: \(Self.errorMessage(for: error))") }
                     self.setLocalizedStatusMessage(render)
                     let message = self.statusMessage
-                    self.isWorking = false
-                    self.failedImportRetryContext = self.activeImportRetryContext
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(
-                        .failed(operation: failedOperation, message: message),
+                    self.finishImportAttempt(
+                        attemptID, event: .failed(operation: failedOperation, message: message),
                         failureRenderer: render
                     )
-                    self.importTask = nil
                 }
                 importLogger.error("Import failed errorType=\(String(describing: type(of: error)), privacy: .public)")
             }
@@ -2150,11 +2142,41 @@ final class AppModel: ObservableObject {
     }
 
     func cancelImport() {
-        guard importTask != nil else {
-            return
-        }
+        guard importTask != nil, importAttempt?.operation != .eject else { return }
+        importAttempt?.requestCancellation()
         statusMessage = L10n.tr("Cancelling...")
         importTask?.cancel()
+    }
+
+    private func beginImportAttempt(
+        _ operation: ImportOperationKind,
+        event: ImportWorkspaceEvent,
+        retryContext: ImportRetryContext? = nil
+    ) -> UUID {
+        let attempt = ImportWorkspaceAttempt(operation: operation)
+        activeImportRetryContext = retryContext
+        failedImportRetryContext = nil
+        importAttempt = attempt
+        transitionImportWorkspace(event)
+        return attempt.id
+    }
+
+    private func finishImportAttempt(
+        _ id: UUID,
+        event: ImportWorkspaceEvent,
+        failureRenderer: (() -> String)? = nil
+    ) {
+        guard let attempt = importAttempt, attempt.accepts(id) else { return }
+        if case .failed = event { failedImportRetryContext = activeImportRetryContext }
+        activeImportRetryContext = nil
+        if attempt.operation == .eject {
+            sourceEjectionTask = nil
+        } else {
+            importTask = nil
+        }
+        transitionImportWorkspace(event, failureRenderer: failureRenderer)
+        importAttempt = nil
+        schedulePendingMountHandoffRetry()
     }
 
     private func transitionImportWorkspace(
@@ -2178,12 +2200,14 @@ final class AppModel: ObservableObject {
     }
 
     func recoverImportWorkspace() {
+        guard importAttempt == nil else { return }
         failedImportRetryContext = nil
         transitionImportWorkspace(.recover(hasScannedJob: currentSummary != nil))
         statusMessage = currentSummary == nil ? L10n.tr("Ready") : L10n.tr("Review import")
     }
 
     func recoverImportReceipt() {
+        guard importAttempt == nil else { return }
         guard currentResult != nil else {
             recoverImportWorkspace()
             return
@@ -2194,11 +2218,17 @@ final class AppModel: ObservableObject {
     }
 
     func retryFailedImportOperation() {
+        guard importAttempt == nil else { return }
         let operation = importFailure?.operation
         let retryContext = failedImportRetryContext
         failedImportRetryContext = nil
         switch retryContext {
         case .currentReview:
+            if let jobID = currentSummary?.jobID,
+               (try? jobRepository?.hasUnresolvedCopies(jobID: jobID)) == true {
+                retryExistingJob(id: jobID, forceReview: true)
+                return
+            }
             transitionImportWorkspace(.recover(hasScannedJob: true))
             importCurrentJob()
             return
@@ -2264,7 +2294,12 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Finish the current operation before scanning another card")
             return
         }
-        guard let volume = pendingMountedVolume else {
+        guard let volume = pendingMountedVolume, let promptID = pendingMountPromptID else {
+            return
+        }
+        guard Self.isCurrentPromptVolume(volume) else {
+            pendingMountedVolume = nil
+            statusMessage = L10n.tr("Card scan cancelled")
             return
         }
         let sourceURL: URL
@@ -2272,12 +2307,14 @@ final class AppModel: ObservableObject {
             if let authorizedURL = authorizedSourceURL(for: volume) {
                 sourceURL = authorizedURL
             } else {
-                guard let selectedURL = FilePanelPresenter.chooseDirectoryURL(
+                let selection = FilePanelPresenter.chooseDirectoryURL(
                     title: L10n.tr("Allow Access to \(volume.name)"),
                     initialPath: volume.mountURL.path,
                     prompt: L10n.tr("Allow Access"),
                     message: L10n.tr("\(AppDistribution.current.displayName) will scan this folder only after you allow access.")
-                ) else {
+                )
+                guard pendingMountPromptID == promptID else { return }
+                guard let selectedURL = selection else {
                     pendingMountedVolume = nil
                     statusMessage = L10n.tr("Card scan cancelled")
                     return
@@ -2285,6 +2322,11 @@ final class AppModel: ObservableObject {
                 guard Self.isSameOrDescendant(selectedURL, of: volume.mountURL) else {
                     let name = volume.name
                     setLocalizedStatusMessage { L10n.tr("Choose \(name) or a folder on that card") }
+                    return
+                }
+                guard Self.isCurrentPromptVolume(volume) else {
+                    pendingMountedVolume = nil
+                    statusMessage = L10n.tr("Card scan cancelled")
                     return
                 }
                 guard retainSelectedFolderAccess(
@@ -2311,6 +2353,17 @@ final class AppModel: ObservableObject {
         sourcePathDidChange()
         savePreferences()
         scan()
+    }
+
+    nonisolated private static func isCurrentPromptVolume(_ expected: MountedVolume) -> Bool {
+        let url = URL(fileURLWithPath: expected.mountURL.path, isDirectory: true)
+        guard let values = try? url.resourceValues(forKeys: [.volumeURLKey, .volumeUUIDStringKey]),
+              values.volume?.standardizedFileURL.path == url.standardizedFileURL.path else {
+            return false
+        }
+        return MountHandoffVolumeIdentity.matchesCurrentVolume(
+            expectedUUID: expected.volumeUUID, currentUUID: values.volumeUUIDString
+        )
     }
 
     func skipMountedVolumePrompt() {
@@ -2342,7 +2395,8 @@ final class AppModel: ObservableObject {
     }
 
     private func performAutoPromptPreferenceChange(_ enabled: Bool) async {
-        invalidateBackgroundPromptHealthRefresh()
+        guard enabled == autoPromptEnabled else { return }
+        backgroundPrompt.cancelPoll()
         loginItem.invalidateApplicationOwnershipCache()
         clearBackgroundPromptRuntimeError()
         if !enabled {
@@ -2353,17 +2407,18 @@ final class AppModel: ObservableObject {
             if enabled {
                 let statusBeforeEnable = loginItem.status
                 if statusBeforeEnable == .notFound || statusBeforeEnable == .notRegistered {
-                    recordNotFoundRepairAttempt()
+                    backgroundPrompt.recordRegistrationAttempt()
                 }
-                recordBackgroundPromptRegistrationAttempt()
+                backgroundPrompt.requireLaunch(after: Date())
             }
             try await loginItem.setEnabled(enabled)
+            guard enabled == autoPromptEnabled else { return }
             refreshBackgroundPromptHealth()
             if enabled, backgroundPromptServiceStatus == .enabled {
                 recordCurrentRepairIdentity()
-                clearNotFoundRepairAttempt()
+                backgroundPrompt.clearRegistrationAttempt()
             } else if !enabled {
-                cancelBackgroundPromptRetry(resetAttempts: true)
+                backgroundPrompt.cancelRetry(resetAttempts: true)
             }
             if enabled, backgroundPromptServiceStatus == .enabled {
                 scheduleBackgroundPromptHealthRefresh()
@@ -2414,7 +2469,8 @@ final class AppModel: ObservableObject {
 
     func repairBackgroundPrompt() {
         guard backgroundPromptCanRepair else { return }
-        isRepairingBackgroundPrompt = true
+        objectWillChange.send()
+        let repairID = backgroundPrompt.beginManualRepair()
         if statusMessageIsBackgroundPromptFeedback {
             statusMessage = ""
         }
@@ -2422,7 +2478,10 @@ final class AppModel: ObservableObject {
             settingsFeedback = nil
         }
         enqueueBackgroundPromptOperation { model in
-            defer { model.isRepairingBackgroundPrompt = false }
+            defer {
+                model.objectWillChange.send()
+                model.backgroundPrompt.finishManualRepair(repairID)
+            }
             guard model.autoPromptEnabled else { return }
             await model.performBackgroundPromptRepair(userInitiated: true)
         }
@@ -2530,7 +2589,7 @@ final class AppModel: ObservableObject {
                 identity: currentRepairIdentity,
                 serviceStatus: backgroundPromptServiceStatus,
                 liveAgentState: backgroundPromptAgentState,
-                minimumLaunchAt: minimumBackgroundPromptAgentLaunchAt
+                minimumLaunchAt: backgroundPrompt.minimumLaunchAt
             )
     }
 
@@ -2573,51 +2632,6 @@ final class AppModel: ObservableObject {
         return try? JSONDecoder().decode(BackgroundPromptRepairIdentity.self, from: data)
     }
 
-    private var lastNotFoundRepairAttemptAt: Date? {
-        let interval = defaults.double(forKey: DefaultsKeys.lastNotFoundRepairAttemptAt)
-        return interval > 0 ? Date(timeIntervalSince1970: interval) : nil
-    }
-
-    private var lastHealthRepairAttemptAt: Date? {
-        let interval = defaults.double(forKey: DefaultsKeys.lastHealthRepairAttemptAt)
-        return interval > 0 ? Date(timeIntervalSince1970: interval) : nil
-    }
-
-    private var healthRepairRetryDelay: TimeInterval {
-        BackgroundPromptRetryPolicy.remainingDelay(
-            lastAttemptAt: lastHealthRepairAttemptAt,
-            now: backgroundPromptRetryNow()
-        )
-    }
-
-    private var minimumBackgroundPromptAgentLaunchAt: Date? {
-        let interval = defaults.double(forKey: DefaultsKeys.minimumBackgroundPromptAgentLaunchAt)
-        return interval > 0 ? Date(timeIntervalSince1970: interval) : nil
-    }
-
-    private func recordNotFoundRepairAttempt() {
-        defaults.set(backgroundPromptRetryNow().timeIntervalSince1970, forKey: DefaultsKeys.lastNotFoundRepairAttemptAt)
-    }
-
-    private func clearNotFoundRepairAttempt() {
-        defaults.removeObject(forKey: DefaultsKeys.lastNotFoundRepairAttemptAt)
-    }
-
-    private func recordHealthRepairAttempt() {
-        defaults.set(backgroundPromptRetryNow().timeIntervalSince1970, forKey: DefaultsKeys.lastHealthRepairAttemptAt)
-    }
-
-    private func clearHealthRepairAttempt() {
-        defaults.removeObject(forKey: DefaultsKeys.lastHealthRepairAttemptAt)
-    }
-
-    private func recordBackgroundPromptRegistrationAttempt(at startedAt: Date = Date()) {
-        defaults.set(
-            startedAt.timeIntervalSince1970,
-            forKey: DefaultsKeys.minimumBackgroundPromptAgentLaunchAt
-        )
-    }
-
     private func recordCurrentRepairIdentity() {
         guard let data = try? JSONEncoder().encode(currentRepairIdentity) else {
             return
@@ -2650,10 +2664,10 @@ final class AppModel: ObservableObject {
             return
         }
         let delay = BackgroundPromptRetryPolicy.remainingDelay(
-            lastAttemptAt: lastNotFoundRepairAttemptAt,
-            now: backgroundPromptRetryNow()
+            lastAttemptAt: backgroundPrompt.lastRegistrationAttemptAt,
+            now: backgroundPrompt.now()
         )
-        backgroundPromptRetryScheduler.schedule(after: delay) { [weak self] in
+        backgroundPrompt.scheduleRetry(after: delay) { [weak self] in
             self?.reconcileBackgroundPromptRegistration()
         }
     }
@@ -2667,21 +2681,13 @@ final class AppModel: ObservableObject {
         else {
             return
         }
-        backgroundPromptRetryScheduler.schedule(after: healthRepairRetryDelay) { [weak self] in
+        backgroundPrompt.scheduleRetry(after: backgroundPrompt.healthRetryDelay) { [weak self] in
             guard let self else {
                 return
             }
             self.enqueueBackgroundPromptOperation { model in
                 await model.performScheduledMissingHelperHealthRepair()
             }
-        }
-    }
-
-    private func cancelBackgroundPromptRetry(resetAttempts: Bool) {
-        backgroundPromptRetryScheduler.cancel()
-        if resetAttempts {
-            clearNotFoundRepairAttempt()
-            clearHealthRepairAttempt()
         }
     }
 
@@ -2701,18 +2707,18 @@ final class AppModel: ObservableObject {
                 || backgroundPromptServiceStatus == .notRegistered) {
                 scheduleRegistrationRetry()
             } else {
-                cancelBackgroundPromptRetry(
+                backgroundPrompt.cancelRetry(
                     resetAttempts: !autoPromptEnabled || !backgroundPromptCanConfigure || ownsRegistration
                 )
             }
             return
         }
         // Another retry may have run while this operation was waiting in the queue.
-        if healthRepairRetryDelay > 0 {
+        if backgroundPrompt.healthRetryDelay > 0 {
             scheduleMissingHelperHealthRepair()
             return
         }
-        recordHealthRepairAttempt()
+        backgroundPrompt.recordHealthRepair()
         // Recheck on the cooldown when diagnostics can't establish whether the helper is already healthy.
         if health != .diagnosticsUnavailable {
             await performBackgroundPromptRepair(userInitiated: false)
@@ -2723,38 +2729,22 @@ final class AppModel: ObservableObject {
     }
 
     private func performBackgroundPromptRepair(userInitiated: Bool) async {
-        invalidateBackgroundPromptHealthRefresh()
+        backgroundPrompt.cancelPoll()
         loginItem.invalidateApplicationOwnershipCache()
         let initialHealth = refreshBackgroundPromptHealth()
         guard backgroundPromptCanConfigure else {
-            cancelBackgroundPromptRetry(resetAttempts: true)
+            backgroundPrompt.cancelRetry(resetAttempts: true)
             return
         }
         guard userInitiated || initialHealth == .waiting else { return }
         clearBackgroundPromptRuntimeError()
         do {
             try authorizeCurrentBackgroundPromptHelperIfNeeded()
-            recordNotFoundRepairAttempt()
-            backgroundPromptServiceStatus = try await loginItem.repair(
-                requireLaunchAfter: { recordBackgroundPromptRegistrationAttempt(at: $0) }
-            ) { [weak self] in
-                guard let self else {
-                    return false
-                }
-                if userInitiated {
-                    return self.autoPromptEnabled
-                }
-                return BackgroundPromptScheduledRepairPolicy.canContinueRegistration(
-                    desiredEnabled: self.autoPromptEnabled,
-                    hasCompletedOnboarding: self.hasCompletedOnboarding,
-                    currentApplicationIsAuthoritative: self.loginItem
-                        .applicationOwnership
-                        .isCurrentApplicationAuthoritative
-                )
-            }
+            backgroundPrompt.recordRegistrationAttempt()
+            backgroundPromptServiceStatus = try await repairBackgroundPromptService(userInitiated: userInitiated)
             if backgroundPromptServiceStatus == .enabled {
                 recordCurrentRepairIdentity()
-                clearNotFoundRepairAttempt()
+                backgroundPrompt.clearRegistrationAttempt()
             }
             let health = refreshBackgroundPromptHealth()
             if backgroundPromptServiceStatus == .enabled, health == .waiting,
@@ -2779,15 +2769,37 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func repairBackgroundPromptService(
+        userInitiated: Bool,
+        clearErrorOnRegistration: Bool = false
+    ) async throws -> BackgroundPromptServiceStatus {
+        let registrationID = backgroundPrompt.beginRegistration()
+        defer { backgroundPrompt.finishRegistration(registrationID) }
+        return try await loginItem.repair(
+            didRegister: {
+                if clearErrorOnRegistration { clearBackgroundPromptRepairError() }
+            },
+            requireLaunchAfter: { backgroundPrompt.requireLaunch(after: $0, registrationID: registrationID) }
+        ) { [weak self] in
+            guard let self, self.backgroundPrompt.isCurrentRegistration(registrationID),
+                  self.autoPromptEnabled, userInitiated || self.hasCompletedOnboarding else {
+                return false
+            }
+            self.loginItem.invalidateApplicationOwnershipCache()
+            return self.loginItem.applicationOwnership.isCurrentApplicationAuthoritative
+        }
+    }
+
     private func performBackgroundPromptReconciliation(showFeedback: Bool) async {
-        invalidateBackgroundPromptHealthRefresh()
+        backgroundPrompt.cancelPoll()
+        loginItem.invalidateApplicationOwnershipCache()
         refreshBackgroundPromptHealth()
         guard hasCompletedOnboarding else {
-            cancelBackgroundPromptRetry(resetAttempts: false)
+            backgroundPrompt.cancelRetry(resetAttempts: false)
             return
         }
         guard backgroundPromptCanConfigure else {
-            cancelBackgroundPromptRetry(resetAttempts: true)
+            backgroundPrompt.cancelRetry(resetAttempts: true)
             if showFeedback {
                 setBackgroundPromptFeedback { [weak self] in self?.backgroundPromptStatusDetail ?? "" }
             }
@@ -2799,33 +2811,32 @@ final class AppModel: ObservableObject {
             if shouldRefreshMismatchedBackgroundHelper {
                 if backgroundPromptServiceStatus == .notFound
                     || backgroundPromptServiceStatus == .notRegistered {
-                    recordNotFoundRepairAttempt()
+                    backgroundPrompt.recordRegistrationAttempt()
                 }
-                backgroundPromptServiceStatus = try await loginItem.repair(
-                    didRegister: clearBackgroundPromptRepairError,
-                    requireLaunchAfter: { recordBackgroundPromptRegistrationAttempt(at: $0) }
+                backgroundPromptServiceStatus = try await repairBackgroundPromptService(
+                    userInitiated: false, clearErrorOnRegistration: true
                 )
                 if backgroundPromptServiceStatus == .enabled {
                     recordCurrentRepairIdentity()
-                    clearNotFoundRepairAttempt()
+                    backgroundPrompt.clearRegistrationAttempt()
                 }
             } else {
                 let statusBeforeReconciliation = backgroundPromptServiceStatus
-                let now = backgroundPromptRetryNow()
+                let now = backgroundPrompt.now()
                 let allowRegistrationAttempt = BackgroundPromptRegistrationPolicy
-                    .allowsNotFoundRegistration(lastAttemptAt: lastNotFoundRepairAttemptAt, now: now)
+                    .allowsNotFoundRegistration(lastAttemptAt: backgroundPrompt.lastRegistrationAttemptAt, now: now)
                 let willAttemptRegistration = BackgroundPromptRegistrationPolicy
                     .shouldAttemptMissingRegistration(
                         desiredEnabled: autoPromptEnabled,
                         serviceStatus: statusBeforeReconciliation,
-                        lastAttemptAt: lastNotFoundRepairAttemptAt,
+                        lastAttemptAt: backgroundPrompt.lastRegistrationAttemptAt,
                         now: now
                     )
                 let registrationIsMissing = statusBeforeReconciliation == .notRegistered
                     || statusBeforeReconciliation == .notFound
                 if willAttemptRegistration {
-                    recordNotFoundRepairAttempt()
-                    recordBackgroundPromptRegistrationAttempt()
+                    backgroundPrompt.recordRegistrationAttempt()
+                    backgroundPrompt.requireLaunch(after: Date())
                 }
                 backgroundPromptServiceStatus = try await loginItem.reconcile(
                     desiredEnabled: autoPromptEnabled
@@ -2839,7 +2850,7 @@ final class AppModel: ObservableObject {
                     backgroundPromptServiceStatus == .enabled
                 {
                     recordCurrentRepairIdentity()
-                    clearNotFoundRepairAttempt()
+                    backgroundPrompt.clearRegistrationAttempt()
                 }
             }
             refreshBackgroundPromptHealth()
@@ -2850,9 +2861,9 @@ final class AppModel: ObservableObject {
                         || backgroundPromptServiceStatus == .notRegistered {
                 scheduleRegistrationRetry()
             } else if !autoPromptEnabled {
-                cancelBackgroundPromptRetry(resetAttempts: true)
+                backgroundPrompt.cancelRetry(resetAttempts: true)
             } else {
-                cancelBackgroundPromptRetry(resetAttempts: false)
+                backgroundPrompt.cancelRetry(resetAttempts: false)
             }
 
             if showFeedback {
@@ -2865,7 +2876,7 @@ final class AppModel: ObservableObject {
                 || backgroundPromptServiceStatus == .notRegistered {
                 scheduleRegistrationRetry()
             } else {
-                cancelBackgroundPromptRetry(resetAttempts: false)
+                backgroundPrompt.cancelRetry(resetAttempts: false)
             }
             setBackgroundPromptFeedback(role: .error) { L10n.tr("Could not update background prompt: \(Self.errorMessage(for: error))") }
         }
@@ -2879,20 +2890,16 @@ final class AppModel: ObservableObject {
             state: backgroundPromptAgentState,
             expectedIdentity: currentRepairIdentity,
             lastRepairIdentity: lastRepairIdentity,
-            lastNotFoundRepairAttemptAt: lastNotFoundRepairAttemptAt,
-            now: backgroundPromptRetryNow()
+            lastNotFoundRepairAttemptAt: backgroundPrompt.lastRegistrationAttemptAt,
+            now: backgroundPrompt.now()
         )
     }
 
     private func enqueueBackgroundPromptOperation(
         _ operation: @escaping @MainActor (AppModel) async -> Void
     ) {
-        let precedingOperation = backgroundPromptOperationTask
-        backgroundPromptOperationTask = Task { [weak self] in
-            _ = await precedingOperation?.result
-            guard let self else {
-                return
-            }
+        backgroundPrompt.enqueue { [weak self] in
+            guard let self else { return }
             await operation(self)
         }
     }
@@ -2981,16 +2988,16 @@ final class AppModel: ObservableObject {
         }
         let interruptedLaunchRecovery = health == .diagnosticsUnavailable
             && backgroundPromptLaunchTimeout != nil
-            && backgroundPromptHealthRefreshTask != nil
+            && backgroundPrompt.isPolling
         if health != .waiting || !autoPromptEnabled || !backgroundPromptCanConfigure
             || backgroundPromptServiceStatus == .requiresApproval {
-            invalidateBackgroundPromptHealthRefresh()
+            backgroundPrompt.cancelPoll()
         }
         if health == .ready {
-            cancelBackgroundPromptRetry(resetAttempts: true)
+            backgroundPrompt.cancelRetry(resetAttempts: true)
             mountObserver?.consumePendingHandoffs()
         } else if !backgroundPromptCanConfigure || !autoPromptEnabled {
-            cancelBackgroundPromptRetry(resetAttempts: true)
+            backgroundPrompt.cancelRetry(resetAttempts: true)
         } else if interruptedLaunchRecovery {
             scheduleMissingHelperHealthRepair()
         }
@@ -3010,31 +3017,13 @@ final class AppModel: ObservableObject {
 
     @discardableResult
     private func scheduleBackgroundPromptHealthRefresh() -> Task<Void, Never> {
-        invalidateBackgroundPromptHealthRefresh()
-        let generation = backgroundPromptHealthRefreshGeneration.begin()
-        let task = Task<Void, Never> { [weak self] in
-            await self?.refreshBackgroundPromptHealthUntilReady(generation: generation)
-        }
-        backgroundPromptHealthRefreshTask = task
-        return task
+        backgroundPrompt.pollForLaunch(
+            whileWaiting: { [weak self] in self?.refreshBackgroundPromptHealth() == .waiting },
+            timedOut: { [weak self] in self?.backgroundPromptPollingTimedOut() }
+        )
     }
 
-    private func refreshBackgroundPromptHealthUntilReady(generation: Int) async {
-        defer {
-            if backgroundPromptHealthRefreshGeneration.isCurrent(generation) {
-                backgroundPromptHealthRefreshTask = nil
-            }
-        }
-        for milliseconds in BackgroundPromptHealth.refreshDelayMilliseconds {
-            do {
-                try await backgroundPromptSleep(.milliseconds(milliseconds))
-            } catch {
-                return
-            }
-            guard backgroundPromptHealthRefreshGeneration.isCurrent(generation) else { return }
-            refreshBackgroundPromptHealth()
-            guard backgroundPromptHealthRefreshGeneration.isCurrent(generation) else { return }
-        }
+    private func backgroundPromptPollingTimedOut() {
         guard autoPromptEnabled, backgroundPromptCanConfigure, backgroundPromptServiceStatus == .enabled else {
             return
         }
@@ -3044,12 +3033,6 @@ final class AppModel: ObservableObject {
         backgroundPromptLaunchTimeout = RelocalizableMessage(message(), render: message)
         refreshBackgroundPromptSettingsFeedbackIfNeeded()
         scheduleMissingHelperHealthRepair()
-    }
-
-    private func invalidateBackgroundPromptHealthRefresh() {
-        backgroundPromptHealthRefreshTask?.cancel()
-        backgroundPromptHealthRefreshTask = nil
-        backgroundPromptHealthRefreshGeneration.invalidate()
     }
 
     func refreshHistory() {
@@ -3074,6 +3057,7 @@ final class AppModel: ObservableObject {
                     return
                 }
                 await MainActor.run {
+                    guard !Task.isCancelled else { return }
                     self.jobs = snapshot.jobs
                     self.selectedJobID = snapshot.selectedJobID
                     self.selectedJobFiles = []
@@ -3089,6 +3073,7 @@ final class AppModel: ObservableObject {
                     return
                 }
                 await MainActor.run {
+                    guard !Task.isCancelled else { return }
                     self.isHistoryLoading = false
                     self.isHistoryDetailLoading = false
                     self.historyRefreshTask = nil
@@ -3121,7 +3106,7 @@ final class AppModel: ObservableObject {
                     return
                 }
                 await MainActor.run {
-                    guard self.selectedJobID == jobID else {
+                    guard !Task.isCancelled, self.selectedJobID == jobID else {
                         return
                     }
                     self.selectedJobFiles = files
@@ -3133,7 +3118,7 @@ final class AppModel: ObservableObject {
                     return
                 }
                 await MainActor.run {
-                    guard self.selectedJobID == jobID else {
+                    guard !Task.isCancelled, self.selectedJobID == jobID else {
                         return
                     }
                     self.selectedJobFiles = []
@@ -3157,7 +3142,7 @@ final class AppModel: ObservableObject {
         retryExistingJob(id: selectedJobID)
     }
 
-    private func retryExistingJob(id jobID: String) {
+    private func retryExistingJob(id jobID: String, forceReview: Bool = false) {
         guard !isWorking, !isEjectingSource else {
             statusMessage = L10n.tr("Finish the current scan or import first")
             return
@@ -3180,7 +3165,8 @@ final class AppModel: ObservableObject {
                 throw SDImportError.jobNotFound(jobID)
             }
             job = storedJob
-            needsReview = try jobRepository.needsDestinationReview(jobID: jobID)
+            needsReview = try forceReview || jobRepository.needsDestinationReview(jobID: jobID)
+                || jobRepository.hasUnresolvedReviewedCopy(jobID: jobID)
             files = needsReview
                 ? try jobRepository.fetchJobFiles(jobID: jobID)
                 : try jobRepository.pendingFilesForImport(jobID: jobID)
@@ -3240,7 +3226,7 @@ final class AppModel: ObservableObject {
 
     func refreshStoredImportReview() {
         guard let storedImportReview else { return }
-        retryExistingJob(id: storedImportReview.job.id)
+        retryExistingJob(id: storedImportReview.job.id, forceReview: true)
     }
 
     func closeStoredImportReview() {
@@ -3359,6 +3345,7 @@ final class AppModel: ObservableObject {
             }
 
             await MainActor.run {
+                guard !Task.isCancelled else { return }
                 self.reportPresentation = ImportReportPresentation(
                     job: job,
                     report: report,
@@ -3615,10 +3602,10 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Finish the current operation before ejecting")
             return
         }
-        isEjectingSource = true
-        activeImportRetryContext = .eject(jobID: jobID, target: target)
-        failedImportRetryContext = nil
-        transitionImportWorkspace(.beginAuxiliaryOperation(.eject))
+        let attemptID = beginImportAttempt(
+            .eject, event: .beginAuxiliaryOperation(.eject),
+            retryContext: .eject(jobID: jobID, target: target)
+        )
         if target.volumeCount > 1 {
             let name = target.displayName
             setLocalizedStatusMessage { L10n.tr("Ejecting \(name) storage...") }
@@ -3632,20 +3619,15 @@ final class AppModel: ObservableObject {
             }
             do {
                 try await Self.ejectDevice(target)
-                guard !Task.isCancelled else {
-                    self.isEjectingSource = false
-                    self.activeImportRetryContext = nil
-                    self.transitionImportWorkspace(.endAuxiliaryOperation)
-                    self.sourceEjectionTask = nil
+                guard self.importAttempt?.accepts(attemptID) == true else { return }
+                if Task.isCancelled {
+                    self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                     return
                 }
                 self.ejectedSourceName = target.displayName
                 self.ejectedSourceVolumeCount = target.volumeCount
                 self.ejectedSourceJobID = jobID
-                self.isEjectingSource = false
-                self.activeImportRetryContext = nil
-                self.transitionImportWorkspace(.endAuxiliaryOperation)
-                self.sourceEjectionTask = nil
+                self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                 self.refreshAvailableSourceVolumes()
                 self.validatePaths()
                 if target.volumeCount > 1 {
@@ -3655,19 +3637,15 @@ final class AppModel: ObservableObject {
                     self.statusMessage = L10n.tr("Source ejected safely")
                 }
             } catch is CancellationError {
-                self.isEjectingSource = false
-                self.activeImportRetryContext = nil
-                self.transitionImportWorkspace(.endAuxiliaryOperation)
-                self.sourceEjectionTask = nil
+                self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
             } catch {
-                self.isEjectingSource = false
-                self.sourceEjectionTask = nil
+                guard self.importAttempt?.accepts(attemptID) == true else { return }
                 let render: () -> String = { L10n.tr("Could not eject source: \(error.localizedDescription)") }
                 self.setLocalizedStatusMessage(render)
                 let message = self.statusMessage
-                self.failedImportRetryContext = self.activeImportRetryContext
-                self.activeImportRetryContext = nil
-                self.transitionImportWorkspace(.failed(operation: .eject, message: message), failureRenderer: render)
+                self.finishImportAttempt(
+                    attemptID, event: .failed(operation: .eject, message: message), failureRenderer: render
+                )
             }
         }
     }
@@ -4415,6 +4393,11 @@ final class AppModel: ObservableObject {
                 self.refreshBackgroundPromptHealth()
                 return .accepted
             },
+            unmountHandler: { [weak self] url in
+                if self?.pendingMountedVolume?.mountURL.standardizedFileURL.path == url.standardizedFileURL.path {
+                    self?.pendingMountedVolume = nil
+                }
+            },
             shouldHandleDirectMount: { [weak self] in
                 guard let self else {
                     return false
@@ -4516,7 +4499,7 @@ final class AppModel: ObservableObject {
             identity: currentRepairIdentity,
             serviceStatus: loginItem.status,
             liveAgentState: state,
-            minimumLaunchAt: minimumBackgroundPromptAgentLaunchAt
+            minimumLaunchAt: backgroundPrompt.minimumLaunchAt
         )
     }
 
@@ -4602,6 +4585,7 @@ final class AppModel: ObservableObject {
         let ejectionVolumes = grouper.ejectionVolumes(for: sourceVolume, among: mountedVolumes)
         guard
             !ejectionVolumes.isEmpty,
+            ejectionVolumes.allSatisfy({ $0.volumeUUID?.isEmpty == false }),
             !destinationPaths.contains(where: {
                 Self.destination($0, sharesDeviceWith: group.volumes)
             })
@@ -4692,7 +4676,16 @@ final class AppModel: ObservableObject {
                     continue
                 }
                 do {
-                    try NSWorkspace.shared.unmountAndEjectDevice(at: volume.mountURL)
+                    let mount = URL(fileURLWithPath: volume.mountURL.path, isDirectory: true)
+                    let currentRoot = try mount.resourceValues(forKeys: [.volumeURLKey]).volume
+                    guard currentRoot?.standardizedFileURL.path == mount.standardizedFileURL.path else {
+                        continue
+                    }
+                    let current = VolumeDetector().mountedVolume(from: mount, includeCapacity: false)
+                    guard SourceEjectionPolicy().canEjectCurrentVolume(current, matching: volume) else {
+                        throw SDImportError.invalidArgument(L10n.tr("Source cannot be ejected safely"))
+                    }
+                    try NSWorkspace.shared.unmountAndEjectDevice(at: mount)
                     ejectedVolumeNames.append(volume.name)
                 } catch {
                     throw SourceDeviceEjectionError(
@@ -4756,9 +4749,6 @@ private enum DefaultsKeys {
     static let location = "SDImport.location"
     static let autoPromptEnabled = "SDImport.autoPromptEnabled"
     static let lastLoginItemRepairIdentity = "SDImport.lastLoginItemRepairIdentity"
-    static let lastNotFoundRepairAttemptAt = "SDImport.lastNotFoundRepairAttemptAt"
-    static let lastHealthRepairAttemptAt = "SDImport.lastHealthRepairAttemptAt"
-    static let minimumBackgroundPromptAgentLaunchAt = "SDImport.minimumBackgroundPromptAgentLaunchAt"
     static let ejectAfterSuccessfulImport = "SDImport.ejectAfterSuccessfulImport"
     static let portableImportReceiptsEnabled = "SDImport.portableImportReceiptsEnabled"
     static let hasCompletedOnboarding = "SDImport.hasCompletedOnboarding"

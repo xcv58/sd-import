@@ -33,6 +33,45 @@ struct BackgroundPromptRepairTests {
         #expect(fixture.model.backgroundPromptStatusTitle == L10n.tr("Running"))
     }
 
+    @Test("automatic mismatch repair rechecks intent after unregister", arguments: [false, true])
+    func automaticRepairAbandonsObsoleteRegistration(changeOwnership: Bool) async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        fixture.model.hasCompletedOnboarding = true
+        fixture.service.didUnregister = { [weak service = fixture.service, weak model = fixture.model] in
+            if changeOwnership {
+                service?.isAuthoritative = false
+            } else {
+                model?.autoPromptEnabled = false
+            }
+        }
+
+        fixture.model.updateLoginItemRegistration()
+        let repair = try #require(fixture.model.backgroundPromptOperationTask)
+        await repair.value
+
+        #expect(fixture.service.unregisterCalls == 1)
+        #expect(fixture.service.registerCalls == 0)
+        #expect(fixture.service.status == .notRegistered)
+    }
+
+    @Test("queued registration bypasses stale cached app ownership")
+    func queuedRegistrationChecksCurrentOwner() async throws {
+        let fixture = try Fixture(serviceStatus: .notRegistered)
+        defer { fixture.cleanUp() }
+        fixture.model.hasCompletedOnboarding = true
+        fixture.model.refreshBackgroundPromptHealth()
+        #expect(fixture.model.backgroundPromptCanConfigure)
+
+        fixture.service.isAuthoritative = false
+        fixture.model.updateLoginItemRegistration()
+        let task = try #require(fixture.model.backgroundPromptOperationTask)
+        await task.value
+
+        #expect(!fixture.model.backgroundPromptCanConfigure)
+        #expect(fixture.service.registerCalls == 0)
+    }
+
     @Test("a newer agent diagnostic preserves the launch timeout and automatic retry")
     func agentErrorDoesNotEraseLaunchTimeout() async throws {
         let fixture = try Fixture()
@@ -421,6 +460,8 @@ private final class RetryClock {
 private final class TestLoginItem {
     var status: BackgroundPromptServiceStatus
     var registerError: FixtureError?
+    var isAuthoritative = true
+    private var cachedAuthority: Bool?
     var didUnregister: (() -> Void)?
     private(set) var registerCalls = 0
     private(set) var unregisterCalls = 0
@@ -434,9 +475,14 @@ private final class TestLoginItem {
         return LoginItemController(
             readStatus: { self.status },
             readApplicationOwnership: {
-                BackgroundPromptApplicationOwnership(currentApplicationPath: path, authoritativeApplicationPath: path)
+                let authority = self.cachedAuthority ?? self.isAuthoritative
+                self.cachedAuthority = authority
+                return BackgroundPromptApplicationOwnership(
+                    currentApplicationPath: path,
+                    authoritativeApplicationPath: authority ? path : nil
+                )
             },
-            invalidateApplicationOwnershipCache: {},
+            invalidateApplicationOwnershipCache: { self.cachedAuthority = nil },
             hasEmbeddedAgent: { true },
             register: {
                 self.registerCalls += 1

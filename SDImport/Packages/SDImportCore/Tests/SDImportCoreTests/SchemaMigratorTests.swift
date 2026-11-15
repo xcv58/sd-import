@@ -81,4 +81,44 @@ struct SchemaMigratorTests {
         #expect(values.1 == false)
         #expect(try JobRepository(pool: pool).needsDestinationReview(jobID: "legacy-job") == false)
     }
+
+    @Test("preserves unresolved copy evidence from the earlier journal schema")
+    func upgradesEarlierCopyJournal() throws {
+        let directoryURL = try temporaryDirectory()
+        let pool = try DatabasePool(path: directoryURL.appendingPathComponent("state.sqlite").path)
+        try SchemaMigrator.makeMigrator().migrate(pool, upTo: SchemaMigrator.copyAttemptMigrationIdentifier)
+        let destination = directoryURL.appendingPathComponent("IMG.JPG")
+        try pool.write { db in
+            try db.execute(sql: """
+                ALTER TABLE import_copy_attempts DROP COLUMN copy_committed;
+                INSERT INTO jobs (job_id, created_at, mount_path, location, photos_root, videos_root, status)
+                VALUES ('draft-job', '2026-11-15T00:00:00Z', '/Volumes/CARD', 'TEST', '/tmp/photos', '/tmp/videos', 'IMPORTING');
+                INSERT INTO job_files (id, job_id, src_path, filename, ext, size, mtime, media_type, decision, copy_status)
+                VALUES (1, 'draft-job', '/Volumes/CARD/IMG.JPG', 'IMG.JPG', '.jpg', 17, '2026-11-15T00:00:00Z',
+                    'photo', 'NEW', 'PENDING');
+                """)
+            let attempt = ImportCopyAttempt(
+                id: UUID(), fileID: 1, jobID: "draft-job", sourcePath: "/Volumes/CARD/IMG.JPG",
+                destinationPath: destination.path,
+                fingerprint: .compute(size: 17, modificationDateString: "2026-11-15T00:00:00Z")
+            )
+            try db.execute(
+                sql: "INSERT INTO import_copy_attempts (file_id, attempt_json) VALUES (1, ?)",
+                arguments: [JSONEncoder().encode(attempt)]
+            )
+        }
+        try SchemaMigrator.migrate(pool)
+        let repository = JobRepository(pool: pool)
+        #expect(try repository.hasUnresolvedCopies(jobID: "draft-job"))
+        #expect(try repository.isUnverifiedDestination(destination))
+        #expect(try repository.copyAttempts(jobID: "draft-job").count == 1)
+        let existingBytes = Data("existing destination".utf8)
+        try existingBytes.write(to: destination)
+        #expect(try RecoveryService(jobRepository: repository).recoverInterruptedImports().recoveredJobs == 1)
+        #expect(try !repository.hasUnresolvedCopies(jobID: "draft-job"))
+        #expect(try repository.needsDestinationReview(jobID: "draft-job"))
+        #expect(try repository.isUnverifiedDestination(destination))
+        #expect(try Data(contentsOf: destination) == existingBytes)
+    }
+
 }

@@ -440,22 +440,23 @@ public struct ImportPlanBuilder: Sendable {
         switch resolver.resolveDestination(
             candidate: destinationURL,
             expectedFingerprint: fingerprint,
-            allowsRename: !preservesProprietaryFilename
+            allowsRename: !preservesProprietaryFilename,
+            rejectingMatchesAt: file.unverifiedDestinationPaths
         ) {
-        case .skip(let reason):
+        case .skip(let matchedURL, let reason):
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
                     id: id,
                     decision: .known,
-                    destinationDirectory: destinationURL.deletingLastPathComponent().path,
-                    plannedDestinationPath: destinationURL.path,
+                    destinationDirectory: matchedURL.deletingLastPathComponent().path,
+                    plannedDestinationPath: matchedURL.path,
                     copyStatus: .skipped,
                     error: reason,
                     knownSource: .destination
                 ),
                 willCopy: false,
                 disposition: .alreadyExists,
-                destinationPath: destinationURL.path
+                destinationPath: matchedURL.path
             )
         case .blocked:
             return filenameConflictPlan(file: file, destinationPath: destinationURL.path)

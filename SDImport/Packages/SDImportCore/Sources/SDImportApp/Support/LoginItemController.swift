@@ -246,3 +246,147 @@ private enum LoginItemControllerError: LocalizedError {
         }
     }
 }
+
+@MainActor
+final class BackgroundPromptCoordinator {
+    private enum RegistrationPhase: Equatable {
+        case registering(UUID)
+        case waitingForLaunch(UUID)
+    }
+
+    private enum Keys {
+        static let minimumLaunch = "SDImport.minimumBackgroundPromptAgentLaunchAt"
+        static let lastRegistration = "SDImport.lastNotFoundRepairAttemptAt"
+        static let lastHealthRepair = "SDImport.lastHealthRepairAttemptAt"
+    }
+
+    let now: () -> Date
+    private let defaults: UserDefaults
+    private let sleep: BackgroundPromptRetryScheduler.Sleep
+    private let retries: BackgroundPromptRetryScheduler
+    private var manualRepairID: UUID?
+    private var registration: RegistrationPhase?
+    private var pollID: UUID?
+    private var pollTask: Task<Void, Never>?
+    private(set) var operationTask: Task<Void, Never>?
+
+    init(
+        defaults: UserDefaults, sleep: @escaping BackgroundPromptRetryScheduler.Sleep, now: @escaping () -> Date
+    ) {
+        self.defaults = defaults
+        self.sleep = sleep
+        self.now = now
+        retries = BackgroundPromptRetryScheduler(sleep: sleep)
+    }
+
+    var isRepairingManually: Bool { manualRepairID != nil }
+    var isPolling: Bool { pollTask != nil }
+    var minimumLaunchAt: Date? { storedDate(Keys.minimumLaunch) }
+    var lastRegistrationAttemptAt: Date? { storedDate(Keys.lastRegistration) }
+    var healthRetryDelay: TimeInterval {
+        BackgroundPromptRetryPolicy.remainingDelay(lastAttemptAt: storedDate(Keys.lastHealthRepair), now: now())
+    }
+
+    func enqueue(_ operation: @escaping @MainActor () async -> Void) {
+        let preceding = operationTask
+        operationTask = Task {
+            _ = await preceding?.value
+            await operation()
+        }
+    }
+
+    func beginManualRepair() -> UUID {
+        let id = UUID()
+        manualRepairID = id
+        return id
+    }
+
+    func finishManualRepair(_ id: UUID) {
+        if manualRepairID == id { manualRepairID = nil }
+    }
+
+    func beginRegistration() -> UUID {
+        let id = UUID()
+        registration = .registering(id)
+        return id
+    }
+
+    func isCurrentRegistration(_ id: UUID) -> Bool {
+        registration == .registering(id) || registration == .waitingForLaunch(id)
+    }
+
+    func finishRegistration(_ id: UUID) {
+        if isCurrentRegistration(id) { registration = nil }
+    }
+
+    func requireLaunch(after date: Date, registrationID: UUID? = nil) {
+        if let id = registrationID {
+            guard isCurrentRegistration(id) else { return }
+            registration = .waitingForLaunch(id)
+        }
+        defaults.set(date.timeIntervalSince1970, forKey: Keys.minimumLaunch)
+    }
+
+    func recordRegistrationAttempt() {
+        defaults.set(now().timeIntervalSince1970, forKey: Keys.lastRegistration)
+    }
+
+    func clearRegistrationAttempt() { defaults.removeObject(forKey: Keys.lastRegistration) }
+
+    func recordHealthRepair() {
+        defaults.set(now().timeIntervalSince1970, forKey: Keys.lastHealthRepair)
+    }
+
+    func scheduleRetry(after delay: TimeInterval, _ operation: @escaping @MainActor @Sendable () async -> Void) {
+        retries.schedule(after: delay, operation: operation)
+    }
+
+    func cancelRetry(resetAttempts: Bool) {
+        retries.cancel()
+        if resetAttempts {
+            clearRegistrationAttempt()
+            defaults.removeObject(forKey: Keys.lastHealthRepair)
+        }
+    }
+
+    func pollForLaunch(
+        whileWaiting: @escaping @MainActor () -> Bool,
+        timedOut: @escaping @MainActor () -> Void
+    ) -> Task<Void, Never> {
+        cancelPoll()
+        let id = UUID()
+        pollID = id
+        let sleep = self.sleep
+        let task = Task { [weak self] in
+            defer { self?.finishPoll(id) }
+            for milliseconds in BackgroundPromptHealth.refreshDelayMilliseconds {
+                do {
+                    try await sleep(.milliseconds(milliseconds))
+                } catch {
+                    return
+                }
+                guard self?.pollID == id, whileWaiting(), self?.pollID == id else { return }
+            }
+            timedOut()
+        }
+        pollTask = task
+        return task
+    }
+
+    func cancelPoll() {
+        pollTask?.cancel()
+        pollID = nil
+        pollTask = nil
+    }
+
+    private func finishPoll(_ id: UUID) {
+        guard pollID == id else { return }
+        pollID = nil
+        pollTask = nil
+    }
+
+    private func storedDate(_ key: String) -> Date? {
+        let value = defaults.double(forKey: key)
+        return value > 0 ? Date(timeIntervalSince1970: value) : nil
+    }
+}

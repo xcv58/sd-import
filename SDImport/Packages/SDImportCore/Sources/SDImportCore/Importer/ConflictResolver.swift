@@ -3,7 +3,7 @@ import Foundation
 
 public enum ConflictResolution: Equatable, Sendable {
     case copy(to: URL)
-    case skip(reason: String)
+    case skip(at: URL, reason: String)
     case blocked(reason: String)
 }
 
@@ -17,14 +17,27 @@ public struct ConflictResolver {
     public func resolveDestination(
         candidate: URL,
         expectedFingerprint: FileFingerprint,
-        allowsRename: Bool = true
+        allowsRename: Bool = true,
+        rejectingMatchesAt unverifiedPaths: Set<String> = []
     ) -> ConflictResolution {
+        resolveDestination(candidate: candidate, expectedFingerprint: expectedFingerprint, allowsRename: allowsRename) {
+            !unverifiedPaths.isEmpty && unverifiedPaths.contains(Self.destinationKey($0))
+        }
+    }
+
+    func resolveDestination(
+        candidate: URL,
+        expectedFingerprint: FileFingerprint,
+        allowsRename: Bool,
+        rejectMatch: (URL) throws -> Bool
+    ) rethrows -> ConflictResolution {
         if !Self.destinationEntryExists(at: candidate) {
             return .copy(to: candidate)
         }
 
-        if existingFileMatches(candidate, expectedFingerprint: expectedFingerprint) {
-            return .skip(reason: "already_exists_same_fingerprint")
+        if existingFileMatches(candidate, expectedFingerprint: expectedFingerprint),
+           try !rejectMatch(candidate) {
+            return .skip(at: candidate, reason: "already_exists_same_fingerprint")
         }
 
         guard allowsRename else {
@@ -42,11 +55,18 @@ public struct ConflictResolver {
             if !Self.destinationEntryExists(at: next) {
                 return .copy(to: next)
             }
-            if existingFileMatches(next, expectedFingerprint: expectedFingerprint) {
-                return .skip(reason: "already_exists_same_fingerprint")
+            if existingFileMatches(next, expectedFingerprint: expectedFingerprint),
+               try !rejectMatch(next) {
+                return .skip(at: next, reason: "already_exists_same_fingerprint")
             }
             counter += 1
         }
+    }
+
+    static func destinationKey(_ url: URL) -> String {
+        url.deletingLastPathComponent().resolvingSymlinksInPath()
+            .appendingPathComponent(url.lastPathComponent).standardizedFileURL.path
+            .precomposedStringWithCanonicalMapping.lowercased()
     }
 
     static func destinationEntryExists(at url: URL) -> Bool {

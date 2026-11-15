@@ -24,6 +24,20 @@ struct ImportWorkspaceTransitionTests {
         #expect(snapshot == ImportWorkspaceSnapshot(phase: .completed))
     }
 
+    @Test("callbacks and cancellation belong to the active attempt")
+    func importAttemptOwnsCallbacks() {
+        let previous = ImportWorkspaceAttempt(operation: .prepareImport)
+        var current = ImportWorkspaceAttempt(operation: .prepareImport)
+        #expect(!current.accepts(previous.id))
+        #expect(!current.accepts(previous.id, isProgress: true))
+        #expect(current.accepts(current.id, isProgress: true))
+
+        current.requestCancellation()
+        #expect(!current.accepts(current.id, isProgress: true))
+        #expect(current.accepts(current.id))
+        #expect(!current.accepts(previous.id))
+    }
+
     @Test("failure records the operation and recovery selects the available workspace")
     func failureAndRecovery() {
         let failed = ImportWorkspaceTransition.applying(

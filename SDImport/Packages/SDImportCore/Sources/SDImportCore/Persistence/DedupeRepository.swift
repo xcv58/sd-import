@@ -43,21 +43,33 @@ public struct DedupeRepository {
         firstSeenAt: Date = Date()
     ) throws {
         try pool.write { db in
-            try db.execute(
-                sql: """
-                INSERT OR IGNORE INTO items (
-                    hash, size, first_seen_at, first_job_id, first_source_path
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    fingerprint.value,
-                    fingerprint.size,
-                    DateCoding.string(from: firstSeenAt),
-                    jobID,
-                    sourcePath
-                ]
+            try Self.recordImported(
+                fingerprint, jobID: jobID, sourcePath: sourcePath, firstSeenAt: firstSeenAt, db: db
             )
         }
+    }
+
+    static func recordImported(
+        _ fingerprint: FileFingerprint,
+        jobID: String,
+        sourcePath: String,
+        firstSeenAt: Date = Date(),
+        db: Database
+    ) throws {
+        try db.execute(
+            sql: """
+            INSERT OR IGNORE INTO items (
+                hash, size, first_seen_at, first_job_id, first_source_path
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            arguments: [
+                fingerprint.value,
+                fingerprint.size,
+                DateCoding.string(from: firstSeenAt),
+                jobID,
+                sourcePath
+            ]
+        )
     }
 
     @discardableResult

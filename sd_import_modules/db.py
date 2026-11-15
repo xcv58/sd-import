@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .common import detect_diskutil_binary, ensure_dir, now_local_iso
+from .common import destination_key, detect_diskutil_binary, ensure_dir, now_local_iso
 
 IMPORTABLE_EXTENSIONS = {
     ".jpg",
@@ -93,6 +93,21 @@ def connect_db(db_path: Path) -> sqlite3.Connection:
             FOREIGN KEY(job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS exclusive_copy_attempts (
+            file_id INTEGER PRIMARY KEY REFERENCES job_files(id) ON DELETE CASCADE,
+            target TEXT NOT NULL,
+            file_identity TEXT NOT NULL,
+            parent_identity TEXT NOT NULL,
+            content_digest TEXT NOT NULL,
+            mtime_ns INTEGER NOT NULL,
+            atime_ns INTEGER NOT NULL,
+            mode INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS unverified_copy_paths (
+            key TEXT PRIMARY KEY NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_job_files_job_decision
             ON job_files(job_id, decision, copy_status);
 
@@ -100,6 +115,16 @@ def connect_db(db_path: Path) -> sqlite3.Connection:
             ON job_files(hash, size);
         """
     )
+    if conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='unverified_copy_destinations'"
+    ).fetchone():
+        with conn:
+            old_paths = conn.execute("SELECT DISTINCT path FROM unverified_copy_destinations").fetchall()
+            conn.executemany(
+                "INSERT OR IGNORE INTO unverified_copy_paths VALUES (?)",
+                [(destination_key(Path(row[0])),) for row in old_paths],
+            )
+            conn.execute("DELETE FROM unverified_copy_destinations")
     return conn
 
 
@@ -296,22 +321,31 @@ def should_debounce_mount(conn: sqlite3.Connection, mount_path: str, debounce_se
 
 
 def prune_history(conn: sqlite3.Connection, cutoff_date: str, vacuum: bool, dry_run: bool) -> Dict[str, Any]:
+    eligible = """
+        substr(jobs.created_at, 1, 10) < ?
+        AND NOT EXISTS (
+            SELECT 1
+            FROM exclusive_copy_attempts AS attempt
+            JOIN job_files AS file ON file.id = attempt.file_id
+            WHERE file.job_id = jobs.job_id
+        )
+    """
     job_rows = conn.execute(
-        """
+        f"""
         SELECT job_id, report_path
         FROM jobs
-        WHERE substr(created_at, 1, 10) < ?
+        WHERE {eligible}
         """,
         (cutoff_date,),
     ).fetchall()
 
     jobs_matched = len(job_rows)
     job_files_matched = conn.execute(
-        """
+        f"""
         SELECT COUNT(*) AS c
         FROM job_files
         WHERE job_id IN (
-            SELECT job_id FROM jobs WHERE substr(created_at, 1, 10) < ?
+            SELECT job_id FROM jobs WHERE {eligible}
         )
         """,
         (cutoff_date,),
@@ -323,10 +357,7 @@ def prune_history(conn: sqlite3.Connection, cutoff_date: str, vacuum: bool, dry_
 
     if not dry_run and jobs_matched > 0:
         conn.execute(
-            """
-            DELETE FROM jobs
-            WHERE substr(created_at, 1, 10) < ?
-            """,
+            f"DELETE FROM jobs WHERE {eligible}",
             (cutoff_date,),
         )
         conn.commit()
