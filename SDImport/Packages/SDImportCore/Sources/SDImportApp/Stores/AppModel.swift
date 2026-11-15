@@ -457,6 +457,7 @@ final class AppModel: ObservableObject {
     private let loginItem: LoginItemController
     private let backgroundPromptStateStore: () throws -> BackgroundPromptAgentStateStore
     private let backgroundPromptSleep: BackgroundPromptRetryScheduler.Sleep
+    private let backgroundPromptHealthNow: () -> Date
     private let purchaseManager: PurchaseManager
     private var initialOnboardingSourcePath: String
     private var applicationSupportURL: URL?
@@ -506,6 +507,7 @@ final class AppModel: ObservableObject {
             try BackgroundPromptAgentStateStore.defaultStore()
         },
         backgroundPromptSleep: @escaping BackgroundPromptRetryScheduler.Sleep = { try await Task.sleep(for: $0) },
+        backgroundPromptHealthNow: @escaping () -> Date = Date.init,
         startsBootstrap: Bool = true
     ) {
         self.purchaseManager = purchaseManager
@@ -513,6 +515,7 @@ final class AppModel: ObservableObject {
         self.loginItem = loginItem
         self.backgroundPromptStateStore = backgroundPromptStateStore
         self.backgroundPromptSleep = backgroundPromptSleep
+        self.backgroundPromptHealthNow = backgroundPromptHealthNow
         self.backgroundPromptRetryScheduler = BackgroundPromptRetryScheduler(sleep: backgroundPromptSleep)
         self.backgroundPromptApplicationOwnership = loginItem.applicationOwnership
         let initialConfiguration = AppConfiguration.defaultConfiguration(
@@ -2578,6 +2581,13 @@ final class AppModel: ObservableObject {
         return interval > 0 ? Date(timeIntervalSince1970: interval) : nil
     }
 
+    private var healthRepairRetryDelay: TimeInterval {
+        BackgroundPromptRetryPolicy.remainingDelay(
+            lastAttemptAt: lastHealthRepairAttemptAt,
+            now: backgroundPromptHealthNow()
+        )
+    }
+
     private var minimumBackgroundPromptAgentLaunchAt: Date? {
         let interval = defaults.double(forKey: DefaultsKeys.minimumBackgroundPromptAgentLaunchAt)
         return interval > 0 ? Date(timeIntervalSince1970: interval) : nil
@@ -2592,7 +2602,7 @@ final class AppModel: ObservableObject {
     }
 
     private func recordHealthRepairAttempt() {
-        defaults.set(Date().timeIntervalSince1970, forKey: DefaultsKeys.lastHealthRepairAttemptAt)
+        defaults.set(backgroundPromptHealthNow().timeIntervalSince1970, forKey: DefaultsKeys.lastHealthRepairAttemptAt)
     }
 
     private func clearHealthRepairAttempt() {
@@ -2654,10 +2664,7 @@ final class AppModel: ObservableObject {
         else {
             return
         }
-        let delay = BackgroundPromptRetryPolicy.remainingDelay(
-            lastAttemptAt: lastHealthRepairAttemptAt
-        )
-        backgroundPromptRetryScheduler.schedule(after: delay) { [weak self] in
+        backgroundPromptRetryScheduler.schedule(after: healthRepairRetryDelay) { [weak self] in
             guard let self else {
                 return
             }
@@ -2695,6 +2702,11 @@ final class AppModel: ObservableObject {
                     resetAttempts: !autoPromptEnabled || !backgroundPromptCanConfigure || ownsRegistration
                 )
             }
+            return
+        }
+        // Another retry may have run while this operation was waiting in the queue.
+        if healthRepairRetryDelay > 0 {
+            scheduleMissingHelperHealthRepair()
             return
         }
         recordHealthRepairAttempt()

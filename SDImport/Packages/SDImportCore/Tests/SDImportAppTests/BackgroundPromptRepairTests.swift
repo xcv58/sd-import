@@ -185,6 +185,52 @@ struct BackgroundPromptRepairTests {
         #expect(fixture.model.backgroundPromptStatusDetail == L10n.tr("The background helper did not become ready in time."))
     }
 
+    @Test("a retry queued behind a manual repair honors the cooldown before restarting again")
+    func overlappingManualRepairKeepsAutomaticRetryCooldown() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        fixture.model.hasCompletedOnboarding = true
+        try fixture.recordLaunch(offset: -60)
+        fixture.model.refreshBackgroundPromptHealth()
+        fixture.model.repairBackgroundPrompt()
+        let firstRepair = try #require(fixture.model.backgroundPromptOperationTask)
+        try await fixture.advancePollingWindow()
+        await firstRepair.value
+
+        // Let the first automatic attempt time out and arm its cooldown.
+        try await waitUntil { fixture.service.unregisterCalls == 2 }
+        try await fixture.advancePollingWindow()
+        try await waitUntil { await fixture.sleeps.hasRetryDelay() }
+
+        fixture.model.repairBackgroundPrompt()
+        let manualRepair = try #require(fixture.model.backgroundPromptOperationTask)
+        let firstPoll = Duration.milliseconds(500)
+        try await fixture.waitForSleep(firstPoll)
+        #expect(fixture.service.unregisterCalls == 3)
+
+        // The cooldown expires while the manual repair still occupies the operation queue.
+        try await fixture.advanceRetryDelay()
+        try await waitUntil { fixture.model.backgroundPromptOperationTask != manualRepair }
+        #expect(fixture.service.unregisterCalls == 3)
+        try await fixture.advancePollingWindow()
+        await manualRepair.value
+
+        try await waitUntil {
+            if fixture.service.unregisterCalls > 4 { return true }
+            return await fixture.sleeps.hasRetryDelay()
+        }
+        try #require(fixture.service.unregisterCalls == 4)
+        #expect(fixture.service.registerCalls == 4)
+        #expect(await fixture.sleeps.retryDelay() == .seconds(
+            BackgroundPromptRegistrationPolicy.notFoundRepairRetryInterval
+        ))
+
+        try fixture.recordLaunch()
+        try await fixture.advance(firstPoll)
+        try await waitUntil { fixture.model.backgroundPromptStatusTitle == L10n.tr("Running") }
+        try await waitUntil { await !fixture.sleeps.hasRetryDelay() }
+    }
+
     @Test("an external diagnostics read failure wakes repair during its longest backoff")
     func externalReadFailureInterruptsSleep() async throws {
         let fixture = try Fixture()
@@ -226,6 +272,7 @@ private final class Fixture {
         .standardizedFileURL.path
     let service: TestLoginItem
     let sleeps = TestSleeps()
+    private let healthClock = HealthRetryClock()
     private let suiteName = "SDImportAppTests.backgroundPrompt.\(UUID())"
     private let defaults: UserDefaults
     private let directory: URL
@@ -243,6 +290,7 @@ private final class Fixture {
             loginItem: service.controller,
             backgroundPromptStateStore: { store },
             backgroundPromptSleep: { [sleeps] in try await sleeps.sleep(for: $0) },
+            backgroundPromptHealthNow: { [healthClock] in healthClock.now },
             startsBootstrap: false
         )
         model.autoPromptEnabled = enabled
@@ -279,8 +327,20 @@ private final class Fixture {
 
     func advanceRetryDelay() async throws {
         try await waitUntil { await self.sleeps.hasRetryDelay() }
-        let resumed = await sleeps.resumeRetryDelay()
+        let delay = try #require(await sleeps.retryDelay())
+        healthClock.advance(by: delay)
+        let resumed = await sleeps.resume(delay)
         try #require(resumed)
+    }
+}
+
+@MainActor
+private final class HealthRetryClock {
+    private(set) var now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func advance(by duration: Duration) {
+        let (seconds, attoseconds) = duration.components
+        now = now.addingTimeInterval(Double(seconds) + Double(attoseconds) / 1e18)
     }
 }
 
@@ -347,19 +407,15 @@ private actor TestSleeps {
     }
 
     func hasRetryDelay() -> Bool {
-        pending.values.contains { $0.0 > .seconds(8) }
+        retryDelay() != nil
+    }
+
+    func retryDelay() -> Duration? {
+        pending.values.first(where: { $0.0 > .seconds(8) })?.0
     }
 
     func resume(_ duration: Duration) -> Bool {
-        resumeSleep { $0 == duration }
-    }
-
-    func resumeRetryDelay() -> Bool {
-        resumeSleep { $0 > .seconds(8) }
-    }
-
-    private func resumeSleep(where matches: (Duration) -> Bool) -> Bool {
-        guard let id = pending.first(where: { matches($0.value.0) })?.key,
+        guard let id = pending.first(where: { $0.value.0 == duration })?.key,
               let (_, continuation) = pending.removeValue(forKey: id) else {
             return false
         }
