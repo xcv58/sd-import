@@ -156,7 +156,7 @@ public struct JobRepository {
     }
 
     public func hasUnresolvedReviewedCopy(jobID: String) throws -> Bool {
-        try copyAttempts(jobID: jobID).contains { !$0.localCopyCommitted && $0.requiresDestinationReview }
+        try copyAttempts(jobID: jobID).contains { $0.localCopyCommitted != true && $0.requiresDestinationReview == true }
     }
 
     public func needsDestinationReview(jobID: String) throws -> Bool {
@@ -423,7 +423,7 @@ public struct JobRepository {
                 sql: "INSERT OR IGNORE INTO unverified_copy_paths VALUES (?)",
                 arguments: [ConflictResolver.destinationKey(attempt.destination)]
             )
-            if attempt.requiresDestinationReview {
+            if attempt.requiresDestinationReview == true {
                 try db.execute(
                     sql: "UPDATE jobs SET needs_destination_review = 1 WHERE job_id = ?",
                     arguments: [attempt.jobID]

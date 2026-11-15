@@ -58,14 +58,14 @@ public struct RecoveryService {
         guard let job = try jobRepository.fetchJob(id: jobID) else { return outcome }
         let attempts = try jobRepository.copyAttempts(jobID: jobID)
         guard job.status == .importing || !attempts.isEmpty else { return outcome }
-        outcome.recovered = job.status == .importing || attempts.contains { !$0.localCopyCommitted }
+        outcome.recovered = job.status == .importing || attempts.contains { $0.localCopyCommitted != true }
 
         for attempt in attempts {
-            if attempt.localCopyCommitted {
+            if attempt.localCopyCommitted == true {
                 if !replayPortableReceipt(attempt) { outcome.portableReceiptPending = true }
                 continue
             }
-            outcome.resumedReviewedCopy = outcome.resumedReviewedCopy || attempt.requiresDestinationReview
+            outcome.resumedReviewedCopy = outcome.resumedReviewedCopy || attempt.requiresDestinationReview == true
             let disposition: CopyRecoveryDisposition
             do {
                 disposition = try inspectInterruptedCopy(attempt)
@@ -78,17 +78,17 @@ public struct RecoveryService {
                 outcome.unavailableFileID = attempt.fileID
             case .unverifiedDestination(let removedStaging):
                 outcome.removedPartFiles += removedStaging ? 1 : 0
-                outcome.needsReview = outcome.needsReview || attempt.requiresDestinationReview
+                outcome.needsReview = outcome.needsReview || attempt.requiresDestinationReview == true
                 try jobRepository.rejectUnverifiedCopy(attempt)
             case .published:
                 try jobRepository.commitCopyAttempt(
-                    attempt, requireReviewForRemainingFiles: attempt.requiresDestinationReview
+                    attempt, requireReviewForRemainingFiles: attempt.requiresDestinationReview == true
                 )
                 outcome.copiedSourcePaths.append(attempt.sourcePath)
                 if !replayPortableReceipt(attempt) { outcome.portableReceiptPending = true }
             case .retry(let removedStaging):
                 outcome.removedPartFiles += removedStaging ? 1 : 0
-                let reviewRequired = attempt.requiresDestinationReview
+                let reviewRequired = attempt.requiresDestinationReview == true
                 outcome.needsReview = outcome.needsReview || reviewRequired
                 try jobRepository.discardCopyAttempt(attempt, needsDestinationReview: reviewRequired)
             }

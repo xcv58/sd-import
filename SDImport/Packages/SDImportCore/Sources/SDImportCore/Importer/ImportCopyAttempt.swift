@@ -9,14 +9,14 @@ struct ImportCopyAttempt: Codable {
     let destinationPath: String
     let fingerprint: FileFingerprint
     var destinationDirectory: ImportCopyDirectoryIdentity?
-    var requiresDestinationReview = false
+    var requiresDestinationReview: Bool? = nil
     var stagingIdentity: ImportCopyFileIdentity?
     var staged: StagedImportCopy?
     var reservedDestination: ImportCopyFileIdentity?
     var directCopyDigest: Data?
     var modificationDate: Date?
     var portableReceipt: CopyPortableReceipt?
-    var localCopyCommitted = false
+    var localCopyCommitted: Bool? = nil
 
     var destination: URL { URL(fileURLWithPath: destinationPath) }
 

@@ -18,15 +18,24 @@ public struct ConflictResolver {
         candidate: URL,
         expectedFingerprint: FileFingerprint,
         allowsRename: Bool = true,
-        rejectingMatchesAt unverifiedPaths: Set<String> = [],
-        rejectMatch: (URL) throws -> Bool = { _ in false }
+        rejectingMatchesAt unverifiedPaths: Set<String> = []
+    ) -> ConflictResolution {
+        resolveDestination(candidate: candidate, expectedFingerprint: expectedFingerprint, allowsRename: allowsRename) {
+            !unverifiedPaths.isEmpty && unverifiedPaths.contains(Self.destinationKey($0))
+        }
+    }
+
+    func resolveDestination(
+        candidate: URL,
+        expectedFingerprint: FileFingerprint,
+        allowsRename: Bool,
+        rejectMatch: (URL) throws -> Bool
     ) rethrows -> ConflictResolution {
         if !Self.destinationEntryExists(at: candidate) {
             return .copy(to: candidate)
         }
 
-        if !unverifiedPaths.contains(Self.destinationKey(candidate)),
-           existingFileMatches(candidate, expectedFingerprint: expectedFingerprint),
+        if existingFileMatches(candidate, expectedFingerprint: expectedFingerprint),
            try !rejectMatch(candidate) {
             return .skip(at: candidate, reason: "already_exists_same_fingerprint")
         }
@@ -46,8 +55,7 @@ public struct ConflictResolver {
             if !Self.destinationEntryExists(at: next) {
                 return .copy(to: next)
             }
-            if !unverifiedPaths.contains(Self.destinationKey(next)),
-               existingFileMatches(next, expectedFingerprint: expectedFingerprint),
+            if existingFileMatches(next, expectedFingerprint: expectedFingerprint),
                try !rejectMatch(next) {
                 return .skip(at: next, reason: "already_exists_same_fingerprint")
             }

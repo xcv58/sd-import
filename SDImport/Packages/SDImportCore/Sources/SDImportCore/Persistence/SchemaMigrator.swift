@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 public enum SchemaMigrator {
-    public static let currentUserVersion: Int32 = 7
+    public static let currentUserVersion: Int32 = 8
     public static let initialMigrationIdentifier = "v1_initial_schema"
     public static let identityScopedFingerprintMigrationIdentifier = "v2_identity_scoped_fingerprints"
     public static let knownFileSourceMigrationIdentifier = "v3_known_file_source"
@@ -10,6 +10,8 @@ public enum SchemaMigrator {
     public static let destinationReviewMigrationIdentifier = "v5_destination_review"
     public static let copyAttemptMigrationIdentifier = "v6_copy_attempts"
     private static let unverifiedPathsMigrationIdentifier = "v7_unverified_copy_paths"
+
+    private static let copyAttemptStateMigrationIdentifier = "v8_copy_attempt_state"
 
     public static func makeMigrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
@@ -122,6 +124,22 @@ public enum SchemaMigrator {
                     )
                 }
             }
+            try db.execute(sql: "PRAGMA user_version = 7")
+        }
+
+        migrator.registerMigration(copyAttemptStateMigrationIdentifier) { db in
+            // Restore the state column for a database opened by an earlier development build.
+            if try !db.columns(in: "import_copy_attempts").contains(where: { $0.name == "copy_committed" }) {
+                try db.execute(sql: """
+                    ALTER TABLE import_copy_attempts ADD COLUMN copy_committed BOOLEAN NOT NULL DEFAULT 0;
+                    UPDATE import_copy_attempts
+                    SET copy_committed = COALESCE(json_extract(CAST(attempt_json AS TEXT), '$.localCopyCommitted'), 0)
+                    """)
+            }
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_copy_attempts_uncommitted_destination
+                ON import_copy_attempts(destination_key) WHERE copy_committed = 0
+                """)
             try db.execute(sql: "PRAGMA user_version = \(Self.currentUserVersion)")
         }
 
