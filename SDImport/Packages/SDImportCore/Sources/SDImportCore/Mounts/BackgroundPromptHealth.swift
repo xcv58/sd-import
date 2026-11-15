@@ -1,7 +1,8 @@
 import Foundation
 
 public enum BackgroundPromptAppErrorReason: Equatable, Sendable {
-    case missingLaunch
+    case launchTimeout
+    case diagnosticsReadFailure
 }
 
 public enum BackgroundPromptHealth {
@@ -26,9 +27,9 @@ public enum BackgroundPromptHealth {
     public static func appErrorAfterRefresh(
         existingError: String?,
         reason: BackgroundPromptAppErrorReason?,
-        agentState: BackgroundPromptAgentState?
+        ownsRegistration: Bool
     ) -> String? {
-        if reason == .missingLaunch, agentState != nil {
+        if reason == .diagnosticsReadFailure || (reason == .launchTimeout && ownsRegistration) {
             return nil
         }
         return existingError

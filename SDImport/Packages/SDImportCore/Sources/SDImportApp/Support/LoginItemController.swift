@@ -99,6 +99,7 @@ enum LoginItemController {
     @discardableResult
     @MainActor
     static func repair(
+        willRegister: (Date) -> Void,
         shouldRegister: @escaping @MainActor () -> Bool = { true }
     ) async throws -> BackgroundPromptServiceStatus {
         try requireAuthoritativeApplication()
@@ -106,19 +107,18 @@ enum LoginItemController {
             throw LoginItemControllerError.missingEmbeddedHelper
         }
 
-        let operations = BackgroundPromptRepairSequence.operations(for: status)
-        for operation in operations {
-            switch operation {
-            case .unregister:
-                try await unregisterAndWait()
-            case .register:
+        try await BackgroundPromptRepairSequence.execute(
+            BackgroundPromptRepairSequence.operations(for: status),
+            unregister: unregisterAndWait,
+            register: { registrationStartedAt in
                 guard shouldRegister(), status != .enabled else {
-                    continue
+                    return
                 }
                 try requireAuthoritativeApplication()
+                willRegister(registrationStartedAt)
                 try service.register()
             }
-        }
+        )
         return status
     }
 
