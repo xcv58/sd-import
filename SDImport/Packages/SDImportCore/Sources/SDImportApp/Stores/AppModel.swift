@@ -325,11 +325,13 @@ final class AppModel: ObservableObject {
     @Published var defaultVideosValidation: PathValidationResult = .empty(purpose: .destination)
     @Published var pendingMountedVolume: MountedVolume? {
         didSet {
+            pendingMountPromptID = pendingMountedVolume == nil ? nil : UUID()
             if oldValue != nil, pendingMountedVolume == nil {
                 schedulePendingMountHandoffRetry()
             }
         }
     }
+    private var pendingMountPromptID: UUID?
     @Published var reportPresentation: ImportReportPresentation?
     @Published var statusMessage = "" {
         didSet {
@@ -1278,7 +1280,13 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
 
                 await MainActor.run {
-                    guard self.importAttempt?.accepts(attemptID) == true else { return }
+                    guard let attempt = self.importAttempt, attempt.accepts(attemptID) else { return }
+                    if attempt.cancellationRequested {
+                        self.currentSummary = nil
+                        self.statusMessage = L10n.tr("Scan cancelled")
+                        self.finishImportAttempt(attemptID, event: .cancelled)
+                        return
+                    }
                     self.currentSummary = summary
                     self.selectedJobID = summary.jobID
                     self.jobs = jobs
@@ -1900,21 +1908,16 @@ final class AppModel: ObservableObject {
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
                 try Task.checkCancellation()
                 guard let files = try repositories.jobRepository.withImportLock(jobID: jobID, {
+                    try Task.checkCancellation()
                     try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: updates)
                     return try repositories.jobRepository.fetchJobFiles(jobID: jobID)
                 }) else {
                     throw SDImportError.invalidArgument(L10n.tr("Finish the current scan or import first"))
                 }
-                try Task.checkCancellation()
                 let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
-                try Task.checkCancellation()
 
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
-                    guard !Task.isCancelled else {
-                        self.finishImportAttempt(attemptID, event: .cancelled)
-                        return
-                    }
                     self.currentPreviewFiles = files
                     self.selectedJobFiles = files
                     self.jobs = jobs
@@ -2221,6 +2224,11 @@ final class AppModel: ObservableObject {
         failedImportRetryContext = nil
         switch retryContext {
         case .currentReview:
+            if let jobID = currentSummary?.jobID,
+               (try? jobRepository?.hasUnresolvedCopies(jobID: jobID)) == true {
+                retryExistingJob(id: jobID)
+                return
+            }
             transitionImportWorkspace(.recover(hasScannedJob: true))
             importCurrentJob()
             return
@@ -2286,7 +2294,7 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Finish the current operation before scanning another card")
             return
         }
-        guard let volume = pendingMountedVolume else {
+        guard let volume = pendingMountedVolume, let promptID = pendingMountPromptID else {
             return
         }
         guard Self.isCurrentPromptVolume(volume) else {
@@ -2299,12 +2307,14 @@ final class AppModel: ObservableObject {
             if let authorizedURL = authorizedSourceURL(for: volume) {
                 sourceURL = authorizedURL
             } else {
-                guard let selectedURL = FilePanelPresenter.chooseDirectoryURL(
+                let selection = FilePanelPresenter.chooseDirectoryURL(
                     title: L10n.tr("Allow Access to \(volume.name)"),
                     initialPath: volume.mountURL.path,
                     prompt: L10n.tr("Allow Access"),
                     message: L10n.tr("\(AppDistribution.current.displayName) will scan this folder only after you allow access.")
-                ) else {
+                )
+                guard pendingMountPromptID == promptID else { return }
+                guard let selectedURL = selection else {
                     pendingMountedVolume = nil
                     statusMessage = L10n.tr("Card scan cancelled")
                     return

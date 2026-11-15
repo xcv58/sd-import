@@ -142,23 +142,83 @@ public struct CopyEngine {
         return try readDigest(at: attempt.destination, identity: ImportCopyFileIdentity(info)) == expected
     }
 
-    static func readDigest(at url: URL, identity: ImportCopyFileIdentity? = nil) throws -> Data {
+    static func partialCopyMatchesSource(
+        _ attempt: ImportCopyAttempt, identity: ImportCopyFileIdentity, observed: stat
+    ) throws -> Bool {
+        guard let expectedDigest = attempt.directCopyDigest else { return false }
+        let sourceURL = URL(fileURLWithPath: attempt.sourcePath)
+        guard try readDigest(at: sourceURL) == expectedDigest else { return false }
+        let source = try FileHandle(forReadingFrom: sourceURL)
+        defer { try? source.close() }
+        let output = try openVerifiedCopy(at: attempt.destination, identity: identity)
+        defer { try? output.close() }
+        var remaining = observed.st_size
+        while remaining > 0 {
+            let count = Int(min(remaining, 1024 * 1024))
+            guard let bytes = try output.read(upToCount: count), bytes.count == count,
+                  try source.read(upToCount: count) == bytes else { return false }
+            remaining -= Int64(count)
+        }
+        guard let info = try fileInfo(at: attempt.destination), identity.matches(info) else { return false }
+        return unchangedFileContents(observed, info)
+    }
+
+    static func restoreCopyDate(_ date: Date, at url: URL, identity: ImportCopyFileIdentity) throws {
+        let file = try openVerifiedCopy(at: url, identity: identity)
+        defer { try? file.close() }
+        try setModificationDate(date, descriptor: file.fileDescriptor, path: url.path)
+    }
+
+    private static func openVerifiedCopy(at url: URL, identity: ImportCopyFileIdentity?) throws -> FileHandle {
         let flags = O_RDONLY | O_CLOEXEC | O_NONBLOCK | (identity == nil ? 0 : O_NOFOLLOW)
         let descriptor = open(url.path, flags)
         guard descriptor >= 0 else {
             throw SDImportError.fileSystemError(operation: "open copy for verification", path: url.path, code: errno)
         }
-        let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
-        defer { try? file.close() }
-        var opened = stat()
-        guard fstat(descriptor, &opened) == 0, opened.st_mode & S_IFMT == S_IFREG,
-              identity?.matches(opened) != false else {
+        var info = stat()
+        guard fstat(descriptor, &info) == 0, info.st_mode & S_IFMT == S_IFREG,
+              identity?.matches(info) != false else {
+            close(descriptor)
             throw SDImportError.missingFileAttributes(url)
         }
+        return FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+    }
+
+    private static func setModificationDate(_ date: Date, descriptor: Int32, path: String) throws {
+        let interval = date.timeIntervalSince1970
+        let seconds = floor(interval)
+        let times = [
+            timespec(tv_sec: 0, tv_nsec: Int(UTIME_OMIT)),
+            timespec(tv_sec: Int(seconds), tv_nsec: Int((interval - seconds) * 1_000_000_000))
+        ]
+        guard futimens(descriptor, times) == 0 else {
+            throw SDImportError.fileSystemError(operation: "set copy date", path: path, code: errno)
+        }
+    }
+
+    private static func unchangedFileContents(_ initial: stat, _ current: stat) -> Bool {
+        initial.st_size == current.st_size
+            && initial.st_ctimespec.tv_sec == current.st_ctimespec.tv_sec
+            && initial.st_ctimespec.tv_nsec == current.st_ctimespec.tv_nsec
+            && initial.st_mtimespec.tv_sec == current.st_mtimespec.tv_sec
+            && initial.st_mtimespec.tv_nsec == current.st_mtimespec.tv_nsec
+    }
+
+    static func readDigest(at url: URL, identity: ImportCopyFileIdentity? = nil) throws -> Data {
+        let file = try openVerifiedCopy(at: url, identity: identity)
+        defer { try? file.close() }
+        var opened = stat()
+        guard fstat(file.fileDescriptor, &opened) == 0 else { throw SDImportError.missingFileAttributes(url) }
         var digest = SHA256()
         while let bytes = try file.read(upToCount: 1024 * 1024), !bytes.isEmpty {
             if Task.isCancelled { throw SDImportError.cancelled }
             digest.update(data: bytes)
+        }
+        if let identity {
+            guard let current = try fileInfo(at: url), identity.matches(current),
+                  unchangedFileContents(opened, current) else {
+                throw SDImportError.reviewedDestinationChanged
+            }
         }
         return Data(digest.finalize())
     }
@@ -199,7 +259,9 @@ public struct CopyEngine {
         guard fstat(outputFD, &opened) == 0 else {
             throw SDImportError.fileSystemError(operation: "inspect new copy", path: destinationPath, code: errno)
         }
-        try didCreate(ImportCopyFileIdentity(opened))
+        let initialIdentity = ImportCopyFileIdentity(opened)
+        try didCreate(initialIdentity)
+        var hasAllocatedData = false
 
         let boundedChunkSize = max(64 * 1024, min(chunkSize, 1024 * 1024))
         let buffer = UnsafeMutableRawPointer.allocate(byteCount: boundedChunkSize, alignment: MemoryLayout<UInt8>.alignment)
@@ -236,19 +298,18 @@ public struct CopyEngine {
                 written += bytesWritten
             }
 
+            if !hasAllocatedData {
+                var allocated = stat()
+                if fstat(outputFD, &allocated) == 0, !initialIdentity.matches(allocated) {
+                    try didCreate(ImportCopyFileIdentity(allocated))
+                }
+                hasAllocatedData = true
+            }
             digest.update(bufferPointer: UnsafeRawBufferPointer(start: buffer, count: bytesRead))
             onChunk?(bytesRead)
         }
         if let modificationDate {
-            let interval = modificationDate.timeIntervalSince1970
-            let seconds = floor(interval)
-            let times = [
-                timespec(tv_sec: 0, tv_nsec: Int(UTIME_OMIT)),
-                timespec(tv_sec: Int(seconds), tv_nsec: Int((interval - seconds) * 1_000_000_000))
-            ]
-            guard futimens(outputFD, times) == 0 else {
-                throw SDImportError.fileSystemError(operation: "set copy date", path: destinationPath, code: errno)
-            }
+            try Self.setModificationDate(modificationDate, descriptor: outputFD, path: destinationPath)
         }
         var finished = stat()
         guard fstat(outputFD, &finished) == 0 else {

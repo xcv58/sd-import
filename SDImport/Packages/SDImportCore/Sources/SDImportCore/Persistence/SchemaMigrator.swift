@@ -90,7 +90,8 @@ public enum SchemaMigrator {
             try db.execute(sql: """
                 CREATE TABLE import_copy_attempts (
                     file_id INTEGER PRIMARY KEY NOT NULL REFERENCES job_files(id) ON DELETE CASCADE,
-                    attempt_json BLOB NOT NULL
+                    attempt_json BLOB NOT NULL,
+                    copy_committed BOOLEAN NOT NULL DEFAULT 0
                 )
                 """)
             try db.execute(sql: "PRAGMA user_version = \(Self.currentUserVersion)")

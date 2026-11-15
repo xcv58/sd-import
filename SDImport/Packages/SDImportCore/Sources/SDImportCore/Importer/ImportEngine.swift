@@ -78,6 +78,9 @@ public struct ImportEngine {
         if let unavailableFileID = recovery.unavailableFileID {
             throw SDImportError.missingDestinationDirectory(unavailableFileID)
         }
+        if let path = recovery.unverifiedDestinationPath {
+            throw SDImportError.destinationFilenameConflict(path)
+        }
         if recovery.needsReview {
             throw SDImportError.reviewedDestinationChanged
         }
@@ -712,6 +715,7 @@ public struct ImportEngine {
             throw SDImportError.missingDestinationDirectory(attempt.fileID)
         }
         attempt.destinationDirectory = identity
+        attempt.modificationDate = modificationDate
         try jobRepository.beginCopyAttempt(attempt)
         do {
             if CopyEngine.supportsExclusiveRename(in: directory) != false {

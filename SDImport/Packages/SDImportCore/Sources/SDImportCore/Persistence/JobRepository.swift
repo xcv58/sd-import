@@ -107,6 +107,22 @@ public struct JobRepository {
         }
     }
 
+    public func hasUnresolvedCopies(jobID: String) throws -> Bool {
+        try pool.read { db in
+            try Bool.fetchOne(
+                db,
+                sql: """
+                SELECT EXISTS (
+                    SELECT 1 FROM import_copy_attempts AS attempt
+                    JOIN job_files AS file ON file.id = attempt.file_id
+                    WHERE file.job_id = ? AND attempt.copy_committed = 0
+                )
+                """,
+                arguments: [jobID]
+            ) ?? false
+        }
+    }
+
     public func needsDestinationReview(jobID: String) throws -> Bool {
         try pool.read { db in
             try Bool.fetchOne(
@@ -376,7 +392,7 @@ public struct JobRepository {
                 pending.localCopyCommitted = true
                 let data = try JSONEncoder().encode(pending)
                 try db.execute(
-                    sql: "UPDATE import_copy_attempts SET attempt_json = ? WHERE file_id = ?",
+                    sql: "UPDATE import_copy_attempts SET attempt_json = ?, copy_committed = 1 WHERE file_id = ?",
                     arguments: [data, attempt.fileID]
                 )
             } else {

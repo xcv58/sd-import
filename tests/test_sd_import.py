@@ -354,6 +354,55 @@ class MetadataDedupeTests(unittest.TestCase):
                 ).fetchone()
                 self.assertEqual(Path(copied["dest_path"]).read_bytes(), data)
 
+    def test_replaced_stage_cannot_overwrite_unrelated_file(self) -> None:
+        source = self.mount / "IMG_SWAP.JPG"
+        source.write_bytes(b"camera")
+        unrelated = self.root / "unrelated.txt"
+        unrelated.write_bytes(b"keep this intact")
+        summary = sd_import.scan_mount(
+            conn=self.conn, mount_path=self.mount, location="TEST",
+            photos_base=self.photos, videos_base=self.videos,
+        )
+        real_copy = importer_mod.copy_file_with_progress
+
+        def substitute_link(source, stage, **options):
+            stage.unlink()
+            stage.symlink_to(unrelated)
+            real_copy(source, stage, **options)
+
+        with mock.patch.object(importer_mod, "copy_file_with_progress", side_effect=substitute_link):
+            outcome = sd_import.import_new_files(self.conn, summary["job_id"])
+        self.assertEqual(outcome["failed_files"], 1)
+        self.assertEqual(unrelated.read_bytes(), b"keep this intact")
+        links = list(self.photos.rglob(".sdimport-*.part"))
+        self.assertEqual(len(links), 1)
+        self.assertTrue(links[0].is_symlink())
+
+    def test_complete_exclusive_recovery_restores_original_timestamp(self) -> None:
+        source = self.mount / "IMG_RECOVER_DATE.JPG"
+        source.write_bytes(b"complete legacy copy")
+        os.utime(source, (1_700_000_000, 1_700_000_000))
+        summary = sd_import.scan_mount(
+            conn=self.conn, mount_path=self.mount, location="TEST",
+            photos_base=self.photos, videos_base=self.videos,
+        )
+        job_id = summary["job_id"]
+
+        def interrupt_after_bytes(source, destination, expected_size, did_create, expected_digest):
+            with destination.open("xb") as handle:
+                did_create(os.fstat(handle.fileno()))
+                handle.write(source.read_bytes())
+            raise SystemExit(8)
+
+        with mock.patch.object(importer_mod, "publish_without_replacing", return_value=False):
+            with mock.patch.object(importer_mod, "copy_to_exclusive_destination", side_effect=interrupt_after_bytes):
+                with self.assertRaises(SystemExit):
+                    sd_import.import_new_files(self.conn, job_id)
+        result = sd_import.import_new_files(self.conn, job_id)
+        row = self.conn.execute("SELECT dest_path FROM job_files WHERE job_id=?", (job_id,)).fetchone()
+        self.assertEqual(result["imported_files"], 1)
+        self.assertEqual(Path(row["dest_path"]).stat().st_mtime_ns, source.stat().st_mtime_ns)
+
     def test_retry_recovers_owned_partial_exclusive_destination(self) -> None:
         source = self.mount / "IMG_INTERRUPTED.JPG"
         source.write_bytes(b"complete data")
@@ -371,14 +420,14 @@ class MetadataDedupeTests(unittest.TestCase):
         def interrupted_copy(source, target, expected_size, did_create, expected_digest):
             with target.open("xb") as handle:
                 did_create(os.fstat(handle.fileno()))
-                handle.write(b"partial")
+                handle.write(b"complete")
             raise SystemExit(19)
 
         with mock.patch.object(importer_mod, "publish_without_replacing", return_value=False):
             with mock.patch.object(importer_mod, "copy_to_exclusive_destination", side_effect=interrupted_copy):
                 with self.assertRaises(SystemExit):
                     sd_import.import_new_files(self.conn, job_id)
-            self.assertEqual(target.read_bytes(), b"partial")
+            self.assertEqual(target.read_bytes(), b"complete")
             self.conn.close()
             self.conn = sd_import.connect_db(self.db_path)
             result = sd_import.import_new_files(self.conn, job_id)

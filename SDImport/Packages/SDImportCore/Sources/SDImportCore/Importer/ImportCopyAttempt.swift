@@ -14,6 +14,7 @@ struct ImportCopyAttempt: Codable {
     var staged: StagedImportCopy?
     var reservedDestination: ImportCopyFileIdentity?
     var directCopyDigest: Data?
+    var modificationDate: Date?
     var portableReceipt: CopyPortableReceipt?
     var localCopyCommitted = false
 
@@ -98,7 +99,7 @@ struct CopyPortableReceipt: Codable {
     let rootIdentity: ImportCopyDirectoryIdentity
     let fileIdentity: PortableFileIdentity
 
-    func replay(sourcePath: String) throws -> Bool {
+    func replay(sourcePath: String, copiedDigest: Data?) throws -> Bool {
         let root = URL(fileURLWithPath: rootPath, isDirectory: true)
         guard rootIdentity.matches(at: root),
               let info = try CopyEngine.fileInfo(at: URL(fileURLWithPath: sourcePath)),
@@ -106,6 +107,9 @@ struct CopyPortableReceipt: Codable {
               Int64(info.st_mtimespec.tv_sec) == fileIdentity.modificationTimeEpochSeconds else {
             return false
         }
+        guard let copiedDigest,
+              try CopyEngine.readDigest(at: URL(fileURLWithPath: sourcePath), identity: ImportCopyFileIdentity(info))
+                == copiedDigest else { return false }
         let ledger = PortableImportReceiptLedger(sourceRootURL: root)
         let snapshot = try ledger.load()
         if !snapshot.fingerprints.contains(PortableImportReceiptLedger.portableFingerprint(for: fileIdentity)) {

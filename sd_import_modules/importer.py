@@ -24,7 +24,7 @@ from .common import (
     planned_media_dest_dir,
     write_json_atomic,
 )
-from .db import get_state_dir_from_conn
+from .db import get_diskutil_info, get_state_dir_from_conn
 from .ui import SwiftDialogProgressWindow, detect_swiftdialog_binary
 
 TERMINAL_PROGRESS_STATES = {"completed", "completed_with_errors", "failed", "aborted", "idle"}
@@ -149,8 +149,10 @@ def copy_file_with_progress(
     dst: Path,
     chunk_size: int = 16 * 1024 * 1024,
     on_chunk: Optional[Callable[[int], None]] = None,
+    descriptor: Optional[int] = None,
 ) -> None:
-    with src.open("rb") as src_f, dst.open("wb") as dst_f:
+    output = dst.open("wb") if descriptor is None else os.fdopen(os.dup(descriptor), "wb")
+    with src.open("rb") as src_f, output as dst_f:
         while True:
             chunk = src_f.read(chunk_size)
             if not chunk:
@@ -158,7 +160,11 @@ def copy_file_with_progress(
             dst_f.write(chunk)
             if on_chunk:
                 on_chunk(len(chunk))
-    shutil.copystat(src, dst)
+        if descriptor is not None:
+            dst_f.flush()
+            set_copy_metadata(dst_f.fileno(), os.fstat(src_f.fileno()))
+    if descriptor is None:
+        shutil.copystat(src, dst)
 
 
 def publish_without_replacing(staging: Path, target: Path) -> bool:
@@ -184,15 +190,35 @@ def entry_inode(info: os.stat_result) -> str:
 
 
 def entry_identity(info: os.stat_result) -> str:
-    return f"{entry_inode(info)}:{getattr(info, 'st_birthtime', '')}"
+    return f"{info.st_ino}:{getattr(info, 'st_birthtime', '')}"
 
 
-def file_digest(path: Path) -> str:
+def parent_identity(path: Path) -> str:
+    info = path.stat()
+    volume = str(info.st_dev)
+    if sys.platform == "darwin":
+        root = path.resolve()
+        while root.parent != root and root.parent.stat().st_dev == info.st_dev:
+            root = root.parent
+        uuid = get_diskutil_info(str(root)).get("VolumeUUID")
+        if uuid:
+            volume = str(uuid)
+    return f"{volume}:{entry_identity(info)}"
+
+
+def file_digest(path: Path, descriptor: Optional[int] = None) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as handle:
+    handle = path.open("rb") if descriptor is None else os.fdopen(os.dup(descriptor), "rb")
+    with handle:
+        handle.seek(0)
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def set_copy_metadata(descriptor: int, source: os.stat_result) -> None:
+    os.utime(descriptor, ns=(source.st_atime_ns, source.st_mtime_ns))
+    os.fchmod(descriptor, stat.S_IMODE(source.st_mode))
 
 
 def copy_to_exclusive_destination(
@@ -209,23 +235,32 @@ def copy_to_exclusive_destination(
             if did_create:
                 did_create(owned)
             digest = hashlib.sha256()
+            has_allocated_data = False
             for chunk in iter(lambda: input_file.read(1024 * 1024), b""):
                 output.write(chunk)
                 digest.update(chunk)
+                if did_create and not has_allocated_data:
+                    output.flush()
+                    allocated = os.fstat(output.fileno())
+                    if entry_identity(allocated) != entry_identity(owned):
+                        did_create(allocated)
+                    has_allocated_data = True
             output.flush()
             if os.fstat(output.fileno()).st_size != expected_size:
                 raise RuntimeError("size mismatch after copy")
             if expected_digest is not None and digest.hexdigest() != expected_digest:
                 raise RuntimeError("source changed during import")
             original = os.fstat(input_file.fileno())
-            os.utime(output.fileno(), ns=(original.st_atime_ns, original.st_mtime_ns))
-            os.fchmod(output.fileno(), stat.S_IMODE(original.st_mode))
+            set_copy_metadata(output.fileno(), original)
             # On macOS setting an older modification time can adjust birth time.
-            if entry_inode(target.lstat()) != entry_inode(owned):
+            completed = os.fstat(output.fileno())
+            if entry_inode(target.lstat()) != entry_inode(completed):
                 raise RuntimeError("destination changed during import")
+            if did_create and entry_identity(completed) != entry_identity(owned):
+                did_create(completed)
         except Exception:
             try:
-                if entry_identity(target.lstat()) == entry_identity(owned):
+                if entry_inode(target.lstat()) == entry_inode(os.fstat(output.fileno())):
                     target.unlink()
             except FileNotFoundError:
                 pass
@@ -233,7 +268,7 @@ def copy_to_exclusive_destination(
 
 
 def recover_exclusive_destination(
-    conn: sqlite3.Connection, file_id: int, expected_size: int
+    conn: sqlite3.Connection, file_id: int, source: Path, expected_size: int
 ) -> Optional[Path]:
     attempt = conn.execute(
         "SELECT * FROM exclusive_copy_attempts WHERE file_id=?", (file_id,)
@@ -241,22 +276,44 @@ def recover_exclusive_destination(
     if not attempt:
         return None
     target = Path(attempt["target"])
-    if entry_identity(target.parent.stat()) != attempt["parent_identity"]:
+    if parent_identity(target.parent) != attempt["parent_identity"]:
         raise OSError(errno.ENODEV, "The original destination directory is unavailable", str(target.parent))
 
     try:
-        info = target.lstat()
+        descriptor = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
-        info = None
-    if info and stat.S_ISREG(info.st_mode):
-        expected_inode, _ = attempt["file_identity"].rsplit(":", 1)
-        if entry_inode(info) == expected_inode and info.st_size == expected_size:
-            if file_digest(target) == attempt["content_digest"]:
-                return target
-        if info.st_size < expected_size and entry_identity(info) == attempt["file_identity"]:
-            target.unlink()
-    conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
-    return None
+        conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
+        return None
+    try:
+        info = os.fstat(descriptor)
+        expected_inode = attempt["file_identity"].split(":", 1)[0]
+        if stat.S_ISREG(info.st_mode) and str(info.st_ino) == expected_inode and info.st_size == expected_size:
+            if file_digest(target, descriptor) == attempt["content_digest"]:
+                os.utime(descriptor, ns=(attempt["atime_ns"], attempt["mtime_ns"]))
+                os.fchmod(descriptor, attempt["mode"])
+                if entry_inode(target.lstat()) == entry_inode(info):
+                    return target
+
+        if (
+            stat.S_ISREG(info.st_mode)
+            and entry_identity(info) == attempt["file_identity"]
+            and info.st_size < expected_size
+            and file_digest(source) == attempt["content_digest"]
+        ):
+            with source.open("rb") as original, os.fdopen(os.dup(descriptor), "rb") as partial:
+                partial.seek(0)
+                for data in iter(lambda: partial.read(1024 * 1024), b""):
+                    if original.read(len(data)) != data:
+                        break
+                else:
+                    current = target.lstat()
+                    if entry_identity(current) == entry_identity(info) and current.st_mtime_ns == info.st_mtime_ns:
+                        target.unlink()
+                        conn.execute("DELETE FROM exclusive_copy_attempts WHERE file_id=?", (file_id,))
+                        return None
+    finally:
+        os.close(descriptor)
+    raise FileExistsError(errno.EEXIST, "The destination cannot be verified", str(target))
 
 
 def progress_path_for_job(state_dir: Path, job_id: str) -> Path:
@@ -453,7 +510,7 @@ def import_new_files(
         filename = row["filename"]
         expected_size = int(row["size"])
         try:
-            recovered = recover_exclusive_destination(conn, row["id"], expected_size)
+            recovered = recover_exclusive_destination(conn, row["id"], src, expected_size)
         except OSError as exc:
             failed_files += 1
             done_files += 1
@@ -544,33 +601,43 @@ def import_new_files(
             continue
 
         tmp_target: Optional[Path] = None
+        descriptor: Optional[int] = None
         try:
             descriptor, tmp_path = tempfile.mkstemp(prefix=".sdimport-", suffix=".part", dir=target.parent)
             tmp_target = Path(tmp_path)
-            os.close(descriptor)
 
             def on_chunk(chunk_size: int) -> None:
                 nonlocal active_file_bytes
                 active_file_bytes = min(expected_size, active_file_bytes + chunk_size)
                 emit_progress(force=False)
 
-            copy_file_with_progress(src, tmp_target, on_chunk=on_chunk)
-            copied_size = tmp_target.stat().st_size
+            copy_file_with_progress(src, tmp_target, on_chunk=on_chunk, descriptor=descriptor)
+            staged = os.fstat(descriptor)
+            if entry_inode(tmp_target.lstat()) != entry_inode(staged):
+                raise RuntimeError("staging path changed during import")
+            copied_size = staged.st_size
             if copied_size != expected_size:
                 raise RuntimeError("size mismatch after copy")
             if not publish_without_replacing(tmp_target, target):
-                expected_digest = file_digest(tmp_target)
+                expected_digest = file_digest(tmp_target, descriptor)
                 tmp_target.unlink()
+                os.close(descriptor)
+                descriptor = None
+                original = src.stat()
+                destination_parent = parent_identity(target.parent)
 
                 def record_reservation(info: os.stat_result) -> None:
                     conn.execute(
-                        "INSERT INTO exclusive_copy_attempts VALUES (?, ?, ?, ?, ?)",
+                        "INSERT OR REPLACE INTO exclusive_copy_attempts VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         (row["id"], str(target), entry_identity(info),
-                         entry_identity(target.parent.stat()), expected_digest),
+                         destination_parent, expected_digest,
+                         original.st_mtime_ns, original.st_atime_ns, stat.S_IMODE(original.st_mode)),
                     )
                     conn.commit()
 
                 copy_to_exclusive_destination(src, target, expected_size, record_reservation, expected_digest)
+            elif entry_inode(target.lstat()) != entry_inode(staged):
+                raise RuntimeError("destination changed during publication")
         except Exception as exc:
             failed_files += 1
             done_files += 1
@@ -585,8 +652,14 @@ def import_new_files(
             emit_progress(force=True)
             continue
         finally:
-            if tmp_target is not None:
-                tmp_target.unlink(missing_ok=True)
+            if descriptor is not None:
+                try:
+                    if tmp_target is not None and entry_inode(tmp_target.lstat()) == entry_inode(os.fstat(descriptor)):
+                        tmp_target.unlink()
+                except FileNotFoundError:
+                    pass
+                finally:
+                    os.close(descriptor)
 
         record_copy(row["id"], src, target, expected_hash, expected_size)
 

@@ -1962,8 +1962,8 @@ struct MediaScannerImportTests {
         }
     }
 
-    @Test("recovery removes a partial exclusive destination only when the journal owns it")
-    func recoverInterruptedExclusiveCreate() throws {
+    @Test("partial exclusive recovery also verifies bytes before cleanup", arguments: [false, true])
+    func recoverInterruptedExclusiveCreate(edited: Bool) throws {
         let fixture = try Fixture()
         let source = fixture.mountURL.appendingPathComponent("IMG_EXCLUSIVE.JPG")
         try fixture.writeFile(source, bytes: Data("source bytes".utf8))
@@ -1982,17 +1982,26 @@ struct MediaScannerImportTests {
         attempt.destinationDirectory = try #require(
             ImportCopyDirectoryIdentity(at: attempt.destination.deletingLastPathComponent())
         )
+        attempt.directCopyDigest = try CopyEngine.readDigest(at: source)
         try fixture.jobRepository.beginCopyAttempt(attempt)
-        try Data("part".utf8).write(to: attempt.destination)
+        let partial = Data((edited ? "USER" : "sour").utf8)
+        try partial.write(to: attempt.destination)
         attempt.reservedDestination = ImportCopyFileIdentity(try #require(try CopyEngine.fileInfo(at: attempt.destination)))
         try fixture.jobRepository.markCopyStaged(attempt)
 
         let recovery = RecoveryService(jobRepository: fixture.jobRepository)
         #expect(try recovery.recoverInterruptedImports().recoveredJobs == 1)
-        #expect(!FileManager.default.fileExists(atPath: attempt.destination.path))
         #expect(try fixture.jobRepository.fetchJobFiles(jobID: jobID).first?.copyStatus == .pending)
-        #expect(try !fixture.jobRepository.needsDestinationReview(jobID: jobID))
-        #expect(try fixture.importEngine.importFiles(jobID: jobID).importedFiles == 1)
+        if edited {
+            #expect(try Data(contentsOf: attempt.destination) == partial)
+            #expect(try fixture.jobRepository.hasUnresolvedCopies(jobID: jobID))
+            #expect(throws: SDImportError.destinationFilenameConflict(attempt.destinationPath)) {
+                try fixture.importEngine.importFiles(jobID: jobID)
+            }
+        } else {
+            #expect(!FileManager.default.fileExists(atPath: attempt.destination.path))
+            #expect(try fixture.importEngine.importFiles(jobID: jobID).importedFiles == 1)
+        }
     }
 
     @Test("recovery preserves an edited exclusive destination even if it owns the original inode")

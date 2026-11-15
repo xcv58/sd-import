@@ -118,6 +118,14 @@ public final class PurchaseManager: ObservableObject {
         case lifetime
         case trial
 
+        init?(identifier: String) {
+            switch identifier {
+            case AppDistribution.lifetimeProductIdentifier: self = .lifetime
+            case AppDistribution.trialProductIdentifier: self = .trial
+            default: return nil
+            }
+        }
+
         var identifier: String {
             switch self {
             case .lifetime: AppDistribution.lifetimeProductIdentifier
@@ -138,6 +146,7 @@ public final class PurchaseManager: ObservableObject {
         case latest
     }
 
+    @Published private var awaitingApproval: Set<EntitlementProduct> = []
     private var entitlementRevisions: [EntitlementProduct: EntitlementRevisions] = [:]
 
 
@@ -226,7 +235,8 @@ public final class PurchaseManager: ObservableObject {
     }
 
     public var statusMessage: String? {
-        switch activeStoreOperation?.status ?? accessState.purchaseStatus {
+        switch activeStoreOperation?.status
+            ?? (!awaitingApproval.isEmpty && !hasLifetimeUnlock ? .pending : accessState.purchaseStatus) {
         case .idle, .available, .purchased:
             return nil
         case .loading:
@@ -281,7 +291,7 @@ public final class PurchaseManager: ObservableObject {
                 applyEntitlementDecision(.granted(transaction.purchaseDate, transaction.id), for: .lifetime)
                 await transaction.finish()
             case .pending:
-                accessState.apply(.pending)
+                recordPendingApproval(productIdentifier: AppDistribution.lifetimeProductIdentifier)
             case .userCancelled:
                 accessState.apply(.cancelled)
             @unknown default:
@@ -319,7 +329,7 @@ public final class PurchaseManager: ObservableObject {
                 applyEntitlementDecision(.granted(transaction.purchaseDate, transaction.id), for: .trial)
                 await transaction.finish()
             case .pending:
-                accessState.apply(.pending)
+                recordPendingApproval(productIdentifier: AppDistribution.trialProductIdentifier)
             case .userCancelled:
                 accessState.apply(.cancelled)
             @unknown default:
@@ -407,16 +417,17 @@ public final class PurchaseManager: ObservableObject {
         }
     }
 
+    func recordPendingApproval(productIdentifier: String) {
+        guard let product = EntitlementProduct(identifier: productIdentifier) else { return }
+        awaitingApproval.insert(product)
+        accessState.apply(.pending)
+    }
+
     @discardableResult
     func receiveVerifiedTransaction(
         productIdentifier: String, purchaseDate: Date, transactionID: UInt64, isRevoked: Bool
     ) async -> Bool {
-        let product: EntitlementProduct
-        switch productIdentifier {
-        case AppDistribution.lifetimeProductIdentifier: product = .lifetime
-        case AppDistribution.trialProductIdentifier: product = .trial
-        default: return false
-        }
+        guard let product = EntitlementProduct(identifier: productIdentifier) else { return false }
         if isRevoked {
             let current = entitlementRevisions[product, default: EntitlementRevisions()].grantedTransactionID
             entitlementRevisions[product, default: EntitlementRevisions()].revokedTransactionIDs.insert(transactionID)
@@ -646,6 +657,7 @@ public final class PurchaseManager: ObservableObject {
                 return false
             }
             entitlementRevisions[product, default: EntitlementRevisions()].grantedTransactionID = id
+            awaitingApproval.remove(product)
         case .absent:
             entitlementRevisions[product, default: EntitlementRevisions()].grantedTransactionID = nil
         }

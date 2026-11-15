@@ -98,7 +98,10 @@ def connect_db(db_path: Path) -> sqlite3.Connection:
             target TEXT NOT NULL,
             file_identity TEXT NOT NULL,
             parent_identity TEXT NOT NULL,
-            content_digest TEXT NOT NULL
+            content_digest TEXT NOT NULL,
+            mtime_ns INTEGER NOT NULL,
+            atime_ns INTEGER NOT NULL,
+            mode INTEGER NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS idx_job_files_job_decision

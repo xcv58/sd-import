@@ -90,7 +90,7 @@ public struct HistoryRetentionService {
         status != ? AND NOT EXISTS (
             SELECT 1 FROM import_copy_attempts AS attempt
             JOIN job_files AS file ON file.id = attempt.file_id
-            WHERE file.job_id = jobs.job_id
+            WHERE file.job_id = jobs.job_id AND attempt.copy_committed = 0
         )
         """
 

@@ -118,6 +118,24 @@ final class PurchaseManagerReliabilityTests: XCTestCase {
         XCTAssertNil(manager.statusMessage)
     }
 
+    func testTrialRevocationPreservesPendingLifetimeApproval() async {
+        let state = StorefrontState()
+        let manager = makeManager(state: state, current: { _ in .verificationFailed })
+        let trial = AppDistribution.trialProductIdentifier
+        await manager.receiveVerifiedTransaction(
+            productIdentifier: trial, purchaseDate: purchaseDate, transactionID: 1, isRevoked: false
+        )
+        manager.recordPendingApproval(productIdentifier: AppDistribution.lifetimeProductIdentifier)
+        let pendingMessage = manager.statusMessage
+        XCTAssertNotNil(pendingMessage)
+
+        await manager.receiveVerifiedTransaction(
+            productIdentifier: trial, purchaseDate: purchaseDate, transactionID: 1, isRevoked: true
+        )
+        XCTAssertFalse(manager.canStartImport)
+        XCTAssertEqual(manager.statusMessage, pendingMessage)
+    }
+
     func testRestoreClearsLoadingWhenVerifiedTrialSurvivesTimeouts() async {
         let state = StorefrontState()
         let product = AppDistribution.trialProductIdentifier
