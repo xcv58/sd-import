@@ -1,3 +1,5 @@
+import CryptoKit
+import Darwin
 import Foundation
 import GRDB
 
@@ -73,7 +75,15 @@ public struct JobRepository {
         try pool.read { db in
             let rows = try Row.fetchAll(
                 db,
-                sql: "SELECT * FROM jobs WHERE status = ? ORDER BY created_at DESC",
+                sql: """
+                SELECT * FROM jobs
+                WHERE status = ? OR EXISTS (
+                    SELECT 1 FROM import_copy_attempts AS attempt
+                    JOIN job_files AS file ON file.id = attempt.file_id
+                    WHERE file.job_id = jobs.job_id
+                )
+                ORDER BY created_at DESC
+                """,
                 arguments: [ImportJobStatus.importing.databaseValue]
             )
             return try rows.map(decodeJob)
@@ -241,28 +251,148 @@ public struct JobRepository {
         completedAt: Date? = Date()
     ) throws {
         try pool.write { db in
-            try db.execute(
-                sql: """
-                UPDATE job_files
-                SET copy_status = ?,
-                    final_dest_path = COALESCE(?, final_dest_path),
-                    error = ?,
-                    decision = COALESCE(?, decision),
-                    known_source = COALESCE(?, known_source),
-                    completed_at = ?
-                WHERE id = ?
-                """,
-                arguments: [
-                    status.databaseValue,
-                    finalDestinationPath,
-                    error,
-                    decision?.databaseValue,
-                    knownSource?.rawValue,
-                    DateCoding.optionalString(from: completedAt),
-                    id
-                ]
+            try Self.writeFileCopyStatus(
+                id: id, status: status, finalDestinationPath: finalDestinationPath,
+                error: error, decision: decision, knownSource: knownSource, completedAt: completedAt, db: db
             )
         }
+    }
+
+    private static func writeFileCopyStatus(
+        id: Int64,
+        status: CopyStatus,
+        finalDestinationPath: String?,
+        error: String?,
+        decision: FileDecision?,
+        knownSource: KnownFileSource?,
+        completedAt: Date?,
+        db: Database
+    ) throws {
+        try db.execute(
+            sql: """
+            UPDATE job_files
+            SET copy_status = ?,
+                final_dest_path = COALESCE(?, final_dest_path),
+                error = ?,
+                decision = COALESCE(?, decision),
+                known_source = COALESCE(?, known_source),
+                completed_at = ?
+            WHERE id = ?
+            """,
+            arguments: [
+                status.databaseValue,
+                finalDestinationPath,
+                error,
+                decision?.databaseValue,
+                knownSource?.rawValue,
+                DateCoding.optionalString(from: completedAt),
+                id
+            ]
+        )
+    }
+
+    // Keep the lock inode in place so every process opens the same lock.
+    public func withImportLock<T>(jobID: String, _ operation: () throws -> T) throws -> T? {
+        let database = URL(fileURLWithPath: pool.path).resolvingSymlinksInPath()
+        let directory = database.appendingPathExtension("import-locks")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let key = SHA256.hash(data: Data(jobID.utf8)).map { String(format: "%02x", $0) }.joined()
+        let path = directory.appendingPathComponent(key).path
+        let descriptor = open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0o600)
+        guard descriptor >= 0 else {
+            throw SDImportError.fileSystemError(operation: "open import lock", path: path, code: errno)
+        }
+        defer { close(descriptor) }
+        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+            let code = errno
+            if code == EWOULDBLOCK { return nil }
+            throw SDImportError.fileSystemError(operation: "lock import job", path: path, code: code)
+        }
+        return try operation()
+    }
+
+    func beginCopyAttempt(_ attempt: ImportCopyAttempt) throws {
+        let data = try JSONEncoder().encode(attempt)
+        try pool.write { db in
+            try db.execute(
+                sql: "INSERT INTO import_copy_attempts (file_id, attempt_json) VALUES (?, ?)",
+                arguments: [attempt.fileID, data]
+            )
+        }
+    }
+
+    func markCopyStaged(_ attempt: ImportCopyAttempt) throws {
+        let data = try JSONEncoder().encode(attempt)
+        try pool.write { db in
+            try db.execute(
+                sql: "UPDATE import_copy_attempts SET attempt_json = ? WHERE file_id = ?",
+                arguments: [data, attempt.fileID]
+            )
+            guard db.changesCount == 1 else {
+                throw SDImportError.invalidDatabaseValue(column: "import_copy_attempts.file_id", value: String(attempt.fileID))
+            }
+        }
+    }
+
+    func copyAttempts(jobID: String) throws -> [ImportCopyAttempt] {
+        try pool.read { db in
+            try Data.fetchAll(
+                db,
+                sql: """
+                SELECT attempt.attempt_json
+                FROM import_copy_attempts AS attempt
+                JOIN job_files AS file ON file.id = attempt.file_id
+                WHERE file.job_id = ?
+                ORDER BY attempt.file_id
+                """,
+                arguments: [jobID]
+            ).map { try JSONDecoder().decode(ImportCopyAttempt.self, from: $0) }
+        }
+    }
+
+    func discardCopyAttempt(_ attempt: ImportCopyAttempt, needsDestinationReview: Bool = false) throws {
+        try pool.write { db in
+            if needsDestinationReview {
+                try db.execute(
+                    sql: "UPDATE jobs SET needs_destination_review = 1 WHERE job_id = ?",
+                    arguments: [attempt.jobID]
+                )
+            }
+            try Self.removeCopyAttempt(fileID: attempt.fileID, db: db)
+        }
+    }
+
+    func commitCopyAttempt(_ attempt: ImportCopyAttempt) throws {
+        try recordDestinationOutcome(
+            fileID: attempt.fileID, jobID: attempt.jobID, sourcePath: attempt.sourcePath,
+            fingerprint: attempt.fingerprint, copiedTo: attempt.destinationPath
+        )
+    }
+
+    func recordDestinationOutcome(
+        fileID: Int64,
+        jobID: String,
+        sourcePath: String,
+        fingerprint: FileFingerprint,
+        copiedTo: String? = nil,
+        skipReason: String? = nil
+    ) throws {
+        try pool.write { db in
+            let copied = copiedTo != nil
+            try Self.writeFileCopyStatus(
+                id: fileID, status: copied ? .copied : .skipped, finalDestinationPath: copiedTo,
+                error: skipReason, decision: copied ? nil : .known,
+                knownSource: copied ? nil : .destination, completedAt: Date(), db: db
+            )
+            try DedupeRepository.recordImported(fingerprint, jobID: jobID, sourcePath: sourcePath, db: db)
+            if copied {
+                try Self.removeCopyAttempt(fileID: fileID, db: db)
+            }
+        }
+    }
+
+    private static func removeCopyAttempt(fileID: Int64, db: Database) throws {
+        try db.execute(sql: "DELETE FROM import_copy_attempts WHERE file_id = ?", arguments: [fileID])
     }
 
     public func updateJobFileImportPlan(

@@ -2,12 +2,13 @@ import Foundation
 import GRDB
 
 public enum SchemaMigrator {
-    public static let currentUserVersion: Int32 = 5
+    public static let currentUserVersion: Int32 = 6
     public static let initialMigrationIdentifier = "v1_initial_schema"
     public static let identityScopedFingerprintMigrationIdentifier = "v2_identity_scoped_fingerprints"
     public static let knownFileSourceMigrationIdentifier = "v3_known_file_source"
     public static let portableReceiptIdentityMigrationIdentifier = "v4_portable_receipt_identity"
     public static let destinationReviewMigrationIdentifier = "v5_destination_review"
+    public static let copyAttemptMigrationIdentifier = "v6_copy_attempts"
 
     public static func makeMigrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
@@ -82,6 +83,16 @@ public enum SchemaMigrator {
                     .notNull()
                     .defaults(to: false)
             }
+            try db.execute(sql: "PRAGMA user_version = 5")
+        }
+
+        migrator.registerMigration(copyAttemptMigrationIdentifier) { db in
+            try db.execute(sql: """
+                CREATE TABLE import_copy_attempts (
+                    file_id INTEGER PRIMARY KEY NOT NULL REFERENCES job_files(id) ON DELETE CASCADE,
+                    attempt_json BLOB NOT NULL
+                )
+                """)
             try db.execute(sql: "PRAGMA user_version = \(Self.currentUserVersion)")
         }
 

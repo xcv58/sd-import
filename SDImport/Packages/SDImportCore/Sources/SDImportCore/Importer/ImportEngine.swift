@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public struct ImportEngine {
@@ -39,6 +40,46 @@ public struct ImportEngine {
         onProgress: ((ImportProgress) -> Void)? = nil,
         shouldCancel: () -> Bool = { false }
     ) throws -> ImportResult {
+        try importFiles(
+            preparing: {}, jobID: jobID, requiresReviewedDestinations: requiresReviewedDestinations,
+            onProgress: onProgress, shouldCancel: shouldCancel
+        )
+    }
+
+    @discardableResult
+    public func importFiles(
+        preparing prepare: () throws -> Void,
+        jobID: String,
+        requiresReviewedDestinations: Bool,
+        onProgress: ((ImportProgress) -> Void)? = nil,
+        shouldCancel: () -> Bool = { false }
+    ) throws -> ImportResult {
+        guard let result = try jobRepository.withImportLock(jobID: jobID, {
+            try importFilesWhileLocked(
+                jobID: jobID, requiresReviewedDestinations: requiresReviewedDestinations,
+                prepare: prepare, onProgress: onProgress, shouldCancel: shouldCancel
+            )
+        }) else {
+            throw SDImportError.invalidArgument(L10n.tr("Finish the current scan or import first"))
+        }
+        return result
+    }
+
+    private func importFilesWhileLocked(
+        jobID: String,
+        requiresReviewedDestinations: Bool,
+        prepare: () throws -> Void,
+        onProgress: ((ImportProgress) -> Void)?,
+        shouldCancel: () -> Bool
+    ) throws -> ImportResult {
+        let recovery = try RecoveryService(fileManager: fileManager, jobRepository: jobRepository)
+            .recoverJobWhileLocked(jobID: jobID)
+        if let unavailableFileID = recovery.unavailableFileID {
+            throw SDImportError.missingDestinationDirectory(unavailableFileID)
+        }
+        if recovery.needsReview {
+            throw SDImportError.reviewedDestinationChanged
+        }
         guard let job = try jobRepository.fetchJob(id: jobID) else {
             throw SDImportError.jobNotFound(jobID)
         }
@@ -47,6 +88,7 @@ public struct ImportEngine {
             throw SDImportError.reviewedDestinationChanged
         }
 
+        try prepare()
         let allFilesAtStart = try jobRepository.fetchJobFiles(jobID: jobID)
         let files = allFilesAtStart.filter(\.isPendingImport)
         let progressUnitIDBySourcePath = Insta360ClipDetector()
@@ -525,20 +567,12 @@ public struct ImportEngine {
             ) {
             case .skip(let reason):
                 if requiresReviewedDestinations { try stopForDestinationChange() }
+                try jobRepository.recordDestinationOutcome(
+                    fileID: fileID, jobID: jobID, sourcePath: file.sourcePath,
+                    fingerprint: fingerprint, skipReason: reason
+                )
                 markDone(file, status: .skipped)
                 processedBytes += file.size
-                try jobRepository.updateFileCopyStatus(
-                    id: fileID,
-                    status: .skipped,
-                    error: reason,
-                    decision: .known,
-                    knownSource: .destination
-                )
-                try dedupeRepository.recordImported(
-                    fingerprint,
-                    jobID: jobID,
-                    sourcePath: file.sourcePath
-                )
                 recordPortableReceipt(portableIdentity, file: file)
                 recordFileEvent(
                     file: file,
@@ -550,62 +584,63 @@ public struct ImportEngine {
                 if requiresReviewedDestinations { try stopForDestinationChange() }
                 throw SDImportError.destinationFilenameConflict(candidate.path)
             case .copy(let destinationURL):
+                let attempt = ImportCopyAttempt(
+                    id: UUID(), fileID: fileID, jobID: jobID, sourcePath: file.sourcePath,
+                    destinationPath: destinationURL.path, fingerprint: fingerprint
+                )
+                currentDestinationPath = destinationURL.path
+                emit(status: "copying")
+                let published: ImportCopyAttempt
                 do {
-                    currentDestinationPath = destinationURL.path
-                    emit(status: "copying")
-                    try copyEngine.copyFile(
-                        from: sourceURL,
-                        to: destinationURL,
-                        expectedSize: file.size,
-                        modificationDate: modificationDate(from: file.modificationDateString),
-                        replacesExisting: false,
+                    published = try copyToDestination(
+                        attempt, from: sourceURL, modificationDate: modificationDate(from: file.modificationDateString),
                         onChunk: { chunkSize in
                             activeFileBytes = min(file.size, activeFileBytes + Int64(chunkSize))
                             emit(status: "copying")
                         },
                         shouldCancel: shouldCancel
                     )
-                    markDone(file, status: .copied)
-                    processedBytes += file.size
-                    copiedBytes += file.size
-                    try jobRepository.updateFileCopyStatus(
-                        id: fileID,
-                        status: .copied,
-                        finalDestinationPath: destinationURL.path,
-                        error: nil
-                    )
-                    try dedupeRepository.recordImported(
-                        fingerprint,
-                        jobID: jobID,
-                        sourcePath: file.sourcePath
-                    )
-                    recordPortableReceipt(portableIdentity, file: file)
-                    recordFileEvent(
-                        file: file,
-                        status: .copied,
-                        detail: "Size checked",
-                        destinationPath: destinationURL.path
-                    )
                 } catch SDImportError.cancelled {
                     try cancelImport(currentFileID: fileID)
                 } catch CocoaError.fileWriteFileExists where requiresReviewedDestinations {
                     try stopForDestinationChange()
                 } catch {
+                    // Cleanup errors may leave a journal entry. Recovery owns those attempts.
+                    if try jobRepository.copyAttempts(jobID: jobID).contains(where: { $0.fileID == fileID }) {
+                        try? jobRepository.refreshImportTotals(jobID: jobID, finalStatus: .failed)
+                        throw error
+                    }
+                    let detail = L10n.errorMessage(for: error)
+                    try jobRepository.updateFileCopyStatus(id: fileID, status: .failed, error: detail)
                     markDone(file, status: .failed)
                     processedBytes += file.size
-                    let detail = L10n.errorMessage(for: error)
-                    try jobRepository.updateFileCopyStatus(
-                        id: fileID,
-                        status: .failed,
-                        error: detail
-                    )
-                    recordFileEvent(
-                        file: file,
-                        status: .failed,
-                        detail: detail,
-                        destinationPath: destinationURL.path
-                    )
+                    recordFileEvent(file: file, status: .failed, detail: detail, destinationPath: destinationURL.path)
+                    currentFile = nil
+                    currentDestinationPath = nil
+                    activeFileBytes = 0
+                    emit(status: "copying")
+                    continue
                 }
+
+                do {
+                    guard let info = try CopyEngine.fileInfo(at: published.destination),
+                          try published.staged?.matches(info) == true
+                            || CopyEngine.publishedFileMatches(published) else {
+                        throw SDImportError.reviewedDestinationChanged
+                    }
+                    try jobRepository.commitCopyAttempt(published)
+                } catch {
+                    // Publication already succeeded. Keep the journal intact for recovery.
+                    try? jobRepository.refreshImportTotals(jobID: jobID, finalStatus: .failed)
+                    throw error
+                }
+                markDone(file, status: .copied)
+                processedBytes += file.size
+                copiedBytes += file.size
+                recordPortableReceipt(portableIdentity, file: file)
+                recordFileEvent(
+                    file: file, status: .copied, detail: "Size checked", destinationPath: destinationURL.path
+                )
             }
 
             currentFile = nil
@@ -628,8 +663,9 @@ public struct ImportEngine {
         let finalFiles = try jobRepository.fetchJobFiles(jobID: jobID)
         let finalUnitIDBySourcePath = Insta360ClipDetector()
             .unitIDBySourcePath(files: finalFiles)
-        let touchedUnitIDs = Set(files.map { file in
-            finalUnitIDBySourcePath[file.sourcePath] ?? "file:\(file.sourcePath)"
+        let touchedSourcePaths = files.map(\.sourcePath) + recovery.copiedSourcePaths
+        let touchedUnitIDs = Set(touchedSourcePaths.map { path in
+            finalUnitIDBySourcePath[path] ?? "file:\(path)"
         })
         let processedContextFiles = finalFiles.filter { file in
             touchedUnitIDs.contains(
@@ -646,6 +682,62 @@ public struct ImportEngine {
             portableReceiptWarning: portableReceiptWarning,
             portableReceiptSizeWarning: portableReceiptSizeWarning
         )
+    }
+
+    private func copyToDestination(
+        _ pending: ImportCopyAttempt,
+        from source: URL,
+        modificationDate: Date?,
+        onChunk: @escaping (Int) -> Void,
+        shouldCancel: () -> Bool
+    ) throws -> ImportCopyAttempt {
+        let directory = pending.destination.deletingLastPathComponent()
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        try jobRepository.beginCopyAttempt(pending)
+        var attempt = pending
+        var stagingIdentity: ImportCopyFileIdentity?
+        do {
+            if CopyEngine.supportsExclusiveRename(in: directory) != false {
+                attempt.staged = try copyEngine.stageFile(
+                    from: source, to: attempt.staging, expectedSize: attempt.fingerprint.size,
+                    modificationDate: modificationDate, onChunk: onChunk, shouldCancel: shouldCancel,
+                    didCreate: { stagingIdentity = $0 }
+                )
+                try jobRepository.markCopyStaged(attempt)
+                if shouldCancel() { throw SDImportError.cancelled }
+                do {
+                    try copyEngine.publishFile(from: attempt.staging, to: attempt.destination)
+                    return attempt
+                } catch SDImportError.fileSystemError(_, _, let code) where code == ENOTSUP || code == EOPNOTSUPP {
+                    // Some volumes cannot rename without replacement. Use their exclusive create instead.
+                    try removeOwnedCopy(at: attempt.staging, identity: stagingIdentity)
+                    stagingIdentity = nil
+                    attempt.staged = nil
+                    try jobRepository.markCopyStaged(attempt)
+                }
+            }
+            attempt.staged = try copyEngine.stageFile(
+                from: source, to: attempt.destination, expectedSize: attempt.fingerprint.size,
+                modificationDate: modificationDate, onChunk: onChunk, shouldCancel: shouldCancel,
+                didCreate: { identity in
+                    attempt.reservedDestination = identity
+                    try jobRepository.markCopyStaged(attempt)
+                }
+            )
+            try jobRepository.markCopyStaged(attempt)
+        } catch {
+            try removeOwnedCopy(at: attempt.staging, identity: stagingIdentity)
+            try removeOwnedCopy(at: attempt.destination, identity: attempt.reservedDestination)
+            try jobRepository.discardCopyAttempt(attempt)
+            throw error
+        }
+        return attempt
+    }
+
+    private func removeOwnedCopy(at url: URL, identity: ImportCopyFileIdentity?) throws {
+        if let identity, let info = try CopyEngine.fileInfo(at: url), identity.matches(info) {
+            try fileManager.removeItem(at: url)
+        }
     }
 
     private func modificationDate(from string: String) -> Date? {

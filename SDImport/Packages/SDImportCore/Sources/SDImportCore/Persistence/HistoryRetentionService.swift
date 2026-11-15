@@ -51,26 +51,48 @@ public struct HistoryRetentionService {
             )
         }
 
-        for path in reportPaths where fileManager.fileExists(atPath: path) {
-            try? fileManager.removeItem(atPath: path)
-        }
-
-        try pool.write { db in
-            for candidate in candidates {
-                try db.execute(
-                    sql: "DELETE FROM jobs WHERE job_id = ?",
-                    arguments: [candidate.jobID]
-                )
+        let repository = JobRepository(pool: pool)
+        var deletedJobs = 0
+        var deletedReports = 0
+        for candidate in candidates {
+            let removedReports = try repository.withImportLock(jobID: candidate.jobID) { () -> Int? in
+                let deleted = try pool.write { db in
+                    try db.execute(
+                        sql: "DELETE FROM jobs WHERE job_id = ? AND " + Self.prunableJobSQL,
+                        arguments: [candidate.jobID, ImportJobStatus.importing.databaseValue]
+                    )
+                    return db.changesCount == 1
+                }
+                guard deleted else { return nil }
+                var removed = 0
+                for path in [candidate.summaryJSONPath, candidate.summaryMarkdownPath].compactMap({ $0 }) {
+                    if (try? fileManager.removeItem(atPath: path)) != nil {
+                        removed += 1
+                    }
+                }
+                return removed
+            }
+            if let removedReports = removedReports ?? nil {
+                deletedJobs += 1
+                deletedReports += removedReports
             }
         }
 
         return RetentionPruneSummary(
             matchedJobs: candidates.count,
-            deletedJobs: candidates.count,
-            deletedReports: reportCount,
+            deletedJobs: deletedJobs,
+            deletedReports: deletedReports,
             dryRun: false
         )
     }
+
+    private static let prunableJobSQL = """
+        status != ? AND NOT EXISTS (
+            SELECT 1 FROM import_copy_attempts AS attempt
+            JOIN job_files AS file ON file.id = attempt.file_id
+            WHERE file.job_id = jobs.job_id
+        )
+        """
 
     private func candidates(olderThan cutoff: Date) throws -> [PruneCandidate] {
         try pool.read { db in
@@ -79,10 +101,10 @@ public struct HistoryRetentionService {
                 sql: """
                 SELECT job_id, summary_json_path, summary_markdown_path
                 FROM jobs
-                WHERE created_at < ?
+                WHERE created_at < ? AND \(Self.prunableJobSQL)
                 ORDER BY created_at
                 """,
-                arguments: [DateCoding.string(from: cutoff)]
+                arguments: [DateCoding.string(from: cutoff), ImportJobStatus.importing.databaseValue]
             )
             return rows.map { row in
                 PruneCandidate(
