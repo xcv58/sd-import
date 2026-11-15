@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 import sd_import  # noqa: E402
 from sd_import_modules import common as common_mod  # noqa: E402
 from sd_import_modules import db as db_mod  # noqa: E402
+from sd_import_modules import importer as importer_mod  # noqa: E402
 
 
 class MountFilterTests(unittest.TestCase):
@@ -301,6 +302,57 @@ class MetadataDedupeTests(unittest.TestCase):
         self.assertEqual(job["skipped_files"], 0)
         self.assertEqual(job["failed_files"], 0)
         self.assertEqual(job["status"], "IMPORTED")
+
+    def test_late_destination_collision_preserves_file_and_allows_retry(self) -> None:
+        for already_occupied in (False, True):
+            with self.subTest(already_occupied=already_occupied):
+                filename = f"IMG_LATE_{int(already_occupied)}.JPG"
+                source = self.mount / filename
+                data = bytes([int(already_occupied)]) * (19 + int(already_occupied))
+                source.write_bytes(data)
+                os.utime(source, (1_700_000_000, 1_700_000_000))
+                summary = sd_import.scan_mount(
+                    conn=self.conn,
+                    mount_path=self.mount,
+                    location="TEST",
+                    photos_base=self.photos,
+                    videos_base=self.videos,
+                )
+                job_id = summary["job_id"]
+                row = self.conn.execute(
+                    "SELECT dest_path FROM job_files WHERE job_id=? AND filename=?",
+                    (job_id, filename),
+                ).fetchone()
+                self.assertIsNotNone(row)
+                candidate = Path(row["dest_path"])
+                candidate.parent.mkdir(parents=True, exist_ok=True)
+                collision = candidate
+                if already_occupied:
+                    candidate.write_bytes(b"original")
+                    collision = candidate.with_name(f"{candidate.stem}-copy-1{candidate.suffix}")
+
+                original_copy = importer_mod.copy_file_with_progress
+
+                def copy_then_occupy(*args, **kwargs):
+                    original_copy(*args, **kwargs)
+                    collision.write_bytes(b"late arrival")
+
+                with mock.patch.object(importer_mod, "copy_file_with_progress", side_effect=copy_then_occupy):
+                    result = sd_import.import_new_files(self.conn, job_id)
+                self.assertEqual(result["failed_files"], 1)
+                self.assertEqual(collision.read_bytes(), b"late arrival")
+                self.assertEqual(list(candidate.parent.glob(".sdimport-*.part")), [])
+
+                retried = sd_import.import_new_files(self.conn, job_id)
+                self.assertEqual(retried["imported_files"], 1)
+                self.assertEqual(collision.read_bytes(), b"late arrival")
+                if already_occupied:
+                    self.assertEqual(candidate.read_bytes(), b"original")
+                copied = self.conn.execute(
+                    "SELECT dest_path FROM job_files WHERE job_id=? AND filename=?",
+                    (job_id, filename),
+                ).fetchone()
+                self.assertEqual(Path(copied["dest_path"]).read_bytes(), data)
 
     def test_import_replans_pending_destinations_after_scan(self) -> None:
         original_photos = self.root / "photos-a"

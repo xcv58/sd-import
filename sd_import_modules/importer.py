@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import ctypes
 import datetime as dt
+import errno
 import os
 import re
 import shutil
 import sqlite3
+import stat
+import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -22,22 +27,30 @@ from .db import get_state_dir_from_conn
 from .ui import SwiftDialogProgressWindow, detect_swiftdialog_binary
 
 TERMINAL_PROGRESS_STATES = {"completed", "completed_with_errors", "failed", "aborted", "idle"}
+# Darwin provides an exclusive rename on the destination volume.
+_RENAME_EXCL = 0x00000004
+_darwin_rename = None
+if sys.platform == "darwin":
+    _darwin_rename = ctypes.CDLL(None, use_errno=True).renamex_np
+    _darwin_rename.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+    _darwin_rename.restype = ctypes.c_int
+
 DATE_PATTERN = re.compile(r"(\d{4}-\d{2}-\d{2})")
 
 
 def existing_hash_matches(path: Path, expected_hash: str, expected_size: int) -> bool:
     try:
-        st = path.stat()
+        st = path.lstat()
     except FileNotFoundError:
         return False
-    if st.st_size != expected_size:
+    if not stat.S_ISREG(st.st_mode) or st.st_size != expected_size:
         return False
     existing_mtime = dt.datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")
     return metadata_fingerprint(st.st_size, existing_mtime) == expected_hash
 
 
 def resolve_destination_path(candidate: Path, expected_hash: str, expected_size: int) -> Tuple[Optional[Path], Optional[str]]:
-    if not candidate.exists():
+    if not os.path.lexists(candidate):
         return candidate, None
 
     if existing_hash_matches(candidate, expected_hash, expected_size):
@@ -50,7 +63,7 @@ def resolve_destination_path(candidate: Path, expected_hash: str, expected_size:
 
     while True:
         nxt = parent / f"{stem}-copy-{counter}{suffix}"
-        if not nxt.exists():
+        if not os.path.lexists(nxt):
             return nxt, None
         if existing_hash_matches(nxt, expected_hash, expected_size):
             return None, "already_exists_same_hash"
@@ -145,6 +158,19 @@ def copy_file_with_progress(
             if on_chunk:
                 on_chunk(len(chunk))
     shutil.copystat(src, dst)
+
+
+def publish_without_replacing(staging: Path, target: Path) -> None:
+    if _darwin_rename is not None:
+        if _darwin_rename(os.fsencode(staging), os.fsencode(target), _RENAME_EXCL) == 0:
+            return
+        code = ctypes.get_errno()
+        if code not in (errno.ENOTSUP, errno.EOPNOTSUPP):
+            raise OSError(code, os.strerror(code), str(target))
+
+    # An exclusive hard link also publishes the complete file in one step.
+    # The caller owns staging and removes its name after publication.
+    os.link(staging, target)
 
 
 def progress_path_for_job(state_dir: Path, job_id: str) -> Path:
@@ -398,8 +424,11 @@ def import_new_files(
             emit_progress(force=True)
             continue
 
-        tmp_target = target.with_suffix(target.suffix + ".part")
+        tmp_target: Optional[Path] = None
         try:
+            descriptor, tmp_path = tempfile.mkstemp(prefix=".sdimport-", suffix=".part", dir=target.parent)
+            tmp_target = Path(tmp_path)
+            os.close(descriptor)
 
             def on_chunk(chunk_size: int) -> None:
                 nonlocal active_file_bytes
@@ -410,13 +439,11 @@ def import_new_files(
             copied_size = tmp_target.stat().st_size
             if copied_size != expected_size:
                 raise RuntimeError("size mismatch after copy")
-            os.replace(tmp_target, target)
+            publish_without_replacing(tmp_target, target)
         except Exception as exc:
             failed_files += 1
             done_files += 1
             processed_bytes_done += expected_size
-            if tmp_target.exists():
-                tmp_target.unlink(missing_ok=True)
             conn.execute(
                 "UPDATE job_files SET copy_status='FAILED', error=? WHERE id=?",
                 (str(exc), row["id"]),
@@ -426,6 +453,9 @@ def import_new_files(
             active_file_bytes = 0
             emit_progress(force=True)
             continue
+        finally:
+            if tmp_target is not None:
+                tmp_target.unlink(missing_ok=True)
 
         imported_files += 1
         done_files += 1
