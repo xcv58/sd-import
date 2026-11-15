@@ -2650,8 +2650,7 @@ final class AppModel: ObservableObject {
             autoPromptEnabled,
             hasCompletedOnboarding,
             backgroundPromptCanConfigure,
-            backgroundPromptServiceStatus == .enabled,
-            !currentlyOwnsBackgroundPromptRegistration()
+            backgroundPromptServiceStatus == .enabled
         else {
             return
         }
@@ -2677,7 +2676,8 @@ final class AppModel: ObservableObject {
     }
 
     private func performScheduledMissingHelperHealthRepair() async {
-        let ownsRegistration = refreshBackgroundPromptHealth() == .ready
+        let health = refreshBackgroundPromptHealth()
+        let ownsRegistration = health == .ready
         guard BackgroundPromptScheduledRepairPolicy.shouldRunMissingHelperRepair(
             desiredEnabled: autoPromptEnabled,
             hasCompletedOnboarding: hasCompletedOnboarding,
@@ -2698,17 +2698,24 @@ final class AppModel: ObservableObject {
             return
         }
         recordHealthRepairAttempt()
-        await performBackgroundPromptRepair(userInitiated: false)
+        // Recheck on the cooldown when diagnostics can't establish whether the helper is already healthy.
+        if health != .diagnosticsUnavailable {
+            await performBackgroundPromptRepair(userInitiated: false)
+        }
+        if backgroundPromptDiagnosticsReadFailed, backgroundPromptLaunchTimeout != nil {
+            scheduleMissingHelperHealthRepair()
+        }
     }
 
     private func performBackgroundPromptRepair(userInitiated: Bool) async {
         invalidateBackgroundPromptHealthRefresh()
         loginItem.invalidateApplicationOwnershipCache()
-        refreshBackgroundPromptHealth()
+        let initialHealth = refreshBackgroundPromptHealth()
         guard backgroundPromptCanConfigure else {
             cancelBackgroundPromptRetry(resetAttempts: true)
             return
         }
+        guard userInitiated || initialHealth == .waiting else { return }
         clearBackgroundPromptRuntimeError()
         do {
             try authorizeCurrentBackgroundPromptHelperIfNeeded()
@@ -2944,6 +2951,9 @@ final class AppModel: ObservableObject {
         if health == .ready || !autoPromptEnabled {
             backgroundPromptLaunchTimeout = nil
         }
+        let interruptedLaunchRecovery = health == .diagnosticsUnavailable
+            && backgroundPromptLaunchTimeout != nil
+            && backgroundPromptHealthRefreshTask != nil
         if health != .waiting || !autoPromptEnabled || !backgroundPromptCanConfigure
             || backgroundPromptServiceStatus == .requiresApproval {
             invalidateBackgroundPromptHealthRefresh()
@@ -2953,6 +2963,8 @@ final class AppModel: ObservableObject {
             mountObserver?.consumePendingHandoffs()
         } else if !backgroundPromptCanConfigure || !autoPromptEnabled {
             cancelBackgroundPromptRetry(resetAttempts: true)
+        } else if interruptedLaunchRecovery {
+            scheduleMissingHelperHealthRepair()
         }
         refreshBackgroundPromptSettingsFeedbackIfNeeded()
         return health
@@ -2998,13 +3010,11 @@ final class AppModel: ObservableObject {
         guard autoPromptEnabled, backgroundPromptCanConfigure, backgroundPromptServiceStatus == .enabled else {
             return
         }
-        if backgroundPromptLaunchTimeout == nil {
-            let state = backgroundPromptAgentState
-            let identity = currentRepairIdentity
-            let message = { BackgroundPromptHealth.ownershipTimeoutError(state: state, expectedIdentity: identity) }
-            backgroundPromptLaunchTimeout = RelocalizableMessage(message(), render: message)
-            refreshBackgroundPromptSettingsFeedbackIfNeeded()
-        }
+        let state = backgroundPromptAgentState
+        let identity = currentRepairIdentity
+        let message = { BackgroundPromptHealth.ownershipTimeoutError(state: state, expectedIdentity: identity) }
+        backgroundPromptLaunchTimeout = RelocalizableMessage(message(), render: message)
+        refreshBackgroundPromptSettingsFeedbackIfNeeded()
         scheduleMissingHelperHealthRepair()
     }
 
