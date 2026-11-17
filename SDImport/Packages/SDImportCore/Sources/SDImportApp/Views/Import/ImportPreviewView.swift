@@ -17,6 +17,10 @@ struct ImportPreviewView: View {
 
     private let filePageSize = 100
 
+    private enum ScrollTarget {
+        case files
+    }
+
     private var fileFilter: ImportPreviewFileFilter {
         if let selectedFileFilter { return selectedFileFilter }
         if model.isReviewingStoredImport { return .all }
@@ -58,26 +62,33 @@ struct ImportPreviewView: View {
         VStack(spacing: 0) {
             reviewHeader
 
-            AppPage(status: model.folderAccessFeedback?.text, statusRole: .error, maxContentWidth: .infinity) {
-                LazyVStack(
-                    alignment: .leading,
-                    spacing: 14,
-                    pinnedViews: [.sectionHeaders]
-                ) {
-                    ImportSourceSummaryView(
-                        allowsChange: !model.isReviewingStoredImport,
-                        allowsRescan: !model.isReviewingStoredImport,
-                        compact: true
-                    )
+            ScrollViewReader { scroll in
+                AppPage(status: model.folderAccessFeedback?.text, statusRole: .error, maxContentWidth: .infinity) {
+                    LazyVStack(
+                        alignment: .leading,
+                        spacing: 14,
+                        pinnedViews: [.sectionHeaders]
+                    ) {
+                        ImportSourceSummaryView(
+                            allowsChange: !model.isReviewingStoredImport,
+                            allowsRescan: !model.isReviewingStoredImport,
+                            compact: true
+                        )
 
-                    if model.isReviewingStoredImport {
-                        storedImportPlanCard
-                    } else if model.previewTotals.copyFiles == 0 {
-                        zeroCopyCard
-                    } else {
-                        importPlanCard
+                        if model.isReviewingStoredImport {
+                            storedImportPlanCard
+                        } else if model.previewTotals.copyFiles == 0 {
+                            zeroCopyCard
+                        } else {
+                            importPlanCard
+                        }
+                        fileBrowser
                     }
-                    fileBrowser
+                }
+                .onChange(of: selectedFileFilter) { _, filter in
+                    guard filter != nil else { return }
+                    // Filtering can replace a tall page with the empty state.
+                    scroll.scrollTo(ScrollTarget.files, anchor: .top)
                 }
             }
         }
@@ -562,6 +573,7 @@ struct ImportPreviewView: View {
             fileBrowserBody
         } header: {
             fileBrowserToolbar
+                .id(ScrollTarget.files)
                 .padding(14)
                 .background(
                     .bar,
