@@ -253,16 +253,13 @@ struct ImportPreviewView: View {
                 L10n.tr("Copy"),
                 maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth
             ) {
-                Picker(L10n.tr("Copy"), selection: mediaSelectionBinding) {
-                    ForEach(ImportMediaSelection.allCases) { selection in
-                        Text(mediaSelectionTitle(selection))
-                            .tag(selection)
-                            .disabled(!isMediaSelectionAvailable(selection))
-                    }
-                }
-                .id(mediaSelectionPickerIdentity)
-                .labelsHidden()
-                .pickerStyle(.segmented)
+                ImportReviewSegmentedControl(
+                    title: L10n.tr("Copy"),
+                    selection: mediaSelectionBinding,
+                    options: ImportMediaSelection.allCases,
+                    optionTitle: mediaSelectionTitle,
+                    isOptionEnabled: isMediaSelectionAvailable
+                )
             }
 
             if showsMixedDestinationLayout {
@@ -270,14 +267,12 @@ struct ImportPreviewView: View {
                     L10n.tr("Save to"),
                     maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth
                 ) {
-                    Picker(L10n.tr("Save to"), selection: destinationLayoutBinding) {
-                        ForEach([ImportDestinationLayout.singleLibrary, .separateMediaFolders]) { layout in
-                            Text(layout.displayTitle).tag(layout)
-                        }
-                    }
-                    .id("import-destination-layout-picker")
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
+                    ImportReviewSegmentedControl(
+                        title: L10n.tr("Save to"),
+                        selection: destinationLayoutBinding,
+                        options: [.singleLibrary, .separateMediaFolders],
+                        optionTitle: { $0.displayTitle }
+                    )
                 }
             }
 
@@ -285,14 +280,12 @@ struct ImportPreviewView: View {
                 L10n.tr("Organize"),
                 maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth
             ) {
-                Picker(L10n.tr("Organize"), selection: folderGroupingBinding) {
-                    ForEach(ImportFolderGrouping.allCases) { grouping in
-                        Text(grouping.displayTitle).tag(grouping)
-                    }
-                }
-                .id("import-folder-grouping-picker")
-                .labelsHidden()
-                .pickerStyle(.segmented)
+                ImportReviewSegmentedControl(
+                    title: L10n.tr("Organize"),
+                    selection: folderGroupingBinding,
+                    options: ImportFolderGrouping.allCases,
+                    optionTitle: { $0.displayTitle }
+                )
             }
         }
     }
@@ -649,16 +642,13 @@ struct ImportPreviewView: View {
     }
 
     private var filterPicker: some View {
-        Picker(L10n.tr("File Filter"), selection: fileFilterBinding) {
-            ForEach(ImportPreviewFileFilter.allCases) { filter in
-                Text(filterTitle(filter)).tag(filter)
-            }
-        }
-        .id(fileFilterPickerIdentity)
-        .labelsHidden()
-        .pickerStyle(.segmented)
+        ImportReviewSegmentedControl(
+            title: L10n.tr("File filter"),
+            selection: fileFilterBinding,
+            options: ImportPreviewFileFilter.allCases,
+            optionTitle: filterTitle
+        )
         .frame(maxWidth: 430)
-        .accessibilityLabel(L10n.tr("File filter"))
         .accessibilityIdentifier("import.review.file-filter")
     }
 
@@ -673,15 +663,14 @@ struct ImportPreviewView: View {
     }
 
     private var modePicker: some View {
-        Picker(L10n.tr("Preview Mode"), selection: $previewMode) {
-            Label(L10n.tr("List"), systemImage: "list.bullet").tag(ImportPreviewMode.list)
-            Label(L10n.tr("Grid"), systemImage: "square.grid.2x2").tag(ImportPreviewMode.grid)
-        }
-        .id("import-preview-mode-picker")
-        .labelsHidden()
-        .pickerStyle(.segmented)
+        ImportReviewSegmentedControl(
+            title: L10n.tr("Preview mode"),
+            selection: $previewMode,
+            options: [.list, .grid],
+            optionTitle: { $0 == .list ? L10n.tr("List") : L10n.tr("Grid") },
+            systemImage: { $0 == .list ? "list.bullet" : "square.grid.2x2" }
+        )
         .frame(width: 120)
-        .accessibilityLabel(L10n.tr("Preview mode"))
         .accessibilityIdentifier("import.review.preview-mode")
     }
 
@@ -947,22 +936,6 @@ struct ImportPreviewView: View {
         case .videosOnly:
             return L10n.tr("Videos (\(mediaContent.videoCount))")
         }
-    }
-
-    // macOS can otherwise reuse an NSSegmentedControl while LazyVStack is
-    // prefetching the review page, then apply a selection to stale segments.
-    // Recreate only when the dynamic segment titles actually change.
-    private var mediaSelectionPickerIdentity: String {
-        let photoCount = model.mediaContentProfile?.photoCount ?? -1
-        let videoCount = model.mediaContentProfile?.videoCount ?? -1
-        return "import-media-selection-picker-\(photoCount)-\(videoCount)"
-    }
-
-    private var fileFilterPickerIdentity: String {
-        let allCount = model.previewRows.count
-        let copyCount = model.previewTotals.copyFiles
-        let skippedCount = allCount - copyCount
-        return "import-file-filter-picker-\(allCount)-\(copyCount)-\(skippedCount)-\(model.previewAttentionCount)"
     }
 
     private func mediaContentSummary(_ profile: MediaContentProfile) -> String {
