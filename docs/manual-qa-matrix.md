@@ -75,10 +75,11 @@ committing any excerpt.
 
 ## Disclosure headers
 
-Use a folder fixture with photos from two dates and an Insta360 recording with
-a matching proxy. In Import Review, choose **Photos + Videos**, **By Capture
-Date**, and the Files list. Use a completed fixture import for History and
-Import Report. A report fixture with a load error exposes the warning header.
+Use a folder fixture with photos from two dates and two distinct Insta360
+recordings, each with its own matching proxy. In Import Review, choose
+**Photos + Videos**, **By Capture Date**, and the Files list.
+Use a completed fixture import for History and Import Report.
+A report fixture with a load error exposes the warning header.
 
 For each header under test, click its title twice, the blank space in its row
 twice, and its chevron twice. Each first click should expand the section and
