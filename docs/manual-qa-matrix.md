@@ -73,6 +73,28 @@ committing any excerpt.
 | Auto-prompt installation authority | Test copies in `/Applications`, `~/Applications`, Downloads, and a mounted DMG, including a renamed installed copy | `/Applications/SD Import.app` wins deterministically, then another matching app in `/Applications`, then `~/Applications`; an uninstalled-only copy says `Install required` | Required before releasing background-prompt changes |
 | Auto-prompt causal errors | Queue an older successful handoff, then force a newer helper launch or mailbox failure before the old event is acknowledged | The newer error remains visible until a later event succeeds; the older acknowledgement does not erase it | Required before releasing background-prompt changes |
 
+## Disclosure headers
+
+Use a folder fixture with photos from two dates and two distinct Insta360
+recordings, each with its own matching proxy. In Import Review, choose
+**Photos + Videos**, **By Capture Date**, and the Files list.
+Use a completed fixture import for History and Import Report.
+A report fixture with a load error exposes the warning header.
+
+For each header under test, click its title twice, the blank space in its row
+twice, and its chevron twice. Each first click should expand the section and
+each second click should collapse it. Repeat at the edge of the chevron and
+in the gap between the chevron and the label. Check that accessibility exposes
+one named disclosure with the matching expanded state.
+
+| Header | Check while expanded |
+| --- | --- |
+| Import Review → Customize Dates | Edit one day's shoot name and click its Photos and Videos labels. The other day's name stays intact, the copy count updates, and the section stays open. Collapse and reopen it to confirm the edit persists. |
+| Import Review → Files → grouped recording | Both member files appear. Selecting one opens its inspector and leaves the group expanded. |
+| History → Files → grouped recording | Each member appears under its own recording. Expanding one recording leaves adjacent recordings alone. |
+| Import Report → Files → grouped recording | Both member rows appear. Collapsing the group hides those rows. |
+| Import Report → Report opened with warnings | The warning detail appears on expand and disappears on collapse. Selecting text inside the detail leaves it expanded. |
+
 ## Recorded Ejection Evidence
 
 - Date: 2026-07-22.

@@ -297,6 +297,7 @@ private struct HistoryFileUnitRow: View {
                 .font(.caption)
                 .padding(.vertical, 6)
             }
+            .disclosureGroupStyle(FullWidthDisclosureGroupStyle())
         } else {
             HistoryFileRow(file: unit.primaryFile, revealAction: revealAction)
         }

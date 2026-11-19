@@ -273,6 +273,7 @@ struct ImportReportView: View {
             )
                 .font(.caption)
         }
+        .disclosureGroupStyle(FullWidthDisclosureGroupStyle())
     }
 }
 
@@ -323,6 +324,7 @@ private struct ReportFileUnitRow: View {
                 .font(.caption)
                 .padding(.vertical, 6)
             }
+            .disclosureGroupStyle(FullWidthDisclosureGroupStyle())
         } else {
             ReportFileRow(file: unit.primaryFile)
         }
