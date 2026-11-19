@@ -98,6 +98,26 @@ struct AppPage<Content: View>: View {
     }
 }
 
+struct FullWidthDisclosureGroupStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        DisclosureGroup(isExpanded: configuration.$isExpanded) {
+            configuration.content
+        } label: {
+            configuration.label
+                .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+                .overlay {
+                    // Extend the header target across the native macOS disclosure indicator.
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { configuration.isExpanded.toggle() }
+                        .padding(.leading, -24)
+                        .accessibilityHidden(true)
+                }
+        }
+        .disclosureGroupStyle(.automatic)
+    }
+}
+
 struct AppStatusLabel: View {
     let title: String
     let systemImage: String

@@ -390,6 +390,7 @@ struct ImportPreviewView: View {
                 }
                 .padding(.top, 8)
             }
+            .disclosureGroupStyle(FullWidthDisclosureGroupStyle())
         }
     }
 
@@ -705,6 +706,7 @@ struct ImportPreviewView: View {
                             destinationText: destinationText(for: item.primaryRow)
                         )
                     }
+                    .disclosureGroupStyle(FullWidthDisclosureGroupStyle())
                     .padding(.horizontal, 10)
                     .padding(.vertical, 2)
                 }
