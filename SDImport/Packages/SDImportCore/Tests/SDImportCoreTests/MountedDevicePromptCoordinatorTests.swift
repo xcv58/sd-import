@@ -76,7 +76,7 @@ struct MountedDevicePromptCoordinatorTests {
         #expect(coordinator.pendingPrompt?.id != first.id)
     }
 
-    @Test("a late sibling does not reopen the prompt across a gap with no mounted volumes")
+    @Test("a mount after all volumes disappear can prompt again on the same USB device")
     func gapBetweenMountedVolumes() throws {
         var coordinator = MountedDevicePromptCoordinator()
         #expect(coordinator.receive(internalStorage, among: [internalStorage], canPresent: true) == .present)
@@ -86,14 +86,14 @@ struct MountedDevicePromptCoordinatorTests {
 
         coordinator.updateMountedVolumes([])
         coordinator.updateMountedVolumes([card])
-        #expect(coordinator.receive(card, among: [card], canPresent: true) == .alreadyPresented)
-        #expect(coordinator.pendingPrompt == nil)
+        #expect(coordinator.receive(card, among: [card], canPresent: true) == .present)
+        #expect(coordinator.pendingPrompt?.id != prompt.id)
     }
 
-    @Test("an attached single-slot reader can prompt again after its card is swapped")
-    func cardSwapInConnectedReader() throws {
+    @Test("an attached reader prompts for its replacement card after all prior volumes unmount", arguments: ["disk4", "disk6"])
+    func cardSwapInConnectedReader(replacementDisk: String) throws {
         let original = Self.volume("First", disk: "disk4", device: "reader")
-        let replacement = Self.volume("Second", disk: "disk4", device: "reader")
+        let replacement = Self.volume("Second", disk: replacementDisk, device: "reader")
         var coordinator = MountedDevicePromptCoordinator()
         #expect(coordinator.receive(original, among: [original], canPresent: true) == .present)
         let prompt = try #require(coordinator.pendingPrompt)
@@ -102,6 +102,57 @@ struct MountedDevicePromptCoordinatorTests {
         coordinator.updateMountedVolumes([replacement])
         #expect(coordinator.receive(replacement, among: [replacement], canPresent: true) == .present)
         #expect(coordinator.pendingPrompt?.id != prompt.id)
+    }
+
+    @Test("the next snapshot can show a different card at the same path without an empty snapshot")
+    func samePathCardSwapWithoutGap() throws {
+        let original = Self.volume("CARD", disk: "disk4", device: "reader", uuid: "first")
+        let replacement = Self.volume("CARD", disk: "disk4", device: "reader", uuid: "second")
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(original, among: [original], canPresent: true) == .present)
+        let previous = try #require(coordinator.pendingPrompt)
+
+        coordinator.updateMountedVolumes([replacement])
+        #expect(coordinator.pendingPrompt == nil)
+        #expect(coordinator.receive(original, among: [replacement], canPresent: true) == .stale)
+        #expect(coordinator.receive(replacement, among: [replacement], canPresent: true) == .present)
+        #expect(coordinator.pendingPrompt?.id != previous.id)
+    }
+
+    @Test("a reader prompts again after a card with multiple partitions is replaced")
+    func replacesPartitionedCard() throws {
+        let firstPartition = Self.volume("First", disk: "disk4", device: "reader")
+        let secondPartition = Self.volume("Other", disk: "disk4", device: "reader")
+        let replacement = Self.volume("Second", disk: "disk4", device: "reader")
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(firstPartition, among: [firstPartition, secondPartition], canPresent: true) == .present)
+        let previous = try #require(coordinator.pendingPrompt)
+        let didDismiss = coordinator.dismiss(previous.id)
+        #expect(didDismiss)
+
+        coordinator.updateMountedVolumes([])
+        #expect(coordinator.receive(replacement, among: [replacement], canPresent: true) == .present)
+        #expect(coordinator.pendingPrompt?.deviceGroup.volumes == [replacement])
+    }
+
+    @Test("replacing a card after dismissal prompts even while a previously offered sibling remains", arguments: [false, true])
+    func replacementWithSurvivingSibling(sawUnmountSeparately: Bool) throws {
+        let replacement = Self.volume("NewCard", disk: "disk6")
+        let afterSwap = [internalStorage, replacement]
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(card, among: [internalStorage, card], canPresent: true) == .present)
+        let previous = try #require(coordinator.pendingPrompt)
+        let didDismiss = coordinator.dismiss(previous.id)
+        #expect(didDismiss)
+
+        if sawUnmountSeparately { coordinator.updateMountedVolumes([internalStorage]) }
+        coordinator.updateMountedVolumes(afterSwap)
+        #expect(coordinator.receive(internalStorage, among: afterSwap, canPresent: true) == .alreadyPresented)
+        #expect(coordinator.receive(replacement, among: afterSwap, canPresent: false) == .deferred)
+        #expect(coordinator.receive(replacement, among: afterSwap, canPresent: true) == .present)
+        let updated = try #require(coordinator.pendingPrompt)
+        #expect(updated.id != previous.id)
+        #expect(updated.contains(replacement))
     }
 
     @Test("learning the USB ID preserves an open or dismissed prompt", arguments: [false, true])
@@ -117,8 +168,6 @@ struct MountedDevicePromptCoordinatorTests {
         #expect(coordinator.receive(card, among: both, canPresent: true) == .alreadyPresented)
         if dismissed {
             #expect(coordinator.pendingPrompt == nil)
-            coordinator.updateMountedVolumes([])
-            #expect(coordinator.receive(card, among: [card], canPresent: true) == .alreadyPresented)
         } else {
             #expect(coordinator.pendingPrompt?.id == prompt.id)
             #expect(coordinator.pendingPrompt?.deviceGroup.volumes == both)

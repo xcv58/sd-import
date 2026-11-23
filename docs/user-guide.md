@@ -38,8 +38,10 @@ same camera; wait for the safe-to-remove confirmation before disconnecting it.
 
 In `Settings > General`, `Prompt when a card is mounted` enables background card
 prompts. When your camera's internal storage and memory card are recognized as
-one device, choose a volume to scan in a single prompt. If another volume from
-that camera mounts after you close the prompt, you can select it in `Source`.
+one device, choose a volume to scan in a single prompt. If a drive from that
+prompt stays mounted, you can find late-arriving sibling drives in `Source`
+after you close the prompt. If all drives unmount, the next mount can open a
+fresh prompt, including when you swap cards in a connected reader.
 
 Keep the App Store app installed in `Applications`. If the helper needs
 approval, allow it in macOS System Settings under Login Items & Extensions. Open

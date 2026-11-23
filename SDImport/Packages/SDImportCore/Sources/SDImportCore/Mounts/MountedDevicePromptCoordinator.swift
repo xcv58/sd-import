@@ -19,28 +19,48 @@ public enum MountedDevicePromptDelivery: Equatable, Sendable {
 }
 
 public struct MountedDevicePromptCoordinator: Sendable {
+    private struct Presentation: Sendable {
+        let group: MountedDeviceGroup
+        let offeredVolumes: [MountedVolume]
+        let acceptsLateSiblings: Bool
+    }
+
     private let grouper = MountedDeviceGrouper()
-    // IOKit registry IDs are unique within a boot. A reconnected USB device
-    // has a new ID, so a gap with no mounted volumes need not erase this one.
-    private var presentedUSBDevices: [String: MountedDeviceGroup] = [:]
-    private var mountedPresentedGroups: [MountedDeviceGroup] = []
+    private var presentations: [Presentation] = []
     public private(set) var pendingPrompt: MountedDevicePrompt?
 
     public init() {}
 
     public mutating func updateMountedVolumes(_ volumes: [MountedVolume]) {
         let groups = grouper.groups(from: volumes)
-        mountedPresentedGroups = groups.filter(wasPresented)
-        for group in mountedPresentedGroups {
-            rememberUSBDevice(group)
-        }
-
         if let pendingPrompt {
             let continuations = groups.filter { $0.continues(pendingPrompt.deviceGroup) }
             let group = continuations.first { $0.id == pendingPrompt.deviceGroup.id } ?? continuations.first
             self.pendingPrompt = group.map {
                 MountedDevicePrompt(id: pendingPrompt.id, deviceGroup: $0)
             }
+        }
+
+        let previousPresentations = presentations
+        presentations = groups.compactMap { group in
+            let previous = previousPresentations.filter { group.continues($0.group) }
+            let previouslyOffered = previous.flatMap(\.offeredVolumes)
+            let stillOffered = group.volumes.filter { volume in
+                previouslyOffered.contains { volume.isSameMount(as: $0) }
+            }
+            let isOpen = pendingPrompt?.deviceGroup.id == group.id
+            guard isOpen || !stillOffered.isEmpty else { return nil }
+
+            // Once a previously offered volume has gone away, an unfamiliar
+            // mount may be replacement media. Keep the decision only for the
+            // surviving volumes until the user sees another prompt.
+            let acceptsLateSiblings = previous.allSatisfy(\.acceptsLateSiblings)
+                && previouslyOffered.allSatisfy { old in volumes.contains { $0.isSameMount(as: old) } }
+            return Presentation(
+                group: group,
+                offeredVolumes: isOpen || acceptsLateSiblings ? group.volumes : stillOffered,
+                acceptsLateSiblings: acceptsLateSiblings
+            )
         }
     }
 
@@ -55,17 +75,21 @@ public struct MountedDevicePromptCoordinator: Sendable {
         ) {
             return .stale
         }
+        let currentVolume = liveVolume ?? volume
         let volumes = liveVolume == nil ? mountedVolumes + [volume] : mountedVolumes
-        let group = grouper.group(containing: liveVolume ?? volume, among: volumes)
-        if wasPresented(group) {
-            rememberUSBDevice(group)
+        updateMountedVolumes(volumes)
+        let group = grouper.group(containing: currentVolume, among: volumes)
+        if presentations.contains(where: { presentation in
+            presentation.group.id == group.id
+                && presentation.offeredVolumes.contains { currentVolume.isSameMount(as: $0) }
+        }) {
             return .alreadyPresented
         }
         guard canPresent, pendingPrompt == nil else {
             return .deferred
         }
-        rememberUSBDevice(group)
-        mountedPresentedGroups.append(group)
+        presentations.removeAll { $0.group.id == group.id }
+        presentations.append(Presentation(group: group, offeredVolumes: group.volumes, acceptsLateSiblings: true))
         pendingPrompt = MountedDevicePrompt(id: UUID(), deviceGroup: group)
         return .present
     }
@@ -78,25 +102,6 @@ public struct MountedDevicePromptCoordinator: Sendable {
         pendingPrompt = nil
         return true
     }
-
-    private func wasPresented(_ group: MountedDeviceGroup) -> Bool {
-        if mountedPresentedGroups.contains(where: { group.continues($0) }) {
-            return true
-        }
-        guard let id = group.usbDeviceID, let previous = presentedUSBDevices[id] else {
-            return false
-        }
-        // A reader can remain plugged in when its only card is swapped.
-        // After an unmount, treat reuse of that single source as a fresh mount.
-        return previous.isMultiVolume || !group.reusesStorage(of: previous)
-    }
-
-    private mutating func rememberUSBDevice(_ group: MountedDeviceGroup) {
-        guard let id = group.usbDeviceID else { return }
-        if presentedUSBDevices[id]?.isMultiVolume != true || group.isMultiVolume {
-            presentedUSBDevices[id] = group
-        }
-    }
 }
 
 private extension MountedDeviceGroup {
@@ -104,38 +109,32 @@ private extension MountedDeviceGroup {
         volumes.first?.deviceGroupIdentifier.flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    func reusesStorage(of previous: MountedDeviceGroup) -> Bool {
-        volumes.contains { current in
-            previous.volumes.contains { old in
-                current.mountPath == old.mountPath
-                    || current.wholeDiskIdentifier.map { $0 == old.wholeDiskIdentifier } == true
-            }
+    func continues(_ previous: MountedDeviceGroup) -> Bool {
+        if let currentUSB = usbDeviceID, let previousUSB = previous.usbDeviceID, currentUSB != previousUSB {
+            return false
+        }
+        return volumes.contains { current in
+            previous.volumes.contains { current.isSameMount(as: $0) }
         }
     }
+}
 
-    func continues(_ previous: MountedDeviceGroup) -> Bool {
-        if let currentUSB = usbDeviceID, let previousUSB = previous.usbDeviceID {
-            return currentUSB == previousUSB
+private extension MountedVolume {
+    func isSameMount(as previous: MountedVolume) -> Bool {
+        guard mountPath == previous.mountPath else { return false }
+        if let currentUSB = deviceGroupIdentifier, let previousUSB = previous.deviceGroupIdentifier,
+           currentUSB != previousUSB {
+            return false
         }
-
-        // Disk numbers can be recycled. Carry a fallback group forward only
-        // when at least one of its volumes is still mounted at the same path.
-        return volumes.contains { current in
-            previous.volumes.contains { old in
-                guard current.mountPath == old.mountPath else { return false }
-                if let disk = current.wholeDiskIdentifier, let oldDisk = old.wholeDiskIdentifier, disk != oldDisk {
-                    return false
-                }
-                if let oldUUID = old.volumeUUID, let currentUUID = current.volumeUUID {
-                    return MountHandoffVolumeIdentity.matchesCurrentVolume(
-                        expectedUUID: oldUUID, currentUUID: currentUUID
-                    )
-                }
-                if current.wholeDiskIdentifier != nil && old.wholeDiskIdentifier != nil {
-                    return true
-                }
-                return current.id == old.id
-            }
+        if let disk = wholeDiskIdentifier, let previousDisk = previous.wholeDiskIdentifier, disk != previousDisk {
+            return false
         }
+        if let uuid = volumeUUID, let previousUUID = previous.volumeUUID {
+            return MountHandoffVolumeIdentity.matchesCurrentVolume(expectedUUID: previousUUID, currentUUID: uuid)
+        }
+        if wholeDiskIdentifier != nil && previous.wholeDiskIdentifier != nil {
+            return true
+        }
+        return id == previous.id
     }
 }
