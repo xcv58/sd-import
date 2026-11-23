@@ -122,6 +122,35 @@ public struct BackgroundPromptAgentStateStore {
         try loadAuthorizationUnlocked()
     }
 
+    private func isAuthorized(agentBuild: String, agentBundlePath: String) throws -> Bool {
+        guard let authorization = try loadAuthorizationUnlocked() else {
+            return true
+        }
+        return authorization.agentBuild == agentBuild
+            && authorization.agentBundlePath == agentBundlePath
+    }
+
+    public func canHandleMountEvents(agentBuild: String, agentBundlePath: String) throws -> Bool {
+        try withExclusiveLock {
+            try canHandleMountEvents(
+                agentBuild: agentBuild,
+                agentBundlePath: agentBundlePath,
+                state: try? loadUnlocked()
+            )
+        }
+    }
+
+    private func canHandleMountEvents(
+        agentBuild: String,
+        agentBundlePath: String,
+        state: BackgroundPromptAgentState?
+    ) throws -> Bool {
+        guard try isAuthorized(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
+            return false
+        }
+        return state.map { matches($0, agentBuild: agentBuild, agentBundlePath: agentBundlePath) } ?? true
+    }
+
     @discardableResult
     public func issueEventSequence(
         agentBuild: String,
@@ -129,11 +158,12 @@ public struct BackgroundPromptAgentStateStore {
         now: Date = Date()
     ) throws -> UInt64 {
         try withExclusiveLock {
-            guard try isAuthorizedUnlocked(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
-                throw StoreError.staleAgentIdentity
-            }
             let existing = try? loadUnlocked()
-            if let existing, !matches(existing, agentBuild: agentBuild, agentBundlePath: agentBundlePath) {
+            guard try canHandleMountEvents(
+                agentBuild: agentBuild,
+                agentBundlePath: agentBundlePath,
+                state: existing
+            ) else {
                 throw StoreError.staleAgentIdentity
             }
             let nextSequence = try Self.nextSequence(after: existing?.lastIssuedSequence ?? 0)
@@ -186,7 +216,7 @@ public struct BackgroundPromptAgentStateStore {
         now: Date = Date()
     ) throws {
         try withExclusiveLock {
-            guard try isAuthorizedUnlocked(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
+            guard try isAuthorized(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
                 throw StoreError.staleAgentIdentity
             }
             let existing = try? loadUnlocked()
@@ -215,7 +245,7 @@ public struct BackgroundPromptAgentStateStore {
         now: Date = Date()
     ) throws {
         try withExclusiveLock {
-            guard try isAuthorizedUnlocked(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
+            guard try isAuthorized(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
                 return
             }
             let existing = try? loadUnlocked()
@@ -246,7 +276,7 @@ public struct BackgroundPromptAgentStateStore {
         eventSequence: UInt64
     ) throws {
         try withExclusiveLock {
-            guard try isAuthorizedUnlocked(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
+            guard try isAuthorized(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
                 return
             }
             guard
@@ -281,7 +311,7 @@ public struct BackgroundPromptAgentStateStore {
         now: Date = Date()
     ) throws {
         try withExclusiveLock {
-            guard try isAuthorizedUnlocked(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
+            guard try isAuthorized(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
                 return
             }
             let existing = try? loadUnlocked()
@@ -359,14 +389,6 @@ public struct BackgroundPromptAgentStateStore {
             BackgroundPromptAgentAuthorization.self,
             from: Data(contentsOf: authorizationURL)
         )
-    }
-
-    private func isAuthorizedUnlocked(agentBuild: String, agentBundlePath: String) throws -> Bool {
-        guard let authorization = try loadAuthorizationUnlocked() else {
-            return true
-        }
-        return authorization.agentBuild == agentBuild
-            && authorization.agentBundlePath == agentBundlePath
     }
 
     private func withExclusiveLock<T>(_ operation: () throws -> T) throws -> T {
