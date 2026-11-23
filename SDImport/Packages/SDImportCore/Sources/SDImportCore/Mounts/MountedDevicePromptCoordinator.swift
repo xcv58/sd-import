@@ -3,11 +3,23 @@ import Foundation
 public struct MountedDevicePrompt: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let deviceGroup: MountedDeviceGroup
+    private let mountIDs: [String: UUID]
+
+    fileprivate init(deviceGroup: MountedDeviceGroup, continuing previous: MountedDevicePrompt? = nil) {
+        id = previous?.id ?? UUID()
+        self.deviceGroup = deviceGroup
+        mountIDs = deviceGroup.volumes.reduce(into: [:]) { ids, volume in
+            ids[volume.mountPath] = previous?.mountID(for: volume) ?? UUID()
+        }
+    }
 
     public func contains(_ volume: MountedVolume) -> Bool {
-        deviceGroup.volumes.contains {
-            $0.id == volume.id && $0.mountPath == volume.mountPath
-        }
+        mountID(for: volume) != nil
+    }
+
+    public func mountID(for volume: MountedVolume) -> UUID? {
+        guard deviceGroup.volumes.contains(where: { $0.isSameMount(as: volume) }) else { return nil }
+        return mountIDs[volume.mountPath]
     }
 }
 
@@ -37,7 +49,7 @@ public struct MountedDevicePromptCoordinator: Sendable {
             let continuations = groups.filter { $0.continues(pendingPrompt.deviceGroup) }
             let group = continuations.first { $0.id == pendingPrompt.deviceGroup.id } ?? continuations.first
             self.pendingPrompt = group.map {
-                MountedDevicePrompt(id: pendingPrompt.id, deviceGroup: $0)
+                MountedDevicePrompt(deviceGroup: $0, continuing: pendingPrompt)
             }
         }
 
@@ -56,9 +68,16 @@ public struct MountedDevicePromptCoordinator: Sendable {
             // surviving volumes until the user sees another prompt.
             let acceptsLateSiblings = previous.allSatisfy(\.acceptsLateSiblings)
                 && previouslyOffered.allSatisfy { old in volumes.contains { $0.isSameMount(as: old) } }
+            // A partition on a surviving offered disk belongs to the same
+            // media, even when another disk was removed from the chooser.
+            let offeredDisks = Set(stillOffered.compactMap(\.wholeDiskIdentifier).filter { !$0.isEmpty })
+            let offeredVolumes = group.volumes.filter { volume in
+                stillOffered.contains { volume.isSameMount(as: $0) }
+                    || volume.wholeDiskIdentifier.map(offeredDisks.contains) == true
+            }
             return Presentation(
                 group: group,
-                offeredVolumes: isOpen || acceptsLateSiblings ? group.volumes : stillOffered,
+                offeredVolumes: isOpen || acceptsLateSiblings ? group.volumes : offeredVolumes,
                 acceptsLateSiblings: acceptsLateSiblings
             )
         }
@@ -90,7 +109,7 @@ public struct MountedDevicePromptCoordinator: Sendable {
         }
         presentations.removeAll { $0.group.id == group.id }
         presentations.append(Presentation(group: group, offeredVolumes: group.volumes, acceptsLateSiblings: true))
-        pendingPrompt = MountedDevicePrompt(id: UUID(), deviceGroup: group)
+        pendingPrompt = MountedDevicePrompt(deviceGroup: group)
         return .present
     }
 
@@ -116,25 +135,5 @@ private extension MountedDeviceGroup {
         return volumes.contains { current in
             previous.volumes.contains { current.isSameMount(as: $0) }
         }
-    }
-}
-
-private extension MountedVolume {
-    func isSameMount(as previous: MountedVolume) -> Bool {
-        guard mountPath == previous.mountPath else { return false }
-        if let currentUSB = deviceGroupIdentifier, let previousUSB = previous.deviceGroupIdentifier,
-           currentUSB != previousUSB {
-            return false
-        }
-        if let disk = wholeDiskIdentifier, let previousDisk = previous.wholeDiskIdentifier, disk != previousDisk {
-            return false
-        }
-        if let uuid = volumeUUID, let previousUUID = previous.volumeUUID {
-            return MountHandoffVolumeIdentity.matchesCurrentVolume(expectedUUID: previousUUID, currentUUID: uuid)
-        }
-        if wholeDiskIdentifier != nil && previous.wholeDiskIdentifier != nil {
-            return true
-        }
-        return id == previous.id
     }
 }

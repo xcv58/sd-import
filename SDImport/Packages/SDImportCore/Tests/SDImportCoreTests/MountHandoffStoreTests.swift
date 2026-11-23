@@ -310,6 +310,49 @@ struct MountHandoffStoreTests {
         #expect(afterSwap == nil)
     }
 
+    @Test("a queued UUID-less card must still be mounted to be delivered")
+    func removedUUIDLessMountIsNotDelivered() {
+        let path = "/Volumes/CARD"
+        let card = MountedVolume(
+            id: path,
+            name: "CARD",
+            mountURL: URL(fileURLWithPath: path, isDirectory: true),
+            volumeUUID: nil,
+            isRemovable: true
+        )
+        let event = MountHandoffEvent(
+            mountPath: path,
+            volumeName: card.name,
+            agentBuild: "44",
+            targetApplicationPath: targetApplicationPath,
+            mountedVolume: card
+        )
+
+        #expect(MountHandoffProbeCompletionValidator.currentVolumeForDelivery(event: event) { card } == card)
+        #expect(MountHandoffProbeCompletionValidator.currentVolumeForDelivery(event: event) { nil } == nil)
+    }
+
+    @Test("delivery does not suppress cloned UUIDs at distinct live mount paths")
+    func clonedVolumeUUIDsDeliverSeparately() {
+        let controller = MountHandoffDeliveryController()
+        var delivered: [String] = []
+        for name in ["First Clone", "Second Clone", "Second Clone"] {
+            let card = MountedVolume(
+                id: "cloned",
+                name: name,
+                mountURL: URL(fileURLWithPath: "/Volumes/\(name)", isDirectory: true),
+                volumeUUID: "cloned",
+                isRemovable: true
+            )
+            let disposition = controller.evaluate(volume: card) { mount in
+                delivered.append(mount.mountPath)
+                return .accepted
+            }
+            #expect(disposition == .accepted)
+        }
+        #expect(delivered == ["/Volumes/First Clone", "/Volumes/Second Clone"])
+    }
+
     @Test("accepted mount stays suppressed until unmount")
     func acceptedMountStaysSuppressedUntilUnmount() {
         let volume = MountedVolume(

@@ -31,7 +31,7 @@ struct MountPromptView: View {
                 if group.isMultiVolume {
                     ForEach(group.volumes, id: \.mountPath) { volume in
                         Button {
-                            model.acceptMountedVolumePrompt(volume, promptID: promptID)
+                            model.acceptMountedVolumePrompt(volume, from: prompt)
                         } label: {
                             HStack {
                                 volumeLabel(volume)
@@ -55,7 +55,7 @@ struct MountPromptView: View {
                     .accessibilityIdentifier("import.mount-prompt.decline")
                     if !group.isMultiVolume {
                         Button(scanButtonTitle(firstVolume)) {
-                            model.acceptMountedVolumePrompt(firstVolume, promptID: promptID)
+                            model.acceptMountedVolumePrompt(firstVolume, from: prompt)
                         }
                         .keyboardShortcut(.defaultAction)
                         .accessibilityIdentifier("import.mount-prompt.allow")

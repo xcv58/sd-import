@@ -875,7 +875,7 @@ final class AppModel: ObservableObject {
         // Workspace notifications can arrive ahead of /Volumes enumeration.
         if let mountedVolume, !volumes.contains(where: {
             $0.mountURL.standardizedFileURL.path == mountedVolume.mountURL.standardizedFileURL.path
-        }) {
+        }), Self.isCurrentPromptVolume(mountedVolume) {
             volumes.append(mountedVolume)
         }
         let observedPaths = Set(volumes.map { $0.mountURL.standardizedFileURL.path })
@@ -2310,8 +2310,11 @@ final class AppModel: ObservableObject {
         statusMessage = L10n.tr("Ready for another card")
     }
 
-    func acceptMountedVolumePrompt(_ volume: MountedVolume, promptID: UUID) {
-        guard promptContains(volume, id: promptID) else { return }
+    func acceptMountedVolumePrompt(_ volume: MountedVolume, from prompt: MountedDevicePrompt) {
+        let promptID = prompt.id
+        guard let mountID = prompt.mountID(for: volume), promptContains(volume, id: promptID, mountID: mountID) else {
+            return
+        }
         guard !isWorking, !isEjectingSource else {
             statusMessage = L10n.tr("Finish the current operation before scanning another card")
             return
@@ -2332,7 +2335,13 @@ final class AppModel: ObservableObject {
                     prompt: L10n.tr("Allow Access"),
                     message: L10n.tr("\(AppDistribution.current.displayName) will scan this folder only after you allow access.")
                 )
-                guard promptContains(volume, id: promptID) else { return }
+                // The modal picker runs an event loop. The same path may now
+                // belong to a new card, even if the camera's chooser stayed open.
+                refreshAvailableSourceVolumes()
+                guard promptContains(volume, id: promptID, mountID: mountID), Self.isCurrentPromptVolume(volume) else {
+                    statusMessage = L10n.tr("Card scan cancelled")
+                    return
+                }
                 guard let selectedURL = selection else {
                     mountPrompts.dismiss(promptID)
                     statusMessage = L10n.tr("Card scan cancelled")
@@ -2341,11 +2350,6 @@ final class AppModel: ObservableObject {
                 guard Self.isSameOrDescendant(selectedURL, of: volume.mountURL) else {
                     let name = volume.name
                     setLocalizedStatusMessage { L10n.tr("Choose \(name) or a folder on that card") }
-                    return
-                }
-                guard Self.isCurrentPromptVolume(volume) else {
-                    refreshAvailableSourceVolumes()
-                    statusMessage = L10n.tr("Card scan cancelled")
                     return
                 }
                 guard retainSelectedFolderAccess(
@@ -2371,19 +2375,18 @@ final class AppModel: ObservableObject {
         scan()
     }
 
-    private func promptContains(_ volume: MountedVolume, id: UUID) -> Bool {
+    private func promptContains(_ volume: MountedVolume, id: UUID, mountID: UUID) -> Bool {
         guard let prompt = pendingMountPrompt, prompt.id == id else { return false }
-        return prompt.contains(volume)
+        return prompt.mountID(for: volume) == mountID
     }
 
     nonisolated private static func isCurrentPromptVolume(_ expected: MountedVolume) -> Bool {
-        let url = URL(fileURLWithPath: expected.mountURL.path, isDirectory: true)
-        guard let values = try? url.resourceValues(forKeys: [.volumeURLKey, .volumeUUIDStringKey]),
-              values.volume?.standardizedFileURL.path == url.standardizedFileURL.path else {
+        guard let current = VolumeDetector().currentMountedVolume(from: expected.mountURL, includeCapacity: false),
+              current.isSameMount(as: expected) else {
             return false
         }
         return MountHandoffVolumeIdentity.matchesCurrentVolume(
-            expectedUUID: expected.volumeUUID, currentUUID: values.volumeUUIDString
+            expectedUUID: expected.volumeUUID, currentUUID: current.volumeUUID
         )
     }
 
@@ -4422,6 +4425,7 @@ final class AppModel: ObservableObject {
                     return .deferred
                 }
                 self.refreshAvailableSourceVolumes(including: volume)
+                guard Self.isCurrentPromptVolume(volume) else { return .accepted }
                 let canPresent = BackgroundPromptDeliveryPolicy.canCommitPrompt(
                     desiredEnabled: self.autoPromptEnabled,
                     hasCompletedOnboarding: self.hasCompletedOnboarding,

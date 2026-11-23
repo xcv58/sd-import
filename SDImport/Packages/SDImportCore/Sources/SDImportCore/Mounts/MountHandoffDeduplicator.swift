@@ -36,13 +36,15 @@ public enum MountHandoffProbeCompletionValidator {
     /// same-path card replacement cannot commit the queued occurrence.
     public static func currentVolumeForDelivery(
         event: MountHandoffEvent?,
-        detectCurrentVolume: () -> MountedVolume
+        observedVolume: MountedVolume? = nil,
+        detectCurrentVolume: () -> MountedVolume?
     ) -> MountedVolume? {
-        let currentVolume = detectCurrentVolume()
-        guard MountHandoffVolumeIdentity.matchesCurrentVolume(
-            expectedUUID: event?.mountedVolume?.volumeUUID,
-            currentUUID: currentVolume.volumeUUID
-        ) else {
+        guard let currentVolume = detectCurrentVolume(),
+              MountHandoffVolumeIdentity.matchesCurrentVolume(
+                  expectedUUID: observedVolume?.volumeUUID ?? event?.mountedVolume?.volumeUUID,
+                  currentUUID: currentVolume.volumeUUID
+              ),
+              observedVolume.map({ currentVolume.isSameMount(as: $0) }) ?? true else {
             return nil
         }
         return currentVolume
@@ -55,6 +57,14 @@ public struct MountHandoffDeduplicator: Sendable {
     private struct AcceptedEvent: Sendable {
         let mountPath: String
         let volumeUUID: String?
+
+        func matches(_ other: AcceptedEvent) -> Bool {
+            guard mountPath == other.mountPath else { return false }
+            if let volumeUUID, let otherUUID = other.volumeUUID {
+                return volumeUUID == otherUUID
+            }
+            return true
+        }
     }
 
     private let capacity: Int
@@ -75,12 +85,7 @@ public struct MountHandoffDeduplicator: Sendable {
     }
 
     private func contains(_ identity: AcceptedEvent) -> Bool {
-        return acceptedEvents.contains { accepted in
-            if let acceptedUUID = accepted.volumeUUID, let eventUUID = identity.volumeUUID {
-                return acceptedUUID == eventUUID
-            }
-            return accepted.mountPath == identity.mountPath
-        }
+        acceptedEvents.contains { $0.matches(identity) }
     }
 
     public mutating func recordAccepted(_ event: MountHandoffEvent) {
@@ -93,12 +98,7 @@ public struct MountHandoffDeduplicator: Sendable {
     }
 
     private mutating func recordAccepted(_ identity: AcceptedEvent) {
-        guard !acceptedEvents.contains(where: { accepted in
-            if let acceptedUUID = accepted.volumeUUID, let eventUUID = identity.volumeUUID {
-                return acceptedUUID == eventUUID
-            }
-            return accepted.mountPath == identity.mountPath
-        }) else {
+        guard !contains(identity) else {
             return
         }
         acceptedEvents.append(identity)

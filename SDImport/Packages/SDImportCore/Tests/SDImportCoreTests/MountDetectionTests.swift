@@ -5,6 +5,18 @@ import Testing
 
 @Suite("Mount detection")
 struct MountDetectionTests {
+    @Test("a directory on a mounted volume is not itself a mount root")
+    func currentMountedVolumeRequiresMountRoot() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let root = try #require(directory.resourceValues(forKeys: [.volumeURLKey]).volume)
+        let detector = VolumeDetector()
+
+        #expect(detector.currentMountedVolume(from: directory, includeCapacity: false) == nil)
+        #expect(detector.currentMountedVolume(from: root, includeCapacity: false)?.mountPath == root.standardizedFileURL.path)
+    }
+
     @Test("volume detector accepts likely removable volumes")
     func detectorAcceptsLikelyRemovableVolumes() {
         let detector = VolumeDetector()

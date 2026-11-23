@@ -10,6 +10,15 @@ public struct VolumeDetector: Sendable {
         self.ignoredNameFragments = ignoredNameFragments.map { $0.lowercased() }
     }
 
+    public func currentMountedVolume(from mountURL: URL, includeCapacity: Bool = true) -> MountedVolume? {
+        let freshURL = URL(fileURLWithPath: mountURL.path, isDirectory: true).standardizedFileURL
+        guard let root = (try? freshURL.resourceValues(forKeys: [.volumeURLKey]))?.volume,
+              root.standardizedFileURL.path == freshURL.path else {
+            return nil
+        }
+        return mountedVolume(from: freshURL, includeCapacity: includeCapacity)
+    }
+
     public func mountedVolume(
         from mountURL: URL,
         includeCapacity: Bool = true

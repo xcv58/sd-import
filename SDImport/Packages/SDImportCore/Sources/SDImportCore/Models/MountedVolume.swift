@@ -59,6 +59,26 @@ public struct MountedVolume: Identifiable, Hashable, Codable, Sendable {
 
     public var mountPath: String { mountURL.standardizedFileURL.path }
 
+    /// Compares two observations of a mount. Callers must track unmounts
+    /// separately, since a later mount can reuse the same path and disk ID.
+    public func isSameMount(as previous: MountedVolume) -> Bool {
+        guard mountPath == previous.mountPath else { return false }
+        if let currentUSB = deviceGroupIdentifier, let previousUSB = previous.deviceGroupIdentifier,
+           currentUSB != previousUSB {
+            return false
+        }
+        if let disk = wholeDiskIdentifier, let previousDisk = previous.wholeDiskIdentifier, disk != previousDisk {
+            return false
+        }
+        if let uuid = volumeUUID, let previousUUID = previous.volumeUUID {
+            return MountHandoffVolumeIdentity.matchesCurrentVolume(expectedUUID: previousUUID, currentUUID: uuid)
+        }
+        if wholeDiskIdentifier != nil && previous.wholeDiskIdentifier != nil {
+            return true
+        }
+        return id == previous.id
+    }
+
     public var physicalDeviceDisplayName: String? {
         let vendor = deviceVendorName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let product = deviceProductName?.trimmingCharacters(in: .whitespacesAndNewlines)

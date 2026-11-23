@@ -93,11 +93,10 @@ final class MountEventObserver {
                 else {
                     return
                 }
-                let name = notification.userInfo?[MountHandoff.nameKey] as? String
                 let eventID = (notification.userInfo?[MountHandoff.eventIDKey] as? String)
                     .flatMap(UUID.init(uuidString:))
                 Task { @MainActor in
-                    self?.handleNotification(path: path, name: name, eventID: eventID)
+                    self?.handleNotification(path: path, eventID: eventID)
                 }
             }
         }
@@ -124,11 +123,10 @@ final class MountEventObserver {
         guard shouldHandleDirectMount() else {
             return
         }
-        let volume = detector.mountedVolume(
+        guard let volume = detector.currentMountedVolume(
             from: mountURL,
             includeCapacity: mountPrivacyPolicy.includesCapacityBeforeConsent
-        )
-        guard detector.isLikelyImportVolume(volume) else {
+        ), detector.isLikelyImportVolume(volume) else {
             return
         }
         volumeMountedHandler(volume)
@@ -156,12 +154,12 @@ final class MountEventObserver {
         }
     }
 
-    private func handleNotification(path: String, name: String?, eventID: UUID?) {
+    private func handleNotification(path: String, eventID: UUID?) {
         guard let eventID else {
             guard shouldHandleDirectMount() else {
                 return
             }
-            handleHandoff(path: path, name: name)
+            handleHandoff(path: path)
             return
         }
 
@@ -206,7 +204,6 @@ final class MountEventObserver {
         }
         handleHandoff(
             path: claim.event.mountPath,
-            name: claim.event.volumeName,
             claim: claim,
             event: claim.event
         )
@@ -214,40 +211,14 @@ final class MountEventObserver {
 
     private func handleHandoff(
         path: String,
-        name: String?,
         claim: MountHandoffClaim? = nil,
         event: MountHandoffEvent? = nil
     ) {
         let mountURL = URL(fileURLWithPath: path, isDirectory: true)
-        let detectedVolume = detector.mountedVolume(
-            from: mountURL,
-            includeCapacity: mountPrivacyPolicy.includesCapacityBeforeConsent
-        )
-        if !MountHandoffVolumeIdentity.matchesCurrentVolume(
-            expectedUUID: event?.mountedVolume?.volumeUUID,
-            currentUUID: detectedVolume.volumeUUID
-        ) {
-            finish(claim)
-            return
-        }
-        let recordedVolume = event?.mountedVolume ?? detectedVolume
-        let volume = MountedVolume(
-            id: detectedVolume.id,
-            name: name.flatMap { $0.isEmpty ? nil : $0 } ?? recordedVolume.name,
-            mountURL: mountURL,
-            volumeUUID: detectedVolume.volumeUUID,
-            isRemovable: recordedVolume.isRemovable,
-            isInternal: recordedVolume.isInternal,
-            isDiskImage: recordedVolume.isDiskImage,
-            totalCapacityBytes: recordedVolume.totalCapacityBytes,
-            availableCapacityBytes: recordedVolume.availableCapacityBytes,
-            // Hardware identifiers are valid only for the current connection.
-            wholeDiskIdentifier: detectedVolume.wholeDiskIdentifier,
-            deviceGroupIdentifier: detectedVolume.deviceGroupIdentifier,
-            deviceVendorName: detectedVolume.deviceVendorName,
-            deviceProductName: detectedVolume.deviceProductName
-        )
-        guard detector.isLikelyImportVolume(volume) else {
+        guard let volume = MountHandoffProbeCompletionValidator.currentVolumeForDelivery(
+            event: event,
+            detectCurrentVolume: { self.currentImportVolume(at: mountURL, event: event) }
+        ) else {
             finish(claim)
             return
         }
@@ -284,11 +255,11 @@ final class MountEventObserver {
                 guard let currentVolume = MountHandoffProbeCompletionValidator
                     .currentVolumeForDelivery(
                         event: event,
+                        observedVolume: volume,
                         detectCurrentVolume: {
-                            self.detector.mountedVolume(from: mountURL)
+                            self.currentImportVolume(at: mountURL, event: event)
                         }
-                    ),
-                    self.detector.isLikelyImportVolume(currentVolume)
+                    )
                 else {
                     self.finish(claim)
                     return
@@ -304,6 +275,34 @@ final class MountEventObserver {
                 }
             }
         }
+    }
+
+    private func currentImportVolume(at mountURL: URL, event: MountHandoffEvent?) -> MountedVolume? {
+        guard let volume = detector.currentMountedVolume(
+            from: mountURL,
+            includeCapacity: mountPrivacyPolicy.includesCapacityBeforeConsent
+        ) else { return nil }
+        if detector.isLikelyImportVolume(volume) { return volume }
+
+#if DEBUG
+        // The existing helper lifecycle QA uses a mounted disk image to test
+        // delivery after classification. It still needs a live mount root.
+        if event?.mountedVolume == BackgroundPromptRuntimeQA.injectedPostDetectionVolume(at: mountURL),
+           BackgroundPromptRuntimeQA.consumesInjectedHandoff() || BackgroundPromptRuntimeQA.helperLifecycleIsActive() {
+            return MountedVolume(
+                id: volume.id,
+                name: volume.name,
+                mountURL: volume.mountURL,
+                volumeUUID: volume.volumeUUID,
+                isRemovable: true,
+                wholeDiskIdentifier: volume.wholeDiskIdentifier,
+                deviceGroupIdentifier: volume.deviceGroupIdentifier,
+                deviceVendorName: volume.deviceVendorName,
+                deviceProductName: volume.deviceProductName
+            )
+        }
+#endif
+        return nil
     }
 
     private func finish(_ claim: MountHandoffClaim?) {

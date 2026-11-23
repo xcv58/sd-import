@@ -155,6 +155,72 @@ struct MountedDevicePromptCoordinatorTests {
         #expect(updated.contains(replacement))
     }
 
+    @Test("a partition of an offered replacement disk stays in Source after dismissal")
+    func latePartitionOfOfferedReplacement() throws {
+        let replacement = Self.volume("NewCard", disk: "disk6")
+        let latePartition = Self.volume("SecondPartition", disk: "disk6")
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(card, among: [internalStorage, card], canPresent: true) == .present)
+        let initial = try #require(coordinator.pendingPrompt)
+
+        coordinator.updateMountedVolumes([internalStorage])
+        coordinator.updateMountedVolumes([internalStorage, replacement])
+        #expect(coordinator.pendingPrompt?.contains(replacement) == true)
+        let dismissed = coordinator.dismiss(initial.id)
+        #expect(dismissed)
+
+        let allVolumes = [internalStorage, replacement, latePartition]
+        #expect(coordinator.receive(latePartition, among: allVolumes, canPresent: true) == .alreadyPresented)
+        #expect(coordinator.pendingPrompt == nil)
+    }
+
+    @Test("an unmount invalidates a UUID-less selection even if its path and disk number are reused", arguments: ["disk5", "disk6"])
+    func replacementWithoutUUIDHasNewMountID(replacementDisk: String) throws {
+        func card(on disk: String) -> MountedVolume {
+            MountedVolume(
+                id: "/Volumes/CARD",
+                name: "CARD",
+                mountURL: URL(fileURLWithPath: "/Volumes/CARD", isDirectory: true),
+                volumeUUID: nil,
+                isRemovable: true,
+                wholeDiskIdentifier: disk,
+                deviceGroupIdentifier: internalStorage.deviceGroupIdentifier
+            )
+        }
+
+        let original = card(on: "disk5")
+        let replacement = card(on: replacementDisk)
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(original, among: [internalStorage, original], canPresent: true) == .present)
+        let initial = try #require(coordinator.pendingPrompt)
+        let originalMountID = try #require(initial.mountID(for: original))
+        let internalMountID = try #require(initial.mountID(for: internalStorage))
+
+        coordinator.updateMountedVolumes([internalStorage])
+        #expect(coordinator.pendingPrompt?.mountID(for: original) == nil)
+        coordinator.updateMountedVolumes([internalStorage, replacement])
+        let updated = try #require(coordinator.pendingPrompt)
+        let replacementMountID = try #require(updated.mountID(for: replacement))
+        #expect(updated.id == initial.id)
+        #expect(updated.mountID(for: internalStorage) == internalMountID)
+        #expect(replacementMountID != originalMountID)
+    }
+
+    @Test("cloned UUIDs without a shared hardware identity get separate prompts")
+    func clonedVolumesStaySeparate() throws {
+        let first = Self.volume("CloneOne", disk: nil, device: nil, uuid: "cloned")
+        let second = Self.volume("CloneTwo", disk: nil, device: nil, uuid: "cloned")
+        let volumes = [first, second]
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(first, among: volumes, canPresent: true) == .present)
+        let initial = try #require(coordinator.pendingPrompt)
+        #expect(initial.deviceGroup.volumes == [first])
+        let dismissed = coordinator.dismiss(initial.id)
+        #expect(dismissed)
+        #expect(coordinator.receive(second, among: volumes, canPresent: true) == .present)
+        #expect(coordinator.pendingPrompt?.deviceGroup.volumes == [second])
+    }
+
     @Test("learning the USB ID preserves an open or dismissed prompt", arguments: [false, true])
     func resolvesUSBIdentity(dismissed: Bool) throws {
         let provisional = Self.volume("Pocket4", disk: "disk4", device: nil)
@@ -218,7 +284,7 @@ struct MountedDevicePromptCoordinatorTests {
 
     private static func volume(
         _ name: String,
-        disk: String,
+        disk: String?,
         device: String? = "camera-usb-device",
         uuid: String? = nil
     ) -> MountedVolume {
