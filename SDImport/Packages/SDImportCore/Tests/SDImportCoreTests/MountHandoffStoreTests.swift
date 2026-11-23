@@ -399,6 +399,55 @@ struct MountHandoffStoreTests {
         }
     }
 
+    @Test("a delayed unmount preserves the replacement at the same path until it actually unmounts")
+    func delayedUnmountPreservesReplacement() throws {
+        func card(media: UInt64) -> MountedVolume {
+            MountedVolume(
+                id: "card",
+                name: "CARD",
+                mountURL: URL(fileURLWithPath: "/Volumes/CARD", isDirectory: true),
+                volumeUUID: nil,
+                isRemovable: true,
+                wholeDiskIdentifier: "disk4",
+                deviceGroupIdentifier: "reader",
+                mediaRegistryID: media
+            )
+        }
+        let original = card(media: 1)
+        let replacement = card(media: 2)
+        let controller = MountHandoffDeliveryController()
+        var coordinator = MountedDevicePromptCoordinator()
+        var deliveries: [MountedVolume] = []
+        for card in [original, replacement] {
+            let disposition = controller.evaluate(volume: card) { volume in
+                deliveries.append(volume)
+                #expect(coordinator.receive(volume, among: [volume], canPresent: true) == .present)
+                return .accepted
+            }
+            #expect(disposition == .accepted)
+        }
+        let promptID = try #require(coordinator.pendingPrompt?.id)
+
+        let currentVolume = try #require(controller.reconcileUnmount(at: original.mountURL, currentVolume: replacement))
+        coordinator.updateMountedVolumes([currentVolume])
+        #expect(coordinator.pendingPrompt?.id == promptID)
+        #expect(coordinator.pendingPrompt?.contains(replacement) == true)
+        #expect(controller.evaluate(volume: replacement) { volume in
+            deliveries.append(volume)
+            return .accepted
+        } == .accepted)
+        #expect(deliveries == [original, replacement])
+
+        #expect(controller.reconcileUnmount(at: replacement.mountURL, currentVolume: nil) == nil)
+        coordinator.updateMountedVolumes([])
+        #expect(coordinator.pendingPrompt == nil)
+        #expect(controller.evaluate(volume: replacement) { volume in
+            deliveries.append(volume)
+            return .accepted
+        } == .accepted)
+        #expect(deliveries == [original, replacement, replacement])
+    }
+
     @Test("delivery does not suppress cloned UUIDs at distinct live mount paths")
     func clonedVolumeUUIDsDeliverSeparately() {
         let controller = MountHandoffDeliveryController()

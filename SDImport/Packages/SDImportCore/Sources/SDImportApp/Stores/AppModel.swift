@@ -885,7 +885,15 @@ final class AppModel: ObservableObject {
                 && Self.currentPromptVolume(matching: volume) != nil
         }
         mountedVolumesSnapshot = volumes
-        availableSourceVolumes = detector.likelyImportVolumes(from: mountedVolumesSnapshot)
+        let sourceVolumes = detector.likelyImportVolumes(from: mountedVolumesSnapshot)
+#if DEBUG
+        availableSourceVolumes = BackgroundPromptRuntimeQA.retainingLivePromptVolume(
+            mountObserver?.runtimeQAPromptVolume,
+            in: sourceVolumes
+        ) { Self.currentPromptVolume(matching: $0) != nil }
+#else
+        availableSourceVolumes = sourceVolumes
+#endif
         mountPrompts.updateMountedVolumes(availableSourceVolumes)
         rebuildSourceEjectionTargetCache()
         rebuildRecentImportSuggestions()

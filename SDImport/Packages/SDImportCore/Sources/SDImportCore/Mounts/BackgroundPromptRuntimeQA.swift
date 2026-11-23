@@ -156,6 +156,19 @@ public enum BackgroundPromptRuntimeQA {
         )
     }
 
+    public static func retainingLivePromptVolume(
+        _ fixture: MountedVolume?,
+        in volumes: [MountedVolume],
+        isCurrent: (MountedVolume) -> Bool
+    ) -> [MountedVolume] {
+        guard let fixture,
+              !volumes.contains(where: { $0.mountPath == fixture.mountPath }),
+              isCurrent(fixture) else {
+            return volumes
+        }
+        return volumes + [fixture]
+    }
+
     private static func defaultLifecycleMarkerURL(fileManager: FileManager) throws -> URL {
         try AppGroupContainer.sharedSupportDirectory(fileManager: fileManager)
             .appendingPathComponent("Background Prompt", isDirectory: true)

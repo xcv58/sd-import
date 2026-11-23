@@ -182,4 +182,12 @@ public final class MountHandoffDeliveryController {
     public func forget(mountURL: URL) {
         deduplicator.forget(mountURL: mountURL)
     }
+
+    /// A delayed notification can name a path already occupied by a new card.
+    public func reconcileUnmount(at mountURL: URL, currentVolume: MountedVolume?) -> MountedVolume? {
+        if currentVolume == nil {
+            forget(mountURL: mountURL)
+        }
+        return currentVolume
+    }
 }

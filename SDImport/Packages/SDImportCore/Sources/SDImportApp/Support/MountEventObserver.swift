@@ -20,6 +20,9 @@ final class MountEventObserver {
     private let targetApplicationPath: String
     private let applicationBuild: String
     private var deliveryController = MountHandoffDeliveryController()
+#if DEBUG
+    private(set) var runtimeQAPromptVolume: MountedVolume?
+#endif
 
     init(
         applicationURL: URL = Bundle.main.bundleURL,
@@ -73,8 +76,7 @@ final class MountEventObserver {
                 return
             }
             Task { @MainActor in
-                self?.deliveryController.forget(mountURL: mountURL)
-                self?.unmountHandler(mountURL)
+                self?.handleUnmountURL(mountURL)
             }
         }
 
@@ -152,6 +154,23 @@ final class MountEventObserver {
         } catch {
             errorHandler(L10n.tr("Could not persist a foreground mounted-card event"), nil)
         }
+    }
+
+    private func handleUnmountURL(_ mountURL: URL) {
+        let currentVolume = detector.currentMountedVolume(
+            from: mountURL,
+            includeCapacity: mountPrivacyPolicy.includesCapacityBeforeConsent
+        )
+        if let currentVolume = deliveryController.reconcileUnmount(at: mountURL, currentVolume: currentVolume) {
+            volumeMountedHandler(currentVolume)
+            return
+        }
+#if DEBUG
+        if runtimeQAPromptVolume?.mountPath == mountURL.standardizedFileURL.path {
+            runtimeQAPromptVolume = nil
+        }
+#endif
+        unmountHandler(mountURL)
     }
 
     private func handleNotification(path: String, eventID: UUID?) {
@@ -289,7 +308,7 @@ final class MountEventObserver {
         // delivery after classification. It still needs a live mount root.
         if event?.mountedVolume == BackgroundPromptRuntimeQA.injectedPostDetectionVolume(at: mountURL),
            BackgroundPromptRuntimeQA.consumesInjectedHandoff() || BackgroundPromptRuntimeQA.helperLifecycleIsActive() {
-            return MountedVolume(
+            let fixture = MountedVolume(
                 id: volume.id,
                 name: volume.name,
                 mountURL: volume.mountURL,
@@ -301,6 +320,8 @@ final class MountEventObserver {
                 deviceProductName: volume.deviceProductName,
                 mediaRegistryID: volume.mediaRegistryID
             )
+            runtimeQAPromptVolume = fixture
+            return fixture
         }
 #endif
         return nil
