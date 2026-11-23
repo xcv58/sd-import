@@ -206,6 +206,40 @@ struct MountedDevicePromptCoordinatorTests {
         #expect(replacementMountID != originalMountID)
     }
 
+    @Test("a different live media ID expires a UUID-less choice without an unmount snapshot")
+    func mediaChangeExpiresChoiceBeforeUnmountDelivery() throws {
+        func card(media: UInt64?) -> MountedVolume {
+            MountedVolume(
+                id: "/Volumes/CARD",
+                name: "CARD",
+                mountURL: URL(fileURLWithPath: "/Volumes/CARD", isDirectory: true),
+                volumeUUID: nil,
+                isRemovable: true,
+                wholeDiskIdentifier: "disk5",
+                deviceGroupIdentifier: internalStorage.deviceGroupIdentifier,
+                mediaRegistryID: media
+            )
+        }
+        let original = card(media: 1)
+        let replacement = card(media: 2)
+        let unverified = card(media: nil)
+        #expect(original.hasVerifiedMediaContinuity(with: original))
+        #expect(!replacement.hasVerifiedMediaContinuity(with: original))
+        #expect(!unverified.hasVerifiedMediaContinuity(with: original))
+        #expect(!unverified.hasVerifiedMediaContinuity(with: unverified))
+
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(original, among: [internalStorage, original], canPresent: true) == .present)
+        let initial = try #require(coordinator.pendingPrompt)
+        let originalMountID = try #require(initial.mountID(for: original))
+
+        coordinator.updateMountedVolumes([internalStorage, replacement])
+        let updated = try #require(coordinator.pendingPrompt)
+        #expect(updated.id == initial.id)
+        #expect(updated.mountID(for: original) == nil)
+        #expect(updated.mountID(for: replacement) != originalMountID)
+    }
+
     @Test("cloned UUIDs without a shared hardware identity get separate prompts")
     func clonedVolumesStaySeparate() throws {
         let first = Self.volume("CloneOne", disk: nil, device: nil, uuid: "cloned")

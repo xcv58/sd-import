@@ -32,8 +32,8 @@ public enum MountHandoffVolumeIdentity {
 }
 
 public enum MountHandoffProbeCompletionValidator {
-    /// Re-reads the mounted volume after an asynchronous media probe so a
-    /// same-path card replacement cannot commit the queued occurrence.
+    /// Checks the live volume against the queued occurrence and any observation
+    /// made before an asynchronous media probe.
     public static func currentVolumeForDelivery(
         event: MountHandoffEvent?,
         observedVolume: MountedVolume? = nil,
@@ -44,6 +44,7 @@ public enum MountHandoffProbeCompletionValidator {
                   expectedUUID: observedVolume?.volumeUUID ?? event?.mountedVolume?.volumeUUID,
                   currentUUID: currentVolume.volumeUUID
               ),
+              event?.mountedVolume.map({ currentVolume.agreesOnKnownHardware(with: $0) }) ?? true,
               observedVolume.map({ currentVolume.isSameMount(as: $0) }) ?? true else {
             return nil
         }
@@ -52,14 +53,18 @@ public enum MountHandoffProbeCompletionValidator {
 }
 
 /// Suppresses repeated deliveries for an accepted, continuously mounted volume.
-/// The accepted identity remains active until the observer receives an unmount.
+/// The accepted identity remains active until an unmount or a replacement is observed.
 public struct MountHandoffDeduplicator: Sendable {
     private struct AcceptedEvent: Sendable {
         let mountPath: String
         let volumeUUID: String?
+        let volume: MountedVolume?
 
         func matches(_ other: AcceptedEvent) -> Bool {
             guard mountPath == other.mountPath else { return false }
+            if let volume, let otherVolume = other.volume, !volume.agreesOnKnownHardware(with: otherVolume) {
+                return false
+            }
             if let volumeUUID, let otherUUID = other.volumeUUID {
                 return volumeUUID == otherUUID
             }
@@ -101,6 +106,7 @@ public struct MountHandoffDeduplicator: Sendable {
         guard !contains(identity) else {
             return
         }
+        acceptedEvents.removeAll { $0.mountPath == identity.mountPath }
         acceptedEvents.append(identity)
         if acceptedEvents.count > capacity {
             acceptedEvents.removeFirst(acceptedEvents.count - capacity)
@@ -115,19 +121,17 @@ public struct MountHandoffDeduplicator: Sendable {
     private func acceptedIdentity(for event: MountHandoffEvent) -> AcceptedEvent {
         AcceptedEvent(
             mountPath: URL(fileURLWithPath: event.mountPath, isDirectory: true).standardizedFileURL.path,
-            volumeUUID: normalizedVolumeUUID(for: event)
+            volumeUUID: normalizedVolumeUUID(event.mountedVolume?.volumeUUID),
+            volume: event.mountedVolume
         )
     }
 
     private func acceptedIdentity(for volume: MountedVolume) -> AcceptedEvent {
         AcceptedEvent(
             mountPath: volume.mountURL.standardizedFileURL.path,
-            volumeUUID: normalizedVolumeUUID(volume.volumeUUID)
+            volumeUUID: normalizedVolumeUUID(volume.volumeUUID),
+            volume: volume
         )
-    }
-
-    private func normalizedVolumeUUID(for event: MountHandoffEvent) -> String? {
-        normalizedVolumeUUID(event.mountedVolume?.volumeUUID)
     }
 
     private func normalizedVolumeUUID(_ volumeUUID: String?) -> String? {

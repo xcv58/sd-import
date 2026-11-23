@@ -461,6 +461,7 @@
 "Scan Again" = "重新掃描";
 "Scan Card" = "掃描記憶卡";
 "Scan Summary" = "掃描摘要";
+"Scan the card currently mounted?" = "掃描目前已掛載的記憶卡？";
 "Scan this volume to preview what would be copied." = "掃描此儲存卷宗，預覽將要拷貝的檔案。";
 "Scan cancelled" = "掃描已取消";
 "Scan complete" = "掃描完成";

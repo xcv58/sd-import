@@ -461,6 +461,7 @@
 "Scan Again" = "다시 스캔";
 "Scan Card" = "카드 스캔";
 "Scan Summary" = "스캔 요약";
+"Scan the card currently mounted?" = "현재 마운트된 카드를 스캔할까요?";
 "Scan this volume to preview what would be copied." = "이 볼륨을 스캔하여 복사할 파일을 미리 확인하세요.";
 "Scan cancelled" = "스캔 취소됨";
 "Scan complete" = "스캔 완료";

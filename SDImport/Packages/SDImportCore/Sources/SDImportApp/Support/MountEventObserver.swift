@@ -298,7 +298,8 @@ final class MountEventObserver {
                 wholeDiskIdentifier: volume.wholeDiskIdentifier,
                 deviceGroupIdentifier: volume.deviceGroupIdentifier,
                 deviceVendorName: volume.deviceVendorName,
-                deviceProductName: volume.deviceProductName
+                deviceProductName: volume.deviceProductName,
+                mediaRegistryID: volume.mediaRegistryID
             )
         }
 #endif

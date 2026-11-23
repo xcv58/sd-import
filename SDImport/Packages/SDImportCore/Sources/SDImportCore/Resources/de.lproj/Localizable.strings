@@ -461,6 +461,7 @@
 "Scan Again" = "Erneut scannen";
 "Scan Card" = "Karte scannen";
 "Scan Summary" = "Scanzusammenfassung";
+"Scan the card currently mounted?" = "Die aktuell eingebundene Karte scannen?";
 "Scan this volume to preview what would be copied." = "Dieses Volume scannen, um eine Vorschau der zu kopierenden Dateien zu sehen.";
 "Scan cancelled" = "Scan abgebrochen";
 "Scan complete" = "Scan abgeschlossen";

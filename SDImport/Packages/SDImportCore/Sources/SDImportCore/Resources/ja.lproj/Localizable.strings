@@ -461,6 +461,7 @@
 "Scan Again" = "再スキャン";
 "Scan Card" = "カードをスキャン";
 "Scan Summary" = "スキャンの概要";
+"Scan the card currently mounted?" = "現在マウントされているカードをスキャンしますか？";
 "Scan this volume to preview what would be copied." = "このボリュームをスキャンして、コピーされるファイルを確認できます。";
 "Scan cancelled" = "スキャンをキャンセルしました";
 "Scan complete" = "スキャン完了";

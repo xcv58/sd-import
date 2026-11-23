@@ -461,6 +461,7 @@
 "Scan Again" = "重新扫描";
 "Scan Card" = "扫描存储卡";
 "Scan Summary" = "扫描摘要";
+"Scan the card currently mounted?" = "扫描当前已挂载的存储卡？";
 "Scan this volume to preview what would be copied." = "扫描此存储卷，预览将要复制的文件。";
 "Scan cancelled" = "扫描已取消";
 "Scan complete" = "扫描完成";

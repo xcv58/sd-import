@@ -461,6 +461,7 @@
 "Scan Again" = "Volver a analizar";
 "Scan Card" = "Analizar tarjeta";
 "Scan Summary" = "Resumen del análisis";
+"Scan the card currently mounted?" = "¿Escanear la tarjeta montada actualmente?";
 "Scan this volume to preview what would be copied." = "Escanea este volumen para ver qué archivos se copiarían.";
 "Scan cancelled" = "Análisis cancelado";
 "Scan complete" = "Análisis completado";
