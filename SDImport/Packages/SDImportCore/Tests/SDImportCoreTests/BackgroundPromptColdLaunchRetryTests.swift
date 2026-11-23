@@ -139,9 +139,16 @@ struct BackgroundPromptColdLaunchRetryTests {
         #expect(activations == 0)
     }
 
-    @Test("An unmount invalidates one candidate and keeps the other mounted volume eligible")
-    func unmountInvalidatesPendingOccurrence() async throws {
-        let removed = volume(named: "Card A", uuid: nil)
+    @Test("An unmount invalidates an ambiguous or conflicting candidate", arguments: [false, true])
+    func unmountInvalidatesPendingOccurrence(hasConflictingMediaID: Bool) async throws {
+        let removed = volume(
+            named: "Card A",
+            uuid: hasConflictingMediaID ? "cloned-uuid" : nil,
+            mediaID: hasConflictingMediaID ? 17 : nil
+        )
+        let atRemovedPath = hasConflictingMediaID
+            ? volume(named: "Card A", uuid: "cloned-uuid", mediaID: 18)
+            : removed
         let live = volume(named: "Card B")
         var observedPaths: [String] = []
         var activations = 0
@@ -151,7 +158,7 @@ struct BackgroundPromptColdLaunchRetryTests {
             },
             currentVolume: { url in
                 observedPaths.append(url.path)
-                return url == removed.mountURL ? removed : live
+                return url == removed.mountURL ? atRemovedPath : live
             },
             isAuthorized: { true },
             sleep: { _ in }
@@ -159,7 +166,7 @@ struct BackgroundPromptColdLaunchRetryTests {
 
         retry.track(removed, at: appURL, startsNewLaunch: true)
         retry.track(live, at: appURL, startsNewLaunch: false)
-        retry.removeVolume(at: removed.mountURL, preserving: removed)
+        retry.removeVolume(at: removed.mountURL, preserving: atRemovedPath)
         let task = try #require(retry.task)
         await task.value
 
@@ -167,10 +174,10 @@ struct BackgroundPromptColdLaunchRetryTests {
         #expect(activations == 1)
     }
 
-    @Test("A delayed unmount leaves a hardware-verified replacement eligible")
-    func delayedUnmountPreservesCurrentMount() async throws {
-        let first = volume(named: "Card A", mediaID: 17)
-        let replacement = volume(named: "Card A", mediaID: 18)
+    @Test("A delayed unmount leaves the current replacement eligible", arguments: [true, false])
+    func delayedUnmountPreservesCurrentMount(hasMediaIDs: Bool) async throws {
+        let first = volume(named: "Card", uuid: "card-a", mediaID: hasMediaIDs ? 17 : nil)
+        let replacement = volume(named: "Card", uuid: "card-b", mediaID: hasMediaIDs ? 18 : nil)
         var activations = 0
         let retry = BackgroundPromptColdLaunchRetry(
             findApplication: { _ in

@@ -71,7 +71,7 @@ public final class BackgroundPromptColdLaunchRetry {
 
     public func removeVolume(at mountURL: URL, preserving current: MountedVolume? = nil) {
         let path = mountURL.standardizedFileURL.path
-        if let current, let tracked = volumes[path], current.hasVerifiedMediaContinuity(with: tracked) {
+        if let current, let tracked = volumes[path], Self.matchesTrackedMount(current, tracked: tracked) {
             return
         }
         volumes.removeValue(forKey: path)
@@ -79,5 +79,18 @@ public final class BackgroundPromptColdLaunchRetry {
             task?.cancel()
             task = nil
         }
+    }
+
+    private static func matchesTrackedMount(_ current: MountedVolume, tracked: MountedVolume) -> Bool {
+        if current.hasVerifiedMediaContinuity(with: tracked) {
+            return true
+        }
+        // Unmount notifications identify the path. A replacement can already
+        // occupy it and expose its UUID before I/O Registry identity is available.
+        guard let uuid = tracked.volumeUUID, !uuid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              current.volumeUUID != nil else {
+            return false
+        }
+        return current.isSameMount(as: tracked)
     }
 }
