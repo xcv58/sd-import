@@ -4429,7 +4429,7 @@ final class AppModel: ObservableObject {
                     hasPendingPrompt: self.pendingMountPrompt != nil
                 )
                 switch self.mountPrompts.receive(volume, among: self.availableSourceVolumes, canPresent: canPresent) {
-                case .alreadyPresented:
+                case .alreadyPresented, .stale:
                     return .accepted
                 case .deferred:
                     return .deferred

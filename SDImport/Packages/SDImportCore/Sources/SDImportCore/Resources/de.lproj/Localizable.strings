@@ -12,7 +12,6 @@
 "%@ ejected. Safe to remove." = "%1$@ ausgeworfen. Sicheres Entfernen möglich.";
 "%@ excluded" = "%1$@ ausgeschlossen";
 "%@ folder path" = "Ordnerpfad für %1$@";
-"%@ found supported media on this volume. Scan it now to preview what will be copied." = "%1$@ hat unterstützte Medien auf diesem Volume gefunden. Jetzt scannen, um die zu kopierenden Dateien anzuzeigen.";
 "%@ free" = "%1$@ frei";
 "%@ free, %@ used of %@" = "%1$@ frei, %2$@ von %3$@ belegt";
 "%@ needed · %@ available" = "%1$@ benötigt · %2$@ verfügbar";
@@ -462,6 +461,7 @@
 "Scan Again" = "Erneut scannen";
 "Scan Card" = "Karte scannen";
 "Scan Summary" = "Scanzusammenfassung";
+"Scan this volume to preview what would be copied." = "Dieses Volume scannen, um eine Vorschau der zu kopierenden Dateien zu sehen.";
 "Scan cancelled" = "Scan abgebrochen";
 "Scan complete" = "Scan abgeschlossen";
 "Scan complete. %@" = "Scan abgeschlossen. %1$@";

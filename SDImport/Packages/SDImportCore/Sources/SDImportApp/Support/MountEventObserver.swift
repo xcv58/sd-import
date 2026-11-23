@@ -232,10 +232,10 @@ final class MountEventObserver {
         }
         let recordedVolume = event?.mountedVolume ?? detectedVolume
         let volume = MountedVolume(
-            id: recordedVolume.id,
+            id: detectedVolume.id,
             name: name.flatMap { $0.isEmpty ? nil : $0 } ?? recordedVolume.name,
             mountURL: mountURL,
-            volumeUUID: recordedVolume.volumeUUID,
+            volumeUUID: detectedVolume.volumeUUID,
             isRemovable: recordedVolume.isRemovable,
             isInternal: recordedVolume.isInternal,
             isDiskImage: recordedVolume.isDiskImage,

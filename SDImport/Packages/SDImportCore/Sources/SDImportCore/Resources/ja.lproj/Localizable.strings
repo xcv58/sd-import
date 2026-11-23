@@ -12,7 +12,6 @@
 "%@ ejected. Safe to remove." = "%1$@ を取り出しました。安全に取り外せます。";
 "%@ excluded" = "%1$@ は除外されています";
 "%@ folder path" = "%1$@ のフォルダパス";
-"%@ found supported media on this volume. Scan it now to preview what will be copied." = "%1$@ がこのボリューム上に対応するメディアを見つけました。スキャンして、コピーするファイルを確認してください。";
 "%@ free" = "空き %1$@";
 "%@ free, %@ used of %@" = "空き %1$@、使用済み %2$@ / %3$@";
 "%@ needed · %@ available" = "必要 %1$@ · 使用可能 %2$@";
@@ -462,6 +461,7 @@
 "Scan Again" = "再スキャン";
 "Scan Card" = "カードをスキャン";
 "Scan Summary" = "スキャンの概要";
+"Scan this volume to preview what would be copied." = "このボリュームをスキャンして、コピーされるファイルを確認できます。";
 "Scan cancelled" = "スキャンをキャンセルしました";
 "Scan complete" = "スキャン完了";
 "Scan complete. %@" = "スキャン完了。%1$@";

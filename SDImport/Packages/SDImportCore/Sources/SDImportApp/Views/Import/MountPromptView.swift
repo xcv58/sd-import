@@ -29,7 +29,7 @@ struct MountPromptView: View {
                     .foregroundStyle(.secondary)
 
                 if group.isMultiVolume {
-                    ForEach(group.volumes) { volume in
+                    ForEach(group.volumes, id: \.mountPath) { volume in
                         Button {
                             model.acceptMountedVolumePrompt(volume, promptID: promptID)
                         } label: {
@@ -43,7 +43,7 @@ struct MountPromptView: View {
                         .buttonStyle(.bordered)
                         .accessibilityLabel(L10n.tr("Scan \(volume.name)"))
                         .accessibilityValue(volume.mountURL.path)
-                        .accessibilityIdentifier("import.mount-prompt.volume.\(volume.id)")
+                        .accessibilityIdentifier("import.mount-prompt.volume.\(volume.mountPath)")
                     }
                 }
 
@@ -85,7 +85,7 @@ struct MountPromptView: View {
         if AppDistribution.current == .macAppStore {
             return L10n.tr("\(AppDistribution.current.displayName) detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?")
         }
-        return L10n.tr("\(AppDistribution.current.displayName) found supported media on this volume. Scan it now to preview what will be copied.")
+        return L10n.tr("Scan this volume to preview what would be copied.")
     }
 
     private var skipButtonTitle: String {

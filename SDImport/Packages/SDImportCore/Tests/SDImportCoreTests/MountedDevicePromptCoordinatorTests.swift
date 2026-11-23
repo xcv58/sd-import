@@ -57,7 +57,7 @@ struct MountedDevicePromptCoordinatorTests {
         #expect(!dismissedReplacement)
     }
 
-    @Test("unmounting one volume keeps its sibling available and disconnecting clears the prompt")
+    @Test("unmounting one volume keeps its sibling and reconnecting with a new USB ID prompts again")
     func unmountAndReconnect() throws {
         var coordinator = MountedDevicePromptCoordinator()
         #expect(coordinator.receive(internalStorage, among: [internalStorage, card], canPresent: true) == .present)
@@ -71,8 +71,89 @@ struct MountedDevicePromptCoordinatorTests {
 
         coordinator.updateMountedVolumes([])
         #expect(coordinator.pendingPrompt == nil)
-        #expect(coordinator.receive(card, among: [card], canPresent: true) == .present)
+        let reconnectedCard = Self.volume("Untitled", disk: "disk5", device: "reconnected-camera")
+        #expect(coordinator.receive(reconnectedCard, among: [reconnectedCard], canPresent: true) == .present)
         #expect(coordinator.pendingPrompt?.id != first.id)
+    }
+
+    @Test("a late sibling does not reopen the prompt across a gap with no mounted volumes")
+    func gapBetweenMountedVolumes() throws {
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(internalStorage, among: [internalStorage], canPresent: true) == .present)
+        let prompt = try #require(coordinator.pendingPrompt)
+        let didDismiss = coordinator.dismiss(prompt.id)
+        #expect(didDismiss)
+
+        coordinator.updateMountedVolumes([])
+        coordinator.updateMountedVolumes([card])
+        #expect(coordinator.receive(card, among: [card], canPresent: true) == .alreadyPresented)
+        #expect(coordinator.pendingPrompt == nil)
+    }
+
+    @Test("an attached single-slot reader can prompt again after its card is swapped")
+    func cardSwapInConnectedReader() throws {
+        let original = Self.volume("First", disk: "disk4", device: "reader")
+        let replacement = Self.volume("Second", disk: "disk4", device: "reader")
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(original, among: [original], canPresent: true) == .present)
+        let prompt = try #require(coordinator.pendingPrompt)
+
+        coordinator.updateMountedVolumes([])
+        coordinator.updateMountedVolumes([replacement])
+        #expect(coordinator.receive(replacement, among: [replacement], canPresent: true) == .present)
+        #expect(coordinator.pendingPrompt?.id != prompt.id)
+    }
+
+    @Test("learning the USB ID preserves an open or dismissed prompt", arguments: [false, true])
+    func resolvesUSBIdentity(dismissed: Bool) throws {
+        let provisional = Self.volume("Pocket4", disk: "disk4", device: nil)
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(provisional, among: [provisional], canPresent: true) == .present)
+        let prompt = try #require(coordinator.pendingPrompt)
+        if dismissed { _ = coordinator.dismiss(prompt.id) }
+
+        let both = [internalStorage, card]
+        coordinator.updateMountedVolumes(both)
+        #expect(coordinator.receive(card, among: both, canPresent: true) == .alreadyPresented)
+        if dismissed {
+            #expect(coordinator.pendingPrompt == nil)
+            coordinator.updateMountedVolumes([])
+            #expect(coordinator.receive(card, among: [card], canPresent: true) == .alreadyPresented)
+        } else {
+            #expect(coordinator.pendingPrompt?.id == prompt.id)
+            #expect(coordinator.pendingPrompt?.deviceGroup.volumes == both)
+        }
+    }
+
+    @Test("a reused disk number and mount path with a different UUID starts a fresh prompt")
+    func reusedFallbackIsDistinct() throws {
+        let previous = Self.volume("Untitled", disk: "disk5", device: nil, uuid: "old")
+        let replacement = Self.volume("Untitled", disk: "disk5", device: nil, uuid: "new")
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(previous, among: [previous], canPresent: true) == .present)
+        let prompt = try #require(coordinator.pendingPrompt)
+
+        coordinator.updateMountedVolumes([replacement])
+        #expect(coordinator.pendingPrompt == nil)
+        #expect(coordinator.receive(previous, among: [replacement], canPresent: true) == .stale)
+        #expect(coordinator.receive(replacement, among: [replacement], canPresent: true) == .present)
+        #expect(coordinator.pendingPrompt?.id != prompt.id)
+    }
+
+    @Test("a handoff without a UUID uses the current volume once")
+    func missingHandoffUUIDDoesNotDuplicateSource() {
+        let unverified = MountedVolume(
+            id: internalStorage.mountPath,
+            name: internalStorage.name,
+            mountURL: internalStorage.mountURL,
+            volumeUUID: nil,
+            isRemovable: true,
+            wholeDiskIdentifier: internalStorage.wholeDiskIdentifier,
+            deviceGroupIdentifier: internalStorage.deviceGroupIdentifier
+        )
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(unverified, among: [internalStorage], canPresent: true) == .present)
+        #expect(coordinator.pendingPrompt?.deviceGroup.volumes == [internalStorage])
     }
 
     @Test("a different volume at the same path invalidates the earlier selection")
@@ -89,7 +170,7 @@ struct MountedDevicePromptCoordinatorTests {
     private static func volume(
         _ name: String,
         disk: String,
-        device: String = "camera-usb-device",
+        device: String? = "camera-usb-device",
         uuid: String? = nil
     ) -> MountedVolume {
         MountedVolume(

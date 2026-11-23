@@ -57,6 +57,8 @@ public struct MountedVolume: Identifiable, Hashable, Codable, Sendable {
         return totalCapacityBytes - availableCapacityBytes
     }
 
+    public var mountPath: String { mountURL.standardizedFileURL.path }
+
     public var physicalDeviceDisplayName: String? {
         let vendor = deviceVendorName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let product = deviceProductName?.trimmingCharacters(in: .whitespacesAndNewlines)

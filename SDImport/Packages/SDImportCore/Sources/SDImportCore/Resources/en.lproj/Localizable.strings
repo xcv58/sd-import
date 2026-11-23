@@ -12,7 +12,6 @@
 "%@ ejected. Safe to remove." = "%@ ejected. Safe to remove.";
 "%@ excluded" = "%@ excluded";
 "%@ folder path" = "%@ folder path";
-"%@ found supported media on this volume. Scan it now to preview what will be copied." = "%@ found supported media on this volume. Scan it now to preview what will be copied.";
 "%@ free" = "%@ free";
 "%@ free, %@ used of %@" = "%@ free, %@ used of %@";
 "%@ needed · %@ available" = "%@ needed · %@ available";
@@ -462,6 +461,7 @@
 "Scan Again" = "Scan Again";
 "Scan Card" = "Scan Card";
 "Scan Summary" = "Scan Summary";
+"Scan this volume to preview what would be copied." = "Scan this volume to preview what would be copied.";
 "Scan cancelled" = "Scan cancelled";
 "Scan complete" = "Scan complete";
 "Scan complete. %@" = "Scan complete. %@";

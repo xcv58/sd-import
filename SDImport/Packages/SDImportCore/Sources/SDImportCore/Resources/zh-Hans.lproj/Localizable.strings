@@ -12,7 +12,6 @@
 "%@ ejected. Safe to remove." = "%1$@ 已弹出，可以安全移除。";
 "%@ excluded" = "%1$@ 已排除";
 "%@ folder path" = "%1$@ 文件夹路径";
-"%@ found supported media on this volume. Scan it now to preview what will be copied." = "%1$@ 在此存储卷上找到支持的媒体文件。现在扫描即可预览将要复制的文件。";
 "%@ free" = "%1$@ 可用";
 "%@ free, %@ used of %@" = "%1$@ 可用，已用 %2$@，共 %3$@";
 "%@ needed · %@ available" = "需要 %1$@ · 可用 %2$@";
@@ -462,6 +461,7 @@
 "Scan Again" = "重新扫描";
 "Scan Card" = "扫描存储卡";
 "Scan Summary" = "扫描摘要";
+"Scan this volume to preview what would be copied." = "扫描此存储卷，预览将要复制的文件。";
 "Scan cancelled" = "扫描已取消";
 "Scan complete" = "扫描完成";
 "Scan complete. %@" = "扫描完成。%1$@";
