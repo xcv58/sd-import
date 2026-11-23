@@ -45,13 +45,9 @@ struct RootView: View {
             OnboardingFlowView()
                 .environmentObject(model)
         }
-        .sheet(item: pendingMountedVolumeBinding) { volume in
-            MountPromptView(
-                volume: volume,
-                deviceGroup: model.sourceDeviceGroup(containing: volume),
-                continueAction: model.acceptMountedVolumePrompt,
-                skipAction: model.skipMountedVolumePrompt
-            )
+        .sheet(item: pendingMountPromptBinding) { prompt in
+            MountPromptView(promptID: prompt.id)
+                .environmentObject(model)
         }
         .sheet(item: $model.reportPresentation) { presentation in
             ImportReportView(presentation: presentation)
@@ -84,11 +80,14 @@ struct RootView: View {
         }
     }
 
-    private var pendingMountedVolumeBinding: Binding<MountedVolume?> {
-        Binding {
-            model.reportPresentation == nil ? model.pendingMountedVolume : nil
-        } set: { volume in
-            model.pendingMountedVolume = volume
+    private var pendingMountPromptBinding: Binding<MountedDevicePrompt?> {
+        let presentedID = model.pendingMountPrompt?.id
+        return Binding {
+            model.reportPresentation == nil ? model.pendingMountPrompt : nil
+        } set: { prompt in
+            if prompt == nil, let presentedID {
+                model.skipMountedVolumePrompt(presentedID)
+            }
         }
     }
 }

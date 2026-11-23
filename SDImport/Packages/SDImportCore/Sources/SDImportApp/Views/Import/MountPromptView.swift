@@ -2,62 +2,88 @@ import SDImportCore
 import SwiftUI
 
 struct MountPromptView: View {
+    @EnvironmentObject private var model: AppModel
     @Environment(\.locale) private var locale
-    let volume: MountedVolume
-    let deviceGroup: MountedDeviceGroup
-    let continueAction: () -> Void
-    let skipAction: () -> Void
+    let promptID: UUID
 
     var body: some View {
         let _ = locale
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 12) {
-                Image(systemName: "externaldrive")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(deviceGroup.isMultiVolume ? deviceGroup.displayName : volume.name)
-                        .font(.headline)
-                    Text("\(volume.name) · \(volume.mountURL.path)")
-                        .font(.caption)
+        if let prompt = model.pendingMountPrompt, prompt.id == promptID,
+           let firstVolume = prompt.deviceGroup.volumes.first {
+            let group = prompt.deviceGroup
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(spacing: 12) {
+                    Image(systemName: "externaldrive")
+                        .font(.title2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .accessibilityHidden(true)
+                    if group.isMultiVolume {
+                        Text(group.displayName).font(.headline)
+                    } else {
+                        volumeLabel(firstVolume)
+                    }
+                }
+
+                Text(promptMessage(isMultiVolume: group.isMultiVolume))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                if group.isMultiVolume {
+                    ForEach(group.volumes) { volume in
+                        Button {
+                            model.acceptMountedVolumePrompt(volume, promptID: promptID)
+                        } label: {
+                            HStack {
+                                volumeLabel(volume)
+                                Spacer()
+                                Image(systemName: "arrow.right")
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel(L10n.tr("Scan \(volume.name)"))
+                        .accessibilityValue(volume.mountURL.path)
+                        .accessibilityIdentifier("import.mount-prompt.volume.\(volume.id)")
+                    }
+                }
+
+                HStack {
+                    Spacer()
+                    Button(skipButtonTitle) {
+                        model.skipMountedVolumePrompt(promptID)
+                    }
+                    .accessibilityIdentifier("import.mount-prompt.decline")
+                    if !group.isMultiVolume {
+                        Button(scanButtonTitle(firstVolume)) {
+                            model.acceptMountedVolumePrompt(firstVolume, promptID: promptID)
+                        }
+                        .keyboardShortcut(.defaultAction)
+                        .accessibilityIdentifier("import.mount-prompt.allow")
+                    }
                 }
             }
-
-            Text(promptMessage)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Spacer()
-                Button(skipButtonTitle) {
-                    skipAction()
-                }
-                .accessibilityIdentifier("import.mount-prompt.decline")
-                Button(scanButtonTitle) {
-                    continueAction()
-                }
-                .keyboardShortcut(.defaultAction)
-                .accessibilityIdentifier("import.mount-prompt.allow")
-            }
+            .padding(22)
+            .frame(width: 420)
         }
-        .padding(22)
-        .frame(width: 420)
     }
 
-    private var promptMessage: String {
-        if AppDistribution.current == .macAppStore {
-            if deviceGroup.isMultiVolume {
-                let names = L10n.list(deviceGroup.volumes.map(\.name))
-                return L10n.tr("\(AppDistribution.current.displayName) detected \(deviceGroup.displayName), with \(deviceGroup.volumes.count) storage volumes: \(names). It has not scanned their contents. Allow a scan of \(volume.name)?")
-            }
-            return L10n.tr("\(AppDistribution.current.displayName) detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?")
+    private func volumeLabel(_ volume: MountedVolume) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(volume.name).font(.headline)
+            Text(volume.mountURL.path)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
-        if deviceGroup.isMultiVolume {
-            let names = L10n.list(deviceGroup.volumes.map(\.name))
-            return L10n.tr("\(deviceGroup.displayName) exposes \(deviceGroup.volumes.count) storage volumes: \(names). Scan \(volume.name) now; the source menu keeps all volumes available.")
+    }
+
+    private func promptMessage(isMultiVolume: Bool) -> String {
+        if isMultiVolume {
+            return L10n.tr("Choose a storage volume to scan and preview what would be copied.")
+        }
+        if AppDistribution.current == .macAppStore {
+            return L10n.tr("\(AppDistribution.current.displayName) detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?")
         }
         return L10n.tr("\(AppDistribution.current.displayName) found supported media on this volume. Scan it now to preview what will be copied.")
     }
@@ -66,7 +92,7 @@ struct MountPromptView: View {
         AppDistribution.current == .macAppStore ? L10n.tr("Don't Scan") : L10n.tr("Skip")
     }
 
-    private var scanButtonTitle: String {
+    private func scanButtonTitle(_ volume: MountedVolume) -> String {
         AppDistribution.current == .macAppStore ? L10n.tr("Allow Scan") : L10n.tr("Scan \(volume.name)")
     }
 }

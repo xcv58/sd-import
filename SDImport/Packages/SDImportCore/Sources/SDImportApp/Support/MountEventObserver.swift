@@ -10,6 +10,7 @@ final class MountEventObserver {
     private var unmountToken: NSObjectProtocol?
     private var distributedToken: NSObjectProtocol?
     private let handler: (MountedVolume) -> MountEventHandlingDisposition
+    private let volumeMountedHandler: (MountedVolume) -> Void
     private let unmountHandler: (URL) -> Void
     private let errorHandler: (String, UInt64?) -> Void
     private let handoffAcknowledgedHandler: (MountHandoffEvent) -> Void
@@ -24,6 +25,7 @@ final class MountEventObserver {
         applicationURL: URL = Bundle.main.bundleURL,
         distribution: AppDistribution = .current,
         handler: @escaping (MountedVolume) -> MountEventHandlingDisposition,
+        volumeMountedHandler: @escaping (MountedVolume) -> Void = { _ in },
         unmountHandler: @escaping (URL) -> Void = { _ in },
         shouldHandleDirectMount: @escaping () -> Bool,
         shouldHandleHandoff: @escaping (MountHandoffEvent) -> Bool,
@@ -32,6 +34,7 @@ final class MountEventObserver {
     ) {
         mountPrivacyPolicy = distribution.mountPrivacyPolicy
         self.handler = handler
+        self.volumeMountedHandler = volumeMountedHandler
         self.unmountHandler = unmountHandler
         self.shouldHandleDirectMount = shouldHandleDirectMount
         self.shouldHandleHandoff = shouldHandleHandoff
@@ -128,6 +131,7 @@ final class MountEventObserver {
         guard detector.isLikelyImportVolume(volume) else {
             return
         }
+        volumeMountedHandler(volume)
         guard let handoffStore else {
             errorHandler(L10n.tr("The background prompt mailbox is unavailable"), nil)
             return
@@ -226,24 +230,23 @@ final class MountEventObserver {
             finish(claim)
             return
         }
-        var volume = event?.mountedVolume ?? detectedVolume
-        if let name, !name.isEmpty {
-            volume = MountedVolume(
-                id: volume.id,
-                name: name,
-                mountURL: volume.mountURL,
-                volumeUUID: volume.volumeUUID,
-                isRemovable: volume.isRemovable,
-                isInternal: volume.isInternal,
-                isDiskImage: volume.isDiskImage,
-                totalCapacityBytes: volume.totalCapacityBytes,
-                availableCapacityBytes: volume.availableCapacityBytes,
-                wholeDiskIdentifier: volume.wholeDiskIdentifier,
-                deviceGroupIdentifier: volume.deviceGroupIdentifier,
-                deviceVendorName: volume.deviceVendorName,
-                deviceProductName: volume.deviceProductName
-            )
-        }
+        let recordedVolume = event?.mountedVolume ?? detectedVolume
+        let volume = MountedVolume(
+            id: recordedVolume.id,
+            name: name.flatMap { $0.isEmpty ? nil : $0 } ?? recordedVolume.name,
+            mountURL: mountURL,
+            volumeUUID: recordedVolume.volumeUUID,
+            isRemovable: recordedVolume.isRemovable,
+            isInternal: recordedVolume.isInternal,
+            isDiskImage: recordedVolume.isDiskImage,
+            totalCapacityBytes: recordedVolume.totalCapacityBytes,
+            availableCapacityBytes: recordedVolume.availableCapacityBytes,
+            // Hardware identifiers are valid only for the current connection.
+            wholeDiskIdentifier: detectedVolume.wholeDiskIdentifier,
+            deviceGroupIdentifier: detectedVolume.deviceGroupIdentifier,
+            deviceVendorName: detectedVolume.deviceVendorName,
+            deviceProductName: detectedVolume.deviceProductName
+        )
         guard detector.isLikelyImportVolume(volume) else {
             finish(claim)
             return

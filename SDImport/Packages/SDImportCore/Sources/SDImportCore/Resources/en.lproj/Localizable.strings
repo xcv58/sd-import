@@ -5,14 +5,12 @@
 "%@ available" = "%@ available";
 "%@ available of %@" = "%@ available of %@";
 "%@ destination folder" = "%@ destination folder";
-"%@ detected %@, with %lld storage volumes: %@. It has not scanned their contents. Allow a scan of %@?" = "%@ detected %@, with %lld storage volumes: %@. It has not scanned their contents. Allow a scan of %@?";
 "%@ detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?" = "%@ detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?";
 "%@ does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing." = "%@ does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing.";
 "%@ ejected safely" = "%@ ejected safely";
 "%@ ejected, but %@ remains mounted: %@" = "%@ ejected, but %@ remains mounted: %@";
 "%@ ejected. Safe to remove." = "%@ ejected. Safe to remove.";
 "%@ excluded" = "%@ excluded";
-"%@ exposes %lld storage volumes: %@. Scan %@ now; the source menu keeps all volumes available." = "%@ exposes %lld storage volumes: %@. Scan %@ now; the source menu keeps all volumes available.";
 "%@ folder path" = "%@ folder path";
 "%@ found supported media on this volume. Scan it now to preview what will be copied." = "%@ found supported media on this volume. Scan it now to preview what will be copied.";
 "%@ free" = "%@ free";
@@ -123,6 +121,7 @@
 "Choose a folder" = "Choose a folder";
 "Choose a retention period to preview or delete old history." = "Choose a retention period to preview or delete old history.";
 "Choose a source" = "Choose a source";
+"Choose a storage volume to scan and preview what would be copied." = "Choose a storage volume to scan and preview what would be copied.";
 "Choose a specific card or source folder" = "Choose a specific card or source folder";
 "Choose recent %@ folder" = "Choose recent %@ folder";
 "Choose recent shoot name" = "Choose recent shoot name";
