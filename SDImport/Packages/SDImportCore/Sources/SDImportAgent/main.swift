@@ -33,6 +33,8 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
     private let detector = VolumeDetector()
     private let mountPrivacyPolicy = AppDistribution.current.mountPrivacyPolicy
     private var token: NSObjectProtocol?
+    private var coldLaunchVolumes: [String: MountedVolume] = [:]
+    private var coldLaunchActivationTask: Task<Void, Never>?
 
     private var agentBuild: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "dev"
@@ -167,22 +169,31 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        activateOrLaunchMainApp(at: appURL, eventSequence: eventSequence)
+        activateOrLaunchMainApp(
+            at: appURL,
+            eventSequence: eventSequence,
+            pendingVolume: event == nil ? nil : volume
+        )
         if mountPrivacyPolicy.usesDistributedNotificationHandoff {
             post(volume, eventID: event?.id, targetApplicationPath: appURL.path)
         }
     }
 
-    private func activateOrLaunchMainApp(at appURL: URL, eventSequence: UInt64) {
+    private func activateOrLaunchMainApp(
+        at appURL: URL,
+        eventSequence: UInt64,
+        pendingVolume: MountedVolume?
+    ) {
         let currentAgentBuild = agentBuild
         let currentAgentBundlePath = agentBundlePath
         let standardizedAppURL = appURL.standardizedFileURL
         let runningApplications = NSRunningApplication.runningApplications(
             withBundleIdentifier: Self.mainBundleIdentifier
         )
-        let runningApp = runningApplications.first(where: {
-            $0.bundleURL?.standardizedFileURL == standardizedAppURL
-        })
+        let runningApp = mainApplication(at: standardizedAppURL, among: runningApplications)
+        if let pendingVolume, runningApp?.isFinishedLaunching != true {
+            scheduleColdLaunchActivation(at: standardizedAppURL, for: pendingVolume)
+        }
         if let runningApp {
             runningApp.activate(options: [.activateAllWindows])
             return
@@ -209,6 +220,50 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
                     eventSequence: eventSequence
                 )
                 agentLogger.error("Could not launch the containing SD Import application")
+            }
+        }
+    }
+
+    private func mainApplication(
+        at appURL: URL,
+        among runningApplications: [NSRunningApplication]
+    ) -> NSRunningApplication? {
+        runningApplications.first { $0.bundleURL?.standardizedFileURL == appURL }
+    }
+
+    private func scheduleColdLaunchActivation(at appURL: URL, for volume: MountedVolume) {
+        coldLaunchVolumes[volume.mountPath] = volume
+        guard coldLaunchActivationTask == nil else { return }
+
+        // Launch Services can create the process before it finishes starting.
+        // Follow up on that same process even if no further mount event arrives.
+        coldLaunchActivationTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                self.coldLaunchVolumes.removeAll()
+                self.coldLaunchActivationTask = nil
+            }
+
+            for delay in [Duration.seconds(1), .seconds(2)] {
+                do {
+                    try await Task.sleep(for: delay)
+                } catch {
+                    return
+                }
+                let runningApp = self.mainApplication(
+                    at: appURL,
+                    among: NSRunningApplication.runningApplications(withBundleIdentifier: Self.mainBundleIdentifier)
+                )
+                guard runningApp?.isFinishedLaunching != true else { return }
+                guard self.coldLaunchVolumes.values.contains(where: { volume in
+                    self.detector.currentMountedVolume(from: volume.mountURL, includeCapacity: false)?
+                        .isSameMount(as: volume) == true
+                }) else { return }
+
+                if let runningApp {
+                    let requested = runningApp.activate(options: [.activateAllWindows])
+                    agentLogger.info("Requested activation for unfinished main app launch: \(requested)")
+                }
             }
         }
     }
