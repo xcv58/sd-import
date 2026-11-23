@@ -33,8 +33,30 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
     private let detector = VolumeDetector()
     private let mountPrivacyPolicy = AppDistribution.current.mountPrivacyPolicy
     private var token: NSObjectProtocol?
-    private var coldLaunchVolumes: [String: MountedVolume] = [:]
-    private var coldLaunchActivationTask: Task<Void, Never>?
+    private var unmountToken: NSObjectProtocol?
+    private var mediaProbes: [String: (id: UUID, volume: MountedVolume)] = [:]
+    private lazy var coldLaunchRetry = BackgroundPromptColdLaunchRetry(
+        findApplication: { appURL in
+            let runningApplications = NSRunningApplication.runningApplications(
+                withBundleIdentifier: Self.mainBundleIdentifier
+            )
+            guard let app = Self.mainApplication(at: appURL, among: runningApplications) else { return nil }
+            return .init(isFinishedLaunching: app.isFinishedLaunching) {
+                let requested = app.activate(options: [.activateAllWindows])
+                agentLogger.info("Requested activation for unfinished main app launch: \(requested)")
+            }
+        },
+        currentVolume: { [detector] mountURL in
+            detector.currentMountedVolume(from: mountURL, includeCapacity: false)
+        },
+        isAuthorized: { [weak self] in
+            guard let self else { return false }
+            return (try? BackgroundPromptAgentStateStore.defaultStore().isAuthorized(
+                agentBuild: self.agentBuild,
+                agentBundlePath: self.agentBundlePath
+            )) == true
+        }
+    )
 
     private var agentBuild: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "dev"
@@ -62,16 +84,28 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
             guard let mountURL = notification.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL else {
                 return
             }
-            Task { @MainActor in
+            // Both callbacks run on .main. Handle them in delivery order.
+            MainActor.assumeIsolated {
                 self?.handleMountURL(mountURL)
+            }
+        }
+
+        unmountToken = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didUnmountNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let mountURL = notification.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL else {
+                return
+            }
+            MainActor.assumeIsolated {
+                self?.handleUnmountURL(mountURL)
             }
         }
 #if DEBUG
         if
             let mountURL = BackgroundPromptRuntimeQA.injectedMountURL(),
-            let values = try? mountURL.resourceValues(forKeys: [.isDirectoryKey, .volumeURLKey]),
-            values.isDirectory == true,
-            values.volume?.standardizedFileURL == mountURL.standardizedFileURL,
+            let mountedVolume = detector.currentMountedVolume(from: mountURL, includeCapacity: false),
             let appURL = containingMainApplicationURL
         {
             do {
@@ -88,13 +122,25 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             handleImportableVolume(
-                BackgroundPromptRuntimeQA.injectedPostDetectionVolume(at: mountURL)
+                BackgroundPromptRuntimeQA.injectedPostDetectionVolume(at: mountURL),
+                activationVolume: mountedVolume
             )
         }
 #endif
     }
 
+    private func handleUnmountURL(_ mountURL: URL) {
+        let path = mountURL.standardizedFileURL.path
+        let current = detector.currentMountedVolume(from: mountURL, includeCapacity: false)
+        if let probe = mediaProbes[path], current?.hasVerifiedMediaContinuity(with: probe.volume) != true {
+            mediaProbes.removeValue(forKey: path)
+        }
+        coldLaunchRetry.removeVolume(at: mountURL, preserving: current)
+    }
+
     private func handleMountURL(_ mountURL: URL) {
+        mediaProbes.removeValue(forKey: mountURL.standardizedFileURL.path)
+        coldLaunchRetry.removeVolume(at: mountURL)
         let volume = detector.mountedVolume(
             from: mountURL,
             includeCapacity: mountPrivacyPolicy.includesCapacityBeforeConsent
@@ -106,17 +152,29 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
             handleImportableVolume(volume)
             return
         }
+        let probeID = UUID()
+        mediaProbes[volume.mountPath] = (probeID, volume)
         Task.detached(priority: .utility) { [weak self] in
-            guard VolumeDetector().containsImportableMedia(at: mountURL) else {
-                return
-            }
+            let containsMedia = VolumeDetector().containsImportableMedia(at: mountURL)
             await MainActor.run {
-                self?.handleImportableVolume(volume)
+                self?.completeMediaProbe(probeID, volume: volume, containsMedia: containsMedia)
             }
         }
     }
 
-    private func handleImportableVolume(_ volume: MountedVolume) {
+    private func completeMediaProbe(_ probeID: UUID, volume: MountedVolume, containsMedia: Bool) {
+        guard mediaProbes[volume.mountPath]?.id == probeID else { return }
+        mediaProbes.removeValue(forKey: volume.mountPath)
+        guard containsMedia,
+              let current = MountHandoffProbeCompletionValidator.currentVolumeForDelivery(
+                event: nil,
+                observedVolume: volume,
+                detectCurrentVolume: { detector.currentMountedVolume(from: volume.mountURL) }
+              ) else { return }
+        handleImportableVolume(current)
+    }
+
+    private func handleImportableVolume(_ volume: MountedVolume, activationVolume: MountedVolume? = nil) {
         guard let appURL = containingMainApplicationURL else {
             try? BackgroundPromptAgentStateStore.defaultStore().recordError(
                 agentBuild: agentBuild,
@@ -172,7 +230,7 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
         activateOrLaunchMainApp(
             at: appURL,
             eventSequence: eventSequence,
-            pendingVolume: event == nil ? nil : volume
+            pendingVolume: event == nil ? nil : (activationVolume ?? volume)
         )
         if mountPrivacyPolicy.usesDistributedNotificationHandoff {
             post(volume, eventID: event?.id, targetApplicationPath: appURL.path)
@@ -190,9 +248,9 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
         let runningApplications = NSRunningApplication.runningApplications(
             withBundleIdentifier: Self.mainBundleIdentifier
         )
-        let runningApp = mainApplication(at: standardizedAppURL, among: runningApplications)
+        let runningApp = Self.mainApplication(at: standardizedAppURL, among: runningApplications)
         if let pendingVolume, runningApp?.isFinishedLaunching != true {
-            scheduleColdLaunchActivation(at: standardizedAppURL, for: pendingVolume)
+            coldLaunchRetry.track(pendingVolume, at: standardizedAppURL, startsNewLaunch: runningApp == nil)
         }
         if let runningApp {
             runningApp.activate(options: [.activateAllWindows])
@@ -224,48 +282,11 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func mainApplication(
+    private static func mainApplication(
         at appURL: URL,
         among runningApplications: [NSRunningApplication]
     ) -> NSRunningApplication? {
         runningApplications.first { $0.bundleURL?.standardizedFileURL == appURL }
-    }
-
-    private func scheduleColdLaunchActivation(at appURL: URL, for volume: MountedVolume) {
-        coldLaunchVolumes[volume.mountPath] = volume
-        guard coldLaunchActivationTask == nil else { return }
-
-        // Launch Services can create the process before it finishes starting.
-        // Follow up on that same process even if no further mount event arrives.
-        coldLaunchActivationTask = Task { [weak self] in
-            guard let self else { return }
-            defer {
-                self.coldLaunchVolumes.removeAll()
-                self.coldLaunchActivationTask = nil
-            }
-
-            for delay in [Duration.seconds(1), .seconds(2)] {
-                do {
-                    try await Task.sleep(for: delay)
-                } catch {
-                    return
-                }
-                let runningApp = self.mainApplication(
-                    at: appURL,
-                    among: NSRunningApplication.runningApplications(withBundleIdentifier: Self.mainBundleIdentifier)
-                )
-                guard runningApp?.isFinishedLaunching != true else { return }
-                guard self.coldLaunchVolumes.values.contains(where: { volume in
-                    self.detector.currentMountedVolume(from: volume.mountURL, includeCapacity: false)?
-                        .isSameMount(as: volume) == true
-                }) else { return }
-
-                if let runningApp {
-                    let requested = runningApp.activate(options: [.activateAllWindows])
-                    agentLogger.info("Requested activation for unfinished main app launch: \(requested)")
-                }
-            }
-        }
     }
 
     private func post(
