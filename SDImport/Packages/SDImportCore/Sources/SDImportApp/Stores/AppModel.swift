@@ -329,15 +329,14 @@ final class AppModel: ObservableObject {
     @Published var videosValidation: PathValidationResult = .empty(purpose: .destination)
     @Published var defaultPhotosValidation: PathValidationResult = .empty(purpose: .destination)
     @Published var defaultVideosValidation: PathValidationResult = .empty(purpose: .destination)
-    @Published var pendingMountedVolume: MountedVolume? {
+    @Published private var mountPrompts = MountedDevicePromptCoordinator() {
         didSet {
-            pendingMountPromptID = pendingMountedVolume == nil ? nil : UUID()
-            if oldValue != nil, pendingMountedVolume == nil {
+            if oldValue.pendingPrompt != nil, mountPrompts.pendingPrompt == nil {
                 schedulePendingMountHandoffRetry()
             }
         }
     }
-    private var pendingMountPromptID: UUID?
+    var pendingMountPrompt: MountedDevicePrompt? { mountPrompts.pendingPrompt }
     @Published var reportPresentation: ImportReportPresentation?
     @Published var statusMessage = "" {
         didSet {
@@ -861,22 +860,47 @@ final class AppModel: ObservableObject {
         savePreferences()
     }
 
-    func refreshAvailableSourceVolumes() {
+    func refreshAvailableSourceVolumes(
+        including mountedVolume: MountedVolume? = nil,
+        excluding unmountedURL: URL? = nil
+    ) {
         let detector = VolumeDetector()
-        mountedVolumesSnapshot = detector.allMountedVolumes(
+        var volumes = detector.allMountedVolumes(
             includeCapacity: AppDistribution.current.mountPrivacyPolicy.includesCapacityBeforeConsent
         )
-        availableSourceVolumes = detector.likelyImportVolumes(from: mountedVolumesSnapshot)
+        let unmountedPath = unmountedURL?.standardizedFileURL.path
+        if let unmountedPath {
+            volumes.removeAll { $0.mountURL.standardizedFileURL.path == unmountedPath }
+        }
+        // Workspace notifications can arrive ahead of /Volumes enumeration.
+        if let mountedVolume, !volumes.contains(where: {
+            $0.mountURL.standardizedFileURL.path == mountedVolume.mountURL.standardizedFileURL.path
+        }), Self.currentPromptVolume(matching: mountedVolume) != nil {
+            volumes.append(mountedVolume)
+        }
+        let observedPaths = Set(volumes.map { $0.mountURL.standardizedFileURL.path })
+        volumes += availableSourceVolumes.filter { volume in
+            let path = volume.mountURL.standardizedFileURL.path
+            return path != unmountedPath && !observedPaths.contains(path)
+                && Self.currentPromptVolume(matching: volume) != nil
+        }
+        mountedVolumesSnapshot = volumes
+        let sourceVolumes = detector.likelyImportVolumes(from: mountedVolumesSnapshot)
+#if DEBUG
+        availableSourceVolumes = BackgroundPromptRuntimeQA.retainingLivePromptVolume(
+            mountObserver?.runtimeQAPromptVolume,
+            in: sourceVolumes
+        ) { Self.currentPromptVolume(matching: $0) != nil }
+#else
+        availableSourceVolumes = sourceVolumes
+#endif
+        mountPrompts.updateMountedVolumes(availableSourceVolumes)
         rebuildSourceEjectionTargetCache()
         rebuildRecentImportSuggestions()
     }
 
     var availableSourceDeviceGroups: [MountedDeviceGroup] {
         MountedDeviceGrouper().groups(from: availableSourceVolumes)
-    }
-
-    func sourceDeviceGroup(containing volume: MountedVolume) -> MountedDeviceGroup {
-        MountedDeviceGrouper().group(containing: volume, among: availableSourceVolumes)
     }
 
     var shouldOfferSelectedSourceEjection: Bool {
@@ -2295,16 +2319,17 @@ final class AppModel: ObservableObject {
         statusMessage = L10n.tr("Ready for another card")
     }
 
-    func acceptMountedVolumePrompt() {
+    func acceptMountedVolumePrompt(_ volume: MountedVolume, from prompt: MountedDevicePrompt) {
+        let promptID = prompt.id
+        guard let mountID = prompt.mountID(for: volume), promptContains(volume, id: promptID, mountID: mountID) else {
+            return
+        }
         guard !isWorking, !isEjectingSource else {
             statusMessage = L10n.tr("Finish the current operation before scanning another card")
             return
         }
-        guard let volume = pendingMountedVolume, let promptID = pendingMountPromptID else {
-            return
-        }
-        guard Self.isCurrentPromptVolume(volume) else {
-            pendingMountedVolume = nil
+        guard let observedVolume = Self.currentPromptVolume(matching: volume) else {
+            refreshAvailableSourceVolumes()
             statusMessage = L10n.tr("Card scan cancelled")
             return
         }
@@ -2319,9 +2344,16 @@ final class AppModel: ObservableObject {
                     prompt: L10n.tr("Allow Access"),
                     message: L10n.tr("\(AppDistribution.current.displayName) will scan this folder only after you allow access.")
                 )
-                guard pendingMountPromptID == promptID else { return }
+                // The modal picker runs an event loop. The same path may now
+                // belong to a new card, even if the camera's chooser stayed open.
+                refreshAvailableSourceVolumes()
+                guard promptContains(volume, id: promptID, mountID: mountID),
+                      let currentVolume = Self.currentPromptVolume(matching: observedVolume) else {
+                    statusMessage = L10n.tr("Card scan cancelled")
+                    return
+                }
                 guard let selectedURL = selection else {
-                    pendingMountedVolume = nil
+                    mountPrompts.dismiss(promptID)
                     statusMessage = L10n.tr("Card scan cancelled")
                     return
                 }
@@ -2330,17 +2362,24 @@ final class AppModel: ObservableObject {
                     setLocalizedStatusMessage { L10n.tr("Choose \(name) or a folder on that card") }
                     return
                 }
-                guard Self.isCurrentPromptVolume(volume) else {
-                    pendingMountedVolume = nil
-                    statusMessage = L10n.tr("Card scan cancelled")
-                    return
+                if !currentVolume.hasVerifiedMediaContinuity(with: observedVolume) {
+                    guard confirmScanOfCurrentVolume(currentVolume) else {
+                        statusMessage = L10n.tr("Card scan cancelled")
+                        return
+                    }
+                    refreshAvailableSourceVolumes()
+                    guard promptContains(volume, id: promptID, mountID: mountID),
+                          Self.currentPromptVolume(matching: currentVolume) != nil else {
+                        statusMessage = L10n.tr("Card scan cancelled")
+                        return
+                    }
                 }
                 guard retainSelectedFolderAccess(
                     .source,
                     url: selectedURL,
                     persistBookmark: true
                 ) else {
-                    pendingMountedVolume = nil
+                    mountPrompts.dismiss(promptID)
                     return
                 }
                 sourceURL = selectedURL
@@ -2349,31 +2388,40 @@ final class AppModel: ObservableObject {
             sourceURL = volume.mountURL
         }
 
-        pendingMountedVolume = nil
+        mountPrompts.dismiss(promptID)
         selection = .import
         cardPath = sourceURL.path
-        // The helper can deliver a mount before /Volumes enumeration catches up.
-        // Refresh after authorization so source ejection is available on the
-        // first source and review screens without requiring a manual refresh.
-        refreshAvailableSourceVolumes()
+        refreshAvailableSourceVolumes(including: volume)
         sourcePathDidChange()
         savePreferences()
         scan()
     }
 
-    nonisolated private static func isCurrentPromptVolume(_ expected: MountedVolume) -> Bool {
-        let url = URL(fileURLWithPath: expected.mountURL.path, isDirectory: true)
-        guard let values = try? url.resourceValues(forKeys: [.volumeURLKey, .volumeUUIDStringKey]),
-              values.volume?.standardizedFileURL.path == url.standardizedFileURL.path else {
-            return false
-        }
-        return MountHandoffVolumeIdentity.matchesCurrentVolume(
-            expectedUUID: expected.volumeUUID, currentUUID: values.volumeUUIDString
-        )
+    private func promptContains(_ volume: MountedVolume, id: UUID, mountID: UUID) -> Bool {
+        guard let prompt = pendingMountPrompt, prompt.id == id else { return false }
+        return prompt.mountID(for: volume) == mountID
     }
 
-    func skipMountedVolumePrompt() {
-        pendingMountedVolume = nil
+    private func confirmScanOfCurrentVolume(_ volume: MountedVolume) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = L10n.tr("Scan the card currently mounted?")
+        alert.informativeText = "\(volume.name)\n\(volume.mountPath)"
+        alert.addButton(withTitle: L10n.tr("Scan Card"))
+        alert.addButton(withTitle: L10n.tr("Cancel"))
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    nonisolated private static func currentPromptVolume(matching expected: MountedVolume) -> MountedVolume? {
+        guard let current = VolumeDetector().currentMountedVolume(from: expected.mountURL, includeCapacity: false),
+              current.isSameMount(as: expected),
+              MountHandoffVolumeIdentity.matchesCurrentVolume(
+                  expectedUUID: expected.volumeUUID, currentUUID: current.volumeUUID
+              ) else { return nil }
+        return current
+    }
+
+    func skipMountedVolumePrompt(_ promptID: UUID) {
+        guard mountPrompts.dismiss(promptID) else { return }
         statusMessage = L10n.tr("Ready")
     }
 
@@ -4406,25 +4454,31 @@ final class AppModel: ObservableObject {
                 guard let self else {
                     return .deferred
                 }
-                self.refreshAvailableSourceVolumes()
-                guard BackgroundPromptDeliveryPolicy.canCommitPrompt(
+                self.refreshAvailableSourceVolumes(including: volume)
+                guard Self.currentPromptVolume(matching: volume) != nil else { return .accepted }
+                let canPresent = BackgroundPromptDeliveryPolicy.canCommitPrompt(
                     desiredEnabled: self.autoPromptEnabled,
                     hasCompletedOnboarding: self.hasCompletedOnboarding,
                     isWorking: self.isWorking || self.isEjectingSource,
-                    hasPendingPrompt: self.pendingMountedVolume != nil
-                ) else {
+                    hasPendingPrompt: self.pendingMountPrompt != nil
+                )
+                switch self.mountPrompts.receive(volume, among: self.availableSourceVolumes, canPresent: canPresent) {
+                case .alreadyPresented, .stale:
+                    return .accepted
+                case .deferred:
                     return .deferred
+                case .present:
+                    self.statusMessage = L10n.tr("Card detected")
+                    MainWindowPresenter.present()
+                    self.refreshBackgroundPromptHealth()
+                    return .accepted
                 }
-                self.pendingMountedVolume = volume
-                self.statusMessage = L10n.tr("Card detected")
-                MainWindowPresenter.present()
-                self.refreshBackgroundPromptHealth()
-                return .accepted
+            },
+            volumeMountedHandler: { [weak self] volume in
+                self?.refreshAvailableSourceVolumes(including: volume)
             },
             unmountHandler: { [weak self] url in
-                if self?.pendingMountedVolume?.mountURL.standardizedFileURL.path == url.standardizedFileURL.path {
-                    self?.pendingMountedVolume = nil
-                }
+                self?.refreshAvailableSourceVolumes(excluding: url)
             },
             shouldHandleDirectMount: { [weak self] in
                 guard let self else {
@@ -4478,7 +4532,7 @@ final class AppModel: ObservableObject {
                 self.hasCompletedOnboarding,
                 !self.isWorking,
                 !self.isEjectingSource,
-                self.pendingMountedVolume == nil,
+                self.pendingMountPrompt == nil,
                 BackgroundPromptDeliveryPolicy.canObserveDirectMount(
                     desiredEnabled: self.autoPromptEnabled,
                     hasCompletedOnboarding: self.hasCompletedOnboarding,

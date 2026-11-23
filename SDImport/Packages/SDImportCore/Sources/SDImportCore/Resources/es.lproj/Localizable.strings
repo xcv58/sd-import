@@ -5,16 +5,13 @@
 "%@ available" = "%1$@ disponibles";
 "%@ available of %@" = "%1$@ disponibles de %2$@";
 "%@ destination folder" = "Carpeta de destino de %1$@";
-"%@ detected %@, with %lld storage volumes: %@. It has not scanned their contents. Allow a scan of %@?" = "%1$@ detectó %2$@, con %3$lld volúmenes: %4$@. Aún no se ha analizado su contenido. ¿Permitir el análisis de %5$@?";
 "%@ detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?" = "%1$@ detectó este volumen extraíble, pero aún no lo ha analizado. ¿Permitir el análisis para ver qué se copiaría?";
 "%@ does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing." = "%1$@ no sube informes de fallos. Si macOS guardó un informe local, muéstrelo o expórtelo aquí y revíselo antes de compartirlo.";
 "%@ ejected safely" = "%1$@ expulsado de forma segura";
 "%@ ejected, but %@ remains mounted: %@" = "%1$@ expulsado, pero %2$@ sigue montado: %3$@";
 "%@ ejected. Safe to remove." = "%1$@ expulsado. Puede retirarse con seguridad.";
 "%@ excluded" = "%1$@ excluido";
-"%@ exposes %lld storage volumes: %@. Scan %@ now; the source menu keeps all volumes available." = "%1$@ ofrece %2$lld volúmenes: %3$@. Analice %4$@ ahora; todos los volúmenes siguen disponibles en el menú de origen.";
 "%@ folder path" = "Ruta de la carpeta de %1$@";
-"%@ found supported media on this volume. Scan it now to preview what will be copied." = "%1$@ encontró archivos multimedia compatibles en este volumen. Analícelo para ver qué se copiará.";
 "%@ free" = "%1$@ libres";
 "%@ free, %@ used of %@" = "%1$@ libres, %2$@ usados de %3$@";
 "%@ needed · %@ available" = "%1$@ necesarios · %2$@ disponibles";
@@ -123,6 +120,7 @@
 "Choose a folder" = "Elegir carpeta";
 "Choose a retention period to preview or delete old history." = "Elija un periodo de conservación para previsualizar o eliminar el historial antiguo.";
 "Choose a source" = "Elegir origen";
+"Choose a storage volume to scan and preview what would be copied." = "Elige un volumen de almacenamiento para escanearlo y ver qué archivos se copiarían.";
 "Choose a specific card or source folder" = "Elegir una tarjeta o carpeta de origen específica";
 "Choose recent %@ folder" = "Elegir carpeta reciente de %1$@";
 "Choose recent shoot name" = "Elegir nombre de sesión reciente";
@@ -463,6 +461,8 @@
 "Scan Again" = "Volver a analizar";
 "Scan Card" = "Analizar tarjeta";
 "Scan Summary" = "Resumen del análisis";
+"Scan the card currently mounted?" = "¿Escanear la tarjeta montada actualmente?";
+"Scan this volume to preview what would be copied." = "Escanea este volumen para ver qué archivos se copiarían.";
 "Scan cancelled" = "Análisis cancelado";
 "Scan complete" = "Análisis completado";
 "Scan complete. %@" = "Análisis completado. %1$@";

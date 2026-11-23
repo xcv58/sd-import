@@ -5,16 +5,13 @@
 "%@ available" = "%1$@ 可用";
 "%@ available of %@" = "共 %2$@，%1$@ 可用";
 "%@ destination folder" = "%1$@ 目標資料夾";
-"%@ detected %@, with %lld storage volumes: %@. It has not scanned their contents. Allow a scan of %@?" = "%1$@ 檢測到 %2$@，含有 %3$lld 個卷宗：%4$@。尚未掃描其內容。是否允許掃描 %5$@？";
 "%@ detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?" = "%1$@ 檢測到此可移動卷宗，但尚未掃描其內容。是否允許掃描，以預覽將要複製的檔案？";
 "%@ does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing." = "%1$@ 不會上傳當機報告。如果 macOS 保存了本地報告，可在此顯示或匯出，並在分享前檢查。";
 "%@ ejected safely" = "%1$@ 已安全退出";
 "%@ ejected, but %@ remains mounted: %@" = "%1$@ 已退出，但 %2$@ 仍處於掛載狀態：%3$@";
 "%@ ejected. Safe to remove." = "%1$@ 已退出，可以安全移除。";
 "%@ excluded" = "%1$@ 已排除";
-"%@ exposes %lld storage volumes: %@. Scan %@ now; the source menu keeps all volumes available." = "%1$@ 提供 %2$lld 個卷宗：%3$@。現在掃描 %4$@；來源菜單中仍可選擇所有卷宗。";
 "%@ folder path" = "%1$@ 資料夾路徑";
-"%@ found supported media on this volume. Scan it now to preview what will be copied." = "%1$@ 在此卷宗上找到支持的媒體檔案。現在掃描即可預覽將要複製的檔案。";
 "%@ free" = "%1$@ 可用";
 "%@ free, %@ used of %@" = "%1$@ 可用，已用 %2$@，共 %3$@";
 "%@ needed · %@ available" = "需要 %1$@ · 可用 %2$@";
@@ -123,6 +120,7 @@
 "Choose a folder" = "選擇資料夾";
 "Choose a retention period to preview or delete old history." = "選擇保留期限，以預覽或刪除舊曆史。";
 "Choose a source" = "選擇來源";
+"Choose a storage volume to scan and preview what would be copied." = "選擇要掃描的儲存卷宗，預覽將要拷貝的檔案。";
 "Choose a specific card or source folder" = "選擇具體的記憶卡或來源資料夾";
 "Choose recent %@ folder" = "選擇最近使用的 %1$@ 資料夾";
 "Choose recent shoot name" = "選擇最近使用的拍攝名稱";
@@ -463,6 +461,8 @@
 "Scan Again" = "重新掃描";
 "Scan Card" = "掃描記憶卡";
 "Scan Summary" = "掃描摘要";
+"Scan the card currently mounted?" = "掃描目前已掛載的記憶卡？";
+"Scan this volume to preview what would be copied." = "掃描此儲存卷宗，預覽將要拷貝的檔案。";
 "Scan cancelled" = "掃描已取消";
 "Scan complete" = "掃描完成";
 "Scan complete. %@" = "掃描完成。%1$@";

@@ -5,16 +5,13 @@
 "%@ available" = "%1$@ verfügbar";
 "%@ available of %@" = "%1$@ von %2$@ verfügbar";
 "%@ destination folder" = "Zielordner für %1$@";
-"%@ detected %@, with %lld storage volumes: %@. It has not scanned their contents. Allow a scan of %@?" = "%1$@ hat %2$@ mit %3$lld Volumes erkannt: %4$@. Die Inhalte wurden noch nicht gescannt. Scan von %5$@ erlauben?";
 "%@ detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?" = "%1$@ hat dieses Wechselmedium erkannt, aber noch nicht gescannt. Scan erlauben, um die zu kopierenden Dateien anzuzeigen?";
 "%@ does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing." = "%1$@ lädt keine Absturzberichte hoch. Falls macOS einen lokalen Bericht gespeichert hat, können Sie ihn hier anzeigen oder exportieren und vor dem Teilen prüfen.";
 "%@ ejected safely" = "%1$@ sicher ausgeworfen";
 "%@ ejected, but %@ remains mounted: %@" = "%1$@ ausgeworfen, aber %2$@ ist noch eingebunden: %3$@";
 "%@ ejected. Safe to remove." = "%1$@ ausgeworfen. Sicheres Entfernen möglich.";
 "%@ excluded" = "%1$@ ausgeschlossen";
-"%@ exposes %lld storage volumes: %@. Scan %@ now; the source menu keeps all volumes available." = "%1$@ bietet %2$lld Volumes: %3$@. Jetzt %4$@ scannen; alle Volumes bleiben im Quellmenü verfügbar.";
 "%@ folder path" = "Ordnerpfad für %1$@";
-"%@ found supported media on this volume. Scan it now to preview what will be copied." = "%1$@ hat unterstützte Medien auf diesem Volume gefunden. Jetzt scannen, um die zu kopierenden Dateien anzuzeigen.";
 "%@ free" = "%1$@ frei";
 "%@ free, %@ used of %@" = "%1$@ frei, %2$@ von %3$@ belegt";
 "%@ needed · %@ available" = "%1$@ benötigt · %2$@ verfügbar";
@@ -123,6 +120,7 @@
 "Choose a folder" = "Ordner auswählen";
 "Choose a retention period to preview or delete old history." = "Wählen Sie eine Aufbewahrungsdauer, um alte Einträge anzuzeigen oder zu löschen.";
 "Choose a source" = "Quelle auswählen";
+"Choose a storage volume to scan and preview what would be copied." = "Wähle ein Speichervolume aus, um es zu scannen und eine Vorschau der zu kopierenden Dateien anzuzeigen.";
 "Choose a specific card or source folder" = "Bestimmte Karte oder Quellordner auswählen";
 "Choose recent %@ folder" = "Zuletzt verwendeten Ordner für %1$@ auswählen";
 "Choose recent shoot name" = "Letzten Aufnahmenamen auswählen";
@@ -463,6 +461,8 @@
 "Scan Again" = "Erneut scannen";
 "Scan Card" = "Karte scannen";
 "Scan Summary" = "Scanzusammenfassung";
+"Scan the card currently mounted?" = "Die aktuell eingebundene Karte scannen?";
+"Scan this volume to preview what would be copied." = "Dieses Volume scannen, um eine Vorschau der zu kopierenden Dateien zu sehen.";
 "Scan cancelled" = "Scan abgebrochen";
 "Scan complete" = "Scan abgeschlossen";
 "Scan complete. %@" = "Scan abgeschlossen. %1$@";

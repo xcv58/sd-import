@@ -47,7 +47,7 @@ public struct MountedDeviceGrouper: Sendable {
             .filter { groupIdentifier(for: $0) == identifier }
             .filter(isSafeEjectionCandidate)
             .sorted(by: volumeSort)
-        let volumes = relatedVolumes.contains(where: { $0.id == sourceVolume.id })
+        let volumes = relatedVolumes.contains(where: { $0.mountPath == sourceVolume.mountPath })
             ? relatedVolumes
             : (relatedVolumes + [sourceVolume]).sorted(by: volumeSort)
 
@@ -67,7 +67,7 @@ public struct MountedDeviceGrouper: Sendable {
 
         for volume in group.volumes {
             let identifier = wholeDiskIdentifier(for: volume)
-            if representativeByWholeDisk[identifier] == nil || volume.id == sourceVolume.id {
+            if representativeByWholeDisk[identifier] == nil || volume.mountPath == sourceVolume.mountPath {
                 representativeByWholeDisk[identifier] = volume
             }
         }
@@ -90,14 +90,14 @@ public struct MountedDeviceGrouper: Sendable {
         if let identifier = volume.wholeDiskIdentifier, !identifier.isEmpty {
             return "disk:\(identifier)"
         }
-        return "volume:\(volume.id)"
+        return "volume:\(volume.mountPath)"
     }
 
     private func wholeDiskIdentifier(for volume: MountedVolume) -> String {
         if let identifier = volume.wholeDiskIdentifier, !identifier.isEmpty {
             return identifier
         }
-        return volume.id
+        return volume.mountPath
     }
 
     private func displayName(for volumes: [MountedVolume]) -> String {

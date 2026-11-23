@@ -14,6 +14,9 @@ public struct MountedVolume: Identifiable, Hashable, Codable, Sendable {
     public let deviceGroupIdentifier: String?
     public let deviceVendorName: String?
     public let deviceProductName: String?
+    /// Live I/O Registry observation. Registry IDs are scoped to a boot and
+    /// are excluded from the durable handoff encoding.
+    public let mediaRegistryID: UInt64?
 
     public init(
         id: String,
@@ -28,7 +31,8 @@ public struct MountedVolume: Identifiable, Hashable, Codable, Sendable {
         wholeDiskIdentifier: String? = nil,
         deviceGroupIdentifier: String? = nil,
         deviceVendorName: String? = nil,
-        deviceProductName: String? = nil
+        deviceProductName: String? = nil,
+        mediaRegistryID: UInt64? = nil
     ) {
         self.id = id
         self.name = name
@@ -43,6 +47,7 @@ public struct MountedVolume: Identifiable, Hashable, Codable, Sendable {
         self.deviceGroupIdentifier = deviceGroupIdentifier
         self.deviceVendorName = deviceVendorName
         self.deviceProductName = deviceProductName
+        self.mediaRegistryID = mediaRegistryID
     }
 
     public var usedCapacityBytes: Int64? {
@@ -55,6 +60,41 @@ public struct MountedVolume: Identifiable, Hashable, Codable, Sendable {
         }
 
         return totalCapacityBytes - availableCapacityBytes
+    }
+
+    public var mountPath: String { mountURL.standardizedFileURL.path }
+
+    /// Compares two observations of a mount. Callers must track unmounts
+    /// separately, since a later mount can reuse the same path and disk ID.
+    public func isSameMount(as previous: MountedVolume) -> Bool {
+        guard mountPath == previous.mountPath, agreesOnKnownHardware(with: previous) else { return false }
+        if let uuid = volumeUUID, let previousUUID = previous.volumeUUID {
+            return MountHandoffVolumeIdentity.matchesCurrentVolume(expectedUUID: previousUUID, currentUUID: uuid)
+        }
+        if wholeDiskIdentifier != nil && previous.wholeDiskIdentifier != nil {
+            return true
+        }
+        return id == previous.id
+    }
+
+    public func hasVerifiedMediaContinuity(with previous: MountedVolume) -> Bool {
+        guard let mediaRegistryID, mediaRegistryID == previous.mediaRegistryID else { return false }
+        return isSameMount(as: previous)
+    }
+
+    func agreesOnKnownHardware(with previous: MountedVolume) -> Bool {
+        if let mediaRegistryID, let previousMedia = previous.mediaRegistryID, mediaRegistryID != previousMedia {
+            return false
+        }
+        if let deviceGroupIdentifier, let previousUSB = previous.deviceGroupIdentifier,
+           deviceGroupIdentifier != previousUSB {
+            return false
+        }
+        if let wholeDiskIdentifier, let previousDisk = previous.wholeDiskIdentifier,
+           wholeDiskIdentifier != previousDisk {
+            return false
+        }
+        return true
     }
 
     public var physicalDeviceDisplayName: String? {
@@ -107,5 +147,6 @@ public struct MountedVolume: Identifiable, Hashable, Codable, Sendable {
         deviceGroupIdentifier = try container.decodeIfPresent(String.self, forKey: .deviceGroupIdentifier)
         deviceVendorName = try container.decodeIfPresent(String.self, forKey: .deviceVendorName)
         deviceProductName = try container.decodeIfPresent(String.self, forKey: .deviceProductName)
+        mediaRegistryID = nil
     }
 }

@@ -239,5 +239,25 @@ struct BackgroundPromptRuntimeQATests {
         #expect(volume.totalCapacityBytes == nil)
         #expect(volume.availableCapacityBytes == nil)
     }
+
+    @Test("the admitted debug fixture survives a Source refresh while its mount is current")
+    func replenishesLiveFixtureInPromptSnapshot() throws {
+        let fixture = BackgroundPromptRuntimeQA.injectedPostDetectionVolume(
+            at: URL(fileURLWithPath: "/Volumes/SDIMPORT_QA_CARD", isDirectory: true)
+        )
+        var coordinator = MountedDevicePromptCoordinator()
+        #expect(coordinator.receive(fixture, among: [], canPresent: true) == .present)
+        let promptID = try #require(coordinator.pendingPrompt?.id)
+
+        let whileMounted = BackgroundPromptRuntimeQA.retainingLivePromptVolume(fixture, in: []) { $0 == fixture }
+        coordinator.updateMountedVolumes(whileMounted)
+        #expect(coordinator.pendingPrompt?.id == promptID)
+        #expect(coordinator.pendingPrompt?.contains(fixture) == true)
+        #expect(BackgroundPromptRuntimeQA.retainingLivePromptVolume(fixture, in: [fixture]) { _ in true } == [fixture])
+
+        let afterUnmount = BackgroundPromptRuntimeQA.retainingLivePromptVolume(fixture, in: []) { _ in false }
+        coordinator.updateMountedVolumes(afterUnmount)
+        #expect(coordinator.pendingPrompt == nil)
+    }
 }
 #endif

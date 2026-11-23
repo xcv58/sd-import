@@ -10,6 +10,15 @@ public struct VolumeDetector: Sendable {
         self.ignoredNameFragments = ignoredNameFragments.map { $0.lowercased() }
     }
 
+    public func currentMountedVolume(from mountURL: URL, includeCapacity: Bool = true) -> MountedVolume? {
+        let freshURL = URL(fileURLWithPath: mountURL.path, isDirectory: true).standardizedFileURL
+        guard let root = (try? freshURL.resourceValues(forKeys: [.volumeURLKey]))?.volume,
+              root.standardizedFileURL.path == freshURL.path else {
+            return nil
+        }
+        return mountedVolume(from: freshURL, includeCapacity: includeCapacity)
+    }
+
     public func mountedVolume(
         from mountURL: URL,
         includeCapacity: Bool = true
@@ -58,7 +67,8 @@ public struct VolumeDetector: Sendable {
             wholeDiskIdentifier: diskTraits.wholeDiskIdentifier,
             deviceGroupIdentifier: diskTraits.deviceGroupIdentifier,
             deviceVendorName: diskTraits.deviceVendorName,
-            deviceProductName: diskTraits.deviceProductName
+            deviceProductName: diskTraits.deviceProductName,
+            mediaRegistryID: diskTraits.mediaRegistryID
         )
     }
 
@@ -201,7 +211,9 @@ public struct VolumeDetector: Sendable {
         } else {
             wholeDiskIdentifier = nil
         }
-        let deviceTraits = usbDeviceTraits(for: disk)
+        let media = DADiskCopyIOMedia(disk)
+        let mediaRegistryID = registryEntryID(of: media)
+        let deviceTraits = usbDeviceTraits(consuming: media)
 
         return DiskTraits(
             deviceModel: description[kDADiskDescriptionDeviceModelKey as String] as? String,
@@ -211,23 +223,29 @@ public struct VolumeDetector: Sendable {
             wholeDiskIdentifier: wholeDiskIdentifier,
             deviceGroupIdentifier: deviceTraits?.identifier,
             deviceVendorName: deviceTraits?.vendorName,
-            deviceProductName: sanitizedDeviceProductName(deviceTraits?.productName)
+            deviceProductName: sanitizedDeviceProductName(deviceTraits?.productName),
+            mediaRegistryID: mediaRegistryID
         )
     }
 
-    private static func usbDeviceTraits(for disk: DADisk) -> USBDeviceTraits? {
-        var entry = DADiskCopyIOMedia(disk)
+    private static func registryEntryID(of entry: io_registry_entry_t) -> UInt64? {
+        guard entry != IO_OBJECT_NULL else { return nil }
+        var id: UInt64 = 0
+        return IORegistryEntryGetRegistryEntryID(entry, &id) == KERN_SUCCESS ? id : nil
+    }
+
+    // Takes ownership of the reference returned by DADiskCopyIOMedia.
+    private static func usbDeviceTraits(consuming media: io_registry_entry_t) -> USBDeviceTraits? {
+        var entry = media
         while entry != IO_OBJECT_NULL {
             if IOObjectConformsTo(entry, "IOUSBHostDevice") != 0 {
-                var registryEntryID: UInt64 = 0
-                let result = IORegistryEntryGetRegistryEntryID(entry, &registryEntryID)
-                let traits = result == KERN_SUCCESS
-                    ? USBDeviceTraits(
-                        identifier: String(registryEntryID, radix: 16),
+                let traits = registryEntryID(of: entry).map { id in
+                    USBDeviceTraits(
+                        identifier: String(id, radix: 16),
                         vendorName: registryStringProperty("USB Vendor Name", entry: entry),
                         productName: registryStringProperty("USB Product Name", entry: entry)
                     )
-                    : nil
+                }
                 IOObjectRelease(entry)
                 return traits
             }
@@ -311,6 +329,7 @@ public struct VolumeDetector: Sendable {
         let deviceGroupIdentifier: String?
         let deviceVendorName: String?
         let deviceProductName: String?
+        let mediaRegistryID: UInt64?
 
         init(
             deviceModel: String? = nil,
@@ -320,7 +339,8 @@ public struct VolumeDetector: Sendable {
             wholeDiskIdentifier: String? = nil,
             deviceGroupIdentifier: String? = nil,
             deviceVendorName: String? = nil,
-            deviceProductName: String? = nil
+            deviceProductName: String? = nil,
+            mediaRegistryID: UInt64? = nil
         ) {
             self.deviceModel = deviceModel
             self.mediaName = mediaName
@@ -330,6 +350,7 @@ public struct VolumeDetector: Sendable {
             self.deviceGroupIdentifier = deviceGroupIdentifier
             self.deviceVendorName = deviceVendorName
             self.deviceProductName = deviceProductName
+            self.mediaRegistryID = mediaRegistryID
         }
 
         var isDiskImage: Bool {

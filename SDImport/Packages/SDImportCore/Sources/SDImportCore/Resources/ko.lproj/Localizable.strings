@@ -5,16 +5,13 @@
 "%@ available" = "%1$@ 사용 가능";
 "%@ available of %@" = "전체 %2$@ 중 %1$@ 사용 가능";
 "%@ destination folder" = "%1$@ 대상 폴더";
-"%@ detected %@, with %lld storage volumes: %@. It has not scanned their contents. Allow a scan of %@?" = "%1$@이(가) %2$@을(를) 감지했습니다. 저장 볼륨 %3$lld개: %4$@. 내용은 아직 스캔하지 않았습니다. %5$@ 스캔을 허용할까요?";
 "%@ detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?" = "%1$@이(가) 이동식 볼륨을 감지했지만 내용은 아직 스캔하지 않았습니다. 복사할 파일을 미리 보려면 스캔을 허용할까요?";
 "%@ does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing." = "%1$@은(는) 충돌 보고서를 업로드하지 않습니다. macOS가 로컬 보고서를 저장했다면 여기서 표시하거나 내보내고 공유 전에 검토하세요.";
 "%@ ejected safely" = "%1$@ 안전하게 추출됨";
 "%@ ejected, but %@ remains mounted: %@" = "%1$@은(는) 추출되었지만 %2$@은(는) 아직 마운트되어 있습니다: %3$@";
 "%@ ejected. Safe to remove." = "%1$@ 추출됨. 안전하게 제거할 수 있습니다.";
 "%@ excluded" = "%1$@ 제외됨";
-"%@ exposes %lld storage volumes: %@. Scan %@ now; the source menu keeps all volumes available." = "%1$@에 저장 볼륨 %2$lld개가 있습니다: %3$@. 지금 %4$@을(를) 스캔합니다. 소스 메뉴에서 모든 볼륨을 계속 선택할 수 있습니다.";
 "%@ folder path" = "%1$@ 폴더 경로";
-"%@ found supported media on this volume. Scan it now to preview what will be copied." = "%1$@이(가) 이 볼륨에서 지원되는 미디어를 찾았습니다. 지금 스캔하여 복사할 파일을 미리 보세요.";
 "%@ free" = "여유 공간 %1$@";
 "%@ free, %@ used of %@" = "여유 %1$@, 전체 %3$@ 중 %2$@ 사용";
 "%@ needed · %@ available" = "필요 %1$@ · 사용 가능 %2$@";
@@ -123,6 +120,7 @@
 "Choose a folder" = "폴더 선택";
 "Choose a retention period to preview or delete old history." = "보관 기간을 선택하여 이전 기록을 미리 보거나 삭제하세요.";
 "Choose a source" = "소스 선택";
+"Choose a storage volume to scan and preview what would be copied." = "스캔할 저장 볼륨을 선택하고 복사할 파일을 미리 확인하세요.";
 "Choose a specific card or source folder" = "특정 카드 또는 소스 폴더 선택";
 "Choose recent %@ folder" = "최근 %1$@ 폴더 선택";
 "Choose recent shoot name" = "최근 촬영 이름 선택";
@@ -463,6 +461,8 @@
 "Scan Again" = "다시 스캔";
 "Scan Card" = "카드 스캔";
 "Scan Summary" = "스캔 요약";
+"Scan the card currently mounted?" = "현재 마운트된 카드를 스캔할까요?";
+"Scan this volume to preview what would be copied." = "이 볼륨을 스캔하여 복사할 파일을 미리 확인하세요.";
 "Scan cancelled" = "스캔 취소됨";
 "Scan complete" = "스캔 완료";
 "Scan complete. %@" = "스캔 완료. %1$@";

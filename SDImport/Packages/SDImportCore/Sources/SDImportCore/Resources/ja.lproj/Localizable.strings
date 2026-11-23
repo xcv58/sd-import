@@ -5,16 +5,13 @@
 "%@ available" = "%1$@ 使用可能";
 "%@ available of %@" = "%2$@ 中 %1$@ 使用可能";
 "%@ destination folder" = "%1$@ の保存先フォルダ";
-"%@ detected %@, with %lld storage volumes: %@. It has not scanned their contents. Allow a scan of %@?" = "%1$@ が %2$@ を検出しました。%3$lld 個のボリュームがあります：%4$@。内容はまだスキャンしていません。%5$@ のスキャンを許可しますか？";
 "%@ detected this removable volume but has not scanned its contents. Allow a scan now to preview what would be copied?" = "%1$@ がこのリムーバブルボリュームを検出しましたが、内容はまだスキャンしていません。コピーするファイルのプレビューのためにスキャンを許可しますか？";
 "%@ does not upload crash reports. If macOS saved a local report, reveal or export it here and review it before sharing." = "%1$@ はクラッシュレポートをアップロードしません。macOS がローカルに保存したレポートはここから表示または書き出し、共有前に確認できます。";
 "%@ ejected safely" = "%1$@ を安全に取り出しました";
 "%@ ejected, but %@ remains mounted: %@" = "%1$@ を取り出しましたが、%2$@ はまだマウントされています：%3$@";
 "%@ ejected. Safe to remove." = "%1$@ を取り出しました。安全に取り外せます。";
 "%@ excluded" = "%1$@ は除外されています";
-"%@ exposes %lld storage volumes: %@. Scan %@ now; the source menu keeps all volumes available." = "%1$@ には %2$lld 個のボリュームがあります：%3$@。今は %4$@ をスキャンします。すべてのボリュームは読み込み元メニューから選択できます。";
 "%@ folder path" = "%1$@ のフォルダパス";
-"%@ found supported media on this volume. Scan it now to preview what will be copied." = "%1$@ がこのボリューム上に対応するメディアを見つけました。スキャンして、コピーするファイルを確認してください。";
 "%@ free" = "空き %1$@";
 "%@ free, %@ used of %@" = "空き %1$@、使用済み %2$@ / %3$@";
 "%@ needed · %@ available" = "必要 %1$@ · 使用可能 %2$@";
@@ -123,6 +120,7 @@
 "Choose a folder" = "フォルダを選択";
 "Choose a retention period to preview or delete old history." = "保存期間を選択して、古い履歴をプレビューまたは削除します。";
 "Choose a source" = "読み込み元を選択";
+"Choose a storage volume to scan and preview what would be copied." = "スキャンするストレージボリュームを選択して、コピーされるファイルを確認できます。";
 "Choose a specific card or source folder" = "特定のカードまたは読み込み元フォルダを選択";
 "Choose recent %@ folder" = "最近使った %1$@ フォルダを選択";
 "Choose recent shoot name" = "最近の撮影名を選択";
@@ -463,6 +461,8 @@
 "Scan Again" = "再スキャン";
 "Scan Card" = "カードをスキャン";
 "Scan Summary" = "スキャンの概要";
+"Scan the card currently mounted?" = "現在マウントされているカードをスキャンしますか？";
+"Scan this volume to preview what would be copied." = "このボリュームをスキャンして、コピーされるファイルを確認できます。";
 "Scan cancelled" = "スキャンをキャンセルしました";
 "Scan complete" = "スキャン完了";
 "Scan complete. %@" = "スキャン完了。%1$@";

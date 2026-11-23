@@ -310,6 +310,165 @@ struct MountHandoffStoreTests {
         #expect(afterSwap == nil)
     }
 
+    @Test("a queued UUID-less card must still be mounted to be delivered")
+    func removedUUIDLessMountIsNotDelivered() {
+        let path = "/Volumes/CARD"
+        let card = MountedVolume(
+            id: path,
+            name: "CARD",
+            mountURL: URL(fileURLWithPath: path, isDirectory: true),
+            volumeUUID: nil,
+            isRemovable: true
+        )
+        let event = MountHandoffEvent(
+            mountPath: path,
+            volumeName: card.name,
+            agentBuild: "44",
+            targetApplicationPath: targetApplicationPath,
+            mountedVolume: card
+        )
+
+        #expect(MountHandoffProbeCompletionValidator.currentVolumeForDelivery(event: event) { card } == card)
+        #expect(MountHandoffProbeCompletionValidator.currentVolumeForDelivery(event: event) { nil } == nil)
+    }
+
+    @Test("a queued event rejects changed disk or USB hardware even with a shared or missing UUID",
+          arguments: [false, true])
+    func queuedEventRejectsReplacementWithReusedPath(clonedUUID: Bool) throws {
+        func volume(disk: String, device: String, media: UInt64) -> MountedVolume {
+            MountedVolume(
+                id: "CARD",
+                name: "CARD",
+                mountURL: URL(fileURLWithPath: "/Volumes/CARD", isDirectory: true),
+                volumeUUID: clonedUUID ? "cloned" : nil,
+                isRemovable: true,
+                wholeDiskIdentifier: disk,
+                deviceGroupIdentifier: device,
+                mediaRegistryID: media
+            )
+        }
+        let original = volume(disk: "disk4", device: "reader", media: 1)
+        let event = MountHandoffEvent(
+            mountPath: original.mountPath,
+            volumeName: original.name,
+            agentBuild: "44",
+            targetApplicationPath: targetApplicationPath,
+            mountedVolume: original
+        )
+        let queued = try JSONDecoder().decode(MountHandoffEvent.self, from: JSONEncoder().encode(event))
+        #expect(queued.mountedVolume?.mediaRegistryID == nil)
+        #expect(MountHandoffProbeCompletionValidator.currentVolumeForDelivery(event: queued) { original } == original)
+
+        let otherDisk = volume(disk: "disk6", device: "reader", media: 2)
+        let otherDevice = volume(disk: "disk4", device: "other-reader", media: 2)
+        #expect(MountHandoffProbeCompletionValidator.currentVolumeForDelivery(event: queued) { otherDisk } == nil)
+        #expect(MountHandoffProbeCompletionValidator.currentVolumeForDelivery(event: queued) { otherDevice } == nil)
+    }
+
+    @Test("a same-path clone reaches the chooser when live hardware or media identity changes")
+    func samePathCloneDoesNotConsumeReplacementEvent() {
+        func volume(disk: String, device: String, media: UInt64) -> MountedVolume {
+            MountedVolume(
+                id: "cloned",
+                name: "CARD",
+                mountURL: URL(fileURLWithPath: "/Volumes/CARD", isDirectory: true),
+                volumeUUID: "cloned",
+                isRemovable: true,
+                wholeDiskIdentifier: disk,
+                deviceGroupIdentifier: device,
+                mediaRegistryID: media
+            )
+        }
+        let original = volume(disk: "disk4", device: "reader", media: 1)
+        let replacements = [
+            volume(disk: "disk6", device: "reader", media: 1),
+            volume(disk: "disk4", device: "other-reader", media: 1),
+            volume(disk: "disk4", device: "reader", media: 2),
+        ]
+        for replacement in replacements {
+            let controller = MountHandoffDeliveryController()
+            var offered: [MountedVolume] = []
+            for mount in [original, replacement, replacement] {
+                let result = controller.evaluate(volume: mount) { volume in
+                    offered.append(volume)
+                    return .accepted
+                }
+                #expect(result == .accepted)
+            }
+            #expect(offered == [original, replacement])
+        }
+    }
+
+    @Test("a delayed unmount preserves the replacement at the same path until it actually unmounts")
+    func delayedUnmountPreservesReplacement() throws {
+        func card(media: UInt64) -> MountedVolume {
+            MountedVolume(
+                id: "card",
+                name: "CARD",
+                mountURL: URL(fileURLWithPath: "/Volumes/CARD", isDirectory: true),
+                volumeUUID: nil,
+                isRemovable: true,
+                wholeDiskIdentifier: "disk4",
+                deviceGroupIdentifier: "reader",
+                mediaRegistryID: media
+            )
+        }
+        let original = card(media: 1)
+        let replacement = card(media: 2)
+        let controller = MountHandoffDeliveryController()
+        var coordinator = MountedDevicePromptCoordinator()
+        var deliveries: [MountedVolume] = []
+        for card in [original, replacement] {
+            let disposition = controller.evaluate(volume: card) { volume in
+                deliveries.append(volume)
+                #expect(coordinator.receive(volume, among: [volume], canPresent: true) == .present)
+                return .accepted
+            }
+            #expect(disposition == .accepted)
+        }
+        let promptID = try #require(coordinator.pendingPrompt?.id)
+
+        let currentVolume = try #require(controller.reconcileUnmount(at: original.mountURL, currentVolume: replacement))
+        coordinator.updateMountedVolumes([currentVolume])
+        #expect(coordinator.pendingPrompt?.id == promptID)
+        #expect(coordinator.pendingPrompt?.contains(replacement) == true)
+        #expect(controller.evaluate(volume: replacement) { volume in
+            deliveries.append(volume)
+            return .accepted
+        } == .accepted)
+        #expect(deliveries == [original, replacement])
+
+        #expect(controller.reconcileUnmount(at: replacement.mountURL, currentVolume: nil) == nil)
+        coordinator.updateMountedVolumes([])
+        #expect(coordinator.pendingPrompt == nil)
+        #expect(controller.evaluate(volume: replacement) { volume in
+            deliveries.append(volume)
+            return .accepted
+        } == .accepted)
+        #expect(deliveries == [original, replacement, replacement])
+    }
+
+    @Test("delivery does not suppress cloned UUIDs at distinct live mount paths")
+    func clonedVolumeUUIDsDeliverSeparately() {
+        let controller = MountHandoffDeliveryController()
+        var delivered: [String] = []
+        for name in ["First Clone", "Second Clone", "Second Clone"] {
+            let card = MountedVolume(
+                id: "cloned",
+                name: name,
+                mountURL: URL(fileURLWithPath: "/Volumes/\(name)", isDirectory: true),
+                volumeUUID: "cloned",
+                isRemovable: true
+            )
+            let disposition = controller.evaluate(volume: card) { mount in
+                delivered.append(mount.mountPath)
+                return .accepted
+            }
+            #expect(disposition == .accepted)
+        }
+        #expect(delivered == ["/Volumes/First Clone", "/Volumes/Second Clone"])
+    }
+
     @Test("accepted mount stays suppressed until unmount")
     func acceptedMountStaysSuppressedUntilUnmount() {
         let volume = MountedVolume(
