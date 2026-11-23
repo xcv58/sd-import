@@ -31,9 +31,11 @@ public final class BackgroundPromptColdLaunchRetry {
         self.sleep = sleep
     }
 
-    public func track(_ volume: MountedVolume, at appURL: URL, startsNewLaunch: Bool) {
-        volumes[volume.mountPath] = volume
-        guard task == nil || startsNewLaunch else { return }
+    public func track(_ volume: MountedVolume?, at appURL: URL, startsNewLaunch: Bool) {
+        if let volume {
+            volumes[volume.mountPath] = volume
+        }
+        guard !volumes.isEmpty, task == nil || startsNewLaunch else { return }
         task?.cancel()
 
         // Launch Services may create the process before it finishes starting.

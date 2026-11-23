@@ -51,7 +51,7 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
         },
         isAuthorized: { [weak self] in
             guard let self else { return false }
-            return (try? BackgroundPromptAgentStateStore.defaultStore().isAuthorized(
+            return (try? BackgroundPromptAgentStateStore.defaultStore().canHandleMountEvents(
                 agentBuild: self.agentBuild,
                 agentBundlePath: self.agentBundlePath
             )) == true
@@ -249,7 +249,7 @@ private final class AgentDelegate: NSObject, NSApplicationDelegate {
             withBundleIdentifier: Self.mainBundleIdentifier
         )
         let runningApp = Self.mainApplication(at: standardizedAppURL, among: runningApplications)
-        if let pendingVolume, runningApp?.isFinishedLaunching != true {
+        if runningApp?.isFinishedLaunching != true {
             coldLaunchRetry.track(pendingVolume, at: standardizedAppURL, startsNewLaunch: runningApp == nil)
         }
         if let runningApp {

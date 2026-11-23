@@ -122,12 +122,33 @@ public struct BackgroundPromptAgentStateStore {
         try loadAuthorizationUnlocked()
     }
 
-    public func isAuthorized(agentBuild: String, agentBundlePath: String) throws -> Bool {
+    private func isAuthorized(agentBuild: String, agentBundlePath: String) throws -> Bool {
         guard let authorization = try loadAuthorizationUnlocked() else {
             return true
         }
         return authorization.agentBuild == agentBuild
             && authorization.agentBundlePath == agentBundlePath
+    }
+
+    public func canHandleMountEvents(agentBuild: String, agentBundlePath: String) throws -> Bool {
+        try withExclusiveLock {
+            try canHandleMountEvents(
+                agentBuild: agentBuild,
+                agentBundlePath: agentBundlePath,
+                state: try? loadUnlocked()
+            )
+        }
+    }
+
+    private func canHandleMountEvents(
+        agentBuild: String,
+        agentBundlePath: String,
+        state: BackgroundPromptAgentState?
+    ) throws -> Bool {
+        guard try isAuthorized(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
+            return false
+        }
+        return state.map { matches($0, agentBuild: agentBuild, agentBundlePath: agentBundlePath) } ?? true
     }
 
     @discardableResult
@@ -137,11 +158,12 @@ public struct BackgroundPromptAgentStateStore {
         now: Date = Date()
     ) throws -> UInt64 {
         try withExclusiveLock {
-            guard try isAuthorized(agentBuild: agentBuild, agentBundlePath: agentBundlePath) else {
-                throw StoreError.staleAgentIdentity
-            }
             let existing = try? loadUnlocked()
-            if let existing, !matches(existing, agentBuild: agentBuild, agentBundlePath: agentBundlePath) {
+            guard try canHandleMountEvents(
+                agentBuild: agentBuild,
+                agentBundlePath: agentBundlePath,
+                state: existing
+            ) else {
                 throw StoreError.staleAgentIdentity
             }
             let nextSequence = try Self.nextSequence(after: existing?.lastIssuedSequence ?? 0)

@@ -33,11 +33,12 @@ struct BackgroundPromptColdLaunchRetryTests {
         #expect(activations == 1)
     }
 
-    @Test("A fresh launch gets its own window and an existing launch keeps its schedule")
-    func newLaunchRestartsRetryWindow() async throws {
+    @Test("A fresh launch renews retries for saved mounts", arguments: [true, false])
+    func newLaunchRestartsRetryWindow(hasSavedSecondEvent: Bool) async throws {
         let first = volume(named: "Card A")
         let second = volume(named: "Card B")
         let third = volume(named: "Card C")
+        let live = hasSavedSecondEvent ? third : first
         let delays = AsyncStream<PendingDelay>.makeStream()
         var delayIterator = delays.stream.makeAsyncIterator()
         let application = SimulatedApplication()
@@ -46,7 +47,7 @@ struct BackgroundPromptColdLaunchRetryTests {
                 guard application.isVisible else { return nil }
                 return .init(isFinishedLaunching: application.activations > 0) { application.activations += 1 }
             },
-            currentVolume: { url in url == third.mountURL ? third : nil },
+            currentVolume: { url in url == live.mountURL ? live : nil },
             isAuthorized: { true },
             sleep: { duration in
                 await withCheckedContinuation { continuation in
@@ -55,6 +56,8 @@ struct BackgroundPromptColdLaunchRetryTests {
             }
         )
 
+        retry.track(nil, at: appURL, startsNewLaunch: true)
+        #expect(retry.task == nil)
         retry.track(first, at: appURL, startsNewLaunch: true)
         let originalTask = try #require(retry.task)
         let firstDelay = try #require(await delayIterator.next())
@@ -63,15 +66,13 @@ struct BackgroundPromptColdLaunchRetryTests {
         let originalLastDelay = try #require(await delayIterator.next())
         #expect(originalLastDelay.duration == .seconds(2))
 
-        retry.track(second, at: appURL, startsNewLaunch: true)
+        retry.track(hasSavedSecondEvent ? second : nil, at: appURL, startsNewLaunch: true)
+        originalLastDelay.continuation.resume()
+        await originalTask.value
+        try #require(originalTask.isCancelled)
         let currentTask = try #require(retry.task)
         let newFirstDelay = try #require(await delayIterator.next())
         #expect(newFirstDelay.duration == .seconds(1))
-
-        originalLastDelay.continuation.resume()
-        await originalTask.value
-        #expect(originalTask.isCancelled)
-        #expect(retry.task != nil)
 
         application.isVisible = true
         retry.track(third, at: appURL, startsNewLaunch: false)
@@ -86,13 +87,19 @@ struct BackgroundPromptColdLaunchRetryTests {
         #expect(retry.task == nil)
     }
 
-    @Test("A former helper cannot activate after another copy takes ownership")
-    func rechecksAuthorization() async throws {
+    @Test("A former helper cannot activate after another copy takes ownership", arguments: [true, false])
+    func rechecksAuthorization(hasAuthorizationFile: Bool) async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let store = BackgroundPromptAgentStateStore(fileURL: directory.appendingPathComponent("agent-state.json"))
+        let stateURL = directory.appendingPathComponent("agent-state.json")
+        let store = BackgroundPromptAgentStateStore(fileURL: stateURL)
         let agentPath = "/Applications/SD Card Import.app/Contents/Library/LoginItems/SDImportAgent.app"
-        try store.authorize(agentBuild: "39", agentBundlePath: agentPath)
+        if hasAuthorizationFile {
+            try store.authorize(agentBuild: "39", agentBundlePath: agentPath)
+        }
+        try store.recordLaunch(agentBuild: "39", agentBundlePath: agentPath)
+        let sequence = try store.issueEventSequence(agentBuild: "39", agentBundlePath: agentPath)
+        #expect(try store.canHandleMountEvents(agentBuild: "39", agentBundlePath: agentPath))
         let card = volume(named: "Card A")
         var activations = 0
         let retry = BackgroundPromptColdLaunchRetry(
@@ -101,11 +108,15 @@ struct BackgroundPromptColdLaunchRetryTests {
             },
             currentVolume: { _ in card },
             isAuthorized: {
-                (try? store.isAuthorized(agentBuild: "39", agentBundlePath: agentPath)) == true
+                (try? store.canHandleMountEvents(agentBuild: "39", agentBundlePath: agentPath)) == true
             },
             sleep: { _ in
-                let updatedStore = BackgroundPromptAgentStateStore(fileURL: directory.appendingPathComponent("agent-state.json"))
-                try updatedStore.authorize(agentBuild: "40", agentBundlePath: agentPath)
+                let updatedStore = BackgroundPromptAgentStateStore(fileURL: stateURL)
+                if hasAuthorizationFile {
+                    try updatedStore.authorize(agentBuild: "40", agentBundlePath: agentPath)
+                } else {
+                    try updatedStore.recordLaunch(agentBuild: "40", agentBundlePath: agentPath)
+                }
             }
         )
 
@@ -113,7 +124,11 @@ struct BackgroundPromptColdLaunchRetryTests {
         let task = try #require(retry.task)
         await task.value
 
-        #expect(try store.isAuthorized(agentBuild: "40", agentBundlePath: agentPath))
+        #expect(try !store.canHandleMountEvents(agentBuild: "39", agentBundlePath: agentPath))
+        if !hasAuthorizationFile {
+            #expect(try store.canHandleMountEvents(agentBuild: "40", agentBundlePath: agentPath))
+        }
+        #expect(try store.load()?.lastIssuedSequence == sequence)
         #expect(activations == 0)
     }
 
