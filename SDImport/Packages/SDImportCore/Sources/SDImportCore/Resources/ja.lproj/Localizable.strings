@@ -636,3 +636,4 @@
 "Discard pending scan results?" = "保留中のスキャン結果を破棄しますか？";
 "Keep Scan Results" = "スキャン結果を保持";
 "Start New Scan" = "新しいスキャンを開始";
+"Choose the original source folder instead of a symbolic link." = "シンボリックリンクではなく、元のソースフォルダを選択してください。";

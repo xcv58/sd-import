@@ -636,3 +636,4 @@
 "Discard pending scan results?" = "Eliminare i risultati della scansione in sospeso?";
 "Keep Scan Results" = "Conserva i risultati";
 "Start New Scan" = "Avvia nuova scansione";
+"Choose the original source folder instead of a symbolic link." = "Scegli la cartella sorgente originale anziché un collegamento simbolico.";

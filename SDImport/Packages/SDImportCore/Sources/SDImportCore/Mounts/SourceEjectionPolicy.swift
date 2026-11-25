@@ -35,14 +35,13 @@ public struct SourceEjectionPolicy: Sendable {
         return true
     }
 
-    public func resolvedDestinationPaths(roots: [String], plans: [ImportFilePlan]) -> Set<String>? {
-        let directories = Set(plans.compactMap { plan -> String? in
-            guard plan.willCopy || plan.disposition == .copied,
-                  let path = plan.destinationPath else { return nil }
-            return (path as NSString).deletingLastPathComponent
-        })
-        // Keep the configured roots for the existing same-device check.
-        var paths = Set(roots.filter { !$0.isEmpty })
+    public func resolvedDestinationVolumePaths(plans: [ImportFilePlan]) -> Set<String>? {
+        var directories = Set<String>()
+        for plan in plans where plan.willCopy || plan.disposition == .copied {
+            guard let path = plan.destinationPath else { return nil }
+            directories.insert((path as NSString).deletingLastPathComponent)
+        }
+        var paths = Set<String>()
         for directory in directories {
             if Task.isCancelled { return nil }
             guard let resolved = resolvedExistingDirectory(directory),

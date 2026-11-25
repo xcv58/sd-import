@@ -636,3 +636,4 @@
 "Discard pending scan results?" = "要捨棄尚未匯入的掃描結果嗎？";
 "Keep Scan Results" = "保留掃描結果";
 "Start New Scan" = "開始新的掃描";
+"Choose the original source folder instead of a symbolic link." = "請選擇原始來源資料夾，而非符號連結。";

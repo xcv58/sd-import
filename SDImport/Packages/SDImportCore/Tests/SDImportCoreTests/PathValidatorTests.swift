@@ -48,9 +48,50 @@ struct PathValidatorTests {
         #expect(source.status == .unreadable)
         #expect(destination.status == .unwritable)
         #expect(AppDistribution.macAppStore.requiresSourceAccess(for: source.status, hasAuthorizedAccess: false))
-        #expect(validator.validate(path: link.path, purpose: .source).status == .unreadable)
+        #expect(validator.validate(path: link.path, purpose: .source).status == .symbolicLink)
         #expect(validator.validate(path: link.path, purpose: .destination).status == .unwritable)
-        #expect(validator.validate(path: danglingLink.path, purpose: .source).status == .missing)
+        #expect(validator.validate(path: danglingLink.path, purpose: .source).status == .symbolicLink)
+    }
+
+    @Test("rejects a linked source or a folder reached through one, while allowing destination links")
+    func rejectsUserSourceSymlinks() throws {
+        let root = try temporaryDirectory()
+        let manager = FileManager.default
+        defer { try? manager.removeItem(at: root) }
+        let actual = root.appendingPathComponent("Card")
+        let subfolder = actual.appendingPathComponent("DCIM")
+        try manager.createDirectory(at: subfolder, withIntermediateDirectories: true)
+        let link = root.appendingPathComponent("Shortcut")
+        try manager.createSymbolicLink(at: link, withDestinationURL: actual)
+        let viaLink = link.appendingPathComponent("DCIM")
+        let validator = PathValidator()
+
+        #expect(validator.validate(path: link.path, purpose: .source).status == .symbolicLink)
+        #expect(validator.validate(path: viaLink.path, purpose: .source).status == .symbolicLink)
+        #expect(validator.validate(path: viaLink.path, purpose: .destination).status == .ready)
+        #expect(validator.validate(path: subfolder.path, purpose: .source).status == .ready)
+    }
+
+    @Test("accepts macOS's temporary-folder alias")
+    func acceptsSystemPathAlias() throws {
+        let directory = URL(fileURLWithPath: "/tmp").appendingPathComponent(UUID().uuidString)
+        let manager = FileManager.default
+        try manager.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? manager.removeItem(at: directory) }
+        let result = PathValidator().validate(path: directory.path, purpose: .source)
+        #expect(result.status == .ready)
+        #expect(result.expandedPath == "/private" + directory.path)
+    }
+
+    @Test("accepts the startup volume's macOS alias when present")
+    func acceptsStartupVolumeAlias() throws {
+        guard let name = try URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeNameKey]).volumeName
+        else { return }
+        let alias = "/Volumes/" + name
+        guard (try? FileManager.default.destinationOfSymbolicLink(atPath: alias)) == "/" else { return }
+        let result = PathValidator().validate(path: alias + "/Users", purpose: .source)
+        #expect(result.status == .ready)
+        #expect(result.expandedPath == "/Users")
     }
 
     @Test("the selected directory must allow traversal")
@@ -163,7 +204,8 @@ struct PathValidatorTests {
         try FileManager.default.createDirectory(at: replacement, withIntermediateDirectories: true)
         let original = root.appendingPathComponent("Card ", isDirectory: true)
         let validator = PathValidator()
-        #expect(validator.validate(path: original.path, purpose: .source).expandedPath == replacement.path)
+        #expect(validator.validate(path: original.path, purpose: .source).expandedPath
+            == validator.validate(path: replacement.path, purpose: .source).expandedPath)
         #expect(validator.validate(path: original.path, purpose: .source, allowsWhitespaceFallback: false).status == .missing)
     }
 

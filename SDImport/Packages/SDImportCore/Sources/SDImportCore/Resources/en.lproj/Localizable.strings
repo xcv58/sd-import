@@ -636,3 +636,4 @@
 "Discard pending scan results?" = "Discard pending scan results?";
 "Keep Scan Results" = "Keep Scan Results";
 "Start New Scan" = "Start New Scan";
+"Choose the original source folder instead of a symbolic link." = "Choose the original source folder instead of a symbolic link.";

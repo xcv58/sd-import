@@ -2313,15 +2313,12 @@ final class AppModel: ObservableObject {
         let portableImportReceiptsEnabled = self.portableImportReceiptsEnabled
         let reviewedSourcePath = currentSummary?.mountPath
         let retainedAccess = (Array(folderAccesses.values) + [scanBothSourceAccess].compactMap { $0 }).filter(\.isActive)
-        let destinationRoots = [builder.roots.photosURL.path, builder.roots.videosURL.path]
 
         importTask = Task.detached(priority: .userInitiated) {
             defer { withExtendedLifetime(retainedAccess) {} }
             do {
                 if Task.isCancelled { throw SDImportError.cancelled }
-                let destinations = SourceEjectionPolicy().resolvedDestinationPaths(
-                    roots: destinationRoots, plans: approvedPlans
-                )
+                let destinations = SourceEjectionPolicy().resolvedDestinationVolumePaths(plans: approvedPlans)
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID, isProgress: true) == true else { return }
                     self.rememberEjectionDestinations(destinations, for: jobID)
@@ -2388,9 +2385,7 @@ final class AppModel: ObservableObject {
                         }
                     )
                 }()
-                let finalDestinations = SourceEjectionPolicy().resolvedDestinationPaths(
-                    roots: destinationRoots, plans: approvedPlans
-                )
+                let finalDestinations = SourceEjectionPolicy().resolvedDestinationVolumePaths(plans: approvedPlans)
                 let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
                 let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
 
@@ -2780,7 +2775,13 @@ final class AppModel: ObservableObject {
         do {
             let (sourceURL, access) = try authorizeScanBothVolume(volume)
             try Task.checkCancellation()
-            let request = scanRequest(mountURL: sourceURL, sourceVolume: volume)
+            let validation = PathValidator().validate(
+                path: sourceURL.path, purpose: .source, allowsWhitespaceFallback: false
+            )
+            guard validation.isUsable else { throw ScanBothIssue.failed(validation.message) }
+            let request = scanRequest(
+                mountURL: URL(fileURLWithPath: validation.expandedPath, isDirectory: true), sourceVolume: volume
+            )
             let worker = Task.detached(priority: .userInitiated) {
                 defer { withExtendedLifetime(access) {} }
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
@@ -4688,6 +4689,15 @@ final class AppModel: ObservableObject {
         persistBookmark: Bool
     ) -> Bool {
         folderAccessFeedback = nil
+        if purpose == .source {
+            let validation = PathValidator().validate(
+                path: url.path, purpose: .source, allowsWhitespaceFallback: false
+            )
+            if validation.status == .symbolicLink {
+                showFolderAccessError { validation.message }
+                return false
+            }
+        }
         let priorAccess = folderAccesses[purpose]
         do {
             if persistBookmark {
@@ -5087,8 +5097,8 @@ final class AppModel: ObservableObject {
         guard
             !ejectionVolumes.isEmpty,
             ejectionVolumes.allSatisfy({ $0.volumeUUID?.isEmpty == false }),
-            !destinationPaths.contains(where: {
-                Self.destination($0, sharesDeviceWith: group.volumes)
+            destinationPaths.allSatisfy({
+                Self.canEject(group.volumes, withDestinationVolumeAt: $0)
             })
         else {
             return nil
@@ -5127,32 +5137,19 @@ final class AppModel: ObservableObject {
             }
     }
 
-    nonisolated static func destination(
-        _ destinationPath: String,
-        sharesDeviceWith sourceVolumes: [MountedVolume]
+    nonisolated static func canEject(
+        _ sourceVolumes: [MountedVolume],
+        withDestinationVolumeAt path: String
     ) -> Bool {
-        var destinationURL = URL(fileURLWithPath: destinationPath, isDirectory: true).standardizedFileURL
+        let destinationURL = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
         // Earlier destination permissions may have ended with that volume's review.
-        if sourceVolumes.contains(where: {
-            destinationURL.path == $0.mountPath || destinationURL.path.hasPrefix($0.mountPath + "/")
-        }) {
-            return true
-        }
-        while
-            !FileManager.default.fileExists(atPath: destinationURL.path),
-            destinationURL.path != "/"
-        {
-            destinationURL.deleteLastPathComponent()
-        }
-        guard
-            let values = try? destinationURL.resourceValues(forKeys: [.volumeURLKey]),
-            let volumeURL = values.volume
-        else {
+        if sourceVolumes.contains(where: { destinationURL.path == $0.mountPath }) {
             return false
         }
-
-        let destinationVolume = VolumeDetector().mountedVolume(from: volumeURL)
-        return sourceVolumes.contains { sourceVolume in
+        guard let destinationVolume = VolumeDetector().currentMountedVolume(
+            from: destinationURL, includeCapacity: false
+        ) else { return false }
+        return !sourceVolumes.contains { sourceVolume in
             if
                 let sourceDevice = sourceVolume.deviceGroupIdentifier,
                 let destinationDevice = destinationVolume.deviceGroupIdentifier

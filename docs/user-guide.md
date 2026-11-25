@@ -33,6 +33,9 @@ Reconnect the original card if needed, then choose `Rescan Source` from the
 interrupted import or its History entry. Choose the source folder and confirm
 the fresh import plan. The new scan can recognize files already copied.
 
+Select the original source folder on the card or Mac when choosing a folder to
+scan. Source paths through user-created symbolic links are rejected.
+
 You can keep photos and videos together or use separate destinations, and group
 imports by capture date. Each detected camera storage volume remains selectable
 in the source menu.
@@ -65,9 +68,9 @@ the app manually and use `Import From Card...` if automatic prompting fails.
 - Files recognized from portable history are labeled `Other Mac`. Choose
   `Import Anyway` only when you want to copy those files again.
 - If a source file changes after scanning, rescan before copying it.
-- Ordinary filename conflicts get a suffix to preserve both files. An Insta360
-  recording conflict blocks copying until you choose another destination, which
-  preserves the recording's filenames.
+- Ordinary filename conflicts get a suffix to preserve both files. If an
+  Insta360 recording has a filename conflict, choose another destination to
+  keep the original filenames.
 - Automatic ejection requires an error-free import that copied files. With
   Scan Both, skipping the last volume leaves ejection manual.
 

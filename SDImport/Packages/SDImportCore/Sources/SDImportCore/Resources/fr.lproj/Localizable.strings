@@ -636,3 +636,4 @@
 "Discard pending scan results?" = "Abandonner les résultats de l’analyse en attente ?";
 "Keep Scan Results" = "Conserver les résultats";
 "Start New Scan" = "Lancer une nouvelle analyse";
+"Choose the original source folder instead of a symbolic link." = "Choisissez le dossier source d’origine plutôt qu’un lien symbolique.";

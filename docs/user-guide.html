@@ -76,8 +76,10 @@
                 <li><span class="step-number">1</span><div><h3 data-i18n="m195">Connect a card.</h3><p data-i18n="m196">Insert an SD card or connect a camera card reader.</p></div></li>
                 <li><span class="step-number">2</span><div><h3 data-i18n="m197">Review the scan.</h3><p data-i18n="m198">Check what is new, already imported, unsupported, or conflicting.</p></div></li>
                 <li><span class="step-number">3</span><div><h3 data-i18n="m199">Start the copy.</h3><p data-i18n="m200">Confirm the destinations and leave the source connected until the import completes.</p></div></li>
-                <li><span class="step-number">4</span><div><h3 data-i18n="m201">Eject safely.</h3><p data-i18n="m202">Choose <code>Eject Source</code> in the import results, or enable automatic ejection in Settings. Automatic ejection runs only after an error-free import.</p></div></li>
+                <li><span class="step-number">4</span><div><h3 data-i18n="m201">Eject safely.</h3><p data-i18n="m202">Use the eject action on the copy receipt and wait for confirmation. If enabled, automatic ejection requires an error-free import that copied files.</p></div></li>
             </ol>
+            <p data-i18n="guide.scan_both">When <code>Scan Both</code> is available, scan the camera’s internal storage and memory card together. Review and confirm each copy separately.</p>
+            <p data-i18n="guide.rescan">If copying is interrupted, completed files stay in your destination. Reconnect the source if needed, choose <code>Rescan Source</code> in History, and review the new plan.</p>
         </section>
 
         <section class="section section-divider two-column">
@@ -87,7 +89,7 @@
                     <li data-i18n="m204">SD Card Import copies files; it does not erase the card.</li>
                     <li data-i18n="m205">If you enable import history on source drives, SD Card Import writes only its history inside the hidden <code>.sd-import</code> folder on the source. Locked and read-only sources still import, with a warning that this history cannot be saved.</li>
                     <li data-i18n="m206">Files already imported are skipped on future runs. <code>Import Anyway</code> is available only for files recognized from the history on your card. If a source file changes after scanning, SD Card Import requires a rescan instead of using outdated history.</li>
-                    <li data-i18n="m207">SD Card Import does not overwrite different files at an existing destination. Ordinary filename conflicts get a suffix. Insta360 recording conflicts are skipped to preserve filenames; choose a different destination before copying.</li>
+                    <li data-i18n="m207">Ordinary filename conflicts get a suffix so both files are kept. If an Insta360 recording has a filename conflict, choose a different destination to keep the original filenames.</li>
                     <li data-i18n="m208">Keep the app installed in <code>Applications</code> to use background card prompts.</li>
                 </ul>
             </div>

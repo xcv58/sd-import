@@ -228,6 +228,7 @@ Rules:
 - Starting a new scan or changing the source asks before closing a Scan Both session with pending results. The previous results remain available if the user cancels, the new source cannot be opened, or every new volume fails to scan.
 - If a planned source volume disconnects during a copy, the app stops the operation and names the volume. Files already copied remain in History.
 - For a manually selected card or folder, disconnect protection uses the mounted volume backing the selected path. Automatic prompt name filters apply only to discovery.
+- Source selection rejects paths through user-created symbolic links. macOS system path aliases remain usable.
 
 ## Per-File Copy Status
 
@@ -291,7 +292,7 @@ Terminal progress states:
 - Ejection uses the source volume root even when the scanned source is a folder inside that volume.
 - Volumes that share the nearest physical USB-device registry identity are presented as one source device.
 - Multiple mounted volumes on the same whole disk require one whole-disk eject operation. Multiple whole disks exposed by one physical USB device are each ejected before the app reports that the device is safe to disconnect.
-- After an import, a destination on the same physical device blocks receipt-driven source-device ejection. Ejection checks where the approved copy folders resolve, including through symlinks, and stays disabled if resolution fails. Scan Both applies the check to both volumes. The explicit Source-panel action remains available whenever no scan or copy is active.
+- After an import, a destination on the same physical device blocks receipt-driven source-device ejection. Ejection checks the resolved volume behind each approved copy folder, including through symlinks. Eject stays disabled if a destination volume cannot be verified. Scan Both applies the check to both volumes. The explicit Source-panel action remains available whenever no scan or copy is active.
 - Device grouping never relies only on volume names, model names, or mount timing. If macOS does not expose a reliable shared identity, volumes remain separate.
 - Ejection never forces a busy volume. A partial multi-disk failure reports which storage was ejected and which storage remains mounted.
 

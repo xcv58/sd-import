@@ -247,13 +247,15 @@ struct ScanBothSessionTests {
     func ejectionChecksBothImportDestinations() throws {
         var session = try scannedSession()
         let both = [internalStorage, card]
-        let macDestination = URL(fileURLWithPath: "/Users/Shared/Import Test", isDirectory: true)
-        let cameraDestination = card.mountURL.appendingPathComponent("Offload", isDirectory: true)
+        let macDestination = try #require(try FileManager.default.temporaryDirectory
+            .resourceValues(forKeys: [.volumeURLKey]).volume)
+        let cameraDestination = card.mountURL
         session.recordImportDestinations([cameraDestination.path], for: internalStorage.name)
         session.recordImportDestinations([macDestination.path], for: card.name)
         let paths = try #require(session.confirmedDestinationPaths)
         #expect(paths == Set([macDestination.path, cameraDestination.path]))
-        #expect(paths.contains { AppModel.destination($0, sharesDeviceWith: both) })
+        #expect(!AppModel.canEject(both, withDestinationVolumeAt: cameraDestination.path))
+        #expect(!AppModel.canEject(both, withDestinationVolumeAt: "/Volumes/Missing-\(UUID())"))
 
         session.recordImportDestinations(nil, for: internalStorage.name)
         session.recordImportDestinations([macDestination.path], for: card.name)

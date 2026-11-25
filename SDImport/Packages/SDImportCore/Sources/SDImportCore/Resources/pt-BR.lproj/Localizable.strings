@@ -636,3 +636,4 @@
 "Discard pending scan results?" = "Descartar os resultados pendentes da verificação?";
 "Keep Scan Results" = "Manter resultados";
 "Start New Scan" = "Iniciar nova verificação";
+"Choose the original source folder instead of a symbolic link." = "Escolha a pasta de origem original em vez de um link simbólico.";

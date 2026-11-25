@@ -76,8 +76,10 @@
                 <li><span class="step-number">1</span><div><h3 data-i18n="m195">Connectez une carte.</h3><p data-i18n="m196">Insérez une carte SD ou branchez un lecteur de cartes d’appareil photo.</p></div></li>
                 <li><span class="step-number">2</span><div><h3 data-i18n="m197">Vérifiez l’analyse.</h3><p data-i18n="m198">Identifiez les fichiers nouveaux, déjà importés, non pris en charge ou en conflit.</p></div></li>
                 <li><span class="step-number">3</span><div><h3 data-i18n="m199">Lancez la copie.</h3><p data-i18n="m200">Confirmez les destinations et laissez la source connectée jusqu’à la fin de l’import.</p></div></li>
-                <li><span class="step-number">4</span><div><h3 data-i18n="m201">Éjectez en toute sécurité.</h3><p data-i18n="m202">Choisissez <code>Éjecter la source</code> sur le récapitulatif ou activez l’éjection automatique dans les réglages. Celle-ci n’a lieu qu’après un import sans erreur.</p></div></li>
+                <li><span class="step-number">4</span><div><h3 data-i18n="m201">Éjectez en toute sécurité.</h3><p data-i18n="m202">Utilisez la commande d’éjection dans le reçu de copie et attendez la confirmation. Si elle est activée, l’éjection automatique exige un import sans erreur ayant copié des fichiers.</p></div></li>
             </ol>
+            <p data-i18n="guide.scan_both">Lorsque <code>Analyser les deux</code> est disponible, lancez une seule analyse pour le stockage interne et la carte mémoire de l’appareil. Vérifiez et confirmez chaque copie séparément.</p>
+            <p data-i18n="guide.rescan">Si la copie est interrompue, les fichiers déjà copiés restent à destination. Reconnectez la source si nécessaire, choisissez <code>Réanalyser la source</code> dans l’historique et vérifiez le nouveau plan.</p>
         </section>
 
         <section class="section section-divider two-column">
@@ -87,7 +89,7 @@
                     <li data-i18n="m204">SD Card Import copie les fichiers ; il n’efface pas la carte.</li>
                     <li data-i18n="m205">Si les reçus portables sont activés, SD Card Import écrit uniquement son registre caché <code>.sd-import</code> sur la source. Les sources verrouillées ou en lecture seule restent utilisables avec un avertissement.</li>
                     <li data-i18n="m206">Les fichiers déjà importés sont ignorés ensuite. <code>Importer quand même</code> est réservé aux fichiers reconnus dans l’historique portable. Si un fichier source change après l’analyse, SD Card Import exige une nouvelle analyse au lieu d’utiliser un historique périmé.</li>
-                    <li data-i18n="m207">SD Card Import n’écrase pas les fichiers de contenu différent déjà présents à destination. Les conflits de noms ordinaires reçoivent un suffixe. Les enregistrements Insta360 en conflit sont ignorés pour préserver leurs noms. Choisissez une autre destination avant de copier.</li>
+                    <li data-i18n="m207">En cas de conflit de noms ordinaire, un suffixe permet de conserver les deux fichiers. Si un enregistrement Insta360 présente un conflit de noms, choisissez une autre destination pour conserver les noms d’origine.</li>
                     <li data-i18n="m208">Gardez l’app installée dans <code>Applications</code> pour recevoir les notifications de carte en arrière-plan.</li>
                 </ul>
             </div>

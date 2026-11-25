@@ -59,8 +59,8 @@ struct SourceEjectionPolicyTests {
         #expect(try manager.attributesOfItem(atPath: resolved.path)[.systemFileNumber] as? NSNumber
             == manager.attributesOfItem(atPath: camera.path)[.systemFileNumber] as? NSNumber)
         let volume = try #require(try camera.resourceValues(forKeys: [.volumeURLKey]).volume)
-        let paths = try #require(policy.resolvedDestinationPaths(roots: [mac.path], plans: [plan]))
-        #expect(paths == [mac.path, volume.standardizedFileURL.path])
+        let paths = try #require(policy.resolvedDestinationVolumePaths(plans: [plan]))
+        #expect(paths == [volume.standardizedFileURL.path])
     }
 
     @Test("broken and cyclic destination symlinks prevent eject", arguments: [true, false])
@@ -74,7 +74,7 @@ struct SourceEjectionPolicyTests {
         let file = link.appendingPathComponent("New Trip/photo.jpg")
         let plan = ImportFilePlan(update: nil, willCopy: true, disposition: .copy, destinationPath: file.path)
 
-        #expect(policy.resolvedDestinationPaths(roots: [fixture.path], plans: [plan]) == nil)
+        #expect(policy.resolvedDestinationVolumePaths(plans: [plan]) == nil)
     }
 
     private func makeJob(
