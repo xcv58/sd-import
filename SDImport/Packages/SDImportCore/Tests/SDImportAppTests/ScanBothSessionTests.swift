@@ -206,6 +206,40 @@ struct ScanBothSessionTests {
         #expect(!review.allowsAutomaticEjection)
     }
 
+    @Test("ejection checks a destination from either volume in the scan session")
+    func ejectionChecksBothImportDestinations() throws {
+        var coordinator = MountedDevicePromptCoordinator()
+        let both = [internalStorage, card]
+        _ = coordinator.receive(internalStorage, among: both, canPresent: true)
+        let prompt = try #require(coordinator.pendingPrompt)
+        var session = try #require(ScanBothSession(prompt: prompt))
+        let macDestination = URL(fileURLWithPath: "/Users/Shared/Import Test", isDirectory: true)
+        let cameraDestination = card.mountURL.appendingPathComponent("Offload", isDirectory: true)
+        for index in session.entries.indices {
+            let volume = session.entries[index].volume
+            session.entries[index].state = .complete(
+                ScanSummary(
+                    jobID: volume.name, mountPath: volume.mountPath, volumeName: volume.name,
+                    volumeUUID: volume.volumeUUID, location: "Camera", scannedFiles: 1, newFiles: 1,
+                    knownFiles: 0, unsupportedFiles: 0, conflictFiles: 0
+                ),
+                [],
+                nil
+            )
+        }
+        session.recordImportDestinations(
+            DestinationRoots(photosURL: cameraDestination, videosURL: macDestination),
+            for: internalStorage.name
+        )
+        let finalJob = ImportJob(
+            id: card.name, createdAt: Date(), mountPath: card.mountPath, location: "Camera",
+            photosRoot: macDestination.path, videosRoot: macDestination.path, status: .imported
+        )
+        let paths = session.ejectionDestinationPaths(for: finalJob)
+        #expect(paths == Set([macDestination.path, cameraDestination.path]))
+        #expect(paths.contains { AppModel.destination($0, sharesDeviceWith: both) })
+    }
+
     @Test("retry rejects pending source files that changed after the scan")
     func verifiesPendingRetryFileMetadata() throws {
         let fileManager = FileManager.default

@@ -631,3 +631,4 @@
 "%lld files scanned" = "%lld fichiers analysés";
 "Review %@" = "Vérifier %@";
 "Rescan Source" = "Réanalyser la source";
+"Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "Une nouvelle analyse met fin à cette session d’analyse des deux volumes. Vous devrez analyser à nouveau les volumes restants.";

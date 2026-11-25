@@ -225,6 +225,7 @@ Rules:
 - Import updates the same job.
 - Failed files retain per-file errors.
 - History offers Retry for pending or failed rows while the app can verify the original mount and the files still match the scan. Retry opens a review before copying. When that verification is unavailable, History offers Rescan Source for a fresh plan.
+- Rescan Source asks before closing a Scan Both session with pending results.
 
 ## Per-File Copy Status
 
@@ -286,7 +287,7 @@ Terminal progress states:
 - Ejection uses the source volume root even when the scanned source is a folder inside that volume.
 - Volumes that share the nearest physical USB-device registry identity are presented as one source device.
 - Multiple mounted volumes on the same whole disk require one whole-disk eject operation. Multiple whole disks exposed by one physical USB device are each ejected before the app reports that the device is safe to disconnect.
-- After an import, a destination on the same physical device blocks receipt-driven source-device ejection. The explicit Source-panel action remains available whenever no scan or copy is active.
+- After an import, a destination on the same physical device blocks receipt-driven source-device ejection. Scan Both checks the confirmed destinations from both volumes. The explicit Source-panel action remains available whenever no scan or copy is active.
 - Device grouping never relies only on volume names, model names, or mount timing. If macOS does not expose a reliable shared identity, volumes remain separate.
 - Ejection never forces a busy volume. A partial multi-disk failure reports which storage was ejected and which storage remains mounted.
 

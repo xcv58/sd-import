@@ -631,3 +631,4 @@
 "%lld files scanned" = "已掃描 %lld 個檔案";
 "Review %@" = "檢視 %@";
 "Rescan Source" = "重新掃描來源";
+"Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "開始新的掃描會結束這次雙卷掃描。剩餘的儲存卷需要重新掃描。";

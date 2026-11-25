@@ -63,6 +63,7 @@ struct ScanBothSession {
     var entries: [Entry]
     var removedMountPaths: Set<String> = []
     var reviewingJobID: String?
+    private var confirmedDestinationPaths: Set<String> = []
 
     init?(prompt: MountedDevicePrompt) {
         let group = prompt.deviceGroup
@@ -96,6 +97,20 @@ struct ScanBothSession {
         guard result.failedFiles == 0,
               let index = entries.firstIndex(where: { $0.jobID == result.jobID }) else { return }
         entries[index].disposition = .imported(result)
+    }
+
+    mutating func recordImportDestinations(_ roots: DestinationRoots, for jobID: String) {
+        guard entry(for: jobID) != nil else { return }
+        // Keep earlier destinations even if a copy fails or its History entry is removed.
+        confirmedDestinationPaths.formUnion(
+            [roots.photosURL, roots.videosURL].map { $0.standardizedFileURL.resolvingSymlinksInPath().path }
+        )
+    }
+
+    func ejectionDestinationPaths(for job: ImportJob) -> Set<String> {
+        let paths = Set([job.photosRoot, job.videosRoot])
+        guard entry(for: job.id) != nil else { return paths }
+        return paths.union(confirmedDestinationPaths)
     }
 
     var allowsAutomaticEjection: Bool {
@@ -2170,10 +2185,14 @@ final class AppModel: ObservableObject {
         let portableImportReceiptsEnabled = self.portableImportReceiptsEnabled
         let retainedAccess: [SecurityScopedResourceAccess]
         switch planMode {
-        case .reviewed:
+        case .reviewed(let builder, _):
             retainedAccess = (Array(folderAccesses.values) + [scanBothSourceAccess].compactMap { $0 }).filter(\.isActive)
+            scanBothSession?.recordImportDestinations(builder.roots, for: jobID)
         case .storedReview(let access, _):
             retainedAccess = access
+            if let storedImportReview, storedImportReview.job.id == jobID {
+                scanBothSession?.recordImportDestinations(storedImportReview.roots, for: jobID)
+            }
         }
 
         importTask = Task.detached(priority: .userInitiated) {
@@ -3562,7 +3581,16 @@ final class AppModel: ObservableObject {
     }
 
     func rescanSource(startingAt path: String) {
-        guard !isWorking, !isEjectingSource, chooseCardFolder(startingAt: path) else { return }
+        guard !isWorking, !isEjectingSource else { return }
+        if scanBothSession?.entries.contains(where: \.awaitsImport) == true {
+            let alert = NSAlert()
+            alert.messageText = L10n.tr("Rescan Source")
+            alert.informativeText = L10n.tr("Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan.")
+            alert.addButton(withTitle: L10n.tr("Rescan Source"))
+            alert.addButton(withTitle: L10n.tr("Cancel"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        guard chooseCardFolder(startingAt: path) else { return }
         resetImportDraftFromDefaults()
         selection = .import
         scan()
@@ -5100,7 +5128,8 @@ final class AppModel: ObservableObject {
         }
         return sourceEjectionTarget(
             sourceVolume: volume,
-            destinationPaths: [job.photosRoot, job.videosRoot],
+            destinationPaths: scanBothSession.map { Array($0.ejectionDestinationPaths(for: job)) }
+                ?? [job.photosRoot, job.videosRoot],
             mountedVolumes: mountedVolumes
         )
     }
@@ -5156,11 +5185,17 @@ final class AppModel: ObservableObject {
             }
     }
 
-    nonisolated private static func destination(
+    nonisolated static func destination(
         _ destinationPath: String,
         sharesDeviceWith sourceVolumes: [MountedVolume]
     ) -> Bool {
         var destinationURL = URL(fileURLWithPath: destinationPath, isDirectory: true).standardizedFileURL
+        // Earlier destination permissions may have ended with that volume's review.
+        if sourceVolumes.contains(where: {
+            destinationURL.path == $0.mountPath || destinationURL.path.hasPrefix($0.mountPath + "/")
+        }) {
+            return true
+        }
         while
             !FileManager.default.fileExists(atPath: destinationURL.path),
             destinationURL.path != "/"

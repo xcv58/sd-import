@@ -631,3 +631,4 @@
 "%lld files scanned" = "%lld Dateien gescannt";
 "Review %@" = "%@ prüfen";
 "Rescan Source" = "Quelle erneut scannen";
+"Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "Ein neuer Scan beendet diese Sitzung für beide Datenträger. Verbleibende Datenträger müssen erneut gescannt werden.";
