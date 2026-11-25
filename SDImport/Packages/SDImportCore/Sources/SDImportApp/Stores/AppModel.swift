@@ -21,7 +21,7 @@ struct ScanBothSession {
 
         enum Disposition {
             case pending
-            case imported(ImportResult)
+            case imported
             case skipped
         }
 
@@ -29,6 +29,7 @@ struct ScanBothSession {
         let volume: MountedVolume
         var state: State = .waiting
         var disposition: Disposition = .pending
+        var hasStartedImport = false
 
         var summary: ScanSummary? {
             if case .complete(let summary, _, _) = state { return summary }
@@ -47,7 +48,18 @@ struct ScanBothSession {
             return true
         }
 
+        var canSkip: Bool {
+            guard case .pending = disposition else { return false }
+            switch state {
+            case .complete, .skipped(.failed), .skipped(.accessUnavailable), .skipped(.cancelled):
+                return true
+            default:
+                return false
+            }
+        }
+
         var isResolved: Bool {
+            if case .skipped = disposition { return true }
             switch state {
             case .complete:
                 return !awaitsImport
@@ -93,10 +105,20 @@ struct ScanBothSession {
         entries.first { $0.jobID == jobID }
     }
 
+    mutating func recordImportStarted(for jobID: String) {
+        guard let index = entries.firstIndex(where: { $0.jobID == jobID }) else { return }
+        entries[index].hasStartedImport = true
+    }
+
     mutating func recordImport(_ result: ImportResult) {
         guard result.failedFiles == 0,
               let index = entries.firstIndex(where: { $0.jobID == result.jobID }) else { return }
-        entries[index].disposition = .imported(result)
+        entries[index].disposition = .imported
+    }
+
+    mutating func skipEntry(_ id: UUID) {
+        guard let index = entries.firstIndex(where: { $0.id == id && $0.canSkip }) else { return }
+        entries[index].disposition = .skipped
     }
 
     mutating func recordImportDestinations(_ paths: Set<String>?, for jobID: String) {
@@ -105,8 +127,15 @@ struct ScanBothSession {
         confirmedDestinationPaths = paths.flatMap { confirmedDestinationPaths?.union($0) }
     }
 
-    var allowsAutomaticEjection: Bool {
+    var allowsEjection: Bool {
         removedMountPaths.isEmpty && entries.allSatisfy(\.isResolved)
+    }
+
+    var allowsAutomaticEjection: Bool {
+        allowsEjection && entries.allSatisfy { entry in
+            if case .imported = entry.disposition { return true }
+            return !entry.hasStartedImport
+        }
     }
 
     var plannedCopyVolumes: [MountedVolume] {
@@ -2213,6 +2242,7 @@ final class AppModel: ObservableObject {
         let attemptID = beginImportAttempt(
             .prepareImport, event: .beginPreparation(.prepareImport), retryContext: retryContext
         )
+        scanBothSession?.recordImportStarted(for: jobID)
         let plannedVolumes = scanBothEntry == nil
             ? [retryVolume ?? expectedSource].compactMap { $0 }
             : scanBothSession?.plannedCopyVolumes ?? []
@@ -2835,16 +2865,8 @@ final class AppModel: ObservableObject {
     }
 
     func skipScanBothImport(_ entryID: UUID) {
-        guard isShowingScanBothResults, !isWorking, !isEjectingSource,
-              let index = scanBothSession?.entries.firstIndex(where: { $0.id == entryID && $0.awaitsImport })
-        else { return }
-        scanBothSession?.entries[index].disposition = .skipped
-        if let result = scanBothSession?.entries.compactMap({ entry -> ImportResult? in
-            if case .imported(let result) = entry.disposition { return result }
-            return nil
-        }).first {
-            autoEjectAfterImport(result)
-        }
+        guard isShowingScanBothResults, !isWorking, !isEjectingSource else { return }
+        scanBothSession?.skipEntry(entryID)
     }
 
     private func promptContains(_ volume: MountedVolume, id: UUID, mountID: UUID) -> Bool {
@@ -4212,13 +4234,13 @@ final class AppModel: ObservableObject {
 
     private func scanBothAllowsEjection(for jobID: String) -> Bool {
         guard let session = scanBothSession, session.entry(for: jobID) != nil else { return true }
-        return session.allowsAutomaticEjection
+        return session.allowsEjection
     }
 
     private var scanBothManualEjectionTarget: SourceEjectionTarget? {
         guard AppDistribution.current.supportsSourceEjection, isShowingScanBothResults,
               !isWorking, !isEjectingSource, ejectedSourceJobID == nil,
-              let session = scanBothSession, session.allowsAutomaticEjection,
+              let session = scanBothSession, session.allowsEjection,
               let destinations = session.confirmedDestinationPaths else { return nil }
         let policy = SourceEjectionPolicy()
         let liveVolumes = session.entries.compactMap { entry in
@@ -4246,15 +4268,11 @@ final class AppModel: ObservableObject {
     }
 
     private func autoEjectAfterImport(_ result: ImportResult) {
-        guard ejectAfterSuccessfulImport, scanBothAllowsEjection(for: result.jobID) else { return }
-        if currentResult?.jobID == result.jobID {
-            if canEjectSource(for: result) {
-                ejectSource(for: result)
-            }
-        } else if let target = buildSourceEjectionTarget(for: result, mountedVolumes: mountedVolumesSnapshot) {
-            // A user can resolve the last pending volume by skipping it from the combined results.
-            ejectSource(jobID: result.jobID, target: target)
+        guard ejectAfterSuccessfulImport, canEjectSource(for: result) else { return }
+        if let session = scanBothSession, session.entry(for: result.jobID) != nil, !session.allowsAutomaticEjection {
+            return
         }
+        ejectSource(for: result)
     }
 
     private func ejectSource(jobID: String, target: SourceEjectionTarget) {

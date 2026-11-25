@@ -246,25 +246,10 @@ struct ScanBothSessionTests {
 
     @Test("ejection checks a destination from either volume in the scan session")
     func ejectionChecksBothImportDestinations() throws {
-        var coordinator = MountedDevicePromptCoordinator()
+        var session = try scannedSession()
         let both = [internalStorage, card]
-        _ = coordinator.receive(internalStorage, among: both, canPresent: true)
-        let prompt = try #require(coordinator.pendingPrompt)
-        var session = try #require(ScanBothSession(prompt: prompt))
         let macDestination = URL(fileURLWithPath: "/Users/Shared/Import Test", isDirectory: true)
         let cameraDestination = card.mountURL.appendingPathComponent("Offload", isDirectory: true)
-        for index in session.entries.indices {
-            let volume = session.entries[index].volume
-            session.entries[index].state = .complete(
-                ScanSummary(
-                    jobID: volume.name, mountPath: volume.mountPath, volumeName: volume.name,
-                    volumeUUID: volume.volumeUUID, location: "Camera", scannedFiles: 1, newFiles: 1,
-                    knownFiles: 0, unsupportedFiles: 0, conflictFiles: 0
-                ),
-                [],
-                nil
-            )
-        }
         session.recordImportDestinations([cameraDestination.path], for: internalStorage.name)
         session.recordImportDestinations([macDestination.path], for: card.name)
         let paths = try #require(session.confirmedDestinationPaths)
@@ -274,6 +259,51 @@ struct ScanBothSessionTests {
         session.recordImportDestinations(nil, for: internalStorage.name)
         session.recordImportDestinations([macDestination.path], for: card.name)
         #expect(session.confirmedDestinationPaths == nil)
+    }
+
+    @Test("skipping a failed scan preserves its error and lets the user eject after importing the sibling")
+    func skipsFailedScan() throws {
+        var session = try scannedSession()
+        let issue = ScanBothIssue.failed("fixture error")
+        session.entries[1].state = .skipped(issue)
+        session.recordImport(ImportResult(
+            jobID: internalStorage.name, importedFiles: 1, skippedFiles: 0, failedFiles: 0, progressPath: nil
+        ))
+        #expect(!session.allowsEjection)
+        #expect(session.entries[1].canSkip)
+
+        let entryID = session.entries[1].id
+        session.skipEntry(entryID)
+        #expect(session.allowsEjection)
+        #expect(!session.entries[1].canSkip)
+        guard case .skipped(let retainedIssue) = session.entries[1].state else {
+            Issue.record("The original scan error should remain on the skipped row")
+            return
+        }
+        #expect(retainedIssue.message == issue.message)
+        session.removedMountPaths.insert(card.mountPath)
+        #expect(!session.allowsEjection)
+    }
+
+    @Test("skipping an attempted but unsuccessful copy leaves eject manual")
+    func skipsUnsuccessfulCopy() throws {
+        let original = try scannedSession()
+        let skippedEntry = original.entries[1].id
+        let successfulInternalCopy = ImportResult(
+            jobID: internalStorage.name, importedFiles: 1, skippedFiles: 0, failedFiles: 0, progressPath: nil
+        )
+
+        var attempted = original
+        attempted.recordImportStarted(for: card.name)
+        attempted.skipEntry(skippedEntry)
+        attempted.recordImport(successfulInternalCopy)
+        #expect(attempted.allowsEjection)
+        #expect(!attempted.allowsAutomaticEjection)
+
+        var skippedBeforeCopy = original
+        skippedBeforeCopy.skipEntry(skippedEntry)
+        skippedBeforeCopy.recordImport(successfulInternalCopy)
+        #expect(skippedBeforeCopy.allowsAutomaticEjection)
     }
 
     @Test("retry requires a rescan if the original folder is gone")
@@ -314,6 +344,26 @@ struct ScanBothSessionTests {
             [.modificationDate: originalDate.addingTimeInterval(20)], ofItemAtPath: url.path
         )
         #expect(!AppModel.retryFilesMatchScan([file]))
+    }
+
+    private func scannedSession() throws -> ScanBothSession {
+        var coordinator = MountedDevicePromptCoordinator()
+        _ = coordinator.receive(internalStorage, among: [internalStorage, card], canPresent: true)
+        let prompt = try #require(coordinator.pendingPrompt)
+        var session = try #require(ScanBothSession(prompt: prompt))
+        for index in session.entries.indices {
+            let volume = session.entries[index].volume
+            session.entries[index].state = .complete(
+                ScanSummary(
+                    jobID: volume.name, mountPath: volume.mountPath, volumeName: volume.name,
+                    volumeUUID: volume.volumeUUID, location: "Camera", scannedFiles: 1, newFiles: 1,
+                    knownFiles: 0, unsupportedFiles: 0, conflictFiles: 0
+                ),
+                [],
+                nil
+            )
+        }
+        return session
     }
 
     private static func volume(_ name: String, disk: String, device: String = "camera") -> MountedVolume {

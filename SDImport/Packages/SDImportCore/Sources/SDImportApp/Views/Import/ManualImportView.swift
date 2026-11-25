@@ -98,12 +98,12 @@ struct ManualImportView: View {
                 phaseHeading(L10n.tr("Review scan results"), detail: session.deviceName)
                 ForEach(session.entries) { entry in
                     AppSection(entry.volume.name, systemImage: "externaldrive") {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            scanBothStatus(entry.state)
+                            Spacer()
+                            scanBothReviewActions(entry)
+                        }
                         if case .complete(let summary, let filenames, _) = entry.state {
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                scanBothStatus(entry.state)
-                                Spacer()
-                                scanBothReviewActions(entry, summary: summary)
-                            }
                             let scannedPath = URL(fileURLWithPath: summary.mountPath, isDirectory: true)
                                 .standardizedFileURL.path
                             if scannedPath != entry.volume.mountPath {
@@ -122,8 +122,6 @@ struct ManualImportView: View {
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             }
-                        } else {
-                            scanBothStatus(entry.state)
                         }
                     }
                 }
@@ -147,26 +145,30 @@ struct ManualImportView: View {
     }
 
     @ViewBuilder
-    private func scanBothReviewActions(_ entry: ScanBothSession.Entry, summary: ScanSummary) -> some View {
+    private func scanBothReviewActions(_ entry: ScanBothSession.Entry) -> some View {
         switch entry.disposition {
         case .pending:
-            Button(L10n.tr("Skip")) {
-                model.skipScanBothImport(entry.id)
+            if entry.canSkip {
+                Button(L10n.tr("Skip")) {
+                    model.skipScanBothImport(entry.id)
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.isEjectingSource)
             }
-            .buttonStyle(.bordered)
-            .disabled(model.isEjectingSource)
-            if model.needsRescan(summary.jobID) {
-                Button(L10n.tr("Rescan Source")) {
-                    model.rescanSource(startingAt: summary.mountPath)
+            if let summary = entry.summary {
+                if model.needsRescan(summary.jobID) {
+                    Button(L10n.tr("Rescan Source")) {
+                        model.rescanSource(startingAt: summary.mountPath)
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    Button(L10n.tr("Review import")) {
+                        model.reviewScanBothVolume(entry.id)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel(L10n.tr("Review \(entry.volume.name)"))
+                    .accessibilityIdentifier("import.scan-both.review.\(entry.volume.mountPath)")
                 }
-                .buttonStyle(.bordered)
-            } else {
-                Button(L10n.tr("Review import")) {
-                    model.reviewScanBothVolume(entry.id)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel(L10n.tr("Review \(entry.volume.name)"))
-                .accessibilityIdentifier("import.scan-both.review.\(entry.volume.mountPath)")
             }
         case .imported:
             Text(L10n.tr("Imported")).foregroundStyle(.secondary)

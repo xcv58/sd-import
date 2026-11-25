@@ -283,7 +283,8 @@ Terminal progress states:
 - `Eject source device after a successful import` is an opt-in setting and defaults off.
 - Automatic ejection requires an error-free imported job and a currently mounted removable volume whose UUID matches the scanned job.
 - In Scan Both, the two volumes share a scan session. Each import has its own confirmation. Device ejection waits for both volumes to finish or be explicitly skipped.
-- Scan Both shows the Eject action on the combined results even when automatic ejection is off. The action is enabled when the session is resolved and the device passes the eject checks.
+- A failed or cancelled scan of a still-mounted volume can be explicitly skipped. The combined results retain the scan error and show a manual Eject action. It becomes available when the session is resolved and the device passes the eject checks.
+- In Scan Both, only a successful copy can trigger automatic ejection. Skipping a volume never triggers it. If a user skips an attempted import that did not succeed, the session offers manual ejection instead.
 - Non-removable volumes, disk images, UUID mismatches, cancelled imports, and imports with failures are never ejected automatically.
 - Removable cards remain eligible when macOS reports their built-in reader location as internal.
 - Ejection uses the source volume root even when the scanned source is a folder inside that volume.
