@@ -209,7 +209,6 @@ struct ScanBothSessionTests {
             #expect(Set(files.map(\.filename)) == Set(expectedNames))
             #expect(preview == Array(files.prefix(5).map(\.filename)))
             #expect(files.allSatisfy { $0.copyStatus == .pending })
-            #expect(AppModel.retryFilesMatchScan(files))
         }
 
         let firstJob = try #require(jobs.first { $0.volumeUUID == internalStorage.volumeUUID })
@@ -325,46 +324,6 @@ struct ScanBothSessionTests {
         #expect(session.issueIfNoVolumeScanned == nil)
         session.entries[1].state = .skipped(.removed)
         #expect(session.issueIfNoVolumeScanned != nil)
-    }
-
-    @Test("retry requires a rescan if the original folder is gone")
-    func requiresRescanForMissingRetrySource() throws {
-        let manager = FileManager.default
-        let volume = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let source = volume.appendingPathComponent("DCIM", isDirectory: true)
-        try manager.createDirectory(at: source, withIntermediateDirectories: true)
-        defer { try? manager.removeItem(at: volume) }
-        let validator = PathValidator()
-        #expect(!AppModel.retrySourceRequiresRescan(validator.validate(path: source.path, purpose: .source)))
-
-        try manager.moveItem(at: source, to: volume.appendingPathComponent("Moved"))
-        #expect(AppModel.retrySourceRequiresRescan(validator.validate(path: source.path, purpose: .source)))
-        try Data().write(to: source)
-        #expect(AppModel.retrySourceRequiresRescan(validator.validate(path: source.path, purpose: .source)))
-    }
-
-    @Test("retry rejects pending source files that changed after the scan")
-    func verifiesPendingRetryFileMetadata() throws {
-        let fileManager = FileManager.default
-        let url = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try Data("old".utf8).write(to: url)
-        defer { try? fileManager.removeItem(at: url) }
-        let originalDate = Date(timeIntervalSince1970: 1_700_000_000)
-        try fileManager.setAttributes([.modificationDate: originalDate], ofItemAtPath: url.path)
-        let file = JobFileRecord(
-            jobID: "job", sourcePath: url.path, relativePath: url.lastPathComponent,
-            filename: url.lastPathComponent, ext: "jpg", size: 3, modificationDateString: "",
-            modificationTimeEpochSeconds: Int64(originalDate.timeIntervalSince1970), mediaKind: .photo,
-            fingerprint: nil, captureDate: nil, decision: .new, destinationDirectory: nil,
-            plannedDestinationPath: nil, copyStatus: .failed
-        )
-        #expect(AppModel.retryFilesMatchScan([file]))
-
-        try Data("new".utf8).write(to: url)
-        try fileManager.setAttributes(
-            [.modificationDate: originalDate.addingTimeInterval(20)], ofItemAtPath: url.path
-        )
-        #expect(!AppModel.retryFilesMatchScan([file]))
     }
 
     private func scannedSession() throws -> ScanBothSession {

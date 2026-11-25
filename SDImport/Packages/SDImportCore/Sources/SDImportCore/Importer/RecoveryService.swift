@@ -43,6 +43,14 @@ public struct RecoveryService {
         return RecoverySummary(recoveredJobs: recoveredJobs, removedPartFiles: removedPartFiles)
     }
 
+    public func recoverInterruptedImport(jobID: String) throws {
+        guard try jobRepository.withImportLock(jobID: jobID, {
+            try recoverJobWhileLocked(jobID: jobID)
+        }) != nil else {
+            throw SDImportError.invalidArgument(L10n.tr("Finish the current scan or import first"))
+        }
+    }
+
     struct JobRecovery {
         var recovered = false
         var removedPartFiles = 0

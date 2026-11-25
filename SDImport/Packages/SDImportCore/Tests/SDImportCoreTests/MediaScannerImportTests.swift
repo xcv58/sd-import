@@ -1893,7 +1893,8 @@ struct MediaScannerImportTests {
             try db.execute(sql: "DROP TRIGGER force_dedupe_failure")
         }
         let recovery = RecoveryService(jobRepository: fixture.jobRepository, portableReceiptsEnabled: true)
-        #expect(try recovery.recoverInterruptedImports().recoveredJobs == 1)
+        try recovery.recoverInterruptedImport(jobID: jobID)
+        try recovery.recoverInterruptedImport(jobID: jobID)
         #expect(try recovery.recoverInterruptedImports().recoveredJobs == 0)
         #expect(try fixture.jobRepository.copyAttempts(jobID: jobID).isEmpty)
         #expect(try fixture.jobRepository.fetchJob(id: jobID)?.status == .imported)
@@ -1907,6 +1908,14 @@ struct MediaScannerImportTests {
         let reportPath = try #require(fixture.jobRepository.fetchJob(id: jobID)?.summaryJSONPath)
         let report = try ImportReportLoader().loadJSON(from: URL(fileURLWithPath: reportPath))
         #expect(report.files.first?.copyStatus == .copied)
+
+        try fixture.writeFile(
+            fixture.mountURL.appendingPathComponent("IMG_NEW.JPG"), bytes: Data("new source file".utf8)
+        )
+        let freshScan = try fixture.scanner.scan(fixture.scanRequest(jobID: "job-rescan"))
+        #expect(freshScan.knownFiles == 1)
+        #expect(freshScan.newFiles == 1)
+        #expect(try fixture.jobRepository.fetchJob(id: jobID)?.status == .imported)
     }
 
     @Test("recovery respects a live job lock and keeps inaccessible attempts", arguments: [false, true])

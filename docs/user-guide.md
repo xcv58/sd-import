@@ -25,23 +25,32 @@ pricing may vary.
 4. If a destination shows `Allow Access`, choose the folder in the macOS picker
    and review the updated plan. Then start copying and keep the source connected
    until the import finishes.
-5. Choose `Eject Source` when finished with a verified removable source.
+5. Use the eject action on the copy receipt when finished with a verified
+   removable source. Wait for the safe-to-remove confirmation.
 
-To retry an unfinished import, reconnect the original card or source folder and
-choose `Retry` in History. If the destination changed during copying, review the
-remaining files and confirm where they will go before copying resumes.
+If copying stops, files already copied stay in the destination and in History.
+Reconnect the original card if needed, then choose `Rescan Source` from the
+interrupted import or its History entry. Choose the source folder and confirm
+the fresh import plan. The new scan can recognize files already copied.
 
 You can keep photos and videos together or use separate destinations, and group
-imports by capture date. Each mounted storage volume remains selectable in the
-source menu. A device eject action can unmount related volumes belonging to the
-same camera; wait for the safe-to-remove confirmation before disconnecting it.
+imports by capture date. Each detected camera storage volume remains selectable
+in the source menu.
 
 In `Settings > General`, `Prompt when a card is mounted` enables background card
-prompts. When your camera's internal storage and memory card are recognized as
-one device, choose a volume to scan in a single prompt. If a drive from that
-prompt stays mounted, you can find late-arriving sibling drives in `Source`
-after you close the prompt. If all drives unmount, the next mount can open a
-fresh prompt, including when you swap cards in a connected reader.
+prompts. When the app recognizes your camera's internal storage and memory card
+as one device, choose either volume or `Scan Both` from the same prompt. With
+`Scan Both`, grant access to each volume as macOS asks. After both scans, choose
+`Review import` and confirm the copy for each volume separately. Use
+`Back to Scan Results` to return to the other volume, or `Skip` to leave it
+out. The camera stays mounted until both volumes are imported or skipped.
+
+The app asks before a new scan or source change discards pending Scan Both
+results. `Keep Scan Results` returns to those results. You can use `Eject`
+from the combined results when both volumes are resolved and the device can
+be safely ejected. If a second volume mounts after the prompt closes, look for
+it in `Source`. If all volumes unmount, reconnecting the camera or inserting
+a replacement card can open a fresh prompt.
 
 Keep the App Store app installed in `Applications`. If the helper needs
 approval, allow it in macOS System Settings under Login Items & Extensions. Open
@@ -56,11 +65,11 @@ the app manually and use `Import From Card...` if automatic prompting fails.
 - Files recognized from portable history are labeled `Other Mac`. Choose
   `Import Anyway` only when you want to copy those files again.
 - If a source file changes after scanning, rescan before copying it.
-- Different files at an existing destination are not overwritten. Ordinary
-  filename conflicts get a suffix. Insta360 recording conflicts are skipped to
-  preserve filenames; select another destination before copying.
-- Automatic ejection runs only after an error-free import. Failed, cancelled,
-  and zero-copy imports do not automatically eject the source.
+- Ordinary filename conflicts get a suffix to preserve both files. An Insta360
+  recording conflict blocks copying until you choose another destination, which
+  preserves the recording's filenames.
+- Automatic ejection requires an error-free import that copied files. With
+  Scan Both, skipping the last volume leaves ejection manual.
 
 Maintain backups and verify copied files before formatting a card.
 

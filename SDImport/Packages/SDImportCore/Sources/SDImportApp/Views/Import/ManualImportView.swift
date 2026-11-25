@@ -155,7 +155,7 @@ struct ManualImportView: View {
             if let summary = entry.summary {
                 if model.needsRescan(summary.jobID) {
                     Button(L10n.tr("Rescan Source")) {
-                        model.rescanSource(startingAt: summary.mountPath)
+                        model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
                     }
                     .buttonStyle(.bordered)
                 } else {
@@ -262,7 +262,12 @@ struct ManualImportView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 10) {
-                        if model.importUIPhase == .failed {
+                        if let summary = model.currentSummary, model.needsRescan(summary.jobID) {
+                            Button(L10n.tr("Rescan Source")) {
+                                model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
+                            }
+                            .buttonStyle(.borderedProminent)
+                        } else if model.importUIPhase == .failed {
                             Button(L10n.tr("Retry")) {
                                 model.retryFailedImportOperation()
                             }
@@ -472,7 +477,7 @@ struct ImportSourceSummaryView: View {
                 .disabled(!model.canStartScan)
             }
 
-            if !model.isReviewingStoredImport, !model.isReviewingScanBothVolume,
+            if !model.isReviewingScanBothVolume,
                model.shouldOfferSelectedSourceEjection {
                 Button {
                     model.ejectSelectedSource()
@@ -494,14 +499,14 @@ struct ImportSourceSummaryView: View {
     }
 
     private var sourceTitle: String {
-        (model.isReviewingStoredImport || model.isReviewingScanBothVolume
+        (model.isReviewingScanBothVolume
             ? model.currentSummary?.volumeName : model.selectedSourceVolume?.name)
             ?? URL(fileURLWithPath: model.importSourcePath, isDirectory: true).lastPathComponent.nilIfBlank
             ?? L10n.tr("Source Folder")
     }
 
     private var sourceDetail: String {
-        if !model.isReviewingStoredImport, !model.isReviewingScanBothVolume,
+        if !model.isReviewingScanBothVolume,
            let volume = model.selectedSourceVolume {
             return volume.detailText
         }

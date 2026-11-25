@@ -146,6 +146,15 @@ struct ImportResultView: View {
 
     private var receiptButtons: some View {
         Group {
+            if let summary = model.currentSummary,
+               summary.jobID == result.jobID, model.needsRescan(summary.jobID) {
+                Button {
+                    model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
+                } label: {
+                    Label(L10n.tr("Rescan Source"), systemImage: "magnifyingglass")
+                }
+            }
+
             Button {
                 if let primaryDestinationPath {
                     model.reveal(path: primaryDestinationPath)

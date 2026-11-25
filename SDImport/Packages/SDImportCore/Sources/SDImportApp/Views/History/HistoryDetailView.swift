@@ -88,21 +88,12 @@ struct HistoryDetailView: View {
     private func actions(_ job: ImportJob) -> some View {
         HStack(spacing: 8) {
             if job.canRetryImport {
-                if model.canRetryHistoryJob(job) {
-                    Button {
-                        model.retrySelectedJob()
-                    } label: {
-                        Label(L10n.tr("Retry"), systemImage: "arrow.counterclockwise")
-                    }
-                    .disabled(model.isWorking)
-                } else {
-                    Button {
-                        model.rescanSource(startingAt: job.mountPath)
-                    } label: {
-                        Label(L10n.tr("Rescan Source"), systemImage: "magnifyingglass")
-                    }
-                    .disabled(model.isWorking)
+                Button {
+                    model.rescanSource(startingAt: job.mountPath, recoveringJobID: job.id)
+                } label: {
+                    Label(L10n.tr("Rescan Source"), systemImage: "magnifyingglass")
                 }
+                .disabled(model.isWorking || model.isEjectingSource)
             }
 
             Menu {

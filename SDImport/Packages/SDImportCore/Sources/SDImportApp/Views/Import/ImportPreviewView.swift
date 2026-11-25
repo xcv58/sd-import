@@ -23,7 +23,6 @@ struct ImportPreviewView: View {
 
     private var fileFilter: ImportPreviewFileFilter {
         if let selectedFileFilter { return selectedFileFilter }
-        if model.isReviewingStoredImport { return .all }
         return model.previewTotals.copyFiles == 0 ? .skipped : .copy
     }
 
@@ -70,17 +69,16 @@ struct ImportPreviewView: View {
                         pinnedViews: [.sectionHeaders]
                     ) {
                         ImportSourceSummaryView(
-                            allowsChange: !model.isReviewingStoredImport && !model.isReviewingScanBothVolume,
-                            allowsRescan: !model.isReviewingStoredImport && !model.isReviewingScanBothVolume,
+                            allowsChange: !model.isReviewingScanBothVolume,
+                            allowsRescan: !model.isReviewingScanBothVolume
+                                && model.currentSummary.map { !model.needsRescan($0.jobID) } == true,
                             compact: true
                         )
                         if model.isReviewingScanBothVolume, let summary = model.currentSummary {
                             ScanPortableReceiptWarning(summary: summary)
                         }
 
-                        if model.isReviewingStoredImport {
-                            storedImportPlanCard
-                        } else if model.previewTotals.copyFiles == 0 {
+                        if model.previewTotals.copyFiles == 0 {
                             zeroCopyCard
                         } else {
                             importPlanCard
@@ -157,7 +155,7 @@ struct ImportPreviewView: View {
 
             if let summary = model.currentSummary, model.needsRescan(summary.jobID) {
                 Button(L10n.tr("Rescan Source")) {
-                    model.rescanSource(startingAt: summary.mountPath)
+                    model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -170,30 +168,6 @@ struct ImportPreviewView: View {
         .background(AppSurfacePalette.contentBackground)
         .overlay(alignment: .bottom) {
             Divider()
-        }
-    }
-
-    private var storedImportPlanCard: some View {
-        AppSection(L10n.tr("Import Plan"), systemImage: "list.bullet.rectangle") {
-            if let blockingReason = model.importReadinessMessage {
-                AppStatusLabel(title: blockingReason, systemImage: "exclamationmark.triangle", role: .warning)
-            } else if model.previewTotals.copyFiles == 0 {
-                Text(L10n.tr("No files will be copied"))
-            } else {
-                reviewSummary
-            }
-            destinationTree
-            HStack {
-                Button(L10n.tr("Refresh")) {
-                    model.refreshStoredImportReview()
-                }
-                if !model.isReviewingScanBothVolume {
-                    Button(L10n.tr("Close")) {
-                        model.closeStoredImportReview()
-                    }
-                }
-            }
-            .buttonStyle(.bordered)
         }
     }
 
@@ -1159,7 +1133,7 @@ private struct ImportReviewPrimaryAction: View {
 
     private var buttonTitle: String {
         guard model.previewTotals.copyFiles > 0 else {
-            return model.isReviewingStoredImport ? L10n.tr("Done") : L10n.tr("Nothing to Import")
+            return L10n.tr("Nothing to Import")
         }
         if !purchaseManager.canStartImport {
             return L10n.tr("Start Trial or Unlock")
