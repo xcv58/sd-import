@@ -8,6 +8,7 @@ public enum SDImportError: Error, Equatable, Sendable {
     case unsupportedMediaExtension(String)
     case missingFileAttributes(URL)
     case sourceFileMissing(URL)
+    case sourceVolumeUnavailable
     case missingDestinationDirectory(Int64?)
     case destinationFilenameConflict(String)
     case reviewedDestinationChanged
@@ -36,6 +37,8 @@ extension SDImportError: LocalizedError {
             L10n.tr("Could not read file information: \(url.path)")
         case .sourceFileMissing(let url):
             L10n.tr("Source file missing: \(url.path)")
+        case .sourceVolumeUnavailable:
+            L10n.tr("Card is not mounted")
         case .missingDestinationDirectory:
             L10n.tr("The destination folder is unavailable.")
         case .destinationFilenameConflict:

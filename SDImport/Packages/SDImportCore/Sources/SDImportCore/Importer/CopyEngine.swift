@@ -2,13 +2,82 @@ import CryptoKit
 import Darwin
 import Foundation
 
+/// Keeps source opens anchored to the directory that was approved for this import.
+public final class CopySourceDirectory {
+    private let descriptor: Int32
+    private let components: [String]
+    private let root: URL
+    private let device: dev_t
+    private let inode: ino_t
+
+    public init(at url: URL) throws {
+        let descriptor = open(url.path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+        guard descriptor >= 0 else {
+            let error = errno
+            if error == ENOENT || error == ENODEV || error == ESTALE || error == ENOTDIR {
+                throw SDImportError.sourceVolumeUnavailable
+            }
+            throw SDImportError.fileSystemError(operation: "open source directory", path: url.path, code: error)
+        }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0 else {
+            let error = errno
+            close(descriptor)
+            throw SDImportError.fileSystemError(operation: "inspect source directory", path: url.path, code: error)
+        }
+        self.descriptor = descriptor
+        root = url.standardizedFileURL
+        components = url.standardizedFileURL.pathComponents
+        device = info.st_dev
+        inode = info.st_ino
+    }
+
+    deinit { close(descriptor) }
+
+    fileprivate func verify() throws {
+        var current = stat()
+        guard stat(root.path, &current) == 0, current.st_dev == device, current.st_ino == inode else {
+            throw SDImportError.sourceVolumeUnavailable
+        }
+    }
+
+    fileprivate func openFile(at url: URL) throws -> FileHandle {
+        try verify()
+        let path = url.standardizedFileURL.pathComponents
+        guard path.starts(with: components), path.count > components.count else {
+            throw SDImportError.missingFileAttributes(url)
+        }
+        let relativePath = path.dropFirst(components.count).joined(separator: "/")
+        let file = openat(descriptor, relativePath, O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW)
+        guard file >= 0 else {
+            throw SDImportError.fileSystemError(operation: "open source", path: url.path, code: errno)
+        }
+        var info = stat()
+        guard fstat(file, &info) == 0, info.st_mode & S_IFMT == S_IFREG else {
+            close(file)
+            throw SDImportError.missingFileAttributes(url)
+        }
+        guard info.st_dev == device else {
+            close(file)
+            throw SDImportError.sourceVolumeUnavailable
+        }
+        return FileHandle(fileDescriptor: file, closeOnDealloc: true)
+    }
+}
+
 public struct CopyEngine {
     private let fileManager: FileManager
     private let chunkSize: Int
+    private let sourceDirectory: CopySourceDirectory?
 
-    public init(fileManager: FileManager = .default, chunkSize: Int = 16 * 1024 * 1024) {
+    public init(
+        fileManager: FileManager = .default,
+        chunkSize: Int = 16 * 1024 * 1024,
+        sourceDirectory: CopySourceDirectory? = nil
+    ) {
         self.fileManager = fileManager
         self.chunkSize = chunkSize
+        self.sourceDirectory = sourceDirectory
     }
 
     public func copyFile(
@@ -179,6 +248,20 @@ public struct CopyEngine {
 
     static func readDigest(at url: URL, identity: ImportCopyFileIdentity? = nil) throws -> Data {
         let file = try openVerifiedCopy(at: url, identity: identity)
+        return try readDigest(from: file, at: url, identity: identity)
+    }
+
+    func readSourceDigest(at url: URL) throws -> Data {
+        guard let sourceDirectory else { return try Self.readDigest(at: url) }
+        let file = try sourceDirectory.openFile(at: url)
+        return try Self.readDigest(from: file, at: url, identity: nil)
+    }
+
+    func verifySourceDirectory() throws {
+        try sourceDirectory?.verify()
+    }
+
+    private static func readDigest(from file: FileHandle, at url: URL, identity: ImportCopyFileIdentity?) throws -> Data {
         defer { try? file.close() }
         var opened = stat()
         guard fstat(file.fileDescriptor, &opened) == 0 else { throw SDImportError.missingFileAttributes(url) }
@@ -208,12 +291,17 @@ public struct CopyEngine {
         if shouldCancel() { throw SDImportError.cancelled }
         let sourcePath = sourceURL.path
         let destinationPath = temporaryURL.path
-        let inputFD = open(sourcePath, O_RDONLY)
+        let inputFile = try sourceDirectory?.openFile(at: sourceURL)
+        let inputFD = inputFile?.fileDescriptor ?? open(sourcePath, O_RDONLY)
         guard inputFD >= 0 else {
             throw SDImportError.fileSystemError(operation: "open source", path: sourcePath, code: errno)
         }
         defer {
-            close(inputFD)
+            if let inputFile {
+                try? inputFile.close()
+            } else {
+                close(inputFD)
+            }
         }
 
         let outputFD = open(destinationPath, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)

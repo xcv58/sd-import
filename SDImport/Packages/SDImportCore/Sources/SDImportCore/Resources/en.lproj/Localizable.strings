@@ -632,3 +632,4 @@
 "Review %@" = "Review %@";
 "Rescan Source" = "Rescan Source";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan.";
+"Import stopped because %@ disconnected." = "Import stopped because %@ disconnected.";

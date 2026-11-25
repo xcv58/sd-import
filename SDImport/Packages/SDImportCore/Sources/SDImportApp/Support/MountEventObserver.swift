@@ -78,7 +78,7 @@ final class MountEventObserver {
             guard let mountURL = notification.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL else {
                 return
             }
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self?.handleUnmountURL(mountURL)
             }
         }

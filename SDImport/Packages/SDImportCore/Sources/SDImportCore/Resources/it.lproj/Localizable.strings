@@ -632,3 +632,4 @@
 "Review %@" = "Esamina %@";
 "Rescan Source" = "Scansiona di nuovo la sorgente";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "Una nuova scansione chiude questa sessione di scansione di entrambi i volumi. Dovrai scansionare di nuovo i volumi rimanenti.";
+"Import stopped because %@ disconnected." = "L’importazione si è interrotta perché %@ è stato scollegato.";

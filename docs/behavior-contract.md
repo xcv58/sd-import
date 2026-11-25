@@ -226,6 +226,7 @@ Rules:
 - Failed files retain per-file errors.
 - History offers Retry for pending or failed rows while the app can verify the original mount and the files still match the scan. Retry opens a review before copying. When that verification is unavailable, History offers Rescan Source for a fresh plan.
 - Rescan Source asks before closing a Scan Both session with pending results.
+- If a planned source volume disconnects during a copy, the app stops the operation and names the volume. Files already copied remain in History.
 
 ## Per-File Copy Status
 
@@ -282,6 +283,7 @@ Terminal progress states:
 - `Eject source device after a successful import` is an opt-in setting and defaults off.
 - Automatic ejection requires an error-free imported job and a currently mounted removable volume whose UUID matches the scanned job.
 - In Scan Both, the two volumes share a scan session. Each import has its own confirmation. Device ejection waits for both volumes to finish or be explicitly skipped.
+- Scan Both shows the Eject action on the combined results even when automatic ejection is off. The action is enabled when the session is resolved and the device passes the eject checks.
 - Non-removable volumes, disk images, UUID mismatches, cancelled imports, and imports with failures are never ejected automatically.
 - Removable cards remain eligible when macOS reports their built-in reader location as internal.
 - Ejection uses the source volume root even when the scanned source is a folder inside that volume.

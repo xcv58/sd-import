@@ -434,7 +434,9 @@ public struct ImportEngine {
 
         emit(status: totalFiles == 0 ? "idle" : "copying")
 
-        func cancelImport(currentFileID: Int64? = nil) throws -> Never {
+        func cancelImport(
+            currentFileID: Int64? = nil, reason: SDImportError = .cancelled
+        ) throws -> Never {
             if let currentFileID {
                 try jobRepository.updateFileCopyStatus(
                     id: currentFileID,
@@ -449,7 +451,7 @@ public struct ImportEngine {
                 completedAt: Date()
             )
             emit(status: "aborted")
-            throw SDImportError.cancelled
+            throw reason
         }
 
         for file in files {
@@ -458,6 +460,11 @@ public struct ImportEngine {
             }
             if shouldCancel() {
                 try cancelImport()
+            }
+            do {
+                try copyEngine.verifySourceDirectory()
+            } catch SDImportError.sourceVolumeUnavailable {
+                try cancelImport(reason: .sourceVolumeUnavailable)
             }
 
             currentFile = file
@@ -622,6 +629,8 @@ public struct ImportEngine {
                     )
                 } catch SDImportError.cancelled {
                     try cancelImport(currentFileID: fileID)
+                } catch SDImportError.sourceVolumeUnavailable {
+                    try cancelImport(currentFileID: fileID, reason: .sourceVolumeUnavailable)
                 } catch CocoaError.fileWriteFileExists where requiresReviewedDestinations {
                     try stopForDestinationChange()
                 } catch {
@@ -760,7 +769,7 @@ public struct ImportEngine {
                 }
             }
             if attempt.directCopyDigest == nil {
-                attempt.directCopyDigest = try CopyEngine.readDigest(at: source)
+                attempt.directCopyDigest = try copyEngine.readSourceDigest(at: source)
                 try jobRepository.markCopyStaged(attempt)
             }
             attempt.staged = try copyEngine.stageFile(

@@ -10,6 +10,44 @@ struct ScanBothSessionTests {
     private let internalStorage = Self.volume("Z Internal", disk: "disk4")
     private let card = Self.volume("SD Card", disk: "disk5")
 
+    @Test("an active copy stops on the first planned volume unmount")
+    func unmountOfEitherPlannedVolumeStopsCopy() {
+        var copy = ActiveCopySources(volumes: [internalStorage, card])
+        let unrelated = copy.noteUnmount(at: "/Volumes/Unrelated")
+        #expect(!unrelated)
+        #expect(copy.disconnectedVolume == nil)
+        let planned = copy.noteUnmount(at: card.mountPath)
+        #expect(planned)
+        #expect(copy.disconnectedVolume == card.name)
+        let second = copy.noteUnmount(at: internalStorage.mountPath)
+        #expect(!second)
+        #expect(copy.disconnectedVolume == card.name)
+    }
+
+    @Test("a copy refuses a replacement at the approved source path")
+    func refusesReplacementSourceDirectory() throws {
+        let manager = FileManager.default
+        let fixture = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let source = fixture.appendingPathComponent("Card", isDirectory: true)
+        try manager.createDirectory(at: source, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: fixture) }
+        let file = source.appendingPathComponent("IMG_0001.jpg")
+        try Data("old".utf8).write(to: file)
+        let copy = CopyEngine(sourceDirectory: try CopySourceDirectory(at: source))
+        let originalDestination = fixture.appendingPathComponent("original.jpg")
+        try copy.copyFile(from: file, to: originalDestination, expectedSize: 3, modificationDate: nil)
+        #expect(try Data(contentsOf: originalDestination) == Data("old".utf8))
+
+        try manager.moveItem(at: source, to: fixture.appendingPathComponent("Removed", isDirectory: true))
+        try manager.createDirectory(at: source, withIntermediateDirectories: false)
+        try Data("new".utf8).write(to: file)
+        let destination = fixture.appendingPathComponent("replacement.jpg")
+        #expect(throws: SDImportError.sourceVolumeUnavailable) {
+            try copy.copyFile(from: file, to: destination, expectedSize: 3, modificationDate: nil)
+        }
+        #expect(!manager.fileExists(atPath: destination.path))
+    }
+
     @Test("a verified sibling arriving later enables Scan Both and internal storage goes first")
     func waitsForVerifiedSibling() throws {
         let otherCard = Self.volume("Other Card", disk: "disk6", device: "other-device")

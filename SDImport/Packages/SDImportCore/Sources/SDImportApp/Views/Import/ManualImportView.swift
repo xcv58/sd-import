@@ -127,6 +127,17 @@ struct ManualImportView: View {
                         }
                     }
                 }
+                if AppDistribution.current.supportsSourceEjection {
+                    SourceEjectionControl(
+                        sourceName: session.deviceName,
+                        volumeCount: session.entries.count,
+                        isEjected: model.ejectedSourceJobID != nil,
+                        isEjecting: model.isEjectingSource,
+                        canEject: model.canEjectScanBoth
+                    ) {
+                        model.ejectScanBoth()
+                    }
+                }
                 Button(L10n.tr("Change Source")) {
                     model.sourcePathDidChange()
                 }
@@ -181,7 +192,7 @@ struct ManualImportView: View {
     }
 
     private var preparingPage: some View {
-        AppPage {
+        AppPage(status: model.importDisconnectionMessage, statusRole: .error) {
             VStack(alignment: .leading, spacing: 18) {
                 phaseHeading(L10n.tr("Preparing import"), detail: model.statusMessage)
                 AppSection(L10n.tr("Preparing"), systemImage: "gearshape.2") {
@@ -202,7 +213,7 @@ struct ManualImportView: View {
     @ViewBuilder
     private var copyingPage: some View {
         if let progress = model.importProgress {
-            AppPage {
+            AppPage(status: model.importDisconnectionMessage, statusRole: .error) {
                 VStack(alignment: .leading, spacing: 18) {
                     phaseHeading(L10n.tr("Copying files"), detail: L10n.tr("Keep the source connected until copying finishes."))
                     ImportProgressPanel(progress: progress) {
@@ -300,6 +311,9 @@ struct ManualImportView: View {
     }
 
     private var recoveryButtonTitle: String {
+        if model.isShowingScanBothResults {
+            return L10n.tr("Back to Scan Results")
+        }
         if model.currentResult != nil {
             return L10n.tr("Back to Receipt")
         }
