@@ -88,7 +88,7 @@ struct HistoryDetailView: View {
     private func actions(_ job: ImportJob) -> some View {
         HStack(spacing: 8) {
             if job.canRetryImport {
-                if model.canRetryHistoryJob(job.id) {
+                if model.canRetryHistoryJob(job) {
                     Button {
                         model.retrySelectedJob()
                     } label: {

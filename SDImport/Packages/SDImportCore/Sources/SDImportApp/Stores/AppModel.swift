@@ -63,7 +63,7 @@ struct ScanBothSession {
     var entries: [Entry]
     var removedMountPaths: Set<String> = []
     var reviewingJobID: String?
-    private(set) var confirmedDestinationPaths: Set<String> = []
+    private(set) var confirmedDestinationPaths: Set<String>? = []
 
     init?(prompt: MountedDevicePrompt) {
         let group = prompt.deviceGroup
@@ -99,18 +99,10 @@ struct ScanBothSession {
         entries[index].disposition = .imported(result)
     }
 
-    mutating func recordImportDestinations(_ roots: DestinationRoots, for jobID: String) {
+    mutating func recordImportDestinations(_ paths: Set<String>?, for jobID: String) {
         guard entry(for: jobID) != nil else { return }
-        // Keep earlier destinations even if a copy fails or its History entry is removed.
-        confirmedDestinationPaths.formUnion(
-            [roots.photosURL, roots.videosURL].map { $0.standardizedFileURL.resolvingSymlinksInPath().path }
-        )
-    }
-
-    func ejectionDestinationPaths(for job: ImportJob) -> Set<String> {
-        let paths = Set([job.photosRoot, job.videosRoot])
-        guard entry(for: job.id) != nil else { return paths }
-        return paths.union(confirmedDestinationPaths)
+        // Keep earlier destinations and unresolved paths even if a copy fails or History is removed.
+        confirmedDestinationPaths = paths.flatMap { confirmedDestinationPaths?.union($0) }
     }
 
     var allowsAutomaticEjection: Bool {
@@ -649,6 +641,7 @@ final class AppModel: ObservableObject {
     private var mountedVolumesSnapshot: [MountedVolume] = []
     private var cachedSelectedSourceEjectionTarget: SourceEjectionTarget?
     private var cachedResultSourceEjectionTargets: [String: SourceEjectionTarget] = [:]
+    private var copyEjectionDestinations: (jobID: String, paths: Set<String>?)?
     private var mountObserver: MountEventObserver?
     private var pendingMountHandoffRetryTask: Task<Void, Never>?
     private var activeImportRetryContext: ImportRetryContext?
@@ -1217,10 +1210,14 @@ final class AppModel: ObservableObject {
         guard !isWorking, !isEjectingSource else {
             return
         }
-        folderAccessFeedback = nil
-        storedImportReview = nil
         scanBothSession = nil
         singleScanMount = nil
+        clearSourceReview()
+    }
+
+    private func clearSourceReview() {
+        folderAccessFeedback = nil
+        storedImportReview = nil
         currentSummary = nil
         currentResult = nil
         importProgress = nil
@@ -1402,7 +1399,10 @@ final class AppModel: ObservableObject {
             return L10n.tr("macOS needs your permission to read this source.")
         }
         if !sourceValidation.isUsable {
-            return isReviewingStoredImport ? Self.retrySourceMessage(sourceValidation) : sourceValidation.message
+            if isReviewingStoredImport, Self.retrySourceRequiresRescan(sourceValidation) {
+                return L10n.tr("Source changed since scan; scan again")
+            }
+            return sourceValidation.message
         }
         if !requiredDestinationPathsAreUsable() {
             return L10n.tr("Choose usable destination folders")
@@ -2027,7 +2027,11 @@ final class AppModel: ObservableObject {
         guard sourceValidation.isUsable else {
             let validation = sourceValidation
             if isReviewingStoredImport {
-                showFolderAccessError { Self.retrySourceMessage(validation) }
+                if Self.retrySourceRequiresRescan(validation) {
+                    requireRescan(for: jobID)
+                } else {
+                    showFolderAccessError { validation.message }
+                }
             } else {
                 setLocalizedStatusMessage { validation.message }
             }
@@ -2223,20 +2227,30 @@ final class AppModel: ObservableObject {
         let portableImportReceiptsEnabled = self.portableImportReceiptsEnabled
         let reviewedSourcePath = currentSummary?.mountPath
         let retainedAccess: [SecurityScopedResourceAccess]
+        let destinationRoots: [String]
+        let approvedPlans: [ImportFilePlan]
         switch planMode {
-        case .reviewed(let builder, _):
+        case .reviewed(let builder, let plans):
             retainedAccess = (Array(folderAccesses.values) + [scanBothSourceAccess].compactMap { $0 }).filter(\.isActive)
-            scanBothSession?.recordImportDestinations(builder.roots, for: jobID)
-        case .storedReview(let access, _):
+            destinationRoots = [builder.roots.photosURL.path, builder.roots.videosURL.path]
+            approvedPlans = plans
+        case .storedReview(let access, let plans):
             retainedAccess = access
-            if let storedImportReview, storedImportReview.job.id == jobID {
-                scanBothSession?.recordImportDestinations(storedImportReview.roots, for: jobID)
-            }
+            destinationRoots = storedImportReview.map { [$0.job.photosRoot, $0.job.videosRoot] } ?? []
+            approvedPlans = plans
         }
 
         importTask = Task.detached(priority: .userInitiated) {
             defer { withExtendedLifetime(retainedAccess) {} }
             do {
+                if Task.isCancelled { throw SDImportError.cancelled }
+                let destinations = SourceEjectionPolicy().resolvedDestinationPaths(
+                    roots: destinationRoots, plans: approvedPlans
+                )
+                await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID, isProgress: true) == true else { return }
+                    self.rememberEjectionDestinations(destinations, for: jobID)
+                }
                 if Task.isCancelled { throw SDImportError.cancelled }
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
                 let result = try {
@@ -2317,11 +2331,15 @@ final class AppModel: ObservableObject {
                         }
                     )
                 }()
+                let finalDestinations = SourceEjectionPolicy().resolvedDestinationPaths(
+                    roots: destinationRoots, plans: approvedPlans
+                )
                 let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
                 let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
 
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
+                    self.rememberEjectionDestinations(finalDestinations, for: jobID)
                     self.currentResult = result
                     self.importProgress = nil
                     self.jobs = jobs
@@ -3650,8 +3668,12 @@ final class AppModel: ObservableObject {
         retryExistingJob(id: selectedJobID)
     }
 
-    func canRetryHistoryJob(_ jobID: String) -> Bool {
-        verifiedRetryVolume(for: jobID) != nil
+    func canRetryHistoryJob(_ job: ImportJob) -> Bool {
+        guard verifiedRetryVolume(for: job.id) != nil else { return false }
+        let validation = PathValidator().validate(
+            path: job.mountPath, purpose: .source, allowsWhitespaceFallback: false
+        )
+        return !Self.retrySourceRequiresRescan(validation)
     }
 
     func needsRescan(_ jobID: String) -> Bool {
@@ -3825,7 +3847,7 @@ final class AppModel: ObservableObject {
             return
         }
         selection = .history
-        sourcePathDidChange()
+        clearSourceReview()
         if let selectedJobID {
             loadJobDetail(jobID: selectedJobID)
         }
@@ -4196,7 +4218,8 @@ final class AppModel: ObservableObject {
     private var scanBothManualEjectionTarget: SourceEjectionTarget? {
         guard AppDistribution.current.supportsSourceEjection, isShowingScanBothResults,
               !isWorking, !isEjectingSource, ejectedSourceJobID == nil,
-              let session = scanBothSession, session.allowsAutomaticEjection else { return nil }
+              let session = scanBothSession, session.allowsAutomaticEjection,
+              let destinations = session.confirmedDestinationPaths else { return nil }
         let policy = SourceEjectionPolicy()
         let liveVolumes = session.entries.compactMap { entry in
             mountedVolumesSnapshot.first {
@@ -4206,7 +4229,7 @@ final class AppModel: ObservableObject {
         guard liveVolumes.count == session.entries.count, let source = liveVolumes.first,
               let target = sourceEjectionTarget(
                 sourceVolume: source,
-                destinationPaths: Array(session.confirmedDestinationPaths),
+                destinationPaths: destinations,
                 mountedVolumes: mountedVolumesSnapshot
               ),
               Set(liveVolumes.map(\.mountPath)).isSubset(of: Set(target.volumes.map(\.mountPath)))
@@ -4870,8 +4893,8 @@ final class AppModel: ObservableObject {
             let validation = validator.validate(
                 path: request.path, purpose: purpose, allowsWhitespaceFallback: purpose == .destination
             )
-            if purpose == .source, !validation.isUsable, validation.status != .unreadable {
-                showFolderAccessError { Self.retrySourceMessage(validation) }
+            if purpose == .source, Self.retrySourceRequiresRescan(validation) {
+                requireRescan(for: job.id)
                 return nil
             }
             if AppDistribution.current == .direct,
@@ -4908,18 +4931,19 @@ final class AppModel: ObservableObject {
             )
             let usable = purpose == .source ? refreshed.isUsable : refreshed.status != .unwritable
             guard usable else {
-                showFolderAccessError { purpose == .source ? Self.retrySourceMessage(refreshed) : refreshed.message }
+                if purpose == .source, Self.retrySourceRequiresRescan(refreshed) {
+                    requireRescan(for: job.id)
+                } else {
+                    showFolderAccessError { refreshed.message }
+                }
                 return nil
             }
         }
         return retainedAccess
     }
 
-    private static func retrySourceMessage(_ validation: PathValidationResult) -> String {
-        if validation.status == .missing {
-            return L10n.tr("Reconnect the original card or restore its source folder, then retry.")
-        }
-        return validation.message
+    nonisolated static func retrySourceRequiresRescan(_ validation: PathValidationResult) -> Bool {
+        !validation.isUsable && validation.status != .unreadable
     }
 
     private func hasActiveFolderAccess(
@@ -5211,6 +5235,16 @@ final class AppModel: ObservableObject {
         return detector.isLikelyImportVolume(volume) ? volume : nil
     }
 
+    private func rememberEjectionDestinations(_ paths: Set<String>?, for jobID: String) {
+        if scanBothSession?.entry(for: jobID) != nil {
+            scanBothSession?.recordImportDestinations(paths, for: jobID)
+        } else if let prior = copyEjectionDestinations, prior.jobID == jobID {
+            copyEjectionDestinations = (jobID, paths.flatMap { prior.paths?.union($0) })
+        } else {
+            copyEjectionDestinations = (jobID, paths)
+        }
+    }
+
     private func rebuildSourceEjectionTargetCache() {
         cachedSelectedSourceEjectionTarget = selectedMountedSourceVolume.flatMap {
             sourceEjectionTarget(
@@ -5244,17 +5278,24 @@ final class AppModel: ObservableObject {
         else {
             return nil
         }
+        let paths: Set<String>?
+        if let session = scanBothSession, session.entry(for: job.id) != nil {
+            paths = session.confirmedDestinationPaths
+        } else {
+            guard copyEjectionDestinations?.jobID == job.id else { return nil }
+            paths = copyEjectionDestinations?.paths
+        }
+        guard let paths else { return nil }
         return sourceEjectionTarget(
             sourceVolume: volume,
-            destinationPaths: scanBothSession.map { Array($0.ejectionDestinationPaths(for: job)) }
-                ?? [job.photosRoot, job.videosRoot],
+            destinationPaths: paths,
             mountedVolumes: mountedVolumes
         )
     }
 
     private func sourceEjectionTarget(
         sourceVolume: MountedVolume,
-        destinationPaths: [String],
+        destinationPaths: Set<String>,
         mountedVolumes: [MountedVolume]
     ) -> SourceEjectionTarget? {
         let grouper = MountedDeviceGrouper()

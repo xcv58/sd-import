@@ -265,17 +265,31 @@ struct ScanBothSessionTests {
                 nil
             )
         }
-        session.recordImportDestinations(
-            DestinationRoots(photosURL: cameraDestination, videosURL: macDestination),
-            for: internalStorage.name
-        )
-        let finalJob = ImportJob(
-            id: card.name, createdAt: Date(), mountPath: card.mountPath, location: "Camera",
-            photosRoot: macDestination.path, videosRoot: macDestination.path, status: .imported
-        )
-        let paths = session.ejectionDestinationPaths(for: finalJob)
+        session.recordImportDestinations([cameraDestination.path], for: internalStorage.name)
+        session.recordImportDestinations([macDestination.path], for: card.name)
+        let paths = try #require(session.confirmedDestinationPaths)
         #expect(paths == Set([macDestination.path, cameraDestination.path]))
         #expect(paths.contains { AppModel.destination($0, sharesDeviceWith: both) })
+
+        session.recordImportDestinations(nil, for: internalStorage.name)
+        session.recordImportDestinations([macDestination.path], for: card.name)
+        #expect(session.confirmedDestinationPaths == nil)
+    }
+
+    @Test("retry requires a rescan if the original folder is gone")
+    func requiresRescanForMissingRetrySource() throws {
+        let manager = FileManager.default
+        let volume = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let source = volume.appendingPathComponent("DCIM", isDirectory: true)
+        try manager.createDirectory(at: source, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: volume) }
+        let validator = PathValidator()
+        #expect(!AppModel.retrySourceRequiresRescan(validator.validate(path: source.path, purpose: .source)))
+
+        try manager.moveItem(at: source, to: volume.appendingPathComponent("Moved"))
+        #expect(AppModel.retrySourceRequiresRescan(validator.validate(path: source.path, purpose: .source)))
+        try Data().write(to: source)
+        #expect(AppModel.retrySourceRequiresRescan(validator.validate(path: source.path, purpose: .source)))
     }
 
     @Test("retry rejects pending source files that changed after the scan")

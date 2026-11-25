@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public struct SourceEjectionPolicy: Sendable {
@@ -32,6 +33,38 @@ public struct SourceEjectionPolicy: Sendable {
         if let device = expected.deviceGroupIdentifier, current.deviceGroupIdentifier != device { return false }
         if let disk = expected.wholeDiskIdentifier, current.wholeDiskIdentifier != disk { return false }
         return true
+    }
+
+    public func resolvedDestinationPaths(roots: [String], plans: [ImportFilePlan]) -> Set<String>? {
+        let directories = Set(plans.compactMap { plan -> String? in
+            guard plan.willCopy || plan.disposition == .copied,
+                  let path = plan.destinationPath else { return nil }
+            return (path as NSString).deletingLastPathComponent
+        })
+        // Keep the configured roots for the existing same-device check.
+        var paths = Set(roots.filter { !$0.isEmpty })
+        for directory in directories {
+            if Task.isCancelled { return nil }
+            guard let resolved = resolvedExistingDirectory(directory),
+                  let volume = try? resolved.resourceValues(forKeys: [.volumeURLKey]).volume else { return nil }
+            paths.insert(volume.standardizedFileURL.path)
+        }
+        return paths
+    }
+
+    func resolvedExistingDirectory(_ directory: String) -> URL? {
+        var candidate = directory
+        var metadata = stat()
+        // The copy can create some directories. Walk only through missing components.
+        // lstat identifies an existing symlink even when its target is missing.
+        while lstat(candidate, &metadata) != 0 {
+            guard errno == ENOENT, candidate.hasPrefix("/"), candidate != "/" else { return nil }
+            candidate = (candidate as NSString).deletingLastPathComponent
+        }
+        guard let resolved = realpath(candidate, nil) else { return nil }
+        defer { free(resolved) }
+        guard stat(resolved, &metadata) == 0, metadata.st_mode & S_IFMT == S_IFDIR else { return nil }
+        return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
     }
 
     private func canEject(
