@@ -86,6 +86,103 @@ struct ScanBothSessionTests {
         }
     }
 
+    @Test("both scan jobs retain their own preview and only the selected job copies")
+    func scansRealFilesAndKeepsCopySeparate() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("sdimport-scan-both-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? fileManager.removeItem(at: directory) }
+
+        let internalStorage = Self.volume("Z Internal", disk: "disk4")
+        let card = Self.volume("SD Card", disk: "disk5")
+        let sourceFolders = [
+            internalStorage.name: directory.appendingPathComponent("Internal", isDirectory: true),
+            card.name: directory.appendingPathComponent("SD Card", isDirectory: true)
+        ]
+        let internalNames = (1...6).map { "Internal-\($0).jpg" }
+        let cardNames = ["Card-1.jpg", "Card-2.jpg"]
+        for (volume, names) in [(internalStorage, internalNames), (card, cardNames)] {
+            let source = try #require(sourceFolders[volume.name])
+            let dcim = source.appendingPathComponent("DCIM", isDirectory: true)
+            try fileManager.createDirectory(at: dcim, withIntermediateDirectories: true)
+            for name in names {
+                try Data(name.utf8).write(to: dcim.appendingPathComponent(name))
+            }
+        }
+
+        let roots = DestinationRoots(
+            photosURL: directory.appendingPathComponent("photos", isDirectory: true),
+            videosURL: directory.appendingPathComponent("videos", isDirectory: true)
+        )
+        for destination in [roots.photosURL, roots.videosURL] {
+            try fileManager.createDirectory(at: destination, withIntermediateDirectories: false)
+        }
+        let pool = try DatabasePoolFactory(databaseURL: directory.appendingPathComponent("state.sqlite"))
+            .makeMigratedPool()
+        let repository = JobRepository(pool: pool)
+        let dedupe = DedupeRepository(pool: pool)
+        let scanner = MediaScanner(jobRepository: repository, dedupeRepository: dedupe)
+
+        var coordinator = MountedDevicePromptCoordinator()
+        _ = coordinator.receive(card, among: [card, internalStorage], canPresent: true)
+        let prompt = try #require(coordinator.pendingPrompt)
+        var review = try #require(ScanBothSession(prompt: prompt))
+        let session = review
+        var scannedVolumes: [String] = []
+        await session.scan { index, state in
+            review.entries[index].state = state
+        } volume: { volume in
+            scannedVolumes.append(volume.name)
+            let source = try #require(sourceFolders[volume.name])
+            let summary = try scanner.scan(ScanRequest(
+                mountURL: source,
+                volumeName: volume.name,
+                volumeUUID: volume.volumeUUID,
+                location: "Camera",
+                roots: roots
+            ))
+            let preview = try repository.previewFilenames(jobID: summary.jobID, limit: 5)
+            return .complete(summary, preview, nil)
+        }
+
+        #expect(scannedVolumes == [internalStorage.name, card.name])
+        let jobs = try repository.listJobs()
+        #expect(jobs.count == 2)
+        #expect(jobs.allSatisfy { $0.status == .scanned })
+        #expect(try repository.listImportHistoryJobs().isEmpty)
+        for destination in [roots.photosURL, roots.videosURL] {
+            #expect(try fileManager.contentsOfDirectory(atPath: destination.path).isEmpty)
+        }
+
+        for (volume, expectedNames) in [(internalStorage, internalNames), (card, cardNames)] {
+            let job = try #require(jobs.first { $0.volumeUUID == volume.volumeUUID })
+            review.reviewingJobID = job.id
+            let entry = try #require(review.reviewingEntry)
+            #expect(entry.volume == volume)
+            guard case .complete(let summary, let preview, _) = entry.state else {
+                Issue.record("Missing scan result for \(volume.name)")
+                return
+            }
+            #expect(summary.jobID == job.id)
+            #expect(summary.scannedFiles == expectedNames.count)
+            #expect(summary.mountPath == sourceFolders[volume.name]?.path)
+            let files = try repository.fetchJobFiles(jobID: job.id)
+            #expect(Set(files.map(\.filename)) == Set(expectedNames))
+            #expect(preview == Array(files.prefix(5).map(\.filename)))
+            #expect(files.allSatisfy { $0.copyStatus == .pending })
+        }
+
+        let firstJob = try #require(jobs.first { $0.volumeUUID == internalStorage.volumeUUID })
+        let siblingJob = try #require(jobs.first { $0.volumeUUID == card.volumeUUID })
+        let engine = ImportEngine(jobRepository: repository, dedupeRepository: dedupe)
+        let result = try engine.importFiles(jobID: firstJob.id)
+        #expect(result.importedFiles == internalNames.count)
+        #expect(try repository.listImportHistoryJobs().map(\.id) == [firstJob.id])
+        #expect(try repository.fetchJob(id: siblingJob.id)?.status == .scanned)
+        #expect(try repository.fetchJobFiles(jobID: siblingJob.id).allSatisfy { $0.copyStatus == .pending })
+    }
+
     private static func volume(_ name: String, disk: String, device: String = "camera") -> MountedVolume {
         MountedVolume(
             id: name, name: name, mountURL: URL(fileURLWithPath: "/Volumes/\(name)"),

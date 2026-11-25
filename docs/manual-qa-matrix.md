@@ -76,6 +76,32 @@ committing any excerpt.
 | Auto-prompt installation authority | Test copies in `/Applications`, `~/Applications`, Downloads, and a mounted DMG, including a renamed installed copy | `/Applications/SD Import.app` wins deterministically, then another matching app in `/Applications`, then `~/Applications`; an uninstalled-only copy says `Install required` | Required before releasing background-prompt changes |
 | Auto-prompt causal errors | Queue an older successful handoff, then force a newer helper launch or mailbox failure before the old event is acknowledged | The newer error remains visible until a later event succeeds; the older acknowledgement does not erase it | Required before releasing background-prompt changes |
 
+## Scan Both
+
+Use an internal TestFlight build and an Insta360 Luna Ultra or DJI Pocket 4
+in USB file-transfer mode. Use a camera with media on both storage volumes.
+Record the build number and per-volume counts.
+
+1. Confirm the two volumes appear in one prompt with individual choices and
+   **Scan Both**. If the mounts are staggered, confirm the second volume joins
+   the open prompt.
+2. Select **Scan Both** and grant folder access when macOS asks. Confirm
+   internal storage finishes scanning before the SD card starts scanning.
+3. Confirm the review shows each volume's label, sample filenames, and file
+   count. Open each volume's **Review import** and return with **Back to Scan
+   Results**. Check that the file list and copy action are scoped to the
+   selected volume. Leave the copy action unselected during the scan check.
+4. Repeat and decline access to one volume when asked. Confirm the skipped
+   volume shows its reason and the sibling's scan result remains available.
+   If the device can unmount one volume separately, repeat by safely
+   unmounting that volume before its scan starts.
+5. Reconnect and choose one volume directly. Confirm the app opens that volume's
+   import review.
+
+The native fixture tests cover staggered delivery, skipped sources, separate
+scan jobs and previews, and copying only the selected job. Hardware verification
+of the TestFlight workflow is pending.
+
 ## Disclosure headers
 
 Use a folder fixture with photos from two dates and two distinct Insta360
