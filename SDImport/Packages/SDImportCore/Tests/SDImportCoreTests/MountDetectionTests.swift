@@ -91,6 +91,26 @@ struct MountDetectionTests {
         #expect(detector.isLikelyImportVolume(backup) == false)
         #expect(detector.isLikelyImportVolume(recovery) == false)
         #expect(detector.isLikelyImportVolume(nonRemovableVolumePath) == false)
+
+        #expect(!detector.isRemovableSourceVolume(diskImage))
+        #expect(!detector.isRemovableSourceVolume(namedDiskImage))
+        #expect(!detector.isRemovableSourceVolume(nonRemovableVolumePath))
+    }
+
+    @Test("a manually selected card can be tracked even if its name suppresses automatic detection")
+    func tracksExplicitlySelectedCardNamedBackup() {
+        let detector = VolumeDetector()
+        let volume = MountedVolume(
+            id: "camera-backup",
+            name: "Camera Backup",
+            mountURL: URL(fileURLWithPath: "/Volumes/Camera Backup", isDirectory: true),
+            volumeUUID: "camera-backup",
+            isRemovable: true,
+            wholeDiskIdentifier: "disk4"
+        )
+
+        #expect(!detector.isLikelyImportVolume(volume))
+        #expect(detector.isRemovableSourceVolume(volume))
     }
 
     @Test("volume detector sorts likely import volumes and removes ignored volumes")

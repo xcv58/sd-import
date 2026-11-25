@@ -10,6 +10,13 @@ public struct VolumeDetector: Sendable {
         self.ignoredNameFragments = ignoredNameFragments.map { $0.lowercased() }
     }
 
+    public func removableSourceVolume(containing sourceURL: URL) -> MountedVolume? {
+        guard let root = try? sourceURL.resourceValues(forKeys: [.volumeURLKey]).volume,
+              let volume = currentMountedVolume(from: root, includeCapacity: false),
+              isRemovableSourceVolume(volume) else { return nil }
+        return volume
+    }
+
     public func currentMountedVolume(from mountURL: URL, includeCapacity: Bool = true) -> MountedVolume? {
         let freshURL = URL(fileURLWithPath: mountURL.path, isDirectory: true).standardizedFileURL
         guard let root = (try? freshURL.resourceValues(forKeys: [.volumeURLKey]))?.volume,
@@ -131,10 +138,11 @@ public struct VolumeDetector: Sendable {
         guard !ignoredNameFragments.contains(where: lowercasedName.contains) else {
             return false
         }
-        guard !isDiskImage(volume) else {
-            return false
-        }
-        return volume.isRemovable && volume.mountURL.path.hasPrefix("/Volumes/")
+        return isRemovableSourceVolume(volume)
+    }
+
+    func isRemovableSourceVolume(_ volume: MountedVolume) -> Bool {
+        volume.isRemovable && volume.mountURL.path.hasPrefix("/Volumes/") && !isDiskImage(volume)
     }
 
     public func containsImportableMedia(

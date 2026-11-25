@@ -1555,9 +1555,10 @@ final class AppModel: ObservableObject {
         statusMessage = L10n.tr("Scanning...")
         importLogger.info("Scan started")
 
-        let sourceVolume = Self.mountedSourceVolume(containing: cardPath)
+        let sourceURL = URL(fileURLWithPath: cardPath, isDirectory: true)
+        let sourceVolume = VolumeDetector().removableSourceVolume(containing: sourceURL)
         let request = scanRequest(
-            mountURL: URL(fileURLWithPath: cardPath, isDirectory: true),
+            mountURL: sourceURL,
             sourceVolume: sourceVolume
         )
         singleScanMount = sourceVolume.map { (jobID: request.jobID, volume: $0) }
@@ -5347,20 +5348,6 @@ final class AppModel: ObservableObject {
             }
             return L10n.tr("Importing \(progress.doneFiles) of \(progress.totalFiles) files")
         }
-    }
-
-    nonisolated private static func mountedSourceVolume(containing sourcePath: String) -> MountedVolume? {
-        let sourceURL = URL(fileURLWithPath: sourcePath, isDirectory: true)
-        guard
-            let values = try? sourceURL.resourceValues(forKeys: [.volumeURLKey]),
-            let volumeURL = values.volume
-        else {
-            return nil
-        }
-
-        let detector = VolumeDetector()
-        let volume = detector.mountedVolume(from: volumeURL)
-        return detector.isLikelyImportVolume(volume) ? volume : nil
     }
 
     private func rememberEjectionDestinations(_ paths: Set<String>?, for jobID: String) {

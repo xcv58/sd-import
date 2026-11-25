@@ -227,6 +227,7 @@ Rules:
 - History offers Retry for pending or failed rows while the original mount can be verified and the scanned folder is present. Retry verifies the files against the scan and opens a review before copying. Closing that review or cancelling its verification preserves the verified mount. When the mount, folder, or files can no longer be verified, History offers Rescan Source for a fresh plan.
 - Starting a new scan or changing the source asks before closing a Scan Both session with pending results. The previous results remain available if the user cancels, the new source cannot be opened, or every new volume fails to scan.
 - If a planned source volume disconnects during a copy, the app stops the operation and names the volume. Files already copied remain in History.
+- For a manually selected card or folder, disconnect protection uses the mounted volume backing the selected path. Automatic prompt name filters apply only to discovery.
 
 ## Per-File Copy Status
 
