@@ -96,6 +96,16 @@ public struct JobRepository {
         }
     }
 
+    public func previewFilenames(jobID: String, limit: Int) throws -> [String] {
+        try pool.read { db in
+            try String.fetchAll(
+                db,
+                sql: "SELECT filename FROM job_files WHERE job_id = ? ORDER BY id LIMIT ?",
+                arguments: [jobID, max(0, limit)]
+            )
+        }
+    }
+
     public func fetchJobFiles(jobID: String) throws -> [JobFileRecord] {
         try pool.read { db in
             let rows = try Row.fetchAll(

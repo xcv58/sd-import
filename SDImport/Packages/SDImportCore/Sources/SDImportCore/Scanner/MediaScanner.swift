@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ScanRequest {
+public struct ScanRequest: Sendable {
     public let mountURL: URL
     public let volumeName: String?
     public let volumeUUID: String?

@@ -622,3 +622,11 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "Versuche es erneut. Wenn du deine Testphase bereits aktiviert oder dauerhaften Zugriff gekauft hast, wähle „Käufe wiederherstellen“.";
 "The import plan changed. Review it before copying." = "Der Importplan hat sich geändert. Prüfen Sie ihn vor dem Kopieren.";
 "Reconnect the original card or restore its source folder, then retry." = "Schließe die ursprüngliche Karte wieder an oder stelle ihren Quellordner wieder her und versuche es erneut.";
+"Scan Both" = "Beide scannen";
+"Choose one or both storage volumes to scan." = "Wähle einen oder beide Datenträger zum Scannen aus.";
+"Access declined" = "Zugriff verweigert";
+"Review scan results" = "Scanergebnisse prüfen";
+"Back to Scan Results" = "Zurück zu den Scanergebnissen";
+"Waiting to scan" = "Wartet auf Scan";
+"%lld files scanned" = "%lld Dateien gescannt";
+"Review %@" = "%@ prüfen";

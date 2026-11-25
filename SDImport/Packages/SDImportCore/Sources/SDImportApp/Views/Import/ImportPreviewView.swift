@@ -70,8 +70,8 @@ struct ImportPreviewView: View {
                         pinnedViews: [.sectionHeaders]
                     ) {
                         ImportSourceSummaryView(
-                            allowsChange: !model.isReviewingStoredImport,
-                            allowsRescan: !model.isReviewingStoredImport,
+                            allowsChange: !model.isReviewingStoredImport && !model.isReviewingScanBothVolume,
+                            allowsRescan: !model.isReviewingStoredImport && !model.isReviewingScanBothVolume,
                             compact: true
                         )
 
@@ -145,6 +145,13 @@ struct ImportPreviewView: View {
 
             Spacer(minLength: 12)
 
+            if model.isReviewingScanBothVolume {
+                Button(L10n.tr("Back to Scan Results")) {
+                    model.returnToScanBothResults()
+                }
+                .buttonStyle(.bordered)
+            }
+
             ImportReviewPrimaryAction()
                 .environmentObject(model)
         }
@@ -170,8 +177,10 @@ struct ImportPreviewView: View {
                 Button(L10n.tr("Refresh")) {
                     model.refreshStoredImportReview()
                 }
-                Button(L10n.tr("Close")) {
-                    model.closeStoredImportReview()
+                if !model.isReviewingScanBothVolume {
+                    Button(L10n.tr("Close")) {
+                        model.closeStoredImportReview()
+                    }
                 }
             }
             .buttonStyle(.bordered)

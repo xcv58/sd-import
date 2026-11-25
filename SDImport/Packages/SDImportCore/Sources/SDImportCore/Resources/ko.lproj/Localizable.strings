@@ -622,3 +622,11 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "다시 시도해 주세요. 이미 체험을 활성화했거나 평생 이용권을 구매했다면 구입 항목 복원을 선택하세요.";
 "The import plan changed. Review it before copying." = "가져오기 계획이 변경되었습니다. 복사하기 전에 확인하세요.";
 "Reconnect the original card or restore its source folder, then retry." = "원래 카드를 다시 연결하거나 소스 폴더를 복원한 후 다시 시도하세요.";
+"Scan Both" = "둘 다 스캔";
+"Choose one or both storage volumes to scan." = "스캔할 저장 볼륨을 하나 또는 둘 다 선택하세요.";
+"Access declined" = "접근이 거부됨";
+"Review scan results" = "스캔 결과 검토";
+"Back to Scan Results" = "스캔 결과로 돌아가기";
+"Waiting to scan" = "스캔 대기 중";
+"%lld files scanned" = "파일 %lld개 스캔 완료";
+"Review %@" = "%@ 검토";
