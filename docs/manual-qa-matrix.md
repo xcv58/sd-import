@@ -98,9 +98,18 @@ Record the build number and per-volume counts.
 5. Reconnect and choose one volume directly. Confirm the app opens that volume's
    import review.
 
-The native fixture tests cover staggered delivery, skipped sources, separate
-scan jobs and previews, and copying only the selected job. Hardware verification
-of the TestFlight workflow is pending.
+On November 25, 2026, internal TestFlight 1.2 (40) passed on an Insta360 Luna
+Ultra with two exFAT volumes on macOS 27.3. The SD Card joined the open
+Internal prompt after a staggered remount. The combined review showed 14
+files on Internal and 52 on SD Card, with a separate import review for each.
+The scan jobs recorded Internal first. Declining access to Internal kept the
+SD Card result. Unmounting the SD Card before its scan kept the Internal
+result and reported the SD Card as unmounted. After restoring both mounts,
+choosing SD Card by itself opened its individual review. The camera scans
+recorded zero imported files.
+
+The native fixture tests also verify that importing one scan job leaves the
+other pending.
 
 ## Disclosure headers
 
