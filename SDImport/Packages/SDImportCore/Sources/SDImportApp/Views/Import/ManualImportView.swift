@@ -95,7 +95,7 @@ struct ManualImportView: View {
                 phaseHeading(L10n.tr("Review scan results"), detail: session.deviceName)
                 ForEach(session.entries) { entry in
                     AppSection(entry.volume.name, systemImage: "externaldrive") {
-                        if case .complete(_, let filenames, _) = entry.state {
+                        if case .complete(let summary, let filenames, _) = entry.state {
                             HStack(alignment: .firstTextBaseline, spacing: 16) {
                                 scanBothStatus(entry.state)
                                 Spacer()
@@ -105,6 +105,16 @@ struct ManualImportView: View {
                                 .buttonStyle(.bordered)
                                 .accessibilityLabel(L10n.tr("Review \(entry.volume.name)"))
                                 .accessibilityIdentifier("import.scan-both.review.\(entry.volume.mountPath)")
+                            }
+                            let scannedPath = URL(fileURLWithPath: summary.mountPath, isDirectory: true)
+                                .standardizedFileURL.path
+                            if scannedPath != entry.volume.mountPath {
+                                Text(verbatim: scannedPath)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .help(scannedPath)
                             }
                             ForEach(filenames.indices, id: \.self) { index in
                                 Text(verbatim: filenames[index])
