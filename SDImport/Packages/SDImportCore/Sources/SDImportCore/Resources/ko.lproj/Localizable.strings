@@ -633,3 +633,6 @@
 "Rescan Source" = "소스 다시 스캔";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "새 스캔을 시작하면 현재의 두 볼륨 스캔 세션이 종료됩니다. 남은 볼륨은 다시 스캔해야 합니다.";
 "Import stopped because %@ disconnected." = "%@의 연결이 끊어져 가져오기가 중지되었습니다.";
+"Discard pending scan results?" = "대기 중인 스캔 결과를 삭제할까요?";
+"Keep Scan Results" = "스캔 결과 유지";
+"Start New Scan" = "새 스캔 시작";

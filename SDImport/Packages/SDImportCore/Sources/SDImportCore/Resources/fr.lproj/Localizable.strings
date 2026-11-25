@@ -633,3 +633,6 @@
 "Rescan Source" = "Réanalyser la source";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "Une nouvelle analyse met fin à cette session d’analyse des deux volumes. Vous devrez analyser à nouveau les volumes restants.";
 "Import stopped because %@ disconnected." = "L’importation s’est arrêtée à la suite de la déconnexion de %@.";
+"Discard pending scan results?" = "Abandonner les résultats de l’analyse en attente ?";
+"Keep Scan Results" = "Conserver les résultats";
+"Start New Scan" = "Lancer une nouvelle analyse";

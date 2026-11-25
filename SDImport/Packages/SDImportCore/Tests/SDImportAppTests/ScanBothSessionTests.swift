@@ -306,6 +306,27 @@ struct ScanBothSessionTests {
         #expect(skippedBeforeCopy.allowsAutomaticEjection)
     }
 
+    @Test("replacing a Scan Both review needs confirmation while the sibling is still pending")
+    func pendingResultsRequireConfirmation() throws {
+        var session = try scannedSession()
+        session.recordImport(ImportResult(
+            jobID: internalStorage.name, importedFiles: 1, skippedFiles: 0, failedFiles: 0, progressPath: nil
+        ))
+        #expect(session.hasPendingResults)
+        let siblingID = session.entries[1].id
+        session.skipEntry(siblingID)
+        #expect(!session.hasPendingResults)
+    }
+
+    @Test("a replacement Scan Both attempt needs at least one completed scan")
+    func replacementNeedsCompletedScan() throws {
+        var session = try scannedSession()
+        session.entries[0].state = .skipped(.accessDeclined)
+        #expect(session.issueIfNoVolumeScanned == nil)
+        session.entries[1].state = .skipped(.removed)
+        #expect(session.issueIfNoVolumeScanned != nil)
+    }
+
     @Test("retry requires a rescan if the original folder is gone")
     func requiresRescanForMissingRetrySource() throws {
         let manager = FileManager.default

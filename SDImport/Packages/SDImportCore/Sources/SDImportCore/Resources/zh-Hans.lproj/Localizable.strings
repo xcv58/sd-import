@@ -633,3 +633,6 @@
 "Rescan Source" = "重新扫描来源";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "开始新的扫描会结束本次双卷扫描。剩余的存储卷需要重新扫描。";
 "Import stopped because %@ disconnected." = "%@ 已断开连接，导入已停止。";
+"Discard pending scan results?" = "要丢弃尚未导入的扫描结果吗？";
+"Keep Scan Results" = "保留扫描结果";
+"Start New Scan" = "开始新的扫描";

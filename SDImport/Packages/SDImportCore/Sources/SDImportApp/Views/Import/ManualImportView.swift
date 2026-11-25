@@ -34,9 +34,6 @@ struct ManualImportView: View {
             model.refreshAvailableSourceVolumes()
             model.validatePaths()
         }
-        .onChange(of: model.cardPath) {
-            model.sourcePathDidChange()
-        }
         .onChange(of: model.photosPath) {
             model.destinationPathDidChange()
         }
@@ -137,7 +134,7 @@ struct ManualImportView: View {
                     }
                 }
                 Button(L10n.tr("Change Source")) {
-                    model.sourcePathDidChange()
+                    model.changeScanBothSource()
                 }
                 .buttonStyle(.bordered)
             }
@@ -670,7 +667,13 @@ private struct SourceField: View {
     }
 
     private var sourcePathField: some View {
-        TextField(L10n.tr("Card or source path"), text: $model.cardPath)
+        TextField(L10n.tr("Card or source path"), text: Binding(
+            get: { model.cardPath },
+            set: {
+                model.cardPath = $0
+                model.sourcePathDidChange()
+            }
+        ))
             .textFieldStyle(.roundedBorder)
             .lineLimit(1)
             .frame(minWidth: 180, maxWidth: 420)

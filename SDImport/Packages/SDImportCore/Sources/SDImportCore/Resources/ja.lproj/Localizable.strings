@@ -633,3 +633,6 @@
 "Rescan Source" = "ソースを再スキャン";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "新しいスキャンを開始すると、両方をスキャンする現在のセッションが終了します。残りのボリュームは再スキャンが必要です。";
 "Import stopped because %@ disconnected." = "%@ が接続解除されたため、読み込みを停止しました。";
+"Discard pending scan results?" = "保留中のスキャン結果を破棄しますか？";
+"Keep Scan Results" = "スキャン結果を保持";
+"Start New Scan" = "新しいスキャンを開始";

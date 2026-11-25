@@ -105,6 +105,24 @@ struct ScanBothSession {
         entries.first { $0.jobID == jobID }
     }
 
+    var hasPendingResults: Bool {
+        entries.contains(where: \.awaitsImport)
+    }
+
+    var issueIfNoVolumeScanned: ScanBothIssue? {
+        guard entries.allSatisfy({ $0.summary == nil }) else { return nil }
+        for entry in entries {
+            if case .skipped(let issue) = entry.state { return issue }
+        }
+        return nil
+    }
+
+    mutating func noteUnmount(at path: String) -> String? {
+        guard let entry = entries.first(where: { $0.volume.mountPath == path }) else { return nil }
+        removedMountPaths.insert(path)
+        return entry.jobID
+    }
+
     mutating func recordImportStarted(for jobID: String) {
         guard let index = entries.firstIndex(where: { $0.jobID == jobID }) else { return }
         entries[index].hasStartedImport = true
@@ -495,6 +513,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var previewSpaceRequirements: [ImportPreviewSpaceRequirement] = []
     @Published var currentSummary: ScanSummary?
     @Published private(set) var scanBothSession: ScanBothSession?
+    private var previousScanBothSession: ScanBothSession?
     @Published var currentResult: ImportResult? {
         didSet {
             rebuildSourceEjectionTargetCache()
@@ -969,22 +988,18 @@ final class AppModel: ObservableObject {
     }
 
     func chooseCardFolder() {
-        chooseCardFolder(startingAt: cardPath)
+        guard let url = pickCardFolder(startingAt: cardPath) else { return }
+        selectSourcePath(url.path)
     }
 
-    @discardableResult
-    private func chooseCardFolder(startingAt path: String) -> Bool {
+    private func pickCardFolder(startingAt path: String) -> URL? {
         guard let url = FilePanelPresenter.chooseDirectoryURL(
             title: L10n.tr("Choose SD Card or Source Folder"),
             initialPath: path
         ), retainSelectedFolderAccess(.source, url: url, persistBookmark: true) else {
-            return false
+            return nil
         }
-        unhideRecentPath(url.path)
-        cardPath = url.path
-        sourcePathDidChange()
-        savePreferences()
-        return true
+        return url
     }
 
     func chooseOnboardingCardFolder() {
@@ -1084,9 +1099,7 @@ final class AppModel: ObservableObject {
         let unmountedPath = unmountedURL?.standardizedFileURL.path
         if let unmountedPath {
             volumes.removeAll { $0.mountURL.standardizedFileURL.path == unmountedPath }
-            if scanBothSession?.entries.contains(where: { $0.volume.mountPath == unmountedPath }) == true {
-                scanBothSession?.removedMountPaths.insert(unmountedPath)
-            }
+            noteScanBothUnmount(at: unmountedPath)
         }
         // Workspace notifications can arrive ahead of /Volumes enumeration.
         if let mountedVolume, !volumes.contains(where: {
@@ -1242,6 +1255,32 @@ final class AppModel: ObservableObject {
         scanBothSession = nil
         singleScanMount = nil
         clearSourceReview()
+    }
+
+    func changeScanBothSource() {
+        guard !isWorking, !isEjectingSource else { return }
+        if scanBothSession?.hasPendingResults == true {
+            guard confirmLeavingScanBothResults(
+                actionTitle: L10n.tr("Change Source"),
+                message: L10n.tr("The current scan and review will be discarded. No copied files are deleted.")
+            ), let url = pickCardFolder(startingAt: cardPath),
+               let path = validatedSelectedSourcePath(url) else { return }
+            selectSourcePath(path)
+        } else {
+            sourcePathDidChange()
+        }
+    }
+
+    private func confirmLeavingScanBothResults(actionTitle: String, message: String? = nil) -> Bool {
+        guard scanBothSession?.hasPendingResults == true else { return true }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L10n.tr("Discard pending scan results?")
+        alert.informativeText = message
+            ?? L10n.tr("Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan.")
+        alert.addButton(withTitle: actionTitle)
+        alert.addButton(withTitle: L10n.tr("Keep Scan Results")).keyEquivalent = "\u{1b}"
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func clearSourceReview() {
@@ -1465,12 +1504,18 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Finish the current scan or import first")
             return
         }
-        validatePaths()
-        guard !sourceNeedsAccess || authorizeSelectedSource() else {
-            return
-        }
+        guard confirmLeavingScanBothResults(actionTitle: L10n.tr("Start New Scan")) else { return }
         guard let databaseURL else {
             statusMessage = L10n.tr("Database is not ready")
+            return
+        }
+        validatePaths()
+        if sourceNeedsAccess {
+            guard let url = authorizeSelectedSource(),
+                  let path = validatedSelectedSourcePath(url) else { return }
+            retainPendingScanBothResults()
+            selectSourcePath(path)
+            startScan(at: path, databaseURL: databaseURL)
             return
         }
         guard sourceValidation.isUsable else {
@@ -1479,6 +1524,22 @@ final class AppModel: ObservableObject {
             return
         }
 
+        startScan(at: resolvedPath(cardPath, validation: sourceValidation), databaseURL: databaseURL)
+    }
+
+    private func validatedSelectedSourcePath(_ url: URL) -> String? {
+        let validation = PathValidator().validate(
+            path: url.path, purpose: .source, allowsWhitespaceFallback: false
+        )
+        guard validation.isUsable else {
+            showFolderAccessError { validation.message }
+            return nil
+        }
+        return validation.expandedPath
+    }
+
+    private func startScan(at cardPath: String, databaseURL: URL) {
+        retainPendingScanBothResults()
         savePreferences()
         scanBothSession = nil
         singleScanMount = nil
@@ -1494,7 +1555,6 @@ final class AppModel: ObservableObject {
         statusMessage = L10n.tr("Scanning...")
         importLogger.info("Scan started")
 
-        let cardPath = resolvedPath(cardPath, validation: sourceValidation)
         let sourceVolume = Self.mountedSourceVolume(containing: cardPath)
         let request = scanRequest(
             mountURL: URL(fileURLWithPath: cardPath, isDirectory: true),
@@ -1523,7 +1583,7 @@ final class AppModel: ObservableObject {
                     if attempt.cancellationRequested {
                         self.currentSummary = nil
                         self.statusMessage = L10n.tr("Scan cancelled")
-                        self.finishImportAttempt(attemptID, event: .cancelled)
+                        self.finishScanAttempt(attemptID, event: .cancelled)
                         return
                     }
                     self.jobs = jobs
@@ -1540,7 +1600,7 @@ final class AppModel: ObservableObject {
                     } else {
                         self.statusMessage = L10n.tr("Scan complete")
                     }
-                    self.finishImportAttempt(attemptID, event: .scanSucceeded)
+                    self.finishScanAttempt(attemptID, event: .scanSucceeded)
                 }
                 importLogger.info(
                     "Scan complete scanned=\(summary.scannedFiles, privacy: .public) new=\(summary.newFiles, privacy: .public) known=\(summary.knownFiles, privacy: .public) sidecars=\(summary.unsupportedFiles, privacy: .public) conflicts=\(summary.conflictFiles, privacy: .public)"
@@ -1554,7 +1614,7 @@ final class AppModel: ObservableObject {
                     self.knownImportedPreviewFileIDs = []
                     self.clearPreviewPlanCache()
                     self.statusMessage = L10n.tr("Scan cancelled")
-                    self.finishImportAttempt(attemptID, event: .cancelled)
+                    self.finishScanAttempt(attemptID, event: .cancelled)
                 }
                 importLogger.notice("Scan cancelled")
             } catch SDImportError.cancelled {
@@ -1566,7 +1626,7 @@ final class AppModel: ObservableObject {
                     self.knownImportedPreviewFileIDs = []
                     self.clearPreviewPlanCache()
                     self.statusMessage = L10n.tr("Scan cancelled")
-                    self.finishImportAttempt(attemptID, event: .cancelled)
+                    self.finishScanAttempt(attemptID, event: .cancelled)
                 }
                 importLogger.notice("Scan cancelled")
             } catch {
@@ -1580,12 +1640,36 @@ final class AppModel: ObservableObject {
                     let render: () -> String = { L10n.tr("Scan failed: \(Self.errorMessage(for: error))") }
                     self.setLocalizedStatusMessage(render)
                     let message = self.statusMessage
-                    self.finishImportAttempt(
+                    self.finishScanAttempt(
                         attemptID, event: .failed(operation: .scan, message: message), failureRenderer: render
                     )
                 }
                 importLogger.error("Scan failed errorType=\(String(describing: type(of: error)), privacy: .public)")
             }
+        }
+    }
+
+    private func retainPendingScanBothResults() {
+        guard scanBothSession?.hasPendingResults == true else { return }
+        previousScanBothSession = scanBothSession
+    }
+
+    private func finishScanAttempt(
+        _ id: UUID,
+        event: ImportWorkspaceEvent,
+        failureRenderer: (() -> String)? = nil
+    ) {
+        guard importAttempt?.accepts(id) == true else { return }
+        let previous = previousScanBothSession
+        previousScanBothSession = nil
+        if let previous, event != .scanSucceeded {
+            singleScanMount = nil
+            scanBothSession = previous
+            scanBothSession?.reviewingJobID = nil
+            if let failureRenderer { showFolderAccessError(failureRenderer) }
+            finishImportAttempt(id, event: .recover(hasScannedJob: true))
+        } else {
+            finishImportAttempt(id, event: event, failureRenderer: failureRenderer)
         }
     }
 
@@ -2643,6 +2727,15 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Finish the current operation before scanning another card")
             return
         }
+        guard let databaseURL else {
+            showFolderAccessError { L10n.tr("Database is not ready") }
+            return
+        }
+        guard confirmLeavingScanBothResults(actionTitle: L10n.tr("Start New Scan")) else {
+            mountPrompts.dismiss(promptID)
+            return
+        }
+        guard promptContains(volume, id: promptID, mountID: mountID) else { return }
         guard let observedVolume = Self.currentPromptVolume(matching: volume) else {
             refreshAvailableSourceVolumes()
             statusMessage = L10n.tr("Card scan cancelled")
@@ -2703,13 +2796,14 @@ final class AppModel: ObservableObject {
             sourceURL = volume.mountURL
         }
 
-        mountPrompts.dismiss(promptID)
+        guard let path = validatedSelectedSourcePath(sourceURL) else { return }
+        guard mountPrompts.dismiss(promptID) else { return }
+        retainPendingScanBothResults()
         selection = .import
-        cardPath = sourceURL.path
+        cardPath = path
         refreshAvailableSourceVolumes(including: volume)
         sourcePathDidChange()
-        savePreferences()
-        scan()
+        startScan(at: path, databaseURL: databaseURL)
     }
 
     func acceptScanBoth(_ prompt: MountedDevicePrompt) {
@@ -2718,8 +2812,14 @@ final class AppModel: ObservableObject {
               let session = ScanBothSession(prompt: prompt),
               session.entries.allSatisfy({ promptContains($0.volume, id: prompt.id, mountID: $0.id) }),
               let databaseURL else { return }
+        guard confirmLeavingScanBothResults(actionTitle: L10n.tr("Start New Scan")) else {
+            mountPrompts.dismiss(prompt.id)
+            return
+        }
+        guard session.entries.allSatisfy({ promptContains($0.volume, id: prompt.id, mountID: $0.id) }) else { return }
         guard mountPrompts.dismiss(prompt.id) else { return }
 
+        retainPendingScanBothResults()
         sourcePathDidChange()
         resetImportDraftFromDefaults()
         selection = .import
@@ -2731,8 +2831,19 @@ final class AppModel: ObservableObject {
             } volume: { volume in
                 try await scanBothVolume(volume, databaseURL: databaseURL)
             }
-            statusMessage = ""
-            finishImportAttempt(attemptID, event: .scanSucceeded)
+            if previousScanBothSession != nil, Task.isCancelled {
+                statusMessage = L10n.tr("Scan cancelled")
+                finishScanAttempt(attemptID, event: .cancelled)
+            } else if previousScanBothSession != nil,
+                      let issue = scanBothSession?.issueIfNoVolumeScanned {
+                let render = { issue.message }
+                finishScanAttempt(
+                    attemptID, event: .failed(operation: .scan, message: render()), failureRenderer: render
+                )
+            } else {
+                statusMessage = ""
+                finishScanAttempt(attemptID, event: .scanSucceeded)
+            }
         }
     }
 
@@ -3704,18 +3815,18 @@ final class AppModel: ObservableObject {
 
     func rescanSource(startingAt path: String) {
         guard !isWorking, !isEjectingSource else { return }
-        if scanBothSession?.entries.contains(where: \.awaitsImport) == true {
-            let alert = NSAlert()
-            alert.messageText = L10n.tr("Rescan Source")
-            alert.informativeText = L10n.tr("Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan.")
-            alert.addButton(withTitle: L10n.tr("Rescan Source"))
-            alert.addButton(withTitle: L10n.tr("Cancel"))
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard let databaseURL else {
+            showFolderAccessError { L10n.tr("Database is not ready") }
+            return
         }
-        guard chooseCardFolder(startingAt: path) else { return }
+        guard confirmLeavingScanBothResults(actionTitle: L10n.tr("Start New Scan")),
+              let url = pickCardFolder(startingAt: path),
+              let chosenPath = validatedSelectedSourcePath(url) else { return }
+        retainPendingScanBothResults()
+        selectSourcePath(chosenPath)
         resetImportDraftFromDefaults()
         selection = .import
-        scan()
+        startScan(at: chosenPath, databaseURL: databaseURL)
     }
 
     private func verifiedRetryVolume(for jobID: String) -> MountedVolume? {
@@ -4846,7 +4957,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func authorizeSelectedSource() -> Bool {
+    private func authorizeSelectedSource() -> URL? {
         folderAccessFeedback = nil
         let sourcePath = sourceValidation.expandedPath
         let sourceURL = URL(fileURLWithPath: sourcePath, isDirectory: true)
@@ -4858,22 +4969,16 @@ final class AppModel: ObservableObject {
             message: L10n.tr("Choose the card or source folder before \(AppDistribution.current.displayName) scans it.")
         ) else {
             statusMessage = L10n.tr("Card scan cancelled")
-            return false
+            return nil
         }
         guard Self.isSameOrDescendant(selectedURL, of: sourceURL) else {
             showFolderAccessError { L10n.tr("Choose \(sourceName) or one of its subfolders.") }
-            return false
+            return nil
         }
         guard retainSelectedFolderAccess(.source, url: selectedURL, persistBookmark: true) else {
-            return false
+            return nil
         }
-        unhideRecentPath(selectedURL.path)
-        cardPath = selectedURL.path
-        sourcePathDidChange()
-        if hasCompletedOnboarding {
-            savePreferences()
-        }
-        return true
+        return selectedURL
     }
 
     private func accessForRetryingJob(
@@ -5145,10 +5250,15 @@ final class AppModel: ObservableObject {
             jobsRequiringRescan.insert(singleScanMount.jobID)
             self.singleScanMount = nil
         }
+        noteScanBothUnmount(at: path)
+    }
+
+    private func noteScanBothUnmount(at path: String) {
         // A remount can hide the unmount from a later volume lookup.
-        guard let entry = scanBothSession?.entries.first(where: { $0.volume.mountPath == path }) else { return }
-        scanBothSession?.removedMountPaths.insert(path)
-        if let jobID = entry.jobID {
+        if let jobID = scanBothSession?.noteUnmount(at: path) {
+            jobsRequiringRescan.insert(jobID)
+        }
+        if let jobID = previousScanBothSession?.noteUnmount(at: path) {
             jobsRequiringRescan.insert(jobID)
         }
     }

@@ -633,3 +633,6 @@
 "Rescan Source" = "Volver a escanear el origen";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "Iniciar un nuevo escaneo cierra esta sesión de Escanear ambos. Tendrás que volver a escanear los volúmenes restantes.";
 "Import stopped because %@ disconnected." = "La importación se detuvo porque se desconectó %@.";
+"Discard pending scan results?" = "¿Descartar los resultados de escaneo pendientes?";
+"Keep Scan Results" = "Conservar resultados";
+"Start New Scan" = "Iniciar nuevo escaneo";
