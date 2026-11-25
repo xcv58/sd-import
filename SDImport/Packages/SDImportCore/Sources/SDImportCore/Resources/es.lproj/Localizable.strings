@@ -630,3 +630,4 @@
 "Waiting to scan" = "En espera de escaneo";
 "%lld files scanned" = "%lld archivos escaneados";
 "Review %@" = "Revisar %@";
+"Rescan Source" = "Volver a escanear el origen";

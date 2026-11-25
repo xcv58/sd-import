@@ -630,3 +630,4 @@
 "Waiting to scan" = "等待掃描";
 "%lld files scanned" = "已掃描 %lld 個檔案";
 "Review %@" = "檢視 %@";
+"Rescan Source" = "重新掃描來源";

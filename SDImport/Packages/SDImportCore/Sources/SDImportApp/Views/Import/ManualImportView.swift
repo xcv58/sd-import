@@ -90,21 +90,19 @@ struct ManualImportView: View {
     }
 
     private func scanBothReviewPage(_ session: ScanBothSession) -> some View {
-        AppPage(status: model.folderAccessFeedback?.text, statusRole: .error) {
+        AppPage(
+            status: model.folderAccessFeedback?.text ?? (model.ejectedSourceJobID == nil ? nil : visibleStatus),
+            statusRole: model.folderAccessFeedback == nil ? .neutral : .error
+        ) {
             VStack(alignment: .leading, spacing: 18) {
                 phaseHeading(L10n.tr("Review scan results"), detail: session.deviceName)
                 ForEach(session.entries) { entry in
                     AppSection(entry.volume.name, systemImage: "externaldrive") {
                         if case .complete(let summary, let filenames, _) = entry.state {
-                            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
                                 scanBothStatus(entry.state)
                                 Spacer()
-                                Button(L10n.tr("Review import")) {
-                                    model.reviewScanBothVolume(entry.id)
-                                }
-                                .buttonStyle(.bordered)
-                                .accessibilityLabel(L10n.tr("Review \(entry.volume.name)"))
-                                .accessibilityIdentifier("import.scan-both.review.\(entry.volume.mountPath)")
+                                scanBothReviewActions(entry, summary: summary)
                             }
                             let scannedPath = URL(fileURLWithPath: summary.mountPath, isDirectory: true)
                                 .standardizedFileURL.path
@@ -116,6 +114,7 @@ struct ManualImportView: View {
                                     .truncationMode(.middle)
                                     .help(scannedPath)
                             }
+                            ScanPortableReceiptWarning(summary: summary)
                             ForEach(filenames.indices, id: \.self) { index in
                                 Text(verbatim: filenames[index])
                                     .font(.callout)
@@ -133,6 +132,35 @@ struct ManualImportView: View {
                 }
                 .buttonStyle(.bordered)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func scanBothReviewActions(_ entry: ScanBothSession.Entry, summary: ScanSummary) -> some View {
+        switch entry.disposition {
+        case .pending:
+            Button(L10n.tr("Skip")) {
+                model.skipScanBothImport(entry.id)
+            }
+            .buttonStyle(.bordered)
+            .disabled(model.isEjectingSource)
+            if model.needsRescan(summary.jobID) {
+                Button(L10n.tr("Rescan Source")) {
+                    model.rescanSource(startingAt: summary.mountPath)
+                }
+                .buttonStyle(.bordered)
+            } else {
+                Button(L10n.tr("Review import")) {
+                    model.reviewScanBothVolume(entry.id)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(L10n.tr("Review \(entry.volume.name)"))
+                .accessibilityIdentifier("import.scan-both.review.\(entry.volume.mountPath)")
+            }
+        case .imported:
+            Text(L10n.tr("Imported")).foregroundStyle(.secondary)
+        case .skipped:
+            Text(L10n.tr("Skipped")).foregroundStyle(.secondary)
         }
     }
 

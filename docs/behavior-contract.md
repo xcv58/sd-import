@@ -224,7 +224,7 @@ Rules:
 - A scan creates a job.
 - Import updates the same job.
 - Failed files retain per-file errors.
-- Retry operates on pending or failed copy rows for an existing job.
+- History offers Retry for pending or failed rows while the app can verify the original mount and the files still match the scan. Retry opens a review before copying. When that verification is unavailable, History offers Rescan Source for a fresh plan.
 
 ## Per-File Copy Status
 
@@ -280,6 +280,7 @@ Terminal progress states:
 - Whenever a verified removable source is selected and no scan or copy is active, the Source panel offers a manual eject action. This lets the user safely disconnect before scanning, after scanning, or instead of importing. A scan never triggers automatic ejection.
 - `Eject source device after a successful import` is an opt-in setting and defaults off.
 - Automatic ejection requires an error-free imported job and a currently mounted removable volume whose UUID matches the scanned job.
+- In Scan Both, the two volumes share a scan session. Each import has its own confirmation. Device ejection waits for both volumes to finish or be explicitly skipped.
 - Non-removable volumes, disk images, UUID mismatches, cancelled imports, and imports with failures are never ejected automatically.
 - Removable cards remain eligible when macOS reports their built-in reader location as internal.
 - Ejection uses the source volume root even when the scanned source is a folder inside that volume.
@@ -421,7 +422,7 @@ Rules:
 4. Add one new file to the same card. Only the new file imports.
 5. Create a different file at the planned destination. Import uses `-copy-N`.
 6. Remove the source file after scan and before import. The job records a failed file.
-7. Retry a failed job after restoring the source file. The file imports.
+7. Restore a failed job's source file on the verified original mount. If the file matches its scan, open Retry and confirm the copy. After remounting or changing the file, use Rescan Source and review the fresh plan.
 8. Cancel during a large copy. No finalized partial file is left behind, and retry remains available.
 9. Crash during copy. Relaunch recovers the job and handles stale `.part` files.
 10. Prune 30-day History. Old jobs and reports are removed, but dedupe still skips known files.

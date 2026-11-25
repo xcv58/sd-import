@@ -86,7 +86,7 @@ struct ScanBothSessionTests {
         }
     }
 
-    @Test("both scan jobs retain their own preview and only the selected job copies")
+    @Test("both scan jobs can be copied separately from one session")
     func scansRealFilesAndKeepsCopySeparate() async throws {
         let fileManager = FileManager.default
         let directory = fileManager.temporaryDirectory
@@ -171,16 +171,63 @@ struct ScanBothSessionTests {
             #expect(Set(files.map(\.filename)) == Set(expectedNames))
             #expect(preview == Array(files.prefix(5).map(\.filename)))
             #expect(files.allSatisfy { $0.copyStatus == .pending })
+            #expect(AppModel.retryFilesMatchScan(files))
         }
 
         let firstJob = try #require(jobs.first { $0.volumeUUID == internalStorage.volumeUUID })
         let siblingJob = try #require(jobs.first { $0.volumeUUID == card.volumeUUID })
         let engine = ImportEngine(jobRepository: repository, dedupeRepository: dedupe)
+
+        review.recordImport(ImportResult(
+            jobID: firstJob.id, importedFiles: 0, skippedFiles: 0, failedFiles: 1, progressPath: nil
+        ))
+        #expect(review.entry(for: firstJob.id)?.awaitsImport == true)
+        #expect(!review.allowsAutomaticEjection)
+
+        review.reviewingJobID = firstJob.id
         let result = try engine.importFiles(jobID: firstJob.id)
+        review.recordImport(result)
         #expect(result.importedFiles == internalNames.count)
         #expect(try repository.listImportHistoryJobs().map(\.id) == [firstJob.id])
         #expect(try repository.fetchJob(id: siblingJob.id)?.status == .scanned)
         #expect(try repository.fetchJobFiles(jobID: siblingJob.id).allSatisfy { $0.copyStatus == .pending })
+        #expect(!review.allowsAutomaticEjection)
+
+        review.reviewingJobID = nil
+        #expect(review.entry(for: firstJob.id)?.awaitsImport == false)
+        #expect(review.entry(for: siblingJob.id)?.awaitsImport == true)
+        review.reviewingJobID = siblingJob.id
+        let siblingResult = try engine.importFiles(jobID: siblingJob.id)
+        review.recordImport(siblingResult)
+        #expect(siblingResult.importedFiles == cardNames.count)
+        #expect(Set(try repository.listImportHistoryJobs().map(\.id)) == Set([firstJob.id, siblingJob.id]))
+        #expect(review.allowsAutomaticEjection)
+        review.removedMountPaths.insert(card.mountPath)
+        #expect(!review.allowsAutomaticEjection)
+    }
+
+    @Test("retry rejects pending source files that changed after the scan")
+    func verifiesPendingRetryFileMetadata() throws {
+        let fileManager = FileManager.default
+        let url = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data("old".utf8).write(to: url)
+        defer { try? fileManager.removeItem(at: url) }
+        let originalDate = Date(timeIntervalSince1970: 1_700_000_000)
+        try fileManager.setAttributes([.modificationDate: originalDate], ofItemAtPath: url.path)
+        let file = JobFileRecord(
+            jobID: "job", sourcePath: url.path, relativePath: url.lastPathComponent,
+            filename: url.lastPathComponent, ext: "jpg", size: 3, modificationDateString: "",
+            modificationTimeEpochSeconds: Int64(originalDate.timeIntervalSince1970), mediaKind: .photo,
+            fingerprint: nil, captureDate: nil, decision: .new, destinationDirectory: nil,
+            plannedDestinationPath: nil, copyStatus: .failed
+        )
+        #expect(AppModel.retryFilesMatchScan([file]))
+
+        try Data("new".utf8).write(to: url)
+        try fileManager.setAttributes(
+            [.modificationDate: originalDate.addingTimeInterval(20)], ofItemAtPath: url.path
+        )
+        #expect(!AppModel.retryFilesMatchScan([file]))
     }
 
     private static func volume(_ name: String, disk: String, device: String = "camera") -> MountedVolume {

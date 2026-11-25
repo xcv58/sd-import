@@ -170,10 +170,12 @@ struct ImportResultView: View {
                 Label(L10n.tr("Open in History"), systemImage: "list.bullet.rectangle")
             }
 
-            Button {
-                model.importAnotherCard()
-            } label: {
-                Label(L10n.tr("Import Another Card"), systemImage: "externaldrive.badge.plus")
+            if !model.isReviewingScanBothVolume {
+                Button {
+                    model.importAnotherCard()
+                } label: {
+                    Label(L10n.tr("Import Another Card"), systemImage: "externaldrive.badge.plus")
+                }
             }
         }
     }

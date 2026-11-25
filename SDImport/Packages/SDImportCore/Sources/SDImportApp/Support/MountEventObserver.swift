@@ -11,6 +11,7 @@ final class MountEventObserver {
     private var distributedToken: NSObjectProtocol?
     private let handler: (MountedVolume) -> MountEventHandlingDisposition
     private let volumeMountedHandler: (MountedVolume) -> Void
+    private let volumeUnmountedHandler: (URL) -> Void
     private let unmountHandler: (URL) -> Void
     private let errorHandler: (String, UInt64?) -> Void
     private let handoffAcknowledgedHandler: (MountHandoffEvent) -> Void
@@ -29,6 +30,7 @@ final class MountEventObserver {
         distribution: AppDistribution = .current,
         handler: @escaping (MountedVolume) -> MountEventHandlingDisposition,
         volumeMountedHandler: @escaping (MountedVolume) -> Void = { _ in },
+        volumeUnmountedHandler: @escaping (URL) -> Void = { _ in },
         unmountHandler: @escaping (URL) -> Void = { _ in },
         shouldHandleDirectMount: @escaping () -> Bool,
         shouldHandleHandoff: @escaping (MountHandoffEvent) -> Bool,
@@ -38,6 +40,7 @@ final class MountEventObserver {
         mountPrivacyPolicy = distribution.mountPrivacyPolicy
         self.handler = handler
         self.volumeMountedHandler = volumeMountedHandler
+        self.volumeUnmountedHandler = volumeUnmountedHandler
         self.unmountHandler = unmountHandler
         self.shouldHandleDirectMount = shouldHandleDirectMount
         self.shouldHandleHandoff = shouldHandleHandoff
@@ -157,6 +160,7 @@ final class MountEventObserver {
     }
 
     private func handleUnmountURL(_ mountURL: URL) {
+        volumeUnmountedHandler(mountURL)
         let currentVolume = detector.currentMountedVolume(
             from: mountURL,
             includeCapacity: mountPrivacyPolicy.includesCapacityBeforeConsent

@@ -74,6 +74,9 @@ struct ImportPreviewView: View {
                             allowsRescan: !model.isReviewingStoredImport && !model.isReviewingScanBothVolume,
                             compact: true
                         )
+                        if model.isReviewingScanBothVolume, let summary = model.currentSummary {
+                            ScanPortableReceiptWarning(summary: summary)
+                        }
 
                         if model.isReviewingStoredImport {
                             storedImportPlanCard
@@ -150,6 +153,13 @@ struct ImportPreviewView: View {
                     model.returnToScanBothResults()
                 }
                 .buttonStyle(.bordered)
+            }
+
+            if let summary = model.currentSummary, model.needsRescan(summary.jobID) {
+                Button(L10n.tr("Rescan Source")) {
+                    model.rescanSource(startingAt: summary.mountPath)
+                }
+                .buttonStyle(.borderedProminent)
             }
 
             ImportReviewPrimaryAction()
