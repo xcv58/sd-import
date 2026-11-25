@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 public enum SchemaMigrator {
-    public static let currentUserVersion: Int32 = 8
+    public static let currentUserVersion: Int32 = 9
     public static let initialMigrationIdentifier = "v1_initial_schema"
     public static let identityScopedFingerprintMigrationIdentifier = "v2_identity_scoped_fingerprints"
     public static let knownFileSourceMigrationIdentifier = "v3_known_file_source"
@@ -12,6 +12,7 @@ public enum SchemaMigrator {
     private static let unverifiedPathsMigrationIdentifier = "v7_unverified_copy_paths"
 
     private static let copyAttemptStateMigrationIdentifier = "v8_copy_attempt_state"
+    private static let rescanOriginMigrationIdentifier = "v9_rescan_origin"
 
     public static func makeMigrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
@@ -139,6 +140,14 @@ public enum SchemaMigrator {
             try db.execute(sql: """
                 CREATE INDEX IF NOT EXISTS idx_copy_attempts_uncommitted_destination
                 ON import_copy_attempts(destination_key) WHERE copy_committed = 0
+                """)
+            try db.execute(sql: "PRAGMA user_version = 8")
+        }
+
+        migrator.registerMigration(rescanOriginMigrationIdentifier) { db in
+            try db.execute(sql: """
+                ALTER TABLE jobs ADD COLUMN volume_mount_path TEXT;
+                ALTER TABLE jobs ADD COLUMN rescan_of_job_id TEXT;
                 """)
             try db.execute(sql: "PRAGMA user_version = \(Self.currentUserVersion)")
         }

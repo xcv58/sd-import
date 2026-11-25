@@ -226,6 +226,14 @@ struct ImportPreviewView: View {
             )
             .font(.caption)
         }
+        if model.hasInsta360RescanConflict {
+            AppStatusLabel(
+                title: L10n.tr("An existing Insta360 lens file could not be verified. Choose a different folder for both files."),
+                systemImage: "exclamationmark.triangle",
+                role: .warning
+            )
+            .font(.caption)
+        }
     }
 
     private var reviewSummary: some View {
@@ -543,13 +551,19 @@ struct ImportPreviewView: View {
     }
 
     private var zeroCopyCard: some View {
-        AppSection(L10n.tr("Nothing New"), systemImage: "checkmark.seal") {
-            Text(zeroCopyTitle)
-                .font(.headline)
-            Text(zeroCopyDetail)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        let conflict = model.hasInsta360RescanConflict
+        return AppSection(
+            conflict ? L10n.tr("Conflicts") : L10n.tr("Nothing New"),
+            systemImage: conflict ? "exclamationmark.triangle" : "checkmark.seal"
+        ) {
+            if !conflict {
+                Text(zeroCopyTitle)
+                    .font(.headline)
+                Text(zeroCopyDetail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if hasSupportedMedia {
                 Divider()

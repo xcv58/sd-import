@@ -335,6 +335,12 @@ struct MediaScannerImportTests {
         case originalCopyMissing
         case originalCopyChangedAfterReview
         case missingSourceLens
+        case remountedWithDifferentFolderScope
+        case differentVolumeAtNewPath
+        case cancelledAgainBeforeCopy
+        case recoveredMissingSourceLens
+        case wrongExistingLens
+        case verifiedExistingLens
     }
 
     @Test("rescan keeps both Insta360 lens files together", arguments: Insta360RescanScenario.allCases)
@@ -346,8 +352,15 @@ struct MediaScannerImportTests {
             try fixture.writeFile(source.appendingPathComponent(name), bytes: Data(name.utf8))
         }
 
+        let defaultRoots = DestinationRoots(photosURL: fixture.photosURL, videosURL: fixture.videosURL)
         let previousJob = "interrupted"
-        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: previousJob, portableReceiptsEnabled: true))
+        let uuid = "original-card"
+        let previousRequest = ScanRequest(
+            mountURL: fixture.mountURL, volumeName: "CARD", volumeUUID: uuid,
+            location: "TEST", roots: defaultRoots, jobID: previousJob,
+            portableReceiptsEnabled: true, volumeMountPath: fixture.mountURL.path
+        )
+        _ = try fixture.scanner.scan(previousRequest)
         let previousFiles = try fixture.jobRepository.fetchJobFiles(jobID: previousJob)
         let customRoot = fixture.videosURL.appendingPathComponent("Custom destination", isDirectory: true)
         let previousPlan = ImportPlanBuilder(
@@ -383,31 +396,99 @@ struct MediaScannerImportTests {
         if scenario == .originalCopyMissing {
             try FileManager.default.removeItem(atPath: originalPath)
         }
-        if scenario == .missingSourceLens {
+        if scenario == .missingSourceLens || scenario == .recoveredMissingSourceLens {
             try FileManager.default.removeItem(atPath: uncopied.sourcePath)
         }
+        if scenario == .wrongExistingLens || scenario == .verifiedExistingLens {
+            let path = try #require(uncopied.plannedDestinationPath)
+            let bytes = scenario == .wrongExistingLens
+                ? Data(repeating: 0, count: Int(uncopied.size)) : Data(uncopied.filename.utf8)
+            try fixture.writeFile(URL(fileURLWithPath: path), bytes: bytes)
+        }
+        var mount = fixture.mountURL
+        if scenario == .remountedWithDifferentFolderScope || scenario == .differentVolumeAtNewPath {
+            mount = fixture.rootURL.appendingPathComponent("CARD 1", isDirectory: true)
+            try FileManager.default.moveItem(at: fixture.mountURL, to: mount)
+        }
+        let selectedFolder = scenario == .remountedWithDifferentFolderScope
+            ? mount.appendingPathComponent("DCIM", isDirectory: true) : mount
 
-        let newJob = "fresh-review"
-        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: newJob, portableReceiptsEnabled: true))
-        let scanned = try fixture.jobRepository.fetchJobFiles(jobID: newJob)
-        let recovery = try Insta360RescanRecovery(previousFiles: interrupted, scannedFiles: scanned)
-        let freshPlan = ImportPlanBuilder(
-            sessions: [],
-            organizationPreset: .classicDatedFolders,
-            roots: DestinationRoots(photosURL: fixture.photosURL, videosURL: fixture.videosURL),
-            fallbackLocation: "TEST",
-            volumeName: "CARD",
-            insta360Recovery: recovery,
-            useOriginalInsta360Folders: scenario != .differentFolder
-        )
-        let planned = freshPlan.plans(files: scanned)
+        func rescan(_ jobID: String, recovering previous: String) throws -> ([JobFileRecord], Insta360RescanRecovery) {
+            let request = ScanRequest(
+                mountURL: selectedFolder, volumeName: "CARD",
+                volumeUUID: scenario == .differentVolumeAtNewPath ? "replacement-card" : uuid,
+                location: "TEST", roots: defaultRoots, jobID: jobID,
+                portableReceiptsEnabled: true, volumeMountPath: mount.path, rescanOfJobID: previous
+            )
+            _ = try fixture.scanner.scan(request)
+            let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+            let recovery = try Insta360RescanRecovery(
+                request: request, scannedFiles: files, jobRepository: fixture.jobRepository
+            )
+            #expect(try fixture.jobRepository.fetchJob(id: jobID)?.rescanOfJobID == previous)
+            return (files, recovery)
+        }
+
+        func builder(_ recovery: Insta360RescanRecovery, preferOriginal: Bool = true) -> ImportPlanBuilder {
+            ImportPlanBuilder(
+                sessions: [], organizationPreset: .classicDatedFolders, roots: defaultRoots,
+                fallbackLocation: "TEST", volumeName: "CARD",
+                insta360Recovery: recovery, useOriginalInsta360Folders: preferOriginal
+            )
+        }
+
+        func engine(for plans: [ImportFilePlan]) -> ImportEngine {
+            ImportEngine(
+                jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+                portableReceiptsEnabled: true,
+                reviewedInsta360RescanMembers: Set(plans.filter(\.isInsta360RescanMember).compactMap { $0.update?.id })
+            )
+        }
+
+        var newJob = "fresh-review"
+        var (scanned, recovery) = try rescan(newJob, recovering: previousJob)
         if scenario == .missingSourceLens {
             #expect(recovery.hasIncompleteRecordings)
-            #expect(planned.map(\.disposition) == [.notReady])
+            #expect(builder(recovery).plans(files: scanned).map(\.disposition) == [.notReady])
+            return
+        }
+        if scenario == .cancelledAgainBeforeCopy {
+            let alternate = builder(recovery, preferOriginal: false).plans(files: scanned)
+            #expect(alternate.filter(\.willCopy).count == 2)
+            try fixture.jobRepository.updateJobImportPlan(
+                jobID: newJob, destinationRoots: defaultRoots, updates: alternate.compactMap(\.update)
+            )
+            #expect(throws: SDImportError.cancelled) {
+                try engine(for: alternate).importFiles(
+                    jobID: newJob, requiresReviewedDestinations: true, shouldCancel: { true }
+                )
+            }
+            #expect(try fixture.jobRepository.fetchJob(id: newJob)?.status == .cancelled)
+            #expect(alternate.compactMap(\.destinationPath).allSatisfy { !FileManager.default.fileExists(atPath: $0) })
+            (scanned, recovery) = try rescan("rescan-after-second-cancellation", recovering: newJob)
+            newJob = "rescan-after-second-cancellation"
+        }
+        if scenario == .recoveredMissingSourceLens {
+            #expect(builder(recovery).plans(files: scanned).map(\.disposition) == [.notReady])
+            try fixture.writeFile(URL(fileURLWithPath: uncopied.sourcePath), bytes: Data(uncopied.filename.utf8))
+            (scanned, recovery) = try rescan("rescan-after-restoring-lens", recovering: newJob)
+            newJob = "rescan-after-restoring-lens"
+        }
+        if scenario == .wrongExistingLens {
+            let conflicted = builder(recovery).plans(files: scanned)
+            #expect(conflicted.filter { $0.disposition == .alreadyExists }.count == 1)
+            #expect(conflicted.filter { $0.disposition.attention == .blocking }.count == 1)
+            #expect(conflicted.allSatisfy { !$0.willCopy })
+        }
+        if scenario == .verifiedExistingLens {
+            #expect(builder(recovery).plans(files: scanned).map(\.disposition) == [.alreadyExists, .alreadyExists])
             return
         }
 
-        let usesOriginal = scenario == .originalFolder || scenario == .originalCopyChangedAfterReview
+        let usesOriginal = scenario != .differentFolder && scenario != .originalCopyMissing
+            && scenario != .differentVolumeAtNewPath && scenario != .wrongExistingLens
+        let freshPlan = builder(recovery, preferOriginal: usesOriginal)
+        let planned = freshPlan.plans(files: scanned)
         let destinationPaths = planned.compactMap(\.destinationPath)
         let destinationFolders = Set(destinationPaths.map {
             URL(fileURLWithPath: $0).deletingLastPathComponent().resolvingSymlinksInPath()
@@ -419,19 +500,18 @@ struct MediaScannerImportTests {
         try fixture.jobRepository.updateJobImportPlan(
             jobID: newJob, destinationRoots: freshPlan.roots, updates: planned.compactMap(\.update)
         )
-        let engine = ImportEngine(
-            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
-            portableReceiptsEnabled: true,
-            reviewedInsta360RescanMembers: Set(planned.filter(\.isInsta360RescanMember).compactMap { $0.update?.id })
-        )
+        let engine = engine(for: planned)
         if scenario == .originalCopyChangedAfterReview {
             try fixture.writeFile(
                 URL(fileURLWithPath: originalPath), bytes: Data(repeating: 0, count: Int(copied.size))
             )
+            #expect(freshPlan.plans(files: scanned).contains { $0.disposition.attention == .blocking })
             #expect(throws: SDImportError.insta360RescanCopyChanged) {
                 try engine.importFiles(jobID: newJob, requiresReviewedDestinations: true)
             }
-            #expect(destinationPaths.filter { FileManager.default.fileExists(atPath: $0) } == [originalPath])
+            let existing = destinationPaths.filter { FileManager.default.fileExists(atPath: $0) }
+                .map { URL(fileURLWithPath: $0).resolvingSymlinksInPath() }
+            #expect(existing == [URL(fileURLWithPath: originalPath).resolvingSymlinksInPath()])
             return
         }
 

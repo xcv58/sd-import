@@ -411,8 +411,7 @@ public struct ImportPlanBuilder: Sendable {
             )
         }
 
-        if let recordedCopy = recovery?.verifiedCopies[file.sourcePath],
-           ConflictResolver.destinationKey(recordedCopy) == ConflictResolver.destinationKey(destinationURL),
+        if recovery?.hasVerifiedCopy(of: file, at: destinationURL) == true,
            !file.unverifiedDestinationPaths.contains(ConflictResolver.destinationKey(destinationURL)) {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
@@ -476,6 +475,9 @@ public struct ImportPlanBuilder: Sendable {
             rejectingMatchesAt: file.unverifiedDestinationPaths
         ) {
         case .skip(let matchedURL, let reason):
+            if isInsta360RescanMember {
+                return filenameConflictPlan(file: file, destinationPath: matchedURL.path)
+            }
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
                     id: id,

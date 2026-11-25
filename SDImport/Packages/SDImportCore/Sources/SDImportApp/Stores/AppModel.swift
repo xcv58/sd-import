@@ -300,6 +300,11 @@ private enum ImportRetryContext {
     case eject(jobID: String, target: SourceEjectionTarget)
 }
 
+private struct RescanContext: Sendable {
+    let jobID: String
+    let access: [SecurityScopedResourceAccess]
+}
+
 private struct SourceDeviceEjectionError: LocalizedError {
     let failedVolumeName: String
     let ejectedVolumeNames: [String]
@@ -518,10 +523,17 @@ final class AppModel: ObservableObject {
     }
     @Published var currentSummary: ScanSummary?
     private var insta360RescanRecovery: Insta360RescanRecovery?
-    private var insta360RescanAccess: [SecurityScopedResourceAccess] = []
+    private var rescanContext: RescanContext?
     var hasInsta360RescanRecordings: Bool { insta360RescanRecovery != nil }
     var canCompleteInsta360InOriginalFolders: Bool { insta360RescanRecovery?.hasOriginalFolders == true }
     var hasIncompleteInsta360RescanRecording: Bool { insta360RescanRecovery?.hasIncompleteRecordings == true }
+    var hasInsta360RescanConflict: Bool {
+        guard let insta360RescanRecovery else { return false }
+        return previewRows.contains { row in
+            guard case .filenameConflict = row.disposition else { return false }
+            return insta360RescanRecovery.includes(sourcePath: row.sourcePath)
+        }
+    }
     @Published private(set) var scanBothSession: ScanBothSession?
     private var previousScanBothSession: ScanBothSession?
     @Published var currentResult: ImportResult? {
@@ -1294,7 +1306,7 @@ final class AppModel: ObservableObject {
     private func clearSourceReview() {
         folderAccessFeedback = nil
         insta360RescanRecovery = nil
-        insta360RescanAccess = []
+        rescanContext = nil
         currentSummary = nil
         currentResult = nil
         importProgress = nil
@@ -1515,13 +1527,14 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Database is not ready")
             return
         }
+        let recovering = rescanContext
         validatePaths()
         if sourceNeedsAccess {
             guard let url = authorizeSelectedSource(),
                   let path = validatedSelectedSourcePath(url) else { return }
             retainPendingScanBothResults()
             selectSourcePath(path)
-            startScan(at: path, databaseURL: databaseURL)
+            startScan(at: path, databaseURL: databaseURL, recovering: recovering)
             return
         }
         guard sourceValidation.isUsable else {
@@ -1530,7 +1543,7 @@ final class AppModel: ObservableObject {
             return
         }
 
-        startScan(at: resolvedPath(cardPath, validation: sourceValidation), databaseURL: databaseURL)
+        startScan(at: resolvedPath(cardPath, validation: sourceValidation), databaseURL: databaseURL, recovering: recovering)
     }
 
     private func validatedSelectedSourcePath(_ url: URL) -> String? {
@@ -1547,14 +1560,14 @@ final class AppModel: ObservableObject {
     private func startScan(
         at cardPath: String,
         databaseURL: URL,
-        recovering: (jobID: String, access: [SecurityScopedResourceAccess])? = nil
+        recovering: RescanContext? = nil
     ) {
         retainPendingScanBothResults()
         savePreferences()
         scanBothSession = nil
         singleScanMount = nil
         insta360RescanRecovery = nil
-        insta360RescanAccess = []
+        rescanContext = recovering
         currentResult = nil
         importProgress = nil
         ejectedSourceJobID = nil
@@ -1571,7 +1584,8 @@ final class AppModel: ObservableObject {
         let sourceVolume = VolumeDetector().removableSourceVolume(containing: sourceURL)
         let request = scanRequest(
             mountURL: sourceURL,
-            sourceVolume: sourceVolume
+            sourceVolume: sourceVolume,
+            rescanOfJobID: recovering?.jobID
         )
         singleScanMount = sourceVolume.map { (jobID: request.jobID, volume: $0) }
         let retainedAccess = Array(folderAccesses.values) + (recovering?.access ?? [])
@@ -1597,10 +1611,9 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
                 let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
                 let files = try repositories.jobRepository.fetchJobFiles(jobID: summary.jobID)
-                let insta360Recovery = try recovering.map {
+                let insta360Recovery = try recovering.map { _ in
                     try Insta360RescanRecovery(
-                        previousFiles: repositories.jobRepository.fetchJobFiles(jobID: $0.jobID),
-                        scannedFiles: files
+                        request: request, scannedFiles: files, jobRepository: repositories.jobRepository
                     )
                 }
                 try Task.checkCancellation()
@@ -1616,7 +1629,8 @@ final class AppModel: ObservableObject {
                     self.jobs = jobs
                     self.loadScanPreview(
                         summary, files: files, dedupeRepository: repositories.dedupeRepository,
-                        insta360Recovery: insta360Recovery, recoveryAccess: recovering?.access ?? []
+                        insta360Recovery: insta360Recovery,
+                        rescanContext: recovering.map { RescanContext(jobID: summary.jobID, access: $0.access) }
                     )
                     if let warning = summary.portableReceiptWarning {
                         self.setLocalizedStatusMessage {
@@ -1703,7 +1717,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func scanRequest(mountURL: URL, sourceVolume: MountedVolume?) -> ScanRequest {
+    private func scanRequest(
+        mountURL: URL, sourceVolume: MountedVolume?, rescanOfJobID: String? = nil
+    ) -> ScanRequest {
         let homeURL = FileManager.default.homeDirectoryForCurrentUser
         let photosPath = planningPath(
             photosPath,
@@ -1725,7 +1741,9 @@ final class AppModel: ObservableObject {
                 videosURL: URL(fileURLWithPath: videosPath, isDirectory: true)
             ),
             reportsDirectoryURL: reportsURL,
-            portableReceiptsEnabled: portableImportReceiptsEnabled
+            portableReceiptsEnabled: portableImportReceiptsEnabled,
+            volumeMountPath: sourceVolume?.mountPath,
+            rescanOfJobID: rescanOfJobID
         )
     }
 
@@ -2341,7 +2359,7 @@ final class AppModel: ObservableObject {
         let portableImportReceiptsEnabled = self.portableImportReceiptsEnabled
         let reviewedSourcePath = currentSummary?.mountPath
         let retainedAccess = (
-            Array(folderAccesses.values) + [scanBothSourceAccess].compactMap { $0 } + insta360RescanAccess
+            Array(folderAccesses.values) + [scanBothSourceAccess].compactMap { $0 } + (rescanContext?.access ?? [])
         ).filter(\.isActive)
         let reviewedInsta360RescanMembers = Set(approvedPlans.compactMap { plan in
             plan.isInsta360RescanMember ? plan.update?.id : nil
@@ -2677,7 +2695,7 @@ final class AppModel: ObservableObject {
         scanBothSession = nil
         singleScanMount = nil
         insta360RescanRecovery = nil
-        insta360RescanAccess = []
+        rescanContext = nil
         currentSummary = nil
         currentResult = nil
         importProgress = nil
@@ -2924,10 +2942,10 @@ final class AppModel: ObservableObject {
 
     private func loadScanPreview(
         _ summary: ScanSummary, files: [JobFileRecord], dedupeRepository: DedupeRepository,
-        insta360Recovery: Insta360RescanRecovery? = nil, recoveryAccess: [SecurityScopedResourceAccess] = []
+        insta360Recovery: Insta360RescanRecovery? = nil, rescanContext: RescanContext? = nil
     ) {
         insta360RescanRecovery = insta360Recovery.flatMap { $0.isEmpty ? nil : $0 }
-        insta360RescanAccess = canCompleteInsta360InOriginalFolders ? recoveryAccess : []
+        self.rescanContext = rescanContext
         currentSummary = summary
         if isReviewingScanBothVolume {
             validatePaths()
@@ -3787,12 +3805,18 @@ final class AppModel: ObservableObject {
         guard confirmLeavingScanBothResults(actionTitle: L10n.tr("Start New Scan")),
               let url = pickCardFolder(startingAt: path),
               let chosenPath = validatedSelectedSourcePath(url) else { return }
-        let recoveryAccess = Array(folderAccesses.values) + insta360RescanAccess
+        var grantedPaths: Set<String> = []
+        let recoveryAccess = (Array(folderAccesses.values) + (rescanContext?.access ?? [])).filter {
+            $0.isActive && grantedPaths.insert($0.url.standardizedFileURL.path).inserted
+        }
         retainPendingScanBothResults()
         selectSourcePath(chosenPath)
         resetImportDraftFromDefaults()
         selection = .import
-        startScan(at: chosenPath, databaseURL: databaseURL, recovering: (recoveringJobID, recoveryAccess))
+        startScan(
+            at: chosenPath, databaseURL: databaseURL,
+            recovering: RescanContext(jobID: recoveringJobID, access: recoveryAccess)
+        )
     }
 
     private func requireRescan(for jobID: String) {
@@ -4438,7 +4462,7 @@ final class AppModel: ObservableObject {
             let originalFolders = copyRows.compactMap { recovery.originalFolder(for: $0.sourcePath) }
             if AppDistribution.current == .macAppStore,
                originalFolders.contains(where: {
-                   !hasActiveFolderAccess(covering: $0.path, additionalAccess: insta360RescanAccess)
+                   !hasActiveFolderAccess(covering: $0.path, additionalAccess: rescanContext?.access ?? [])
                }) {
                 return false
             }

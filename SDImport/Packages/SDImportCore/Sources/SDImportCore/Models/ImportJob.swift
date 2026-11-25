@@ -8,6 +8,8 @@ public struct ImportJob: Identifiable, Hashable, Codable, Sendable {
     public let mountPath: String
     public let volumeName: String?
     public let volumeUUID: String?
+    public let volumeMountPath: String?
+    public let rescanOfJobID: String?
     public let location: String
     public let photosRoot: String
     public let videosRoot: String
@@ -57,7 +59,9 @@ public struct ImportJob: Identifiable, Hashable, Codable, Sendable {
         failedFiles: Int = 0,
         summaryJSONPath: String? = nil,
         summaryMarkdownPath: String? = nil,
-        appVersion: String? = nil
+        appVersion: String? = nil,
+        volumeMountPath: String? = nil,
+        rescanOfJobID: String? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -66,6 +70,8 @@ public struct ImportJob: Identifiable, Hashable, Codable, Sendable {
         self.mountPath = mountPath
         self.volumeName = volumeName
         self.volumeUUID = volumeUUID
+        self.volumeMountPath = volumeMountPath
+        self.rescanOfJobID = rescanOfJobID
         self.location = location
         self.photosRoot = photosRoot
         self.videosRoot = videosRoot
