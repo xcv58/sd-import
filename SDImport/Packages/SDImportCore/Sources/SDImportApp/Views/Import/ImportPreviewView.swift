@@ -185,6 +185,7 @@ struct ImportPreviewView: View {
 
             if hasSupportedMedia {
                 ImportDestinationFields()
+                insta360RescanOptions
                 defaultsAction
                 sessionControls
             }
@@ -200,6 +201,30 @@ struct ImportPreviewView: View {
                 )
                 .font(.caption)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var insta360RescanOptions: some View {
+        if model.canCompleteInsta360InOriginalFolders {
+            Toggle(
+                L10n.tr("Complete Insta360 recordings in their original folders"),
+                isOn: $model.useOriginalInsta360Folders
+            )
+        }
+        if model.hasInsta360RescanRecordings, !model.hasIncompleteInsta360RescanRecording,
+           !model.canCompleteInsta360InOriginalFolders || !model.useOriginalInsta360Folders {
+            Text(L10n.tr("The plan includes both Insta360 lens files in the selected destination."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        if model.hasIncompleteInsta360RescanRecording {
+            AppStatusLabel(
+                title: L10n.tr("The source is missing an Insta360 lens file. Scan the folder containing both files."),
+                systemImage: "exclamationmark.triangle",
+                role: .warning
+            )
+            .font(.caption)
         }
     }
 
@@ -530,6 +555,7 @@ struct ImportPreviewView: View {
                 Divider()
                 importOptionControls
                 ImportDestinationFields()
+                insta360RescanOptions
                 defaultsAction
                 sessionControls
             }

@@ -637,3 +637,8 @@
 "Keep Scan Results" = "保留掃描結果";
 "Start New Scan" = "開始新的掃描";
 "Choose the original source folder instead of a symbolic link." = "請選擇原始來源資料夾，而非符號連結。";
+
+"Complete Insta360 recordings in their original folders" = "在原始資料夾中補齊 Insta360 錄影";
+"The plan includes both Insta360 lens files in the selected destination." = "此計畫會在所選的目的地保留兩個 Insta360 鏡頭檔案。";
+"The source is missing an Insta360 lens file. Scan the folder containing both files." = "來源缺少一個 Insta360 鏡頭檔案。請掃描包含兩個檔案的資料夾。";
+"An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "無法驗證現有的 Insta360 鏡頭檔案。請選擇其他資料夾來儲存兩個檔案。";

@@ -637,3 +637,8 @@
 "Keep Scan Results" = "Manter resultados";
 "Start New Scan" = "Iniciar nova verificação";
 "Choose the original source folder instead of a symbolic link." = "Escolha a pasta de origem original em vez de um link simbólico.";
+
+"Complete Insta360 recordings in their original folders" = "Completar gravações da Insta360 nas pastas originais";
+"The plan includes both Insta360 lens files in the selected destination." = "O plano inclui os arquivos das duas lentes da Insta360 no destino selecionado.";
+"The source is missing an Insta360 lens file. Scan the folder containing both files." = "Falta um arquivo de lente da Insta360 na origem. Escaneie a pasta que contém os dois arquivos.";
+"An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "Não foi possível verificar um arquivo de lente da Insta360 existente. Escolha outra pasta para os dois arquivos.";

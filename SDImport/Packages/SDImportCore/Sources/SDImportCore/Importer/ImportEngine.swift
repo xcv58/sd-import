@@ -12,6 +12,7 @@ public struct ImportEngine {
     private let destinationSpaceChecker: DestinationSpaceChecker
     private let reportWriter: ReportWriter
     private let portableReceiptsEnabled: Bool
+    private let reviewedInsta360RescanMembers: Set<Int64>
 
     public init(
         fileManager: FileManager = .default,
@@ -21,7 +22,8 @@ public struct ImportEngine {
         copyEngine: CopyEngine = CopyEngine(),
         destinationSpaceChecker: DestinationSpaceChecker = DestinationSpaceChecker(),
         reportWriter: ReportWriter = ReportWriter(),
-        portableReceiptsEnabled: Bool = false
+        portableReceiptsEnabled: Bool = false,
+        reviewedInsta360RescanMembers: Set<Int64> = []
     ) {
         self.fileManager = fileManager
         self.jobRepository = jobRepository
@@ -31,6 +33,7 @@ public struct ImportEngine {
         self.destinationSpaceChecker = destinationSpaceChecker
         self.reportWriter = reportWriter
         self.portableReceiptsEnabled = portableReceiptsEnabled
+        self.reviewedInsta360RescanMembers = reviewedInsta360RescanMembers
     }
 
     @discardableResult
@@ -238,10 +241,23 @@ public struct ImportEngine {
 
         refreshPortableFingerprints()
 
+        func isReviewedInsta360RescanMember(_ file: JobFileRecord) -> Bool {
+            file.id.map { reviewedInsta360RescanMembers.contains($0) } == true
+        }
+
         if requiresReviewedDestinations {
             for file in allFilesAtStart where file.decision == .known && file.knownSource == .destination {
                 guard let path = file.plannedDestinationPath else { continue }
                 let candidate = URL(fileURLWithPath: path, isDirectory: false)
+                if isReviewedInsta360RescanMember(file) {
+                    guard try !jobRepository.isUnverifiedDestination(candidate),
+                          Insta360RescanRecovery.matchesSource(file, at: candidate, using: copyEngine)
+                    else {
+                        if shouldCancel() { throw SDImportError.cancelled }
+                        throw SDImportError.insta360RescanCopyChanged
+                    }
+                    continue
+                }
                 let fingerprint = fingerprint(for: file, currentIdentity: nil)
                 guard case .skip = try conflictResolver.resolveDestination(
                     candidate: candidate,
@@ -258,6 +274,16 @@ public struct ImportEngine {
         for group in Insta360ClipDetector().groups(files: allFilesAtStart) {
             let pendingMembers = group.files.filter { pendingSourcePaths.contains($0.sourcePath) }
             guard !pendingMembers.isEmpty else { continue }
+            if pendingMembers.contains(where: isReviewedInsta360RescanMember) {
+                let masterFolders = group.masterFiles.compactMap { member in
+                    member.plannedDestinationPath.map {
+                        URL(fileURLWithPath: $0).deletingLastPathComponent().resolvingSymlinksInPath()
+                    }
+                }
+                guard masterFolders.count == group.masterFiles.count, Set(masterFolders).count == 1 else {
+                    throw SDImportError.insta360RescanCopyChanged
+                }
+            }
             var destinationPaths: Set<String> = []
             for member in pendingMembers {
                 guard let plannedDestinationPath = member.plannedDestinationPath else { continue }
@@ -294,8 +320,8 @@ public struct ImportEngine {
                 portableIdentity = nil
             }
             let fingerprint = fingerprint(for: file, currentIdentity: portableIdentity)
-            if try dedupeRepository.contains(fingerprint)
-                || hasPortableReceipt(portableIdentity, file: file)
+            if !isReviewedInsta360RescanMember(file),
+               try dedupeRepository.contains(fingerprint) || hasPortableReceipt(portableIdentity, file: file)
             {
                 return false
             }
@@ -524,7 +550,7 @@ public struct ImportEngine {
             let fingerprint = fingerprint(for: file, currentIdentity: portableIdentity)
             refreshPortableFingerprints()
 
-            if try dedupeRepository.contains(fingerprint) {
+            if !isReviewedInsta360RescanMember(file), try dedupeRepository.contains(fingerprint) {
                 markDone(file, status: .skipped)
                 processedBytes += file.size
                 try jobRepository.updateFileCopyStatus(
@@ -547,7 +573,7 @@ public struct ImportEngine {
                 continue
             }
 
-            if hasPortableReceipt(portableIdentity, file: file) {
+            if !isReviewedInsta360RescanMember(file), hasPortableReceipt(portableIdentity, file: file) {
                 markDone(file, status: .skipped)
                 processedBytes += file.size
                 try jobRepository.updateFileCopyStatus(

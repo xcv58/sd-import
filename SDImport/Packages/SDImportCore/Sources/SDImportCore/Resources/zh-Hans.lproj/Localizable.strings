@@ -637,3 +637,8 @@
 "Keep Scan Results" = "保留扫描结果";
 "Start New Scan" = "开始新的扫描";
 "Choose the original source folder instead of a symbolic link." = "请选择原始来源文件夹，而不是符号链接。";
+
+"Complete Insta360 recordings in their original folders" = "在原文件夹中补全 Insta360 录像";
+"The plan includes both Insta360 lens files in the selected destination." = "此计划将在所选目标位置保留两个 Insta360 镜头文件。";
+"The source is missing an Insta360 lens file. Scan the folder containing both files." = "源位置缺少一个 Insta360 镜头文件。请扫描包含两个文件的文件夹。";
+"An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "无法验证现有的 Insta360 镜头文件。请选择其他文件夹来保存两个文件。";

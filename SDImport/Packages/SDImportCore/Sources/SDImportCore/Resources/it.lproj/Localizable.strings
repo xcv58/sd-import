@@ -637,3 +637,8 @@
 "Keep Scan Results" = "Conserva i risultati";
 "Start New Scan" = "Avvia nuova scansione";
 "Choose the original source folder instead of a symbolic link." = "Scegli la cartella sorgente originale anziché un collegamento simbolico.";
+
+"Complete Insta360 recordings in their original folders" = "Completa le registrazioni Insta360 nelle cartelle originali";
+"The plan includes both Insta360 lens files in the selected destination." = "Il piano include entrambi i file degli obiettivi Insta360 nella destinazione selezionata.";
+"The source is missing an Insta360 lens file. Scan the folder containing both files." = "Nell’origine manca un file di un obiettivo Insta360. Scansiona la cartella che contiene entrambi i file.";
+"An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "Non è stato possibile verificare un file di un obiettivo Insta360 già presente. Scegli un’altra cartella per entrambi i file.";

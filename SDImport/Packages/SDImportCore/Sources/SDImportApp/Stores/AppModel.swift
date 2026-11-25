@@ -509,7 +509,19 @@ final class AppModel: ObservableObject {
     @Published private(set) var previewTotals: ImportPreviewTotals = .empty
     @Published private(set) var previewDestinations: [ImportPreviewDestination] = []
     @Published private(set) var previewSpaceRequirements: [ImportPreviewSpaceRequirement] = []
+    @Published var useOriginalInsta360Folders = true {
+        didSet {
+            if useOriginalInsta360Folders != oldValue {
+                rebuildPreviewPlanCache()
+            }
+        }
+    }
     @Published var currentSummary: ScanSummary?
+    private var insta360RescanRecovery: Insta360RescanRecovery?
+    private var insta360RescanAccess: [SecurityScopedResourceAccess] = []
+    var hasInsta360RescanRecordings: Bool { insta360RescanRecovery != nil }
+    var canCompleteInsta360InOriginalFolders: Bool { insta360RescanRecovery?.hasOriginalFolders == true }
+    var hasIncompleteInsta360RescanRecording: Bool { insta360RescanRecovery?.hasIncompleteRecordings == true }
     @Published private(set) var scanBothSession: ScanBothSession?
     private var previousScanBothSession: ScanBothSession?
     @Published var currentResult: ImportResult? {
@@ -1281,6 +1293,8 @@ final class AppModel: ObservableObject {
 
     private func clearSourceReview() {
         folderAccessFeedback = nil
+        insta360RescanRecovery = nil
+        insta360RescanAccess = []
         currentSummary = nil
         currentResult = nil
         importProgress = nil
@@ -1539,6 +1553,8 @@ final class AppModel: ObservableObject {
         savePreferences()
         scanBothSession = nil
         singleScanMount = nil
+        insta360RescanRecovery = nil
+        insta360RescanAccess = []
         currentResult = nil
         importProgress = nil
         ejectedSourceJobID = nil
@@ -1581,6 +1597,12 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
                 let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
                 let files = try repositories.jobRepository.fetchJobFiles(jobID: summary.jobID)
+                let insta360Recovery = try recovering.map {
+                    try Insta360RescanRecovery(
+                        previousFiles: repositories.jobRepository.fetchJobFiles(jobID: $0.jobID),
+                        scannedFiles: files
+                    )
+                }
                 try Task.checkCancellation()
 
                 await MainActor.run {
@@ -1592,7 +1614,10 @@ final class AppModel: ObservableObject {
                         return
                     }
                     self.jobs = jobs
-                    self.loadScanPreview(summary, files: files, dedupeRepository: repositories.dedupeRepository)
+                    self.loadScanPreview(
+                        summary, files: files, dedupeRepository: repositories.dedupeRepository,
+                        insta360Recovery: insta360Recovery, recoveryAccess: recovering?.access ?? []
+                    )
                     if let warning = summary.portableReceiptWarning {
                         self.setLocalizedStatusMessage {
                             let localizedWarning = L10n.portableReceiptWarning(
@@ -1866,7 +1891,9 @@ final class AppModel: ObservableObject {
             folderGrouping: folderGrouping,
             roots: effectiveDestinationRoots,
             fallbackLocation: Self.defaultSessionLabel(for: location),
-            volumeName: currentSummary.volumeName
+            volumeName: currentSummary.volumeName,
+            insta360Recovery: insta360RescanRecovery,
+            useOriginalInsta360Folders: useOriginalInsta360Folders
         )
     }
 
@@ -2110,6 +2137,7 @@ final class AppModel: ObservableObject {
 
     private func isKnownImportedFile(_ row: ImportPreviewRow) -> Bool {
         knownImportedPreviewFileIDs.contains(row.id)
+            && insta360RescanRecovery?.includes(sourcePath: row.sourcePath) != true
     }
 
     func importCurrentJob() {
@@ -2312,7 +2340,12 @@ final class AppModel: ObservableObject {
         importLogger.info("Import started jobID=\(jobID, privacy: .private)")
         let portableImportReceiptsEnabled = self.portableImportReceiptsEnabled
         let reviewedSourcePath = currentSummary?.mountPath
-        let retainedAccess = (Array(folderAccesses.values) + [scanBothSourceAccess].compactMap { $0 }).filter(\.isActive)
+        let retainedAccess = (
+            Array(folderAccesses.values) + [scanBothSourceAccess].compactMap { $0 } + insta360RescanAccess
+        ).filter(\.isActive)
+        let reviewedInsta360RescanMembers = Set(approvedPlans.compactMap { plan in
+            plan.isInsta360RescanMember ? plan.update?.id : nil
+        })
 
         importTask = Task.detached(priority: .userInitiated) {
             defer { withExtendedLifetime(retainedAccess) {} }
@@ -2340,7 +2373,8 @@ final class AppModel: ObservableObject {
                         jobRepository: repositories.jobRepository,
                         dedupeRepository: repositories.dedupeRepository,
                         copyEngine: CopyEngine(sourceDirectory: sourceDirectory),
-                        portableReceiptsEnabled: portableImportReceiptsEnabled
+                        portableReceiptsEnabled: portableImportReceiptsEnabled,
+                        reviewedInsta360RescanMembers: reviewedInsta360RescanMembers
                     )
                     var lastPublishedAt = Date(timeIntervalSince1970: 0)
                     let minimumUpdateInterval: TimeInterval = 0.75
@@ -2425,6 +2459,22 @@ final class AppModel: ObservableObject {
                 importLogger.info(
                     "Import finished imported=\(result.importedFiles, privacy: .public) skipped=\(result.skippedFiles, privacy: .public) failed=\(result.failedFiles, privacy: .public)"
                 )
+            } catch SDImportError.insta360RescanCopyChanged {
+                let snapshot = try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID)
+                await MainActor.run {
+                    guard self.importAttempt?.accepts(attemptID) == true else { return }
+                    if let snapshot {
+                        self.jobs = snapshot.jobs
+                        self.selectedJobFiles = snapshot.files
+                        self.currentPreviewFiles = snapshot.files
+                    }
+                    self.useOriginalInsta360Folders = false
+                    self.importProgress = nil
+                    self.finishImportAttempt(attemptID, event: .recover(hasScannedJob: true))
+                    self.showFolderAccessError {
+                        L10n.tr("An existing Insta360 lens file could not be verified. Choose a different folder for both files.")
+                    }
+                }
             } catch SDImportError.reviewedDestinationChanged {
                 let snapshot = try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID)
                 await MainActor.run {
@@ -2626,6 +2676,8 @@ final class AppModel: ObservableObject {
         }
         scanBothSession = nil
         singleScanMount = nil
+        insta360RescanRecovery = nil
+        insta360RescanAccess = []
         currentSummary = nil
         currentResult = nil
         importProgress = nil
@@ -2871,8 +2923,11 @@ final class AppModel: ObservableObject {
     }
 
     private func loadScanPreview(
-        _ summary: ScanSummary, files: [JobFileRecord], dedupeRepository: DedupeRepository
+        _ summary: ScanSummary, files: [JobFileRecord], dedupeRepository: DedupeRepository,
+        insta360Recovery: Insta360RescanRecovery? = nil, recoveryAccess: [SecurityScopedResourceAccess] = []
     ) {
+        insta360RescanRecovery = insta360Recovery.flatMap { $0.isEmpty ? nil : $0 }
+        insta360RescanAccess = canCompleteInsta360InOriginalFolders ? recoveryAccess : []
         currentSummary = summary
         if isReviewingScanBothVolume {
             validatePaths()
@@ -2880,6 +2935,7 @@ final class AppModel: ObservableObject {
         selectedJobID = summary.jobID
         selectedJobFiles = files
         currentPreviewFiles = files
+        useOriginalInsta360Folders = true
         knownImportedPreviewFileIDs = Self.knownImportedFileIDs(files: files, dedupeRepository: dedupeRepository)
         applyRecommendationAfterScan(files: files, summary: summary)
         rebuildPreviewSessions(files: files, defaultLabel: summary.location)
@@ -3731,7 +3787,7 @@ final class AppModel: ObservableObject {
         guard confirmLeavingScanBothResults(actionTitle: L10n.tr("Start New Scan")),
               let url = pickCardFolder(startingAt: path),
               let chosenPath = validatedSelectedSourcePath(url) else { return }
-        let recoveryAccess = Array(folderAccesses.values)
+        let recoveryAccess = Array(folderAccesses.values) + insta360RescanAccess
         retainPendingScanBothResults()
         selectSourcePath(chosenPath)
         resetImportDraftFromDefaults()
@@ -4377,7 +4433,20 @@ final class AppModel: ObservableObject {
     }
 
     private func requiredDestinationPathsAreUsable() -> Bool {
-        requiredDestinationValidations().allSatisfy {
+        if useOriginalInsta360Folders, let recovery = insta360RescanRecovery {
+            let copyRows = previewRows.filter(\.willCopy)
+            let originalFolders = copyRows.compactMap { recovery.originalFolder(for: $0.sourcePath) }
+            if AppDistribution.current == .macAppStore,
+               originalFolders.contains(where: {
+                   !hasActiveFolderAccess(covering: $0.path, additionalAccess: insta360RescanAccess)
+               }) {
+                return false
+            }
+            if !copyRows.isEmpty, originalFolders.count == copyRows.count {
+                return true
+            }
+        }
+        return requiredDestinationValidations().allSatisfy {
             $0.isUsable && !destinationNeedsAccess($0)
         }
     }

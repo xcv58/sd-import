@@ -637,3 +637,8 @@
 "Keep Scan Results" = "Keep Scan Results";
 "Start New Scan" = "Start New Scan";
 "Choose the original source folder instead of a symbolic link." = "Choose the original source folder instead of a symbolic link.";
+
+"Complete Insta360 recordings in their original folders" = "Complete Insta360 recordings in their original folders";
+"The plan includes both Insta360 lens files in the selected destination." = "The plan includes both Insta360 lens files in the selected destination.";
+"The source is missing an Insta360 lens file. Scan the folder containing both files." = "The source is missing an Insta360 lens file. Scan the folder containing both files.";
+"An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "An existing Insta360 lens file could not be verified. Choose a different folder for both files.";

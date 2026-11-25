@@ -637,3 +637,8 @@
 "Keep Scan Results" = "スキャン結果を保持";
 "Start New Scan" = "新しいスキャンを開始";
 "Choose the original source folder instead of a symbolic link." = "シンボリックリンクではなく、元のソースフォルダを選択してください。";
+
+"Complete Insta360 recordings in their original folders" = "元のフォルダで Insta360 の録画を完成させる";
+"The plan includes both Insta360 lens files in the selected destination." = "選択した保存先に Insta360 の両方のレンズファイルを保存するプランです。";
+"The source is missing an Insta360 lens file. Scan the folder containing both files." = "読み込み元に Insta360 のレンズファイルが 1 つありません。両方のファイルがあるフォルダをスキャンしてください。";
+"An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "既存の Insta360 のレンズファイルを確認できませんでした。両方のファイルを保存する別のフォルダを選択してください。";

@@ -12,6 +12,7 @@ public enum SDImportError: Error, Equatable, Sendable {
     case missingDestinationDirectory(Int64?)
     case destinationFilenameConflict(String)
     case reviewedDestinationChanged
+    case insta360RescanCopyChanged
     case insufficientDestinationSpace(path: String, requiredBytes: Int64, availableBytes: Int64)
     case copySizeMismatch(expected: Int64, actual: Int64)
     case jobNotFound(String)
@@ -43,7 +44,7 @@ extension SDImportError: LocalizedError {
             L10n.tr("The destination folder is unavailable.")
         case .destinationFilenameConflict:
             L10n.tr("Conflicts")
-        case .reviewedDestinationChanged:
+        case .reviewedDestinationChanged, .insta360RescanCopyChanged:
             L10n.tr("The import plan changed. Review it before copying.")
         case .insufficientDestinationSpace(let path, let required, let available):
             L10n.tr("Not enough space in \(path). Need \(L10n.fileSize(required)), available \(L10n.fileSize(available)).")
