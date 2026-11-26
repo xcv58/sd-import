@@ -43,7 +43,7 @@ committing any excerpt.
 | Video sidecars | Video clips with XML/metadata/proxy files | Footage Backup shows sidecar count; sidecars stay skipped unless kept | Fixture coverage exists; hardware unavailable |
 | Duplicate filenames | Two camera folders containing the same clip filename | Destination plan suffixes later copies and avoids overwrites | Fixture coverage exists; hardware unavailable |
 | Card removal during scan | Remove card after scan starts | User-facing failure; no duplicate job loop | Fixture coverage exists; hardware unavailable |
-| Card removal during import | Remove card during copy | Failed file recorded; retry remains available | Fixture coverage exists; hardware unavailable |
+| Card removal during import | Remove card during copy | Import stops and names the disconnected volume. Completed files remain in the destination and History. Use **Rescan Source** after reconnecting. | Fixture coverage exists; hardware unplug verification pending |
 | Manual source eject | Complete an error-free import, then choose the named eject action on the receipt | The whole source volume unmounts; the receipt says `Ejected — Safe to Remove`; destination files remain accessible | Passed 2026-07-22: 11 of 11 files (200.1 MB) copied, then the built-in-reader source ejected |
 | Automatic source eject | Enable `Eject source device after a successful import`, then complete an error-free import | The verified removable source device ejects only after the receipt and report are finalized | Required before releasing source ejection |
 | Multi-volume camera detection | Connect a camera that exposes internal storage and a memory card as separate disks | Both volumes are direct, one-click source choices labeled with the same physical device | Topology confirmed 2026-07-25 with DJI Pocket hardware: `Untitled` on one whole disk and `Pocket4` on a second whole disk share one DJI USB-device registry identity |
@@ -52,7 +52,7 @@ committing any excerpt.
 | Multi-volume camera eject | Import from either storage volume, then choose the device eject action | Every whole disk belonging to the verified physical device unmounts before the UI says the camera is safe to disconnect | Grouped manual eject passed 2026-07-25; the post-import receipt path was not separately exercised on multi-volume hardware |
 | Partial multi-volume eject failure | Keep one camera volume busy, then eject the grouped device | No force-eject occurs; the app identifies any volume already ejected and the volume that remains mounted | Fixture coverage required; confirm with hardware when practical |
 | Eject blocked by another app | Keep a source file open in another app, then request ejection | macOS refusal is shown in SD Import; the source remains mounted; no force-eject occurs | Required before releasing source ejection |
-| Import completed with errors | Enable automatic ejection, then produce a retryable copy failure | The source remains mounted and retry stays available | Fixture policy coverage exists; confirm with hardware before release |
+| Import completed with errors | Enable automatic ejection, then produce a copy failure | The source remains mounted. The receipt and History offer **Rescan Source** to create a fresh plan. | Fixture policy coverage exists; confirm with hardware before release |
 | Source subfolder | Select a folder inside the mounted card as the source, import, then eject | SD Import ejects the card's volume root rather than only the selected folder | Fixture policy coverage exists; confirm with hardware before release |
 | Built-in card reader | Import from a card that macOS reports as both internal-location and removable | The verified removable card remains eligible and ejects normally | Passed 2026-07-22 with a removable Secure Digital source reported at an internal device location |
 | Ejection completion UI | Complete a clean import, then eject from the copy receipt | The named source has a prominent eject action; success changes to a green `Ejected — Safe to Remove` confirmation | Passed 2026-07-22 with source `Untitled` |
@@ -75,6 +75,41 @@ committing any excerpt.
 | Auto-prompt stale-copy settings save | Open an uninstalled copy before enabling prompting in the installed copy, then change an unrelated path or theme in the stale copy | The unrelated setting saves, but the installed copy's shared auto-prompt preference remains enabled | Automated atomic two-writer repository coverage exists; physical validation required for a future background-prompt release |
 | Auto-prompt installation authority | Test copies in `/Applications`, `~/Applications`, Downloads, and a mounted DMG, including a renamed installed copy | `/Applications/SD Import.app` wins deterministically, then another matching app in `/Applications`, then `~/Applications`; an uninstalled-only copy says `Install required` | Required before releasing background-prompt changes |
 | Auto-prompt causal errors | Queue an older successful handoff, then force a newer helper launch or mailbox failure before the old event is acknowledged | The newer error remains visible until a later event succeeds; the older acknowledgement does not erase it | Required before releasing background-prompt changes |
+
+## Scan Both
+
+Use an internal TestFlight build and an Insta360 Luna Ultra or DJI Pocket 4
+in USB file-transfer mode. Use a camera with media on both storage volumes.
+Record the build number and per-volume counts.
+
+1. Confirm the two volumes appear in one prompt with individual choices and
+   **Scan Both**. If the mounts are staggered, confirm the second volume joins
+   the open prompt.
+2. Select **Scan Both** and grant folder access when macOS asks. Confirm
+   internal storage finishes scanning before the SD card starts scanning.
+3. Confirm the review shows each volume's label, sample filenames, and file
+   count. Open each volume's **Review import** and return with **Back to Scan
+   Results**. Check that the file list and copy action are scoped to the
+   selected volume. Leave the copy action unselected during the scan check.
+4. Repeat and decline access to one volume when asked. Confirm the skipped
+   volume shows its reason and the sibling's scan result remains available.
+   If the device can unmount one volume separately, repeat by safely
+   unmounting that volume before its scan starts.
+5. Reconnect and choose one volume directly. Confirm the app opens that volume's
+   import review.
+
+On November 25, 2026, internal TestFlight 1.2 (40) passed on an Insta360 Luna
+Ultra with two exFAT volumes on macOS 27.3. The SD Card joined the open
+Internal prompt after a staggered remount. The combined review showed 14
+files on Internal and 52 on SD Card, with a separate import review for each.
+The scan jobs recorded Internal first. Declining access to Internal kept the
+SD Card result. Unmounting the SD Card before its scan kept the Internal
+result and reported the SD Card as unmounted. After restoring both mounts,
+choosing SD Card by itself opened its individual review. The camera scans
+recorded zero imported files.
+
+The native fixture tests also verify that importing one scan job leaves the
+other pending.
 
 ## Disclosure headers
 

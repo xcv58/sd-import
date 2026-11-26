@@ -13,6 +13,7 @@ public enum PathValidationStatus: Equatable, Sendable {
     case unreadable
     case unwritable
     case placeholder
+    case symbolicLink
     case ready
 
     public var isUsable: Bool {
@@ -33,6 +34,8 @@ public enum PathValidationStatus: Equatable, Sendable {
             return L10n.tr("Permission needed")
         case .placeholder:
             return L10n.tr("Choose a specific card or source folder")
+        case .symbolicLink:
+            return L10n.tr("Choose the original source folder instead of a symbolic link.")
         case .ready:
             return L10n.tr("Ready")
         }
@@ -152,37 +155,68 @@ public struct PathValidator {
         originalPath: String,
         purpose: PathValidationPurpose
     ) -> PathValidationResult {
-        if purpose == .source, URL(fileURLWithPath: expandedPath).standardizedFileURL.path == "/Volumes" {
-            return PathValidationResult(
-                originalPath: originalPath,
-                expandedPath: expandedPath,
-                purpose: purpose,
-                status: .placeholder
-            )
+        let path: String
+        if purpose == .source {
+            guard let sourcePath = sourcePathWithoutUserSymlinks(expandedPath) else {
+                return PathValidationResult(
+                    originalPath: originalPath, expandedPath: expandedPath, purpose: purpose, status: .symbolicLink
+                )
+            }
+            path = sourcePath
+            if URL(fileURLWithPath: path).standardizedFileURL.path == "/Volumes" {
+                return PathValidationResult(
+                    originalPath: originalPath, expandedPath: path, purpose: purpose, status: .placeholder
+                )
+            }
+        } else {
+            path = expandedPath
         }
 
         let denied: PathValidationStatus = purpose == .source ? .unreadable : .unwritable
         let status: PathValidationStatus
         var metadata = stat()
         // Follow symlinks and retain the lookup error when macOS hides the target.
-        if stat(expandedPath, &metadata) != 0 {
+        if stat(path, &metadata) != 0 {
             let lookupError = errno
             status = lookupError == EACCES || lookupError == EPERM ? denied : .missing
         } else if metadata.st_mode & S_IFMT != S_IFDIR {
             status = .notDirectory
         } else {
-            let canTraverse = fileManager.isExecutableFile(atPath: expandedPath)
+            let canTraverse = fileManager.isExecutableFile(atPath: path)
             let canUse = purpose == .source
-                ? fileManager.isReadableFile(atPath: expandedPath)
-                : fileManager.isWritableFile(atPath: expandedPath)
+                ? fileManager.isReadableFile(atPath: path)
+                : fileManager.isWritableFile(atPath: path)
             status = canTraverse && canUse ? .ready : denied
         }
 
         return PathValidationResult(
             originalPath: originalPath,
-            expandedPath: expandedPath,
+            expandedPath: path,
             purpose: purpose,
             status: status
         )
+    }
+
+    private func sourcePathWithoutUserSymlinks(_ expandedPath: String) -> String? {
+        let absolutePath = expandedPath.hasPrefix("/") ? expandedPath : fileManager.currentDirectoryPath + "/" + expandedPath
+        var path = ""
+        for component in absolutePath.split(separator: "/") where component != "." {
+            path += "/" + component
+            var metadata = stat()
+            guard lstat(path, &metadata) == 0, metadata.st_mode & S_IFMT == S_IFLNK else { continue }
+            // macOS exposes these aliases itself. Translate them before checking the rest of the path.
+            let target = try? fileManager.destinationOfSymbolicLink(atPath: path)
+            if ["/tmp", "/var", "/etc"].contains(path),
+               target == "private" + path || target == "/private" + path {
+                path = "/private" + path
+            } else if path.hasPrefix("/Volumes/"), target == "/",
+                      let bootName = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeNameKey]).volumeName,
+                      path == "/Volumes/" + bootName {
+                path = ""
+            } else {
+                return nil
+            }
+        }
+        return path.isEmpty ? "/" : path
     }
 }

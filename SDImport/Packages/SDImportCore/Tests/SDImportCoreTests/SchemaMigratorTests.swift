@@ -79,7 +79,12 @@ struct SchemaMigratorTests {
         }
         #expect(values.0 == nil)
         #expect(values.1 == false)
-        #expect(try JobRepository(pool: pool).needsDestinationReview(jobID: "legacy-job") == false)
+        let repository = JobRepository(pool: pool)
+        #expect(try repository.needsDestinationReview(jobID: "legacy-job") == false)
+        let migratedJob = try repository.fetchJob(id: "legacy-job")
+        let legacyJob = try #require(migratedJob)
+        #expect(legacyJob.volumeMountPath == nil)
+        #expect(legacyJob.rescanOfJobID == nil)
     }
 
     @Test("preserves unresolved copy evidence from the earlier journal schema")

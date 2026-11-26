@@ -879,10 +879,7 @@
   },
   "m202": {
     "page": "user-guide",
-    "tokens": {
-      "{0}": "<code>",
-      "{/0}": "</code>"
-    }
+    "tokens": {}
   },
   "m203": {
     "page": "user-guide",
@@ -1476,5 +1473,19 @@
   "beta.feedback": {
     "page": "beta",
     "tokens": {}
+  },
+  "guide.scan_both": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>",
+      "{/0}": "</code>"
+    }
+  },
+  "guide.rescan": {
+    "page": "user-guide",
+    "tokens": {
+      "{0}": "<code>",
+      "{/0}": "</code>"
+    }
   }
 }

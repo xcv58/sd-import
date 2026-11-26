@@ -622,3 +622,23 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "Vuelve a intentarlo. Si ya activaste tu prueba o compraste el acceso de por vida, selecciona Restaurar compras.";
 "The import plan changed. Review it before copying." = "El plan de importación cambió. Revíselo antes de copiar.";
 "Reconnect the original card or restore its source folder, then retry." = "Vuelve a conectar la tarjeta original o restaura su carpeta de origen y vuelve a intentarlo.";
+"Scan Both" = "Escanear ambos";
+"Choose one or both storage volumes to scan." = "Elige uno o ambos volúmenes para escanear.";
+"Access declined" = "Acceso denegado";
+"Review scan results" = "Revisar resultados del escaneo";
+"Back to Scan Results" = "Volver a los resultados";
+"Waiting to scan" = "En espera de escaneo";
+"%lld files scanned" = "%lld archivos escaneados";
+"Review %@" = "Revisar %@";
+"Rescan Source" = "Volver a escanear el origen";
+"Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "Iniciar un nuevo escaneo cierra esta sesión de Escanear ambos. Tendrás que volver a escanear los volúmenes restantes.";
+"Import stopped because %@ disconnected." = "La importación se detuvo porque se desconectó %@.";
+"Discard pending scan results?" = "¿Descartar los resultados de escaneo pendientes?";
+"Keep Scan Results" = "Conservar resultados";
+"Start New Scan" = "Iniciar nuevo escaneo";
+"Choose the original source folder instead of a symbolic link." = "Elige la carpeta de origen original en lugar de un enlace simbólico.";
+
+"Complete Insta360 recordings in their original folders" = "Completar las grabaciones de Insta360 en sus carpetas originales";
+"The plan includes both Insta360 lens files in the selected destination." = "El plan incluye los archivos de ambas lentes de Insta360 en el destino seleccionado.";
+"The source is missing an Insta360 lens file. Scan the folder containing both files." = "Falta un archivo de lente de Insta360 en el origen. Escanea la carpeta que contiene ambos archivos.";
+"An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "No se pudo verificar un archivo de lente de Insta360 existente. Elige otra carpeta para ambos archivos.";

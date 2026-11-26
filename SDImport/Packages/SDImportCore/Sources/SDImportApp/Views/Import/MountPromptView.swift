@@ -24,7 +24,7 @@ struct MountPromptView: View {
                     }
                 }
 
-                Text(promptMessage(isMultiVolume: group.isMultiVolume))
+                Text(promptMessage(volumeCount: group.volumes.count))
                     .font(.callout)
                     .foregroundStyle(.secondary)
 
@@ -53,7 +53,13 @@ struct MountPromptView: View {
                         model.skipMountedVolumePrompt(promptID)
                     }
                     .accessibilityIdentifier("import.mount-prompt.decline")
-                    if !group.isMultiVolume {
+                    if group.volumes.count == 2 {
+                        Button(L10n.tr("Scan Both")) {
+                            model.acceptScanBoth(prompt)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("import.mount-prompt.both")
+                    } else if !group.isMultiVolume {
                         Button(scanButtonTitle(firstVolume)) {
                             model.acceptMountedVolumePrompt(firstVolume, from: prompt)
                         }
@@ -78,8 +84,11 @@ struct MountPromptView: View {
         }
     }
 
-    private func promptMessage(isMultiVolume: Bool) -> String {
-        if isMultiVolume {
+    private func promptMessage(volumeCount: Int) -> String {
+        if volumeCount == 2 {
+            return L10n.tr("Choose one or both storage volumes to scan.")
+        }
+        if volumeCount > 1 {
             return L10n.tr("Choose a storage volume to scan and preview what would be copied.")
         }
         if AppDistribution.current == .macAppStore {

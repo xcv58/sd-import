@@ -188,12 +188,12 @@
   "m199": "Avvia la copia.",
   "m200": "Conferma le destinazioni e lascia collegata la sorgente fino al termine dell’importazione.",
   "m201": "Espelli in sicurezza.",
-  "m202": "Scegli {0}Espelli sorgente{/0} nel riepilogo o attiva l’espulsione automatica in Impostazioni. Avviene solo dopo un’importazione senza errori.",
+  "m202": "Usa il comando di espulsione nella ricevuta di copia e attendi la conferma. Se attiva, l’espulsione automatica richiede un’importazione senza errori che abbia copiato dei file.",
   "m203": "Precauzioni",
   "m204": "SD Card Import copia i file; non cancella la scheda.",
   "m205": "Con le ricevute portatili attive, SD Card Import scrive sulla sorgente solo il registro nascosto {0}. Le sorgenti bloccate o di sola lettura continuano a funzionare con un avviso.",
   "m206": "I file già importati vengono saltati nelle esecuzioni successive. {0}Importa comunque{/0} è disponibile solo per quelli riconosciuti dalla cronologia portatile. Se un file cambia dopo la scansione, SD Card Import richiede una nuova scansione anziché usare dati obsoleti.",
-  "m207": "SD Card Import non sovrascrive file con contenuto diverso già presenti nella destinazione. Ai normali conflitti di nome viene aggiunto un suffisso. Le registrazioni Insta360 in conflitto vengono ignorate per preservare i nomi. Scegli un’altra destinazione prima di copiare.",
+  "m207": "I normali conflitti di nome si risolvono con un suffisso per conservare entrambi i file. Se una registrazione Insta360 presenta un conflitto, scegli un’altra destinazione per mantenere i nomi originali.",
   "m208": "Mantieni l’app installata in {0} per ricevere gli avvisi delle schede in background.",
   "m209": "Scorciatoie da tastiera",
   "m210": "{0}: apri Importa.",
@@ -319,5 +319,7 @@
   "beta.step2.body": "Apri il link della beta pubblica sul tuo Mac, poi segui i passaggi in TestFlight per installare SD Card Import.",
   "beta.step3.title": "Condividi il tuo feedback.",
   "beta.step3.body": "Invia il feedback da TestFlight oppure scrivici indicando la versione dell’app e cosa è successo.",
-  "beta.feedback": "Invia feedback sulla beta via e-mail"
+  "beta.feedback": "Invia feedback sulla beta via e-mail",
+  "guide.scan_both": "Quando è disponibile {0}Scansiona entrambi{/0}, scansiona insieme la memoria interna e la scheda della fotocamera. Controlla e conferma ogni copia separatamente.",
+  "guide.rescan": "Se la copia si interrompe, i file già copiati restano nella destinazione. Ricollega la sorgente se necessario, scegli {0}Scansiona di nuovo la sorgente{/0} nella cronologia e controlla il nuovo piano."
 }

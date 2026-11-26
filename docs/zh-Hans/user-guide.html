@@ -76,8 +76,10 @@
                 <li><span class="step-number">1</span><div><h3 data-i18n="m195">连接存储卡。</h3><p data-i18n="m196">插入 SD 卡或连接相机读卡器。</p></div></li>
                 <li><span class="step-number">2</span><div><h3 data-i18n="m197">检查扫描结果。</h3><p data-i18n="m198">检查新增、已导入、不支持或存在冲突的文件。</p></div></li>
                 <li><span class="step-number">3</span><div><h3 data-i18n="m199">开始拷贝。</h3><p data-i18n="m200">确认目标位置，保持源设备连接直到导入完成。</p></div></li>
-                <li><span class="step-number">4</span><div><h3 data-i18n="m201">安全推出。</h3><p data-i18n="m202">在导入结果中选择<code>弹出来源</code>，或在“设置”中启用自动弹出。只有导入没有错误时才会自动弹出。</p></div></li>
+                <li><span class="step-number">4</span><div><h3 data-i18n="m201">安全推出。</h3><p data-i18n="m202">请在复制回执中选择推出，并等待确认。启用自动推出后，只有实际复制了文件且导入无误时才会推出。</p></div></li>
             </ol>
+            <p data-i18n="guide.scan_both">如果能选择<code>扫描两者</code>，可以一起扫描相机内置存储和存储卡。请分别检查和确认每次复制。</p>
+            <p data-i18n="guide.rescan">复制中断时，已复制的文件会保留在目标位置。必要时重新连接来源，在历史记录中选择<code>重新扫描来源</code>，然后检查新方案。</p>
         </section>
 
         <section class="section section-divider two-column">
@@ -87,7 +89,7 @@
                     <li data-i18n="m204">SD Card Import 拷贝文件，不会抹掉存储卡。</li>
                     <li data-i18n="m205">若启用在来源保存导入记录，SD Card Import 只会在来源隐藏的 <code>.sd-import</code> 文件夹中写入记录。锁定或只读的来源仍可导入，并会提示无法保存这些记录。</li>
                     <li data-i18n="m206">已导入的文件会在之后跳过。<code>仍然导入</code>只适用于从卡上记录识别出的文件。如果源文件在扫描后更改，SD Card Import 会要求重新扫描，不会沿用过期记录。</li>
-                    <li data-i18n="m207">SD Card Import 不会覆盖目标位置中内容不同的文件。普通文件名冲突会添加后缀。Insta360 录像发生冲突时会跳过，以保留原始文件名；请在复制前选择其他目标位置。</li>
+                    <li data-i18n="m207">普通文件名冲突会添加后缀，以保留两个文件。如果 Insta360 录制的文件名有冲突，请选择其他目标文件夹以保留原始文件名。</li>
                     <li data-i18n="m208">将应用保留在 <code>Applications</code> 中，以使用后台存储卡提示。</li>
                 </ul>
             </div>

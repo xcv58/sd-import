@@ -622,3 +622,23 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "다시 시도해 주세요. 이미 체험을 활성화했거나 평생 이용권을 구매했다면 구입 항목 복원을 선택하세요.";
 "The import plan changed. Review it before copying." = "가져오기 계획이 변경되었습니다. 복사하기 전에 확인하세요.";
 "Reconnect the original card or restore its source folder, then retry." = "원래 카드를 다시 연결하거나 소스 폴더를 복원한 후 다시 시도하세요.";
+"Scan Both" = "둘 다 스캔";
+"Choose one or both storage volumes to scan." = "스캔할 저장 볼륨을 하나 또는 둘 다 선택하세요.";
+"Access declined" = "접근이 거부됨";
+"Review scan results" = "스캔 결과 검토";
+"Back to Scan Results" = "스캔 결과로 돌아가기";
+"Waiting to scan" = "스캔 대기 중";
+"%lld files scanned" = "파일 %lld개 스캔 완료";
+"Review %@" = "%@ 검토";
+"Rescan Source" = "소스 다시 스캔";
+"Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "새 스캔을 시작하면 현재의 두 볼륨 스캔 세션이 종료됩니다. 남은 볼륨은 다시 스캔해야 합니다.";
+"Import stopped because %@ disconnected." = "%@의 연결이 끊어져 가져오기가 중지되었습니다.";
+"Discard pending scan results?" = "대기 중인 스캔 결과를 삭제할까요?";
+"Keep Scan Results" = "스캔 결과 유지";
+"Start New Scan" = "새 스캔 시작";
+"Choose the original source folder instead of a symbolic link." = "심볼릭 링크 대신 원본 소스 폴더를 선택하세요.";
+
+"Complete Insta360 recordings in their original folders" = "기존 폴더에서 Insta360 녹화 완성하기";
+"The plan includes both Insta360 lens files in the selected destination." = "이 계획에는 선택한 대상에 Insta360 렌즈 파일 두 개를 저장하는 작업이 포함됩니다.";
+"The source is missing an Insta360 lens file. Scan the folder containing both files." = "소스에 Insta360 렌즈 파일 하나가 없습니다. 두 파일이 모두 있는 폴더를 스캔하세요.";
+"An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "기존 Insta360 렌즈 파일을 확인할 수 없습니다. 두 파일을 저장할 다른 폴더를 선택하세요.";

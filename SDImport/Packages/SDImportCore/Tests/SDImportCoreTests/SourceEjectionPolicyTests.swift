@@ -40,6 +40,43 @@ struct SourceEjectionPolicyTests {
         #expect(!policy.canEjectCurrentVolume(makeVolume(volumeUUID: nil), matching: makeVolume(volumeUUID: nil)))
     }
 
+    @Test("ejection checks nested symlinks in approved copy destinations")
+    func resolvesApprovedDestinationFolders() throws {
+        let manager = FileManager.default
+        let fixture = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let mac = fixture.appendingPathComponent("Mac", isDirectory: true)
+        let camera = fixture.appendingPathComponent("Camera", isDirectory: true)
+        try manager.createDirectory(at: mac, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: fixture) }
+        try manager.createDirectory(at: camera, withIntermediateDirectories: false)
+        let symlink = mac.appendingPathComponent("Photos", isDirectory: true)
+        try manager.createSymbolicLink(at: symlink, withDestinationURL: camera)
+        let newFolder = symlink.appendingPathComponent("New Trip", isDirectory: true)
+        let file = newFolder.appendingPathComponent("photo.jpg")
+        let plan = ImportFilePlan(update: nil, willCopy: true, disposition: .copy, destinationPath: file.path)
+
+        let resolved = try #require(policy.resolvedExistingDirectory(newFolder.path))
+        #expect(try manager.attributesOfItem(atPath: resolved.path)[.systemFileNumber] as? NSNumber
+            == manager.attributesOfItem(atPath: camera.path)[.systemFileNumber] as? NSNumber)
+        let volume = try #require(try camera.resourceValues(forKeys: [.volumeURLKey]).volume)
+        let paths = try #require(policy.resolvedDestinationVolumePaths(plans: [plan]))
+        #expect(paths == [volume.standardizedFileURL.path])
+    }
+
+    @Test("broken and cyclic destination symlinks prevent eject", arguments: [true, false])
+    func rejectsUnresolvableDestinationFolders(cycle: Bool) throws {
+        let manager = FileManager.default
+        let fixture = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try manager.createDirectory(at: fixture, withIntermediateDirectories: false)
+        defer { try? manager.removeItem(at: fixture) }
+        let link = fixture.appendingPathComponent("Photos", isDirectory: true)
+        try manager.createSymbolicLink(at: link, withDestinationURL: cycle ? link : fixture.appendingPathComponent("Missing"))
+        let file = link.appendingPathComponent("New Trip/photo.jpg")
+        let plan = ImportFilePlan(update: nil, willCopy: true, disposition: .copy, destinationPath: file.path)
+
+        #expect(policy.resolvedDestinationVolumePaths(plans: [plan]) == nil)
+    }
+
     private func makeJob(
         status: ImportJobStatus = .imported,
         volumeUUID: String? = "card-uuid"

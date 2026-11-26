@@ -146,6 +146,15 @@ struct ImportResultView: View {
 
     private var receiptButtons: some View {
         Group {
+            if let summary = model.currentSummary,
+               summary.jobID == result.jobID, model.needsRescan(summary.jobID) {
+                Button {
+                    model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
+                } label: {
+                    Label(L10n.tr("Rescan Source"), systemImage: "magnifyingglass")
+                }
+            }
+
             Button {
                 if let primaryDestinationPath {
                     model.reveal(path: primaryDestinationPath)
@@ -170,10 +179,12 @@ struct ImportResultView: View {
                 Label(L10n.tr("Open in History"), systemImage: "list.bullet.rectangle")
             }
 
-            Button {
-                model.importAnotherCard()
-            } label: {
-                Label(L10n.tr("Import Another Card"), systemImage: "externaldrive.badge.plus")
+            if !model.isReviewingScanBothVolume {
+                Button {
+                    model.importAnotherCard()
+                } label: {
+                    Label(L10n.tr("Import Another Card"), systemImage: "externaldrive.badge.plus")
+                }
             }
         }
     }

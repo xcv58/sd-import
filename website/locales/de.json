@@ -188,12 +188,12 @@
   "m199": "Kopieren starten.",
   "m200": "Bestätige die Ziele und lasse die Quelle bis zum Abschluss verbunden.",
   "m201": "Sicher auswerfen.",
-  "m202": "Wähle auf dem Beleg {0}Quelle auswerfen{/0} oder aktiviere automatisches Auswerfen in den Einstellungen. Es erfolgt nur nach einem fehlerfreien Import.",
+  "m202": "Verwende die Auswurffunktion im Importbeleg und warte auf die Bestätigung. Ist der automatische Auswurf aktiviert, setzt er einen fehlerfreien Import voraus, bei dem Dateien kopiert wurden.",
   "m203": "Sicherheitshinweise",
   "m204": "SD Card Import kopiert Dateien; es löscht die Karte nicht.",
   "m205": "Bei aktivierten portablen Belegen schreibt SD Card Import nur sein verborgenes Protokoll {0} auf die Quelle. Gesperrte und schreibgeschützte Quellen werden mit einem Hinweis weiterverarbeitet.",
   "m206": "Bereits importierte Dateien werden später übersprungen. {0}Trotzdem importieren{/0} ist nur für Dateien aus dem portablen Verlauf verfügbar. Ändert sich eine Quelldatei nach dem Scan, verlangt SD Card Import einen neuen Scan statt veraltete Verlaufsdaten zu verwenden.",
-  "m207": "SD Card Import überschreibt keine Dateien mit anderem Inhalt am Zielort. Bei normalen Namenskonflikten wird ein Suffix angehängt. Konflikte bei Insta360-Aufnahmen werden übersprungen, um die Dateinamen zu erhalten. Wähle vor dem Kopieren einen anderen Zielort.",
+  "m207": "Bei gewöhnlichen Namenskonflikten erhält eine Datei einen Zusatz, damit beide erhalten bleiben. Wähle bei einem Namenskonflikt einer Insta360-Aufnahme einen anderen Zielordner, damit die ursprünglichen Namen erhalten bleiben.",
   "m208": "Lass die App in {0} installiert, um Kartenhinweise im Hintergrund zu erhalten.",
   "m209": "Tastaturkurzbefehle",
   "m210": "{0}: Import öffnen.",
@@ -319,5 +319,7 @@
   "beta.step2.body": "Öffne den öffentlichen Beta-Link auf deinem Mac und folge den Schritten in TestFlight, um SD Card Import zu installieren.",
   "beta.step3.title": "Feedback teilen.",
   "beta.step3.body": "Sende Feedback über TestFlight oder schreibe uns eine E-Mail mit der App-Version und einer Beschreibung des Problems.",
-  "beta.feedback": "Beta-Feedback per E-Mail senden"
+  "beta.feedback": "Beta-Feedback per E-Mail senden",
+  "guide.scan_both": "Wenn {0}Beide scannen{/0} verfügbar ist, scanne den internen Speicher und die Speicherkarte der Kamera zusammen. Prüfe und bestätige jeden Kopiervorgang einzeln.",
+  "guide.rescan": "Wird der Kopiervorgang unterbrochen, bleiben bereits kopierte Dateien am Zielort. Verbinde die Quelle bei Bedarf erneut, wähle im Verlauf {0}Quelle erneut scannen{/0} und prüfe den neuen Plan."
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ScanRequest {
+public struct ScanRequest: Sendable {
     public let mountURL: URL
     public let volumeName: String?
     public let volumeUUID: String?
@@ -9,6 +9,8 @@ public struct ScanRequest {
     public let reportsDirectoryURL: URL?
     public let jobID: String
     public let portableReceiptsEnabled: Bool
+    public let volumeMountPath: String?
+    public let rescanOfJobID: String?
 
     public init(
         mountURL: URL,
@@ -18,7 +20,9 @@ public struct ScanRequest {
         roots: DestinationRoots,
         reportsDirectoryURL: URL? = nil,
         jobID: String = JobID.make(),
-        portableReceiptsEnabled: Bool = false
+        portableReceiptsEnabled: Bool = false,
+        volumeMountPath: String? = nil,
+        rescanOfJobID: String? = nil
     ) {
         self.mountURL = mountURL
         self.volumeName = volumeName
@@ -28,6 +32,8 @@ public struct ScanRequest {
         self.reportsDirectoryURL = reportsDirectoryURL
         self.jobID = jobID
         self.portableReceiptsEnabled = portableReceiptsEnabled
+        self.volumeMountPath = volumeMountPath
+        self.rescanOfJobID = rescanOfJobID
     }
 }
 
@@ -341,7 +347,9 @@ public struct MediaScanner {
             unsupportedFiles: recordingCounts.unsupportedFiles,
             conflictFiles: recordingCounts.conflictFiles,
             summaryJSONPath: reportBaseURL?.appendingPathExtension("json").path,
-            summaryMarkdownPath: reportBaseURL?.appendingPathExtension("md").path
+            summaryMarkdownPath: reportBaseURL?.appendingPathExtension("md").path,
+            volumeMountPath: request.volumeMountPath,
+            rescanOfJobID: request.rescanOfJobID
         )
 
         try jobRepository.insertScannedJob(job, files: files)

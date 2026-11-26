@@ -23,7 +23,6 @@ struct ImportPreviewView: View {
 
     private var fileFilter: ImportPreviewFileFilter {
         if let selectedFileFilter { return selectedFileFilter }
-        if model.isReviewingStoredImport { return .all }
         return model.previewTotals.copyFiles == 0 ? .skipped : .copy
     }
 
@@ -70,14 +69,16 @@ struct ImportPreviewView: View {
                         pinnedViews: [.sectionHeaders]
                     ) {
                         ImportSourceSummaryView(
-                            allowsChange: !model.isReviewingStoredImport,
-                            allowsRescan: !model.isReviewingStoredImport,
+                            allowsChange: !model.isReviewingScanBothVolume,
+                            allowsRescan: !model.isReviewingScanBothVolume
+                                && model.currentSummary.map { !model.needsRescan($0.jobID) } == true,
                             compact: true
                         )
+                        if model.isReviewingScanBothVolume, let summary = model.currentSummary {
+                            ScanPortableReceiptWarning(summary: summary)
+                        }
 
-                        if model.isReviewingStoredImport {
-                            storedImportPlanCard
-                        } else if model.previewTotals.copyFiles == 0 {
+                        if model.previewTotals.copyFiles == 0 {
                             zeroCopyCard
                         } else {
                             importPlanCard
@@ -145,6 +146,20 @@ struct ImportPreviewView: View {
 
             Spacer(minLength: 12)
 
+            if model.isReviewingScanBothVolume {
+                Button(L10n.tr("Back to Scan Results")) {
+                    model.returnToScanBothResults()
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if let summary = model.currentSummary, model.needsRescan(summary.jobID) {
+                Button(L10n.tr("Rescan Source")) {
+                    model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
             ImportReviewPrimaryAction()
                 .environmentObject(model)
         }
@@ -153,28 +168,6 @@ struct ImportPreviewView: View {
         .background(AppSurfacePalette.contentBackground)
         .overlay(alignment: .bottom) {
             Divider()
-        }
-    }
-
-    private var storedImportPlanCard: some View {
-        AppSection(L10n.tr("Import Plan"), systemImage: "list.bullet.rectangle") {
-            if let blockingReason = model.importReadinessMessage {
-                AppStatusLabel(title: blockingReason, systemImage: "exclamationmark.triangle", role: .warning)
-            } else if model.previewTotals.copyFiles == 0 {
-                Text(L10n.tr("No files will be copied"))
-            } else {
-                reviewSummary
-            }
-            destinationTree
-            HStack {
-                Button(L10n.tr("Refresh")) {
-                    model.refreshStoredImportReview()
-                }
-                Button(L10n.tr("Close")) {
-                    model.closeStoredImportReview()
-                }
-            }
-            .buttonStyle(.bordered)
         }
     }
 
@@ -192,6 +185,7 @@ struct ImportPreviewView: View {
 
             if hasSupportedMedia {
                 ImportDestinationFields()
+                insta360RescanOptions
                 defaultsAction
                 sessionControls
             }
@@ -207,6 +201,38 @@ struct ImportPreviewView: View {
                 )
                 .font(.caption)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var insta360RescanOptions: some View {
+        if model.canCompleteInsta360InOriginalFolders {
+            Toggle(
+                L10n.tr("Complete Insta360 recordings in their original folders"),
+                isOn: $model.useOriginalInsta360Folders
+            )
+        }
+        if model.hasInsta360RescanLensesToCopy, !model.hasIncompleteInsta360RescanRecording,
+           !model.canCompleteInsta360InOriginalFolders || !model.useOriginalInsta360Folders {
+            Text(L10n.tr("The plan includes both Insta360 lens files in the selected destination."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        if model.hasIncompleteInsta360RescanRecording {
+            AppStatusLabel(
+                title: L10n.tr("The source is missing an Insta360 lens file. Scan the folder containing both files."),
+                systemImage: "exclamationmark.triangle",
+                role: .warning
+            )
+            .font(.caption)
+        }
+        if model.hasInsta360RescanConflict {
+            AppStatusLabel(
+                title: L10n.tr("An existing Insta360 lens file could not be verified. Choose a different folder for both files."),
+                systemImage: "exclamationmark.triangle",
+                role: .warning
+            )
+            .font(.caption)
         }
     }
 
@@ -525,18 +551,25 @@ struct ImportPreviewView: View {
     }
 
     private var zeroCopyCard: some View {
-        AppSection(L10n.tr("Nothing New"), systemImage: "checkmark.seal") {
-            Text(zeroCopyTitle)
-                .font(.headline)
-            Text(zeroCopyDetail)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        let conflict = model.hasInsta360RescanConflict
+        return AppSection(
+            conflict ? L10n.tr("Conflicts") : L10n.tr("Nothing New"),
+            systemImage: conflict ? "exclamationmark.triangle" : "checkmark.seal"
+        ) {
+            if !conflict {
+                Text(zeroCopyTitle)
+                    .font(.headline)
+                Text(zeroCopyDetail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if hasSupportedMedia {
                 Divider()
                 importOptionControls
                 ImportDestinationFields()
+                insta360RescanOptions
                 defaultsAction
                 sessionControls
             }
@@ -1140,7 +1173,7 @@ private struct ImportReviewPrimaryAction: View {
 
     private var buttonTitle: String {
         guard model.previewTotals.copyFiles > 0 else {
-            return model.isReviewingStoredImport ? L10n.tr("Done") : L10n.tr("Nothing to Import")
+            return L10n.tr("Nothing to Import")
         }
         if !purchaseManager.canStartImport {
             return L10n.tr("Start Trial or Unlock")

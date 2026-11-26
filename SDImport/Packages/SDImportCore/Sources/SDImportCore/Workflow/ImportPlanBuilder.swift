@@ -102,6 +102,7 @@ public struct ImportFilePlan: Equatable, Sendable {
     public let willCopy: Bool
     public let disposition: ImportPlanDisposition
     public let destinationPath: String?
+    public let isInsta360RescanMember: Bool
 
     public var status: String { disposition.title }
 
@@ -109,12 +110,14 @@ public struct ImportFilePlan: Equatable, Sendable {
         update: JobFilePlanUpdate?,
         willCopy: Bool,
         disposition: ImportPlanDisposition,
-        destinationPath: String?
+        destinationPath: String?,
+        isInsta360RescanMember: Bool = false
     ) {
         self.update = update
         self.willCopy = willCopy
         self.disposition = disposition
         self.destinationPath = destinationPath
+        self.isInsta360RescanMember = isInsta360RescanMember
     }
 }
 
@@ -126,6 +129,8 @@ public struct ImportPlanBuilder: Sendable {
     public let roots: DestinationRoots
     public let fallbackLocation: String
     public let volumeName: String?
+    private let insta360Recovery: Insta360RescanRecovery?
+    private let useOriginalInsta360Folders: Bool
 
     public init(
         sessions: [ImportPlanSession],
@@ -134,7 +139,9 @@ public struct ImportPlanBuilder: Sendable {
         folderGrouping: ImportFolderGrouping = .byDay,
         roots: DestinationRoots,
         fallbackLocation: String,
-        volumeName: String?
+        volumeName: String?,
+        insta360Recovery: Insta360RescanRecovery? = nil,
+        useOriginalInsta360Folders: Bool = true
     ) {
         self.sessions = sessions
         self.mediaSelection = mediaSelection
@@ -143,6 +150,8 @@ public struct ImportPlanBuilder: Sendable {
         self.roots = roots
         self.fallbackLocation = fallbackLocation
         self.volumeName = volumeName
+        self.insta360Recovery = insta360Recovery
+        self.useOriginalInsta360Folders = useOriginalInsta360Folders
     }
 
     public func updates(files: [JobFileRecord]) -> [JobFilePlanUpdate] {
@@ -153,13 +162,16 @@ public struct ImportPlanBuilder: Sendable {
         let groups = Insta360ClipDetector().groups(files: files)
         var recordingMasterBySourcePath: [String: JobFileRecord] = [:]
         var recordingIDBySourcePath: [String: String] = [:]
+        var completedFolderBySourcePath: [String: URL] = [:]
         for group in groups {
             guard let master = group.masterFiles.first else {
                 continue
             }
+            let completed = insta360Recovery?.recording(for: master.sourcePath)?.completedFolder(for: group.masterFiles)
             for file in group.files {
                 recordingMasterBySourcePath[file.sourcePath] = master
                 recordingIDBySourcePath[file.sourcePath] = group.id
+                completedFolderBySourcePath[file.sourcePath] = completed
             }
         }
         var reservedDestinationPaths: Set<String> = []
@@ -167,6 +179,7 @@ public struct ImportPlanBuilder: Sendable {
             plan(
                 file: $0,
                 insta360RecordingMaster: recordingMasterBySourcePath[$0.sourcePath],
+                completedInsta360Folder: completedFolderBySourcePath[$0.sourcePath],
                 reservedDestinationPaths: &reservedDestinationPaths
             )
         }
@@ -257,6 +270,7 @@ public struct ImportPlanBuilder: Sendable {
     private func plan(
         file: JobFileRecord,
         insta360RecordingMaster: JobFileRecord?,
+        completedInsta360Folder: URL? = nil,
         reservedDestinationPaths: inout Set<String>
     ) -> ImportFilePlan {
         guard let id = file.id else {
@@ -345,7 +359,13 @@ public struct ImportPlanBuilder: Sendable {
             )
         }
 
-        let knownFromImportHistory = file.decision == .known && file.knownSource != .destination
+        let recovery = insta360Recovery?.recording(for: file.sourcePath)
+        if let recovery, !recovery.allMastersPresent {
+            return ImportFilePlan(
+                update: nil, willCopy: false, disposition: .notReady, destinationPath: nil
+            )
+        }
+        let knownFromImportHistory = recovery == nil && file.decision == .known && file.knownSource != .destination
         if knownFromImportHistory && !isInsta360RecordingFile {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
@@ -369,7 +389,13 @@ public struct ImportPlanBuilder: Sendable {
         } else {
             destinationMediaKind = isFootageSupportFile ? .unsupported : file.mediaKind
         }
-        guard let destinationURL = planner.destinationURL(
+        let originalFolder = useOriginalInsta360Folders ? recovery?.originalFolder : nil
+        let completedDestination = completedInsta360Folder.flatMap { folder -> URL? in
+            let destination = folder.appendingPathComponent(file.filename)
+            return recovery?.hasVerifiedCopy(of: file, at: destination) == true ? destination : nil
+        }
+        let recoveredDestination = completedDestination ?? originalFolder?.appendingPathComponent(file.filename)
+        guard let destinationURL = recoveredDestination ?? planner.destinationURL(
             filename: file.filename,
             mediaKind: destinationMediaKind,
             captureDate: folderDate,
@@ -395,6 +421,18 @@ public struct ImportPlanBuilder: Sendable {
             )
         }
 
+        if recovery?.hasVerifiedCopy(of: file, at: destinationURL) == true {
+            return ImportFilePlan(
+                update: JobFilePlanUpdate(
+                    id: id, decision: .known, destinationDirectory: destinationURL.deletingLastPathComponent().path,
+                    plannedDestinationPath: destinationURL.path, copyStatus: .skipped,
+                    error: nil, knownSource: .destination
+                ),
+                willCopy: false, disposition: .alreadyExists, destinationPath: destinationURL.path,
+                isInsta360RescanMember: true
+            )
+        }
+
         if knownFromImportHistory {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
@@ -417,6 +455,7 @@ public struct ImportPlanBuilder: Sendable {
             destinationURL: destinationURL,
             preservesProprietaryFilename: isInsta360RecordingFile || Insta360ClipDetector.isProprietaryRecordingFile(file),
             isSupportFile: isFootageSupportFile || isInsta360Proxy,
+            isInsta360RescanMember: recovery != nil,
             reservedDestinationPaths: &reservedDestinationPaths
         )
     }
@@ -427,6 +466,7 @@ public struct ImportPlanBuilder: Sendable {
         destinationURL: URL,
         preservesProprietaryFilename: Bool,
         isSupportFile: Bool,
+        isInsta360RescanMember: Bool = false,
         candidateAlreadyReserved: Bool = false,
         suffixBase: URL? = nil,
         reservedDestinationPaths: inout Set<String>
@@ -444,6 +484,9 @@ public struct ImportPlanBuilder: Sendable {
             rejectingMatchesAt: file.unverifiedDestinationPaths
         ) {
         case .skip(let matchedURL, let reason):
+            if isInsta360RescanMember {
+                return filenameConflictPlan(file: file, destinationPath: matchedURL.path)
+            }
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
                     id: id,
@@ -456,7 +499,8 @@ public struct ImportPlanBuilder: Sendable {
                 ),
                 willCopy: false,
                 disposition: .alreadyExists,
-                destinationPath: matchedURL.path
+                destinationPath: matchedURL.path,
+                isInsta360RescanMember: isInsta360RescanMember
             )
         case .blocked:
             return filenameConflictPlan(file: file, destinationPath: destinationURL.path)
@@ -503,7 +547,8 @@ public struct ImportPlanBuilder: Sendable {
                 ),
                 willCopy: true,
                 disposition: disposition,
-                destinationPath: resolvedURL.path
+                destinationPath: resolvedURL.path,
+                isInsta360RescanMember: isInsta360RescanMember
             )
         }
     }

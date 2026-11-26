@@ -8,7 +8,7 @@ This document defines the current importer behavior that the native Swift app mu
 - When the user opts in to portable import receipts, the app may create or append only within `.sd-import` on the source.
 - Importing the same already-imported original again must not create duplicates.
 - Destination folder changes must not make known source files import again.
-- A failed or interrupted import must remain visible and retryable.
+- A failed or interrupted import must remain visible and offer a fresh scan.
 - A closed, skipped, or timed-out prompt must not start copying.
 - History is user-support history, not immutable audit evidence.
 
@@ -224,7 +224,11 @@ Rules:
 - A scan creates a job.
 - Import updates the same job.
 - Failed files retain per-file errors.
-- Retry operates on pending or failed copy rows for an existing job.
+- History offers Rescan Source for unfinished imports from cards and folders. Rescan checks any outstanding copy journal for the old job, then creates a new job and review. The user confirms the fresh plan before copying.
+- Starting a new scan or changing the source asks before closing a Scan Both session with pending results. The previous results remain available if the user cancels, the new source cannot be opened, or every new volume fails to scan.
+- If a planned source volume disconnects during a copy, the app stops the operation and names the volume. Files already copied remain in History.
+- For a manually selected card or folder, disconnect protection uses the mounted volume backing the selected path. Automatic prompt name filters apply only to discovery.
+- Source selection rejects paths through user-created symbolic links. macOS system path aliases remain usable.
 
 ## Per-File Copy Status
 
@@ -239,7 +243,7 @@ Rules:
 
 - Unsupported and known files are skipped.
 - New/conflict files start pending.
-- Failed files stay retryable.
+- Failed files and their errors remain in History for reference during a fresh scan.
 
 ## Progress
 
@@ -279,13 +283,16 @@ Terminal progress states:
 - The receipt presents ejection as the primary completion action, names the mounted source device, states how many storage volumes will be unmounted, and confirms when it is safe to remove.
 - Whenever a verified removable source is selected and no scan or copy is active, the Source panel offers a manual eject action. This lets the user safely disconnect before scanning, after scanning, or instead of importing. A scan never triggers automatic ejection.
 - `Eject source device after a successful import` is an opt-in setting and defaults off.
-- Automatic ejection requires an error-free imported job and a currently mounted removable volume whose UUID matches the scanned job.
+- Automatic ejection requires at least one copied file, an error-free imported job, and a currently mounted removable volume whose UUID matches the scanned job.
+- In Scan Both, the two volumes share a scan session. Each import has its own confirmation. Device ejection waits for both volumes to finish or be explicitly skipped.
+- A failed or cancelled scan of a still-mounted volume can be explicitly skipped. The combined results retain the scan error and show a manual Eject action. It becomes available when the session is resolved and the device passes the eject checks.
+- In Scan Both, only a successful copy can trigger automatic ejection. Skipping a volume never triggers it. If a user skips an attempted import that did not succeed, the session offers manual ejection instead.
 - Non-removable volumes, disk images, UUID mismatches, cancelled imports, and imports with failures are never ejected automatically.
 - Removable cards remain eligible when macOS reports their built-in reader location as internal.
 - Ejection uses the source volume root even when the scanned source is a folder inside that volume.
 - Volumes that share the nearest physical USB-device registry identity are presented as one source device.
 - Multiple mounted volumes on the same whole disk require one whole-disk eject operation. Multiple whole disks exposed by one physical USB device are each ejected before the app reports that the device is safe to disconnect.
-- After an import, a destination on the same physical device blocks receipt-driven source-device ejection. The explicit Source-panel action remains available whenever no scan or copy is active.
+- After an import, a destination on the same physical device blocks receipt-driven source-device ejection. Ejection checks the resolved volume behind each approved copy folder, including through symlinks. Eject stays disabled if a destination volume cannot be verified. Scan Both applies the check to both volumes. The explicit Source-panel action remains available whenever no scan or copy is active.
 - Device grouping never relies only on volume names, model names, or mount timing. If macOS does not expose a reliable shared identity, volumes remain separate.
 - Ejection never forces a busy volume. A partial multi-disk failure reports which storage was ejected and which storage remains mounted.
 
@@ -340,7 +347,7 @@ History UI must support:
 - success/failed filtering
 - job detail
 - failed file list
-- retry failed/pending files
+- rescan sources from unfinished imports
 - reveal destination folder
 - copy/export summary
 - retention pruning
@@ -421,8 +428,8 @@ Rules:
 4. Add one new file to the same card. Only the new file imports.
 5. Create a different file at the planned destination. Import uses `-copy-N`.
 6. Remove the source file after scan and before import. The job records a failed file.
-7. Retry a failed job after restoring the source file. The file imports.
-8. Cancel during a large copy. No finalized partial file is left behind, and retry remains available.
+7. Restore a failed job's source file. Use Rescan Source, verify the fresh plan recognizes completed copies, and confirm any remaining copy.
+8. Cancel during a large copy. No finalized partial file is left behind. Rescan Source offers a fresh review.
 9. Crash during copy. Relaunch recovers the job and handles stale `.part` files.
 10. Prune 30-day History. Old jobs and reports are removed, but dedupe still skips known files.
 11. Insert a real SD card with background prompt enabled. One prompt appears.

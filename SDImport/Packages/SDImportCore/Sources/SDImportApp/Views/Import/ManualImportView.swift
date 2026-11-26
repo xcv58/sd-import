@@ -14,7 +14,11 @@ struct ManualImportView: View {
             case .scanning:
                 scanningPage
             case .review:
-                ImportPreviewView()
+                if let session = model.scanBothSession, model.isShowingScanBothResults {
+                    scanBothReviewPage(session)
+                } else {
+                    ImportPreviewView()
+                }
             case .preparing:
                 preparingPage
             case .copying:
@@ -29,9 +33,6 @@ struct ManualImportView: View {
         .onAppear {
             model.refreshAvailableSourceVolumes()
             model.validatePaths()
-        }
-        .onChange(of: model.cardPath) {
-            model.sourcePathDidChange()
         }
         .onChange(of: model.photosPath) {
             model.destinationPathDidChange()
@@ -57,7 +58,19 @@ struct ManualImportView: View {
         AppPage {
             VStack(alignment: .leading, spacing: 18) {
                 phaseHeading(L10n.tr("Scanning source"), detail: L10n.tr("Reading media and checking previous imports."))
-                ImportSourceSummaryView(allowsChange: false)
+                if let session = model.scanBothSession {
+                    AppSection(session.deviceName, systemImage: "externaldrive") {
+                        ForEach(session.entries) { entry in
+                            HStack {
+                                Text(entry.volume.name).fontWeight(.medium)
+                                Spacer()
+                                scanBothStatus(entry.state)
+                            }
+                        }
+                    }
+                } else {
+                    ImportSourceSummaryView(allowsChange: false)
+                }
                 AppSection(L10n.tr("Scanning"), systemImage: "magnifyingglass") {
                     ProgressView()
                         .controlSize(.small)
@@ -73,8 +86,112 @@ struct ManualImportView: View {
         }
     }
 
+    private func scanBothReviewPage(_ session: ScanBothSession) -> some View {
+        AppPage(
+            status: model.folderAccessFeedback?.text ?? (model.ejectedSourceJobID == nil ? nil : visibleStatus),
+            statusRole: model.folderAccessFeedback == nil ? .neutral : .error
+        ) {
+            VStack(alignment: .leading, spacing: 18) {
+                phaseHeading(L10n.tr("Review scan results"), detail: session.deviceName)
+                ForEach(session.entries) { entry in
+                    AppSection(entry.volume.name, systemImage: "externaldrive") {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            scanBothStatus(entry.state)
+                            Spacer()
+                            scanBothReviewActions(entry)
+                        }
+                        if case .complete(let summary, let filenames, _) = entry.state {
+                            let scannedPath = URL(fileURLWithPath: summary.mountPath, isDirectory: true)
+                                .standardizedFileURL.path
+                            if scannedPath != entry.volume.mountPath {
+                                Text(verbatim: scannedPath)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .help(scannedPath)
+                            }
+                            ScanPortableReceiptWarning(summary: summary)
+                            ForEach(filenames.indices, id: \.self) { index in
+                                Text(verbatim: filenames[index])
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                        }
+                    }
+                }
+                if AppDistribution.current.supportsSourceEjection {
+                    SourceEjectionControl(
+                        sourceName: session.deviceName,
+                        volumeCount: session.entries.count,
+                        isEjected: model.ejectedSourceJobID != nil,
+                        isEjecting: model.isEjectingSource,
+                        canEject: model.canEjectScanBoth
+                    ) {
+                        model.ejectScanBoth()
+                    }
+                }
+                Button(L10n.tr("Change Source")) {
+                    model.changeScanBothSource()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func scanBothReviewActions(_ entry: ScanBothSession.Entry) -> some View {
+        switch entry.disposition {
+        case .pending:
+            if entry.canSkip {
+                Button(L10n.tr("Skip")) {
+                    model.skipScanBothImport(entry.id)
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.isEjectingSource)
+            }
+            if let summary = entry.summary {
+                if model.needsRescan(summary.jobID) {
+                    Button(L10n.tr("Rescan Source")) {
+                        model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    Button(L10n.tr("Review import")) {
+                        model.reviewScanBothVolume(entry.id)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel(L10n.tr("Review \(entry.volume.name)"))
+                    .accessibilityIdentifier("import.scan-both.review.\(entry.volume.mountPath)")
+                }
+            }
+        case .imported:
+            Text(L10n.tr("Imported")).foregroundStyle(.secondary)
+        case .skipped:
+            Text(L10n.tr("Skipped")).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func scanBothStatus(_ state: ScanBothSession.Entry.State) -> some View {
+        switch state {
+        case .waiting:
+            Text(L10n.tr("Waiting to scan"))
+                .foregroundStyle(.secondary)
+        case .scanning:
+            Text(L10n.tr("Scanning"))
+        case .complete(let summary, _, _):
+            Text(L10n.tr("\(summary.scannedFiles) files scanned"))
+                .foregroundStyle(.secondary)
+        case .skipped(let issue):
+            AppStatusLabel(title: issue.message, systemImage: "exclamationmark.triangle", role: .warning)
+        }
+    }
+
     private var preparingPage: some View {
-        AppPage {
+        AppPage(status: model.importDisconnectionMessage, statusRole: .error) {
             VStack(alignment: .leading, spacing: 18) {
                 phaseHeading(L10n.tr("Preparing import"), detail: model.statusMessage)
                 AppSection(L10n.tr("Preparing"), systemImage: "gearshape.2") {
@@ -95,7 +212,7 @@ struct ManualImportView: View {
     @ViewBuilder
     private var copyingPage: some View {
         if let progress = model.importProgress {
-            AppPage {
+            AppPage(status: model.importDisconnectionMessage, statusRole: .error) {
                 VStack(alignment: .leading, spacing: 18) {
                     phaseHeading(L10n.tr("Copying files"), detail: L10n.tr("Keep the source connected until copying finishes."))
                     ImportProgressPanel(progress: progress) {
@@ -120,6 +237,7 @@ struct ManualImportView: View {
                             : L10n.tr("Review the failed files before removing the source.")
                     )
                     ImportResultView(result: result)
+                    scanBothBackButton
                 }
             }
         } else {
@@ -144,7 +262,12 @@ struct ManualImportView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 10) {
-                        if model.importUIPhase == .failed {
+                        if let summary = model.currentSummary, model.needsRescan(summary.jobID) {
+                            Button(L10n.tr("Rescan Source")) {
+                                model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
+                            }
+                            .buttonStyle(.borderedProminent)
+                        } else if model.importUIPhase == .failed {
                             Button(L10n.tr("Retry")) {
                                 model.retryFailedImportOperation()
                             }
@@ -159,9 +282,21 @@ struct ManualImportView: View {
                             }
                         }
                         .buttonStyle(.bordered)
+
+                        scanBothBackButton
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var scanBothBackButton: some View {
+        if model.isReviewingScanBothVolume {
+            Button(L10n.tr("Back to Scan Results")) {
+                model.returnToScanBothResults()
+            }
+            .buttonStyle(.bordered)
         }
     }
 
@@ -180,6 +315,9 @@ struct ManualImportView: View {
     }
 
     private var recoveryButtonTitle: String {
+        if model.isShowingScanBothResults {
+            return L10n.tr("Back to Scan Results")
+        }
         if model.currentResult != nil {
             return L10n.tr("Back to Receipt")
         }
@@ -339,7 +477,8 @@ struct ImportSourceSummaryView: View {
                 .disabled(!model.canStartScan)
             }
 
-            if !model.isReviewingStoredImport, model.shouldOfferSelectedSourceEjection {
+            if !model.isReviewingScanBothVolume,
+               model.shouldOfferSelectedSourceEjection {
                 Button {
                     model.ejectSelectedSource()
                 } label: {
@@ -360,13 +499,15 @@ struct ImportSourceSummaryView: View {
     }
 
     private var sourceTitle: String {
-        (model.isReviewingStoredImport ? model.currentSummary?.volumeName : model.selectedSourceVolume?.name)
+        (model.isReviewingScanBothVolume
+            ? model.currentSummary?.volumeName : model.selectedSourceVolume?.name)
             ?? URL(fileURLWithPath: model.importSourcePath, isDirectory: true).lastPathComponent.nilIfBlank
             ?? L10n.tr("Source Folder")
     }
 
     private var sourceDetail: String {
-        if !model.isReviewingStoredImport, let volume = model.selectedSourceVolume {
+        if !model.isReviewingScanBothVolume,
+           let volume = model.selectedSourceVolume {
             return volume.detailText
         }
         if let summary = model.currentSummary {
@@ -531,7 +672,13 @@ private struct SourceField: View {
     }
 
     private var sourcePathField: some View {
-        TextField(L10n.tr("Card or source path"), text: $model.cardPath)
+        TextField(L10n.tr("Card or source path"), text: Binding(
+            get: { model.cardPath },
+            set: {
+                model.cardPath = $0
+                model.sourcePathDidChange()
+            }
+        ))
             .textFieldStyle(.roundedBorder)
             .lineLimit(1)
             .frame(minWidth: 180, maxWidth: 420)

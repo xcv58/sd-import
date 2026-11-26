@@ -188,12 +188,12 @@
   "m199": "Inicie a cópia.",
   "m200": "Confirme os destinos e mantenha a origem conectada até a importação terminar.",
   "m201": "Ejete com segurança.",
-  "m202": "Escolha {0}Ejetar origem{/0} no comprovante ou ative a ejeção automática em Ajustes. Ela ocorre apenas após uma importação sem erros.",
+  "m202": "Use a opção de ejeção no comprovante da cópia e aguarde a confirmação. Quando ativada, a ejeção automática exige uma importação sem erros que tenha copiado arquivos.",
   "m203": "Cuidados",
   "m204": "SD Card Import copia arquivos; ele não apaga o cartão.",
   "m205": "Com os comprovantes portáteis ativados, SD Card Import grava apenas seu registro oculto {0} na origem. Origens bloqueadas ou somente leitura continuam funcionando com um aviso.",
   "m206": "Arquivos já importados são ignorados nas próximas execuções. {0}Importar mesmo assim{/0} só está disponível para arquivos reconhecidos no histórico portátil. Se um arquivo mudar após a análise, SD Card Import exige nova análise em vez de usar um histórico desatualizado.",
-  "m207": "O SD Card Import não sobrescreve arquivos com conteúdo diferente no destino. Conflitos comuns de nomes recebem um sufixo. Gravações Insta360 em conflito são ignoradas para preservar os nomes. Escolha outro destino antes de copiar.",
+  "m207": "Conflitos comuns de nomes recebem um sufixo para preservar os dois arquivos. Se houver conflito de nomes em uma gravação da Insta360, escolha outro destino para manter os nomes originais.",
   "m208": "Mantenha o app instalado em {0} para receber avisos de cartões em segundo plano.",
   "m209": "Atalhos de teclado",
   "m210": "{0}: abrir Importar.",
@@ -319,5 +319,7 @@
   "beta.step2.body": "Abra o link do beta público no seu Mac e siga as etapas no TestFlight para instalar o SD Card Import.",
   "beta.step3.title": "Compartilhe seu feedback.",
   "beta.step3.body": "Envie seu feedback pelo TestFlight ou por e-mail, informando a versão do app e o que aconteceu.",
-  "beta.feedback": "Enviar feedback do beta por e-mail"
+  "beta.feedback": "Enviar feedback do beta por e-mail",
+  "guide.scan_both": "Quando {0}Escanear ambos{/0} estiver disponível, escaneie juntos o armazenamento interno e o cartão de memória da câmera. Revise e confirme cada cópia separadamente.",
+  "guide.rescan": "Se a cópia for interrompida, os arquivos já copiados permanecem no destino. Reconecte a origem se necessário, escolha {0}Escanear a origem novamente{/0} no Histórico e revise o novo plano."
 }

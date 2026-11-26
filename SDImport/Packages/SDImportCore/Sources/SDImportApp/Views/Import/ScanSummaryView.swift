@@ -24,15 +24,8 @@ struct ScanSummaryView: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
 
-            if let warning = summary.portableReceiptWarning {
-                AppStatusLabel(
-                    title: L10n.portableReceiptWarning(
-                        warning, sizeWarning: summary.portableReceiptSizeWarning
-                    ),
-                    systemImage: "exclamationmark.triangle",
-                    role: .warning
-                )
-                    .font(.callout)
+            if summary.portableReceiptWarning != nil {
+                ScanPortableReceiptWarning(summary: summary)
             } else if let portableKnownFiles = summary.portableKnownFiles, portableKnownFiles > 0 {
                 AppStatusLabel(
                     title: portableKnownFiles == 1
@@ -43,6 +36,23 @@ struct ScanSummaryView: View {
                 )
                     .font(.callout)
             }
+        }
+    }
+}
+
+struct ScanPortableReceiptWarning: View {
+    @Environment(\.locale) private var locale
+    let summary: ScanSummary
+
+    var body: some View {
+        let _ = locale
+        if let warning = summary.portableReceiptWarning {
+            AppStatusLabel(
+                title: L10n.portableReceiptWarning(warning, sizeWarning: summary.portableReceiptSizeWarning),
+                systemImage: "exclamationmark.triangle",
+                role: .warning
+            )
+            .font(.callout)
         }
     }
 }

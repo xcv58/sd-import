@@ -96,6 +96,16 @@ public struct JobRepository {
         }
     }
 
+    public func previewFilenames(jobID: String, limit: Int) throws -> [String] {
+        try pool.read { db in
+            try String.fetchAll(
+                db,
+                sql: "SELECT filename FROM job_files WHERE job_id = ? ORDER BY id LIMIT ?",
+                arguments: [jobID, max(0, limit)]
+            )
+        }
+    }
+
     public func fetchJobFiles(jobID: String) throws -> [JobFileRecord] {
         try pool.read { db in
             let rows = try Row.fetchAll(
@@ -605,8 +615,8 @@ public struct JobRepository {
                 volume_name, volume_uuid, location, photos_root, videos_root,
                 status, scanned_files, new_files, known_files, unsupported_files,
                 conflict_files, imported_files, skipped_files, failed_files,
-                summary_json_path, summary_markdown_path, app_version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                summary_json_path, summary_markdown_path, app_version, volume_mount_path, rescan_of_job_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             arguments: [
                 job.id,
@@ -630,7 +640,9 @@ public struct JobRepository {
                 job.failedFiles,
                 job.summaryJSONPath,
                 job.summaryMarkdownPath,
-                job.appVersion
+                job.appVersion,
+                job.volumeMountPath,
+                job.rescanOfJobID
             ]
         )
     }
@@ -697,7 +709,9 @@ public struct JobRepository {
             failedFiles: row["failed_files"],
             summaryJSONPath: row["summary_json_path"],
             summaryMarkdownPath: row["summary_markdown_path"],
-            appVersion: row["app_version"]
+            appVersion: row["app_version"],
+            volumeMountPath: row["volume_mount_path"],
+            rescanOfJobID: row["rescan_of_job_id"]
         )
     }
 
