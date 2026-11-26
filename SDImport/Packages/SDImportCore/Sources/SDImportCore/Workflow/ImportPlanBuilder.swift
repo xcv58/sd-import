@@ -162,13 +162,16 @@ public struct ImportPlanBuilder: Sendable {
         let groups = Insta360ClipDetector().groups(files: files)
         var recordingMasterBySourcePath: [String: JobFileRecord] = [:]
         var recordingIDBySourcePath: [String: String] = [:]
+        var completedFolderBySourcePath: [String: URL] = [:]
         for group in groups {
             guard let master = group.masterFiles.first else {
                 continue
             }
+            let completed = insta360Recovery?.recording(for: master.sourcePath)?.completedFolder(for: group.masterFiles)
             for file in group.files {
                 recordingMasterBySourcePath[file.sourcePath] = master
                 recordingIDBySourcePath[file.sourcePath] = group.id
+                completedFolderBySourcePath[file.sourcePath] = completed
             }
         }
         var reservedDestinationPaths: Set<String> = []
@@ -176,6 +179,7 @@ public struct ImportPlanBuilder: Sendable {
             plan(
                 file: $0,
                 insta360RecordingMaster: recordingMasterBySourcePath[$0.sourcePath],
+                completedInsta360Folder: completedFolderBySourcePath[$0.sourcePath],
                 reservedDestinationPaths: &reservedDestinationPaths
             )
         }
@@ -266,6 +270,7 @@ public struct ImportPlanBuilder: Sendable {
     private func plan(
         file: JobFileRecord,
         insta360RecordingMaster: JobFileRecord?,
+        completedInsta360Folder: URL? = nil,
         reservedDestinationPaths: inout Set<String>
     ) -> ImportFilePlan {
         guard let id = file.id else {
@@ -385,7 +390,12 @@ public struct ImportPlanBuilder: Sendable {
             destinationMediaKind = isFootageSupportFile ? .unsupported : file.mediaKind
         }
         let originalFolder = useOriginalInsta360Folders ? recovery?.originalFolder : nil
-        guard let destinationURL = originalFolder?.appendingPathComponent(file.filename) ?? planner.destinationURL(
+        let completedDestination = completedInsta360Folder.flatMap { folder -> URL? in
+            let destination = folder.appendingPathComponent(file.filename)
+            return recovery?.hasVerifiedCopy(of: file, at: destination) == true ? destination : nil
+        }
+        let recoveredDestination = completedDestination ?? originalFolder?.appendingPathComponent(file.filename)
+        guard let destinationURL = recoveredDestination ?? planner.destinationURL(
             filename: file.filename,
             mediaKind: destinationMediaKind,
             captureDate: folderDate,
@@ -411,8 +421,7 @@ public struct ImportPlanBuilder: Sendable {
             )
         }
 
-        if recovery?.hasVerifiedCopy(of: file, at: destinationURL) == true,
-           !file.unverifiedDestinationPaths.contains(ConflictResolver.destinationKey(destinationURL)) {
+        if recovery?.hasVerifiedCopy(of: file, at: destinationURL) == true {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
                     id: id, decision: .known, destinationDirectory: destinationURL.deletingLastPathComponent().path,

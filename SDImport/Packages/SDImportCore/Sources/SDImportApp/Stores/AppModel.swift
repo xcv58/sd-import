@@ -524,8 +524,19 @@ final class AppModel: ObservableObject {
     @Published var currentSummary: ScanSummary?
     private var insta360RescanRecovery: Insta360RescanRecovery?
     private var rescanContext: RescanContext?
-    var hasInsta360RescanRecordings: Bool { insta360RescanRecovery != nil }
-    var canCompleteInsta360InOriginalFolders: Bool { insta360RescanRecovery?.hasOriginalFolders == true }
+    var hasInsta360RescanLensesToCopy: Bool {
+        guard let insta360RescanRecovery else { return false }
+        return previewRows.contains { row in
+            row.willCopy && row.mediaKind == .video && insta360RescanRecovery.includes(sourcePath: row.sourcePath)
+        }
+    }
+    var canCompleteInsta360InOriginalFolders: Bool {
+        guard let insta360RescanRecovery else { return false }
+        return previewRows.contains { row in
+            (row.willCopy || row.disposition.attention == .blocking)
+                && insta360RescanRecovery.originalFolder(for: row.sourcePath) != nil
+        }
+    }
     var hasIncompleteInsta360RescanRecording: Bool { insta360RescanRecovery?.hasIncompleteRecordings == true }
     var hasInsta360RescanConflict: Bool {
         guard let insta360RescanRecovery else { return false }

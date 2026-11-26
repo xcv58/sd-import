@@ -9,11 +9,21 @@ public struct Insta360RescanRecovery: Sendable {
         let verifiedCopies: [String: VerifiedCopy]
 
         func hasVerifiedCopy(of file: JobFileRecord, at destination: URL) -> Bool {
-            guard let copy = verifiedCopies[file.sourcePath],
-                  ConflictResolver.destinationKey(copy.url) == ConflictResolver.destinationKey(destination),
+            guard let copy = verifiedCopies[file.sourcePath] else { return false }
+            let key = ConflictResolver.destinationKey(destination)
+            guard ConflictResolver.destinationKey(copy.url) == key,
+                  !file.unverifiedDestinationPaths.contains(key),
                   let info = try? CopyEngine.fileInfo(at: destination)
             else { return false }
             return copy.revision == FileRevision(info)
+        }
+
+        func completedFolder(for masters: [JobFileRecord]) -> URL? {
+            guard allMastersPresent, let first = masters.first,
+                  let copy = verifiedCopies[first.sourcePath] else { return nil }
+            let folder = Insta360RescanRecovery.parentFolder(copy.url)
+            return masters.allSatisfy { hasVerifiedCopy(of: $0, at: folder.appendingPathComponent($0.filename)) }
+                ? folder : nil
         }
     }
 
@@ -45,10 +55,6 @@ public struct Insta360RescanRecovery: Sendable {
     private let recordingsBySourcePath: [String: Recording]
 
     public var isEmpty: Bool { recordingsBySourcePath.isEmpty }
-
-    public var hasOriginalFolders: Bool {
-        recordingsBySourcePath.values.contains { $0.originalFolder != nil }
-    }
 
     public var hasIncompleteRecordings: Bool {
         recordingsBySourcePath.values.contains { !$0.allMastersPresent }
@@ -98,17 +104,10 @@ public struct Insta360RescanRecovery: Sendable {
                       masters.allSatisfy({ (previousByMaster[$0]?.id ?? group.id) == group.id }) else { continue }
                 let expected = Set(group.masterFiles.compactMap(paths.previousKey))
                 guard expected.count == group.masterFiles.count else { continue }
-                let completeSource = expected.isSubset(of: masters)
-                let copiedMasters = group.masterFiles.compactMap(Self.recordedCopy)
-                let folders = Set(copiedMasters.map(Self.parentFolder))
                 matched.insert(current.id)
-                if completeSource, expected == masters, copiedMasters.count == expected.count, folders.count == 1 {
-                    // A later attempt that completed the pair supersedes an older partial copy.
-                    continue
-                }
                 let recording = Self.makeRecording(
                     current: current, previous: group, paths: paths,
-                    completeSource: completeSource, copiedMasters: copiedMasters, folders: folders
+                    completeSource: expected.isSubset(of: masters)
                 )
                 for file in current.files {
                     result[file.sourcePath] = recording
@@ -137,9 +136,7 @@ public struct Insta360RescanRecovery: Sendable {
         current: Insta360ClipGroup,
         previous: Insta360ClipGroup,
         paths: MatchingPaths,
-        completeSource: Bool,
-        copiedMasters: [URL],
-        folders: Set<URL>
+        completeSource: Bool
     ) -> Recording {
         guard completeSource else {
             return Recording(allMastersPresent: false, originalFolder: nil, verifiedCopies: [:])
@@ -154,18 +151,21 @@ public struct Insta360RescanRecovery: Sendable {
             verified[file.sourcePath] = proof
         }
 
-        let verifiedDestinations = Set(verified.values.map { ConflictResolver.destinationKey($0.url) })
-        let folder = folders.count == 1 && copiedMasters.allSatisfy {
-            verifiedDestinations.contains(ConflictResolver.destinationKey($0))
-        } ? folders.first : nil
-        let original = folder.flatMap {
-            PathValidator().validate(path: $0.path, purpose: .destination).isUsable ? $0 : nil
-        }
-        if let original {
+        // Only verified masters can establish a folder for completing the recording.
+        let folders = Set(current.masterFiles.compactMap { verified[$0.sourcePath].map { parentFolder($0.url) } })
+        let folder = folders.count == 1 ? folders.first : nil
+        if let folder {
             for file in current.files where verified[file.sourcePath] == nil {
-                let candidate = original.appendingPathComponent(file.filename)
+                let candidate = folder.appendingPathComponent(file.filename)
+                if let key = paths.currentKey(file), let recorded = recordedPaths[key],
+                   ConflictResolver.destinationKey(recorded) == ConflictResolver.destinationKey(candidate) {
+                    continue
+                }
                 verified[file.sourcePath] = verifiedCopy(of: file, at: candidate, using: CopyEngine())
             }
+        }
+        let original = folder.flatMap {
+            PathValidator().validate(path: $0.path, purpose: .destination).isUsable ? $0 : nil
         }
         return Recording(allMastersPresent: true, originalFolder: original, verifiedCopies: verified)
     }

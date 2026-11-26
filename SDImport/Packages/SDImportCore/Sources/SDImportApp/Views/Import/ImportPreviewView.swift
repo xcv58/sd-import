@@ -212,7 +212,7 @@ struct ImportPreviewView: View {
                 isOn: $model.useOriginalInsta360Folders
             )
         }
-        if model.hasInsta360RescanRecordings, !model.hasIncompleteInsta360RescanRecording,
+        if model.hasInsta360RescanLensesToCopy, !model.hasIncompleteInsta360RescanRecording,
            !model.canCompleteInsta360InOriginalFolders || !model.useOriginalInsta360Folders {
             Text(L10n.tr("The plan includes both Insta360 lens files in the selected destination."))
                 .font(.caption)
