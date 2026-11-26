@@ -1160,20 +1160,29 @@ private struct ImportReviewPrimaryAction: View {
         Button {
             model.importCurrentJob()
         } label: {
-            Label(buttonTitle, systemImage: "square.and.arrow.down")
+            Label(buttonTitle, systemImage: model.isReviewingScanBothVolume ? "checkmark" : "square.and.arrow.down")
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .keyboardShortcut(.defaultAction)
         .disabled(!model.canImportPlannedFiles)
-        .help(model.importReadinessMessage ?? L10n.tr("Start importing the reviewed files"))
-        .accessibilityHint(model.importReadinessMessage ?? L10n.tr("Begins copying the reviewed files"))
-        .accessibilityIdentifier("import.review.copy")
+        .help(model.importReadinessMessage ?? actionHint)
+        .accessibilityHint(model.importReadinessMessage ?? actionHint)
+        .accessibilityIdentifier(model.isReviewingScanBothVolume ? "import.review.confirm-plan" : "import.review.copy")
+    }
+
+    private var actionHint: String {
+        model.isReviewingScanBothVolume
+            ? L10n.tr("Confirms this volume for Start Imports")
+            : L10n.tr("Begins copying the reviewed files")
     }
 
     private var buttonTitle: String {
         guard model.previewTotals.copyFiles > 0 else {
             return L10n.tr("Nothing to Import")
+        }
+        if model.isReviewingScanBothVolume {
+            return L10n.tr("Confirm Plan")
         }
         if !purchaseManager.canStartImport {
             return L10n.tr("Start Trial or Unlock")

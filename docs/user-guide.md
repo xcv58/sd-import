@@ -43,10 +43,11 @@ in the source menu.
 In `Settings > General`, `Prompt when a card is mounted` enables background card
 prompts. When the app recognizes your camera's internal storage and memory card
 as one device, choose either volume or `Scan Both` from the same prompt. With
-`Scan Both`, grant access to each volume as macOS asks. After both scans, choose
-`Review import` and confirm the copy for each volume separately. Use
-`Back to Scan Results` to return to the other volume, or `Skip` to leave it
-out. The camera stays mounted until both volumes are imported or skipped.
+`Scan Both`, grant access to each volume as macOS asks. After both scans, open
+`Review import` and choose `Confirm Plan` for each volume you want to copy.
+Use `Skip` to leave a volume out. Select `Start Imports` to copy the confirmed
+volumes one at a time. If a plan changes before its copy starts, review it again.
+Keep both volumes mounted until the imports finish.
 
 The app asks before a new scan or source change discards pending Scan Both
 results. `Keep Scan Results` returns to those results. You can use `Eject`
@@ -72,7 +73,8 @@ the app manually and use `Import From Card...` if automatic prompting fails.
   Insta360 recording has a filename conflict, choose another destination to
   keep the original filenames.
 - Automatic ejection requires an error-free import that copied files. With
-  Scan Both, skipping the last volume leaves ejection manual.
+  Scan Both, the app checks for auto-eject after the final successful copy.
+  Skipping a volume after an unsuccessful copy leaves ejection manual.
 
 Maintain backups and verify copied files before formatting a card.
 

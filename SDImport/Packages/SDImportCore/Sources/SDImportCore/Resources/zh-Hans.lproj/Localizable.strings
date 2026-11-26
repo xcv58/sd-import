@@ -60,6 +60,10 @@
 "Allow %@ in System Settings → General → Login Items & Extensions." = "请在“系统设置 → 通用 → 登录项与扩展”中允许 %1$@。";
 "Allow Access" = "允许访问";
 "Allow Access & Scan" = "允许访问并扫描";
+"Confirm Plan" = "确认导入计划";
+"Confirms this volume for Start Imports" = "确认将此宗卷纳入待开始的导入";
+"Edit Plan" = "编辑导入计划";
+"Start Imports" = "开始导入";
 "macOS needs your permission to read this source." = "macOS 需要你的许可才能读取此来源。";
 "Allow Access to %@" = "允许访问 %1$@";
 "Allow Access to Source" = "允许访问来源";

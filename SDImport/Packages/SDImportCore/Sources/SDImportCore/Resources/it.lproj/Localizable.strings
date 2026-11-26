@@ -60,6 +60,10 @@
 "Allow %@ in System Settings → General → Login Items & Extensions." = "Consenti %1$@ in Impostazioni di Sistema → Generali → Elementi login ed estensioni.";
 "Allow Access" = "Consenti accesso";
 "Allow Access & Scan" = "Consenti accesso e analizza";
+"Confirm Plan" = "Conferma piano";
+"Confirms this volume for Start Imports" = "Conferma questo volume per avviare le importazioni";
+"Edit Plan" = "Modifica piano";
+"Start Imports" = "Avvia importazioni";
 "macOS needs your permission to read this source." = "macOS ha bisogno del tuo permesso per leggere questa sorgente.";
 "Allow Access to %@" = "Consenti accesso a %1$@";
 "Allow Access to Source" = "Consenti accesso alla sorgente";

@@ -124,8 +124,8 @@ struct ScanBothSessionTests {
         }
     }
 
-    @Test("both scan jobs can be copied separately from one session")
-    func scansRealFilesAndKeepsCopySeparate() async throws {
+    @Test("separate plans can be confirmed before copying in volume order", arguments: [false, true])
+    func confirmsBeforeSequentialCopy(sharedFilename: Bool) async throws {
         let fileManager = FileManager.default
         let directory = fileManager.temporaryDirectory
             .appendingPathComponent("sdimport-scan-both-\(UUID().uuidString)", isDirectory: true)
@@ -138,14 +138,16 @@ struct ScanBothSessionTests {
             internalStorage.name: directory.appendingPathComponent("Internal", isDirectory: true),
             card.name: directory.appendingPathComponent("SD Card", isDirectory: true)
         ]
-        let internalNames = (1...6).map { "Internal-\($0).jpg" }
-        let cardNames = ["Card-1.jpg", "Card-2.jpg"]
+        let internalNames = (1...6).map { "Internal-\($0).jpg" } + (sharedFilename ? ["Shared.jpg"] : [])
+        let cardNames = ["Card-1.jpg", sharedFilename ? "Shared.jpg" : "Card-2.jpg"]
         for (volume, names) in [(internalStorage, internalNames), (card, cardNames)] {
             let source = try #require(sourceFolders[volume.name])
             let dcim = source.appendingPathComponent("DCIM", isDirectory: true)
             try fileManager.createDirectory(at: dcim, withIntermediateDirectories: true)
             for name in names {
-                try Data(name.utf8).write(to: dcim.appendingPathComponent(name))
+                let file = dcim.appendingPathComponent(name)
+                try Data("\(volume.name) \(name)".utf8).write(to: file)
+                try fileManager.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)], ofItemAtPath: file.path)
             }
         }
 
@@ -214,15 +216,34 @@ struct ScanBothSessionTests {
         let firstJob = try #require(jobs.first { $0.volumeUUID == internalStorage.volumeUUID })
         let siblingJob = try #require(jobs.first { $0.volumeUUID == card.volumeUUID })
         let engine = ImportEngine(jobRepository: repository, dedupeRepository: dedupe)
+        let builder = ImportPlanBuilder(
+            sessions: [], organizationPreset: .classicDatedFolders, roots: roots,
+            fallbackLocation: "Camera", volumeName: nil
+        )
 
-        review.recordImport(ImportResult(
-            jobID: firstJob.id, importedFiles: 0, skippedFiles: 0, failedFiles: 1, progressPath: nil
-        ))
-        #expect(review.entry(for: firstJob.id)?.awaitsImport == true)
-        #expect(!review.allowsAutomaticEjection)
+        #expect(!review.canStartImports)
+        for jobID in [siblingJob.id, firstJob.id] {
+            let summary = try #require(review.entry(for: jobID)?.summary)
+            let files = try repository.fetchJobFiles(jobID: jobID)
+            review.setConfirmation(.init(
+                draft: draft(sourcePath: summary.mountPath, roots: roots),
+                plans: builder.plans(files: files),
+                destinationAccess: []
+            ), for: jobID)
+            #expect(review.canStartImports == (jobID == firstJob.id))
+        }
+        #expect(try repository.listImportHistoryJobs().isEmpty)
+        #expect(try fileManager.contentsOfDirectory(atPath: roots.photosURL.path).isEmpty)
 
-        review.reviewingJobID = firstJob.id
-        let result = try engine.importFiles(jobID: firstJob.id)
+        let first = try #require(review.nextConfirmedEntry)
+        #expect(first.jobID == firstJob.id)
+        let firstConfirmation = try #require(first.confirmation)
+        review.recordImportStarted(for: firstJob.id)
+        let result = try engine.importFiles(preparing: {
+            try repository.updateJobImportPlan(
+                jobID: firstJob.id, destinationRoots: roots, updates: firstConfirmation.plans.compactMap(\.update)
+            )
+        }, jobID: firstJob.id, requiresReviewedDestinations: true)
         review.recordImport(result)
         #expect(result.importedFiles == internalNames.count)
         #expect(try repository.listImportHistoryJobs().map(\.id) == [firstJob.id])
@@ -230,17 +251,67 @@ struct ScanBothSessionTests {
         #expect(try repository.fetchJobFiles(jobID: siblingJob.id).allSatisfy { $0.copyStatus == .pending })
         #expect(!review.allowsAutomaticEjection)
 
-        review.reviewingJobID = nil
-        #expect(review.entry(for: firstJob.id)?.awaitsImport == false)
-        #expect(review.entry(for: siblingJob.id)?.awaitsImport == true)
-        review.reviewingJobID = siblingJob.id
-        let siblingResult = try engine.importFiles(jobID: siblingJob.id)
+        #expect(review.entry(for: firstJob.id)?.result == result)
+        let second = try #require(review.nextConfirmedEntry)
+        #expect(second.jobID == siblingJob.id)
+        let secondConfirmation = try #require(second.confirmation)
+        #expect(secondConfirmation.draft.sourcePath == sourceFolders[card.name]?.path)
+        let freshSecondPlans = builder.plans(files: try repository.fetchJobFiles(jobID: siblingJob.id))
+        #expect((freshSecondPlans != secondConfirmation.plans) == sharedFilename)
+        if sharedFilename {
+            review.setConfirmation(nil, for: siblingJob.id)
+            #expect(review.nextConfirmedEntry == nil)
+            #expect(try repository.listImportHistoryJobs().map(\.id) == [firstJob.id])
+            #expect(review.entry(for: firstJob.id)?.result == result)
+            review.setConfirmation(.init(
+                draft: secondConfirmation.draft, plans: freshSecondPlans, destinationAccess: []
+            ), for: siblingJob.id)
+        }
+        let approvedSecond = try #require(review.nextConfirmedEntry?.confirmation)
+        review.recordImportStarted(for: siblingJob.id)
+        let siblingResult = try engine.importFiles(preparing: {
+            try repository.updateJobImportPlan(
+                jobID: siblingJob.id, destinationRoots: roots, updates: approvedSecond.plans.compactMap(\.update)
+            )
+        }, jobID: siblingJob.id, requiresReviewedDestinations: true)
         review.recordImport(siblingResult)
         #expect(siblingResult.importedFiles == cardNames.count)
         #expect(Set(try repository.listImportHistoryJobs().map(\.id)) == Set([firstJob.id, siblingJob.id]))
         #expect(review.allowsAutomaticEjection)
+        #expect(review.nextConfirmedEntry == nil)
         review.removedMountPaths.insert(card.mountPath)
         #expect(!review.allowsAutomaticEjection)
+    }
+
+    @Test("losing one approved volume invalidates only its confirmation")
+    func disconnectInvalidatesOnlyAffectedConfirmation() throws {
+        var session = try scannedSession()
+        let roots = DestinationRoots(
+            photosURL: FileManager.default.temporaryDirectory,
+            videosURL: FileManager.default.temporaryDirectory
+        )
+        for entry in session.entries {
+            let jobID = try #require(entry.jobID)
+            session.setConfirmation(.init(
+                draft: draft(sourcePath: entry.volume.mountPath, roots: roots), plans: [], destinationAccess: []
+            ), for: jobID)
+        }
+        #expect(session.canStartImports)
+        #expect(session.noteUnmount(at: card.mountPath) == card.name)
+        #expect(!session.canStartImports)
+        #expect(session.entries[1].confirmation == nil)
+        #expect(session.nextConfirmedEntry?.volume == internalStorage)
+        session.skipEntry(session.entries[1].id)
+        #expect(session.canStartImports)
+        #expect(!session.allowsEjection)
+    }
+
+    private func draft(sourcePath: String, roots: DestinationRoots) -> ImportDraft {
+        ImportDraft(
+            sourcePath: sourcePath, photosPath: roots.photosURL.path, videosPath: roots.videosURL.path,
+            shootName: "Camera", workflowProfile: .photoImport, mediaSelection: .photosOnly,
+            destinationLayout: .separateMediaFolders, folderGrouping: .byDay
+        )
     }
 
     @Test("ejection checks a destination from either volume in the scan session")

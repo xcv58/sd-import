@@ -60,6 +60,10 @@
 "Allow %@ in System Settings → General → Login Items & Extensions." = "Allow %@ in System Settings → General → Login Items & Extensions.";
 "Allow Access" = "Allow Access";
 "Allow Access & Scan" = "Allow Access & Scan";
+"Confirm Plan" = "Confirm Plan";
+"Confirms this volume for Start Imports" = "Confirms this volume for Start Imports";
+"Edit Plan" = "Edit Plan";
+"Start Imports" = "Start Imports";
 "macOS needs your permission to read this source." = "macOS needs your permission to read this source.";
 "Allow Access to %@" = "Allow Access to %@";
 "Allow Access to Source" = "Allow Access to Source";

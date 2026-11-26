@@ -11,6 +11,12 @@ private let diagnosticsLogger = Logger(subsystem: appLogSubsystem, category: "Di
 typealias ImportPreviewSession = ImportPlanSession
 
 struct ScanBothSession {
+    struct Confirmation {
+        let draft: ImportDraft
+        let plans: [ImportFilePlan]
+        let destinationAccess: [SecurityScopedResourceAccess]
+    }
+
     struct Entry: Identifiable {
         enum State {
             case waiting
@@ -30,6 +36,8 @@ struct ScanBothSession {
         var state: State = .waiting
         var disposition: Disposition = .pending
         var hasStartedImport = false
+        var confirmation: Confirmation?
+        var result: ImportResult?
 
         var summary: ScanSummary? {
             if case .complete(let summary, _, _) = state { return summary }
@@ -51,7 +59,7 @@ struct ScanBothSession {
         var canSkip: Bool {
             guard case .pending = disposition else { return false }
             switch state {
-            case .complete, .skipped(.failed), .skipped(.accessUnavailable), .skipped(.cancelled):
+            case .complete, .skipped(.failed), .skipped(.accessUnavailable), .skipped(.cancelled), .skipped(.removed):
                 return true
             default:
                 return false
@@ -109,6 +117,19 @@ struct ScanBothSession {
         entries.contains(where: \.awaitsImport)
     }
 
+    var nextConfirmedEntry: Entry? {
+        entries.first { $0.awaitsImport && $0.confirmation != nil }
+    }
+
+    var canStartImports: Bool {
+        nextConfirmedEntry != nil && entries.allSatisfy { $0.isResolved || $0.confirmation != nil }
+    }
+
+    mutating func setConfirmation(_ confirmation: Confirmation?, for jobID: String) {
+        guard let index = entries.firstIndex(where: { $0.jobID == jobID && $0.awaitsImport }) else { return }
+        entries[index].confirmation = confirmation
+    }
+
     var issueIfNoVolumeScanned: ScanBothIssue? {
         guard entries.allSatisfy({ $0.summary == nil }) else { return nil }
         for entry in entries {
@@ -118,25 +139,29 @@ struct ScanBothSession {
     }
 
     mutating func noteUnmount(at path: String) -> String? {
-        guard let entry = entries.first(where: { $0.volume.mountPath == path }) else { return nil }
+        guard let index = entries.firstIndex(where: { $0.volume.mountPath == path }) else { return nil }
         removedMountPaths.insert(path)
-        return entry.jobID
+        entries[index].confirmation = nil
+        return entries[index].jobID
     }
 
     mutating func recordImportStarted(for jobID: String) {
         guard let index = entries.firstIndex(where: { $0.jobID == jobID }) else { return }
         entries[index].hasStartedImport = true
+        entries[index].confirmation = nil
     }
 
     mutating func recordImport(_ result: ImportResult) {
         guard result.failedFiles == 0,
               let index = entries.firstIndex(where: { $0.jobID == result.jobID }) else { return }
         entries[index].disposition = .imported
+        entries[index].result = result
     }
 
     mutating func skipEntry(_ id: UUID) {
         guard let index = entries.firstIndex(where: { $0.id == id && $0.canSkip }) else { return }
         entries[index].disposition = .skipped
+        entries[index].confirmation = nil
     }
 
     mutating func recordImportDestinations(_ paths: Set<String>?, for jobID: String) {
@@ -545,7 +570,13 @@ final class AppModel: ObservableObject {
             return insta360RescanRecovery.includes(sourcePath: row.sourcePath)
         }
     }
-    @Published private(set) var scanBothSession: ScanBothSession?
+    @Published private(set) var scanBothSession: ScanBothSession? {
+        didSet {
+            if scanBothSession?.reviewingJobID == nil {
+                scanBothReviewDestinationAccess = []
+            }
+        }
+    }
     private var previousScanBothSession: ScanBothSession?
     @Published var currentResult: ImportResult? {
         didSet {
@@ -710,6 +741,8 @@ final class AppModel: ObservableObject {
     private var bookmarkStore: BookmarkStore?
     private var folderAccesses: [BookmarkPurpose: SecurityScopedResourceAccess] = [:]
     private var importTask: Task<Void, Never>?
+    private var isRunningScanBothImports = false
+    private var scanBothReviewDestinationAccess: [SecurityScopedResourceAccess] = []
     @Published private var activeCopySources: ActiveCopySources?
     var importDisconnectionMessage: String? {
         activeCopySources?.disconnectedVolume.map { Self.importDisconnectedMessage($0) }
@@ -737,6 +770,12 @@ final class AppModel: ObservableObject {
         scanBothSession != nil && scanBothSession?.reviewingJobID == nil
     }
     var isReviewingScanBothVolume: Bool { scanBothSession?.reviewingJobID != nil }
+    var canStartScanBothImports: Bool {
+        isShowingScanBothResults && !isWorking && !isEjectingSource && scanBothSession?.canStartImports == true
+    }
+    var activeScanBothImportVolumeName: String? {
+        isRunningScanBothImports ? scanBothSession?.reviewingEntry?.volume.name : nil
+    }
     var importSourcePath: String {
         if isReviewingScanBothVolume, let currentSummary { return currentSummary.mountPath }
         return cardPath
@@ -1337,8 +1376,10 @@ final class AppModel: ObservableObject {
         rebuildSourceEjectionTargetCache()
     }
 
-    func destinationPathDidChange() {
-        folderAccessFeedback = nil
+    func destinationPathDidChange(clearFeedback: Bool = true) {
+        if clearFeedback {
+            folderAccessFeedback = nil
+        }
         validatePaths()
         rebuildPreviewPlanCache()
     }
@@ -1349,7 +1390,7 @@ final class AppModel: ObservableObject {
 
     var currentImportDraft: ImportDraft {
         ImportDraft(
-            sourcePath: cardPath,
+            sourcePath: importSourcePath,
             photosPath: photosPath,
             videosPath: videosPath,
             shootName: location,
@@ -1908,7 +1949,9 @@ final class AppModel: ObservableObject {
         files: [JobFileRecord],
         sessions: [ImportPreviewSession]
     ) -> [ImportFilePlan] {
-        importPlanBuilder(sessions: sessions)?.plans(files: files) ?? []
+        importPlanBuilder(sessions: sessions)?.plans(
+            files: files, knownImportedFileIDs: isReviewingScanBothVolume ? knownImportedPreviewFileIDs : []
+        ) ?? []
     }
 
     private func importPlanBuilder(sessions: [ImportPreviewSession]) -> ImportPlanBuilder? {
@@ -2174,7 +2217,7 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Finish the current scan or import first")
             return
         }
-        guard purchaseManager.canStartImport else {
+        if !isReviewingScanBothVolume, !purchaseManager.canStartImport {
             purchaseManager.isShowingPurchase = true
             statusMessage = L10n.tr("Start your 14-day trial or unlock unlimited imports to continue")
             return
@@ -2189,19 +2232,47 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Database is not ready")
             return
         }
+        guard let plan = validatedImportPlan() else { return }
+
+        savePreferences()
+        if isReviewingScanBothVolume {
+            guard let entry = scanBothSession?.reviewingEntry, entry.jobID == jobID else { return }
+            guard liveScanBothVolume(matching: entry.volume) != nil else {
+                requireRescan(for: jobID)
+                return
+            }
+            var grantedPaths: Set<String> = []
+            let destinationAccess = ([folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }
+                + scanBothReviewDestinationAccess).filter {
+                $0.isActive && grantedPaths.insert($0.url.standardizedFileURL.path).inserted
+            }
+            scanBothSession?.setConfirmation(
+                .init(draft: currentImportDraft, plans: plan.files, destinationAccess: destinationAccess),
+                for: jobID
+            )
+            returnToScanBothResults()
+            return
+        }
+
+        startImport(jobID: jobID, databaseURL: databaseURL, builder: plan.builder, approvedPlans: plan.files)
+    }
+
+    private func validatedImportPlan(
+        matching confirmation: ScanBothSession.Confirmation? = nil
+    ) -> (builder: ImportPlanBuilder, files: [ImportFilePlan])? {
         validatePaths()
         guard !sourceNeedsAccess else {
             showFolderAccessError { L10n.tr("macOS needs your permission to read this source.") }
-            return
+            return nil
         }
         guard sourceValidation.isUsable else {
             let validation = sourceValidation
-            setLocalizedStatusMessage { validation.message }
-            return
+            showFolderAccessError { validation.message }
+            return nil
         }
         guard requiredDestinationPathsAreUsable() else {
             showFolderAccessError { L10n.tr("Choose usable destination folders") }
-            return
+            return nil
         }
         if let dedupeRepository {
             knownImportedPreviewFileIDs = Self.knownImportedFileIDs(
@@ -2209,37 +2280,33 @@ final class AppModel: ObservableObject {
                 dedupeRepository: dedupeRepository
             )
         }
-        guard let builder = importPlanBuilder(sessions: previewSessions) else { return }
-        let plans = builder.plans(files: currentPreviewFiles)
+        guard let builder = importPlanBuilder(sessions: previewSessions) else { return nil }
+        let plans = builder.plans(
+            files: currentPreviewFiles,
+            knownImportedFileIDs: isReviewingScanBothVolume ? knownImportedPreviewFileIDs : []
+        )
         let freshRows = makePreviewRows(files: currentPreviewFiles, plans: plans)
-        let planChanged = freshRows != previewRows
+        let planChanged = freshRows != previewRows || confirmation.map { $0.plans != plans } == true
         updatePreviewPlanCache(rows: freshRows)
         guard !planChanged else {
             showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
-            return
+            return nil
         }
         folderAccessFeedback = nil
         guard previewTotals.copyFiles > 0,
               !previewRows.contains(where: { $0.disposition.attention == .blocking })
-        else { return }
+        else { return nil }
         if let failure = previewSpaceRequirements.first(where: { !$0.isSatisfied }) {
             let path = failure.displayPath
             if failure.isKnown {
-                setLocalizedStatusMessage { L10n.tr("Not enough space in \(path)") }
+                showFolderAccessError { L10n.tr("Not enough space in \(path)") }
             } else {
-                setLocalizedStatusMessage { L10n.tr("Could not check available space in \(path)") }
+                showFolderAccessError { L10n.tr("Could not check available space in \(path)") }
             }
-            return
+            return nil
         }
 
-        savePreferences()
-
-        startImport(
-            jobID: jobID,
-            databaseURL: databaseURL,
-            builder: builder,
-            approvedPlans: plans
-        )
+        return (builder, plans)
     }
 
     func importPortableKnownFilesAnyway() {
@@ -2340,6 +2407,7 @@ final class AppModel: ObservableObject {
         approvedPlans: [ImportFilePlan]
     ) {
         let scanBothEntry = scanBothSession?.entry(for: jobID)
+        let isScanBothImport = scanBothEntry != nil
         let expectedSource = scanBothEntry?.volume
             ?? singleScanMount.flatMap { $0.jobID == jobID ? $0.volume : nil }
         let currentSource = expectedSource.flatMap { volume in
@@ -2370,7 +2438,8 @@ final class AppModel: ObservableObject {
         let portableImportReceiptsEnabled = self.portableImportReceiptsEnabled
         let reviewedSourcePath = currentSummary?.mountPath
         let retainedAccess = (
-            Array(folderAccesses.values) + [scanBothSourceAccess].compactMap { $0 } + (rescanContext?.access ?? [])
+            Array(folderAccesses.values) + scanBothReviewDestinationAccess
+                + [scanBothSourceAccess].compactMap { $0 } + (rescanContext?.access ?? [])
         ).filter(\.isActive)
         let reviewedInsta360RescanMembers = Set(approvedPlans.compactMap { plan in
             plan.isInsta360RescanMember ? plan.update?.id : nil
@@ -2411,7 +2480,10 @@ final class AppModel: ObservableObject {
                     return try engine.importFiles(
                         preparing: {
                             let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
-                            guard builder.plans(files: files) == approvedPlans else {
+                            let known = isScanBothImport
+                                ? Self.knownImportedFileIDs(files: files, dedupeRepository: repositories.dedupeRepository)
+                                : []
+                            guard builder.plans(files: files, knownImportedFileIDs: known) == approvedPlans else {
                                 throw SDImportError.reviewedDestinationChanged
                             }
                             if Task.isCancelled { throw SDImportError.cancelled }
@@ -2480,8 +2552,17 @@ final class AppModel: ObservableObject {
                     } else {
                         self.statusMessage = L10n.tr("Import finished")
                     }
+                    let finishedSuccessfully = result.failedFiles == 0
+                        && self.importAttempt?.cancellationRequested == false
+                        && self.activeCopySources?.disconnectedVolume == nil
                     self.finishImportAttempt(attemptID, event: .completed)
-                    if self.importUIPhase == .completed {
+                    if finishedSuccessfully, self.isRunningScanBothImports,
+                       self.scanBothSession?.nextConfirmedEntry != nil {
+                        self.startNextScanBothImport()
+                    } else {
+                        self.isRunningScanBothImports = false
+                    }
+                    if finishedSuccessfully, self.importUIPhase == .completed {
                         self.autoEjectAfterImport(result)
                     }
                 }
@@ -2601,6 +2682,7 @@ final class AppModel: ObservableObject {
     ) {
         guard let attempt = importAttempt, attempt.accepts(id) else { return }
         if let volume = activeCopySources?.disconnectedVolume {
+            isRunningScanBothImports = false
             let render = { Self.importDisconnectedMessage(volume) }
             let message = render()
             folderAccessFeedback = nil
@@ -2608,6 +2690,9 @@ final class AppModel: ObservableObject {
             failedImportRetryContext = activeImportRetryContext
             transitionImportWorkspace(.failed(operation: .copy, message: message), failureRenderer: render)
         } else {
+            if event != .completed {
+                isRunningScanBothImports = false
+            }
             if case .failed = event { failedImportRetryContext = activeImportRetryContext }
             transitionImportWorkspace(event, failureRenderer: failureRenderer)
         }
@@ -2926,28 +3011,93 @@ final class AppModel: ObservableObject {
     func reviewScanBothVolume(_ entryID: UUID) {
         guard isShowingScanBothResults, !isWorking, !isEjectingSource,
               let entry = scanBothSession?.entries.first(where: { $0.id == entryID }),
-              entry.awaitsImport, let jobID = entry.jobID, !needsRescan(jobID),
-              case .complete(let summary, _, _) = entry.state else { return }
-        guard liveScanBothVolume(matching: entry.volume) != nil else {
-            requireRescan(for: summary.jobID)
+              entry.awaitsImport, let summary = entry.summary, !needsRescan(summary.jobID),
+              openScanBothVolume(entry, summary: summary) else { return }
+        scanBothSession?.setConfirmation(nil, for: summary.jobID)
+    }
+
+    func startScanBothImports() {
+        guard canStartScanBothImports else { return }
+        guard purchaseManager.canStartImport else {
+            purchaseManager.isShowingPurchase = true
             return
         }
+        isRunningScanBothImports = true
+        startNextScanBothImport()
+    }
+
+    private func startNextScanBothImport() {
+        defer {
+            if !isWorking { isRunningScanBothImports = false }
+        }
+        guard let session = scanBothSession, session.canStartImports,
+              let entry = session.nextConfirmedEntry,
+              let confirmation = entry.confirmation, let summary = entry.summary else { return }
+        guard let databaseURL else {
+            showFolderAccessError { L10n.tr("Database is not ready") }
+            return
+        }
+        if let missing = session.plannedCopyVolumes.first(where: { liveScanBothVolume(matching: $0) == nil }) {
+            invalidateScansAtUnmount(missing.mountURL)
+            returnToScanBothResults()
+            showFolderAccessError { Self.importDisconnectedMessage(missing.name) }
+            return
+        }
+        guard openScanBothVolume(entry, summary: summary) else {
+            scanBothSession?.setConfirmation(nil, for: summary.jobID)
+            return
+        }
+        guard let plan = validatedImportPlan(matching: confirmation) else {
+            scanBothSession?.setConfirmation(nil, for: summary.jobID)
+            return
+        }
+        startImport(
+            jobID: summary.jobID, databaseURL: databaseURL,
+            builder: plan.builder, approvedPlans: confirmation.plans
+        )
+    }
+
+    private func openScanBothVolume(_ entry: ScanBothSession.Entry, summary: ScanSummary) -> Bool {
+        guard liveScanBothVolume(matching: entry.volume) != nil else {
+            requireRescan(for: summary.jobID)
+            return false
+        }
         do {
-            guard let jobRepository, let dedupeRepository else { return }
+            guard let jobRepository, let dedupeRepository else { return false }
             let files = try jobRepository.fetchJobFiles(jobID: summary.jobID)
             if try jobRepository.fetchJob(id: summary.jobID)?.canRetryImport == true {
-                jobsRequiringRescan.insert(summary.jobID)
-                return
+                requireRescan(for: summary.jobID)
+                return false
             }
             scanBothSession?.reviewingJobID = summary.jobID
+            scanBothReviewDestinationAccess = entry.confirmation?.destinationAccess ?? []
             folderAccessFeedback = nil
+            currentResult = nil
             resetImportDraftFromDefaults()
             previewSessions = []
             workflowProfileWasManuallyChosenForCurrentJob = false
             loadScanPreview(summary, files: files, dedupeRepository: dedupeRepository)
+            if let draft = entry.confirmation?.draft {
+                photosPath = draft.photosPath
+                videosPath = draft.videosPath
+                location = draft.shootName
+                workflowProfile = draft.workflowProfile
+                workflowProfileWasManuallyChosenForCurrentJob = true
+                importMediaSelection = draft.mediaSelection
+                destinationLayout = draft.destinationLayout
+                organizationPreset = draft.destinationLayout.organizationPreset
+                if draft.mediaSelection == .photosAndVideos {
+                    preferredMixedDestinationLayout = draft.destinationLayout
+                }
+                folderGrouping = draft.folderGrouping
+                validatePaths()
+                previewSessions = draft.sessions
+            }
             recoverImportWorkspace()
+            return true
         } catch {
             showFolderAccessError { Self.errorMessage(for: error) }
+            return false
         }
     }
 
@@ -3817,7 +3967,9 @@ final class AppModel: ObservableObject {
               let url = pickCardFolder(startingAt: path),
               let chosenPath = validatedSelectedSourcePath(url) else { return }
         var grantedPaths: Set<String> = []
-        let recoveryAccess = (Array(folderAccesses.values) + (rescanContext?.access ?? [])).filter {
+        let recoveryAccess = (
+            Array(folderAccesses.values) + scanBothReviewDestinationAccess + (rescanContext?.access ?? [])
+        ).filter {
             $0.isActive && grantedPaths.insert($0.url.standardizedFileURL.path).inserted
         }
         retainPendingScanBothResults()
@@ -3832,6 +3984,7 @@ final class AppModel: ObservableObject {
 
     private func requireRescan(for jobID: String) {
         jobsRequiringRescan.insert(jobID)
+        scanBothSession?.setConfirmation(nil, for: jobID)
         showFolderAccessError { L10n.tr("Source changed since scan; scan again") }
     }
 
@@ -4856,7 +5009,7 @@ final class AppModel: ObservableObject {
         covering path: String, additionalAccess: [SecurityScopedResourceAccess] = []
     ) -> Bool {
         let requestedURL = URL(fileURLWithPath: expanded(path), isDirectory: true)
-        return (Array(folderAccesses.values) + additionalAccess).contains { access in
+        return (Array(folderAccesses.values) + scanBothReviewDestinationAccess + additionalAccess).contains { access in
             access.isActive && Self.isSameOrDescendant(requestedURL, of: access.url)
         }
     }

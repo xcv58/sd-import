@@ -35,10 +35,10 @@ struct ManualImportView: View {
             model.validatePaths()
         }
         .onChange(of: model.photosPath) {
-            model.destinationPathDidChange()
+            model.destinationPathDidChange(clearFeedback: !model.isReviewingScanBothVolume)
         }
         .onChange(of: model.videosPath) {
-            model.destinationPathDidChange()
+            model.destinationPathDidChange(clearFeedback: !model.isReviewingScanBothVolume)
         }
         .onChange(of: model.importUIPhase) {
             phaseHeadingIsFocused = true
@@ -100,6 +100,9 @@ struct ManualImportView: View {
                             Spacer()
                             scanBothReviewActions(entry)
                         }
+                        if let result = entry.result {
+                            scanBothCopySummary(result)
+                        }
                         if case .complete(let summary, let filenames, _) = entry.state {
                             let scannedPath = URL(fileURLWithPath: summary.mountPath, isDirectory: true)
                                 .standardizedFileURL.path
@@ -121,6 +124,17 @@ struct ManualImportView: View {
                             }
                         }
                     }
+                }
+                if session.hasPendingResults {
+                    Button {
+                        model.startScanBothImports()
+                    } label: {
+                        Label(L10n.tr("Start Imports"), systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(!model.canStartScanBothImports)
+                    .accessibilityIdentifier("import.scan-both.start")
                 }
                 if AppDistribution.current.supportsSourceEjection {
                     SourceEjectionControl(
@@ -145,6 +159,9 @@ struct ManualImportView: View {
     private func scanBothReviewActions(_ entry: ScanBothSession.Entry) -> some View {
         switch entry.disposition {
         case .pending:
+            if entry.confirmation != nil {
+                Text(L10n.tr("Ready")).foregroundStyle(.secondary)
+            }
             if entry.canSkip {
                 Button(L10n.tr("Skip")) {
                     model.skipScanBothImport(entry.id)
@@ -159,7 +176,7 @@ struct ManualImportView: View {
                     }
                     .buttonStyle(.bordered)
                 } else {
-                    Button(L10n.tr("Review import")) {
+                    Button(entry.confirmation == nil ? L10n.tr("Review import") : L10n.tr("Edit Plan")) {
                         model.reviewScanBothVolume(entry.id)
                     }
                     .buttonStyle(.bordered)
@@ -171,6 +188,18 @@ struct ManualImportView: View {
             Text(L10n.tr("Imported")).foregroundStyle(.secondary)
         case .skipped:
             Text(L10n.tr("Skipped")).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func scanBothCopySummary(_ result: ImportResult) -> some View {
+        LabeledContent(L10n.tr("Copied"), value: L10n.tr("\(result.importedFiles) files"))
+        if let warning = result.portableReceiptWarning {
+            AppStatusLabel(
+                title: L10n.portableReceiptWarning(warning, sizeWarning: result.portableReceiptSizeWarning),
+                systemImage: "exclamationmark.triangle",
+                role: .warning
+            )
         }
     }
 
@@ -194,7 +223,7 @@ struct ManualImportView: View {
         AppPage(status: model.importDisconnectionMessage, statusRole: .error) {
             VStack(alignment: .leading, spacing: 18) {
                 phaseHeading(L10n.tr("Preparing import"), detail: model.statusMessage)
-                AppSection(L10n.tr("Preparing"), systemImage: "gearshape.2") {
+                AppSection(model.activeScanBothImportVolumeName ?? L10n.tr("Preparing"), systemImage: "gearshape.2") {
                     ProgressView()
                         .controlSize(.small)
                     Button(role: .cancel) {
@@ -214,7 +243,11 @@ struct ManualImportView: View {
         if let progress = model.importProgress {
             AppPage(status: model.importDisconnectionMessage, statusRole: .error) {
                 VStack(alignment: .leading, spacing: 18) {
-                    phaseHeading(L10n.tr("Copying files"), detail: L10n.tr("Keep the source connected until copying finishes."))
+                    phaseHeading(
+                        L10n.tr("Copying files"),
+                        detail: model.activeScanBothImportVolumeName
+                            ?? L10n.tr("Keep the source connected until copying finishes.")
+                    )
                     ImportProgressPanel(progress: progress) {
                         model.cancelImport()
                     }
@@ -228,7 +261,7 @@ struct ManualImportView: View {
     @ViewBuilder
     private var completionPage: some View {
         if let result = model.currentResult {
-            AppPage {
+            AppPage(status: model.folderAccessFeedback?.text, statusRole: .error) {
                 VStack(alignment: .leading, spacing: 18) {
                     phaseHeading(
                         result.failedFiles == 0 ? L10n.tr("Import complete") : L10n.tr("Completed with errors"),
@@ -236,6 +269,18 @@ struct ManualImportView: View {
                             ? L10n.tr("Your copied files are ready.")
                             : L10n.tr("Review the failed files before removing the source.")
                     )
+                    if let session = model.scanBothSession, session.entry(for: result.jobID) != nil {
+                        ForEach(session.entries) { entry in
+                            if let earlierResult = entry.result, earlierResult.jobID != result.jobID {
+                                AppSection(entry.volume.name, systemImage: "externaldrive") {
+                                    scanBothCopySummary(earlierResult)
+                                }
+                            }
+                        }
+                        if let name = session.entry(for: result.jobID)?.volume.name {
+                            Text(name).font(.headline)
+                        }
+                    }
                     ImportResultView(result: result)
                     scanBothBackButton
                 }

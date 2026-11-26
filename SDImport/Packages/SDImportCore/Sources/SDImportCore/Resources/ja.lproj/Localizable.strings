@@ -60,6 +60,10 @@
 "Allow %@ in System Settings → General → Login Items & Extensions." = "「システム設定 → 一般 → ログイン項目と機能拡張」で %1$@ を許可してください。";
 "Allow Access" = "アクセスを許可";
 "Allow Access & Scan" = "アクセスを許可してスキャン";
+"Confirm Plan" = "プランを確定";
+"Confirms this volume for Start Imports" = "インポートを開始する対象としてこのボリュームを確定します";
+"Edit Plan" = "プランを編集";
+"Start Imports" = "インポートを開始";
 "macOS needs your permission to read this source." = "この読み込み元を読み取るには、macOS でアクセスを許可する必要があります。";
 "Allow Access to %@" = "%1$@ へのアクセスを許可";
 "Allow Access to Source" = "読み込み元へのアクセスを許可";

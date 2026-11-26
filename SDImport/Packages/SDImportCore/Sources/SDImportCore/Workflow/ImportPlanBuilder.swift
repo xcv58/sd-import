@@ -158,7 +158,7 @@ public struct ImportPlanBuilder: Sendable {
         plans(files: files).compactMap(\.update)
     }
 
-    public func plans(files: [JobFileRecord]) -> [ImportFilePlan] {
+    public func plans(files: [JobFileRecord], knownImportedFileIDs: Set<Int64> = []) -> [ImportFilePlan] {
         let groups = Insta360ClipDetector().groups(files: files)
         var recordingMasterBySourcePath: [String: JobFileRecord] = [:]
         var recordingIDBySourcePath: [String: String] = [:]
@@ -180,6 +180,7 @@ public struct ImportPlanBuilder: Sendable {
                 file: $0,
                 insta360RecordingMaster: recordingMasterBySourcePath[$0.sourcePath],
                 completedInsta360Folder: completedFolderBySourcePath[$0.sourcePath],
+                knownLocally: $0.id.map { knownImportedFileIDs.contains($0) } == true,
                 reservedDestinationPaths: &reservedDestinationPaths
             )
         }
@@ -271,6 +272,7 @@ public struct ImportPlanBuilder: Sendable {
         file: JobFileRecord,
         insta360RecordingMaster: JobFileRecord?,
         completedInsta360Folder: URL? = nil,
+        knownLocally: Bool = false,
         reservedDestinationPaths: inout Set<String>
     ) -> ImportFilePlan {
         guard let id = file.id else {
@@ -365,7 +367,9 @@ public struct ImportPlanBuilder: Sendable {
                 update: nil, willCopy: false, disposition: .notReady, destinationPath: nil
             )
         }
-        let knownFromImportHistory = recovery == nil && file.decision == .known && file.knownSource != .destination
+        let knownSource: KnownFileSource? = knownLocally ? .localLedger : file.knownSource
+        let knownFromImportHistory = recovery == nil
+            && (knownLocally || (file.decision == .known && file.knownSource != .destination))
         if knownFromImportHistory && !isInsta360RecordingFile {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(
@@ -374,10 +378,11 @@ public struct ImportPlanBuilder: Sendable {
                     destinationDirectory: file.destinationDirectory,
                     plannedDestinationPath: file.plannedDestinationPath,
                     copyStatus: .skipped,
-                    error: nil
+                    error: nil,
+                    knownSource: knownSource
                 ),
                 willCopy: false,
-                disposition: .known(file.knownSource),
+                disposition: .known(knownSource),
                 destinationPath: file.plannedDestinationPath
             )
         }
@@ -441,10 +446,11 @@ public struct ImportPlanBuilder: Sendable {
                     destinationDirectory: destinationURL.deletingLastPathComponent().path,
                     plannedDestinationPath: destinationURL.path,
                     copyStatus: .skipped,
-                    error: nil
+                    error: nil,
+                    knownSource: knownSource
                 ),
                 willCopy: false,
-                disposition: .known(file.knownSource),
+                disposition: .known(knownSource),
                 destinationPath: destinationURL.path
             )
         }
