@@ -60,6 +60,10 @@
 "Allow %@ in System Settings → General → Login Items & Extensions." = "Autorisez %1$@ dans Réglages Système → Général → Ouverture et extensions.";
 "Allow Access" = "Autoriser l’accès";
 "Allow Access & Scan" = "Autoriser l’accès et analyser";
+"Confirm Plan" = "Confirmer le plan";
+"Confirms this volume for Start Imports" = "Confirme ce volume pour le lancement des imports";
+"Edit Plan" = "Modifier le plan";
+"Start Imports" = "Lancer les imports";
 "macOS needs your permission to read this source." = "macOS a besoin de votre autorisation pour lire cette source.";
 "Allow Access to %@" = "Autoriser l’accès à %1$@";
 "Allow Access to Source" = "Autoriser l’accès à la source";
@@ -390,6 +394,7 @@
 "Preparing files imported on another Mac..." = "Préparation des fichiers importés sur un autre Mac…";
 "Preparing import" = "Préparation de l’importation";
 "Preparing import..." = "Préparation de l’importation…";
+"Press Return to confirm" = "Appuyez sur Retour pour confirmer";
 "Press Return to start" = "Appuyez sur Retour pour démarrer";
 "Press Space for Quick Look" = "Appuyez sur Espace pour Coup d’œil";
 "Preview Cleanup" = "Prévisualiser le nettoyage";

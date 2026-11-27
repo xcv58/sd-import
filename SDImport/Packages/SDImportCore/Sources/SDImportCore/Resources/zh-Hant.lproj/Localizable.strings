@@ -60,6 +60,10 @@
 "Allow %@ in System Settings → General → Login Items & Extensions." = "請在“系統設定 → 通用 → 登入項與擴展”中允許 %1$@。";
 "Allow Access" = "允許訪問";
 "Allow Access & Scan" = "允許取用並掃描";
+"Confirm Plan" = "確認匯入計畫";
+"Confirms this volume for Start Imports" = "確認將此卷宗納入待開始的匯入";
+"Edit Plan" = "編輯匯入計畫";
+"Start Imports" = "開始匯入";
 "macOS needs your permission to read this source." = "macOS 需要你的許可才能讀取這個來源。";
 "Allow Access to %@" = "允許訪問 %1$@";
 "Allow Access to Source" = "允許訪問來源";
@@ -390,6 +394,7 @@
 "Preparing files imported on another Mac..." = "正在準備已在另一台 Mac 上匯入的檔案…";
 "Preparing import" = "正在準備匯入";
 "Preparing import..." = "正在準備匯入…";
+"Press Return to confirm" = "按 Return 鍵確認";
 "Press Return to start" = "按回車鍵開始";
 "Press Space for Quick Look" = "按空格鍵快速查看";
 "Preview Cleanup" = "預覽清理";

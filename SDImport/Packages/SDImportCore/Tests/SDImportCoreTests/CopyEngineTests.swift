@@ -5,6 +5,59 @@ import Testing
 
 @Suite("CopyEngine")
 struct CopyEngineTests {
+    @Test("an opened source must still match the reviewed timestamp")
+    func rejectsChangedReviewedSource() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let source = root.appendingPathComponent("source")
+        let destination = root.appendingPathComponent("stage")
+        try Data("changed".utf8).write(to: source)
+        try fm.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_700_000_010)], ofItemAtPath: source.path)
+        #expect(throws: SDImportError.reviewedSourceChanged) {
+            _ = try CopyEngine().stageFile(
+                from: source, to: destination, expectedSize: 7, modificationDate: nil,
+                expectedSourceEpoch: 1_700_000_000, onChunk: nil, shouldCancel: { false }
+            )
+        }
+        #expect(!fm.fileExists(atPath: destination.path))
+    }
+
+    @Test("reviewed streaming rejects an in-place rewrite within the approved second")
+    func rejectsSourceMutationDuringStreaming() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let source = root.appendingPathComponent("source")
+        let destination = root.appendingPathComponent("stage")
+        let size = 256 * 1_024
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        try Data(repeating: 65, count: size).write(to: source)
+        try fm.setAttributes([.modificationDate: date], ofItemAtPath: source.path)
+        var rewritten = false
+        #expect(throws: SDImportError.reviewedSourceChanged) {
+            _ = try CopyEngine(chunkSize: 65_536).stageFile(
+                from: source, to: destination, expectedSize: Int64(size), modificationDate: nil,
+                expectedSourceEpoch: 1_700_000_000, onChunk: { _ in
+                    guard !rewritten else { return }
+                    do {
+                        let file = try FileHandle(forWritingTo: source)
+                        defer { try? file.close() }
+                        try file.seek(toOffset: UInt64(size - 1))
+                        try file.write(contentsOf: Data([66]))
+                        try fm.setAttributes([.modificationDate: date], ofItemAtPath: source.path)
+                        rewritten = true
+                    } catch {
+                        Issue.record("Could not update test fixture: \(error)")
+                    }
+                }, shouldCancel: { false }
+            )
+        }
+        #expect(rewritten)
+    }
+
     @Test("copies large files with bounded chunks")
     func copiesLargeFileWithBoundedChunks() throws {
         let directory = try temporaryDirectory()

@@ -1,4 +1,6 @@
 import Foundation
+import os
+import SDImportCommerce
 import SDImportCore
 import Testing
 
@@ -111,7 +113,7 @@ struct ScanBothSessionTests {
         #expect(order == [internalStorage.name, card.name])
         let completed = states[declineFirst ? 1 : 0]
         let skipped = states[declineFirst ? 0 : 1]
-        if case .complete(let summary, let filenames, _) = completed {
+        if case .complete(let summary, let filenames, _, _) = completed {
             #expect(summary.volumeName == completedVolume.name)
             #expect(filenames == ["clip.mp4"])
         } else {
@@ -124,8 +126,8 @@ struct ScanBothSessionTests {
         }
     }
 
-    @Test("both scan jobs can be copied separately from one session")
-    func scansRealFilesAndKeepsCopySeparate() async throws {
+    @Test("separate plans can be confirmed before copying in volume order", arguments: [false, true])
+    func confirmsBeforeSequentialCopy(sharedFilename: Bool) async throws {
         let fileManager = FileManager.default
         let directory = fileManager.temporaryDirectory
             .appendingPathComponent("sdimport-scan-both-\(UUID().uuidString)", isDirectory: true)
@@ -138,14 +140,16 @@ struct ScanBothSessionTests {
             internalStorage.name: directory.appendingPathComponent("Internal", isDirectory: true),
             card.name: directory.appendingPathComponent("SD Card", isDirectory: true)
         ]
-        let internalNames = (1...6).map { "Internal-\($0).jpg" }
-        let cardNames = ["Card-1.jpg", "Card-2.jpg"]
+        let internalNames = (1...6).map { "Internal-\($0).jpg" } + (sharedFilename ? ["Shared.jpg"] : [])
+        let cardNames = ["Card-1.jpg", sharedFilename ? "Shared.jpg" : "Card-2.jpg"]
         for (volume, names) in [(internalStorage, internalNames), (card, cardNames)] {
             let source = try #require(sourceFolders[volume.name])
             let dcim = source.appendingPathComponent("DCIM", isDirectory: true)
             try fileManager.createDirectory(at: dcim, withIntermediateDirectories: true)
             for name in names {
-                try Data(name.utf8).write(to: dcim.appendingPathComponent(name))
+                let file = dcim.appendingPathComponent(name)
+                try Data("\(volume.name) \(name)".utf8).write(to: file)
+                try fileManager.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)], ofItemAtPath: file.path)
             }
         }
 
@@ -198,7 +202,7 @@ struct ScanBothSessionTests {
             review.reviewingJobID = job.id
             let entry = try #require(review.reviewingEntry)
             #expect(entry.volume == volume)
-            guard case .complete(let summary, let preview, _) = entry.state else {
+            guard case .complete(let summary, let preview, _, _) = entry.state else {
                 Issue.record("Missing scan result for \(volume.name)")
                 return
             }
@@ -214,15 +218,35 @@ struct ScanBothSessionTests {
         let firstJob = try #require(jobs.first { $0.volumeUUID == internalStorage.volumeUUID })
         let siblingJob = try #require(jobs.first { $0.volumeUUID == card.volumeUUID })
         let engine = ImportEngine(jobRepository: repository, dedupeRepository: dedupe)
+        let builder = ImportPlanBuilder(
+            sessions: [], organizationPreset: .classicDatedFolders, roots: roots,
+            fallbackLocation: "Camera", volumeName: nil
+        )
 
-        review.recordImport(ImportResult(
-            jobID: firstJob.id, importedFiles: 0, skippedFiles: 0, failedFiles: 1, progressPath: nil
-        ))
-        #expect(review.entry(for: firstJob.id)?.awaitsImport == true)
-        #expect(!review.allowsAutomaticEjection)
+        #expect(!review.canStartImports)
+        for jobID in [siblingJob.id, firstJob.id] {
+            let summary = try #require(review.entry(for: jobID)?.summary)
+            let files = try repository.fetchJobFiles(jobID: jobID)
+            let plans = builder.plans(files: files)
+            review.setConfirmation(.init(
+                draft: draft(sourcePath: summary.mountPath, roots: roots),
+                plans: plans, destinationAccess: [],
+                destinations: try #require(ReviewedImportDestinations(plans: plans))
+            ), for: jobID)
+            #expect(review.canStartImports == (jobID == firstJob.id))
+        }
+        #expect(try repository.listImportHistoryJobs().isEmpty)
+        #expect(try fileManager.contentsOfDirectory(atPath: roots.photosURL.path).isEmpty)
 
-        review.reviewingJobID = firstJob.id
-        let result = try engine.importFiles(jobID: firstJob.id)
+        let first = try #require(review.nextConfirmedEntry)
+        #expect(first.jobID == firstJob.id)
+        let firstConfirmation = try #require(first.confirmation)
+        review.recordImportStarted(for: firstJob.id)
+        let result = try engine.importFiles(preparing: {
+            try repository.updateJobImportPlan(
+                jobID: firstJob.id, destinationRoots: roots, updates: firstConfirmation.plans.compactMap(\.update)
+            )
+        }, jobID: firstJob.id, requiresReviewedDestinations: true)
         review.recordImport(result)
         #expect(result.importedFiles == internalNames.count)
         #expect(try repository.listImportHistoryJobs().map(\.id) == [firstJob.id])
@@ -230,17 +254,69 @@ struct ScanBothSessionTests {
         #expect(try repository.fetchJobFiles(jobID: siblingJob.id).allSatisfy { $0.copyStatus == .pending })
         #expect(!review.allowsAutomaticEjection)
 
-        review.reviewingJobID = nil
-        #expect(review.entry(for: firstJob.id)?.awaitsImport == false)
-        #expect(review.entry(for: siblingJob.id)?.awaitsImport == true)
-        review.reviewingJobID = siblingJob.id
-        let siblingResult = try engine.importFiles(jobID: siblingJob.id)
+        #expect(review.entry(for: firstJob.id)?.result == result)
+        let second = try #require(review.nextConfirmedEntry)
+        #expect(second.jobID == siblingJob.id)
+        let secondConfirmation = try #require(second.confirmation)
+        #expect(secondConfirmation.draft.sourcePath == sourceFolders[card.name]?.path)
+        let freshSecondPlans = builder.plans(files: try repository.fetchJobFiles(jobID: siblingJob.id))
+        #expect((freshSecondPlans != secondConfirmation.plans) == sharedFilename)
+        if sharedFilename {
+            review.setConfirmation(nil, for: siblingJob.id)
+            #expect(review.nextConfirmedEntry == nil)
+            #expect(try repository.listImportHistoryJobs().map(\.id) == [firstJob.id])
+            #expect(review.entry(for: firstJob.id)?.result == result)
+            review.setConfirmation(.init(
+                draft: secondConfirmation.draft, plans: freshSecondPlans, destinationAccess: [],
+                destinations: try #require(ReviewedImportDestinations(plans: freshSecondPlans))
+            ), for: siblingJob.id)
+        }
+        let approvedSecond = try #require(review.nextConfirmedEntry?.confirmation)
+        review.recordImportStarted(for: siblingJob.id)
+        let siblingResult = try engine.importFiles(preparing: {
+            try repository.updateJobImportPlan(
+                jobID: siblingJob.id, destinationRoots: roots, updates: approvedSecond.plans.compactMap(\.update)
+            )
+        }, jobID: siblingJob.id, requiresReviewedDestinations: true)
         review.recordImport(siblingResult)
         #expect(siblingResult.importedFiles == cardNames.count)
         #expect(Set(try repository.listImportHistoryJobs().map(\.id)) == Set([firstJob.id, siblingJob.id]))
         #expect(review.allowsAutomaticEjection)
+        #expect(review.nextConfirmedEntry == nil)
         review.removedMountPaths.insert(card.mountPath)
         #expect(!review.allowsAutomaticEjection)
+    }
+
+    @Test("losing one approved volume invalidates only its confirmation")
+    func disconnectInvalidatesOnlyAffectedConfirmation() throws {
+        var session = try scannedSession()
+        let roots = DestinationRoots(
+            photosURL: FileManager.default.temporaryDirectory,
+            videosURL: FileManager.default.temporaryDirectory
+        )
+        for entry in session.entries {
+            let jobID = try #require(entry.jobID)
+            session.setConfirmation(.init(
+                draft: draft(sourcePath: entry.volume.mountPath, roots: roots), plans: [], destinationAccess: [],
+                destinations: try #require(ReviewedImportDestinations(plans: []))
+            ), for: jobID)
+        }
+        #expect(session.canStartImports)
+        #expect(session.noteUnmount(at: card.mountPath) == card.name)
+        #expect(!session.canStartImports)
+        #expect(session.entries[1].confirmation == nil)
+        #expect(session.nextConfirmedEntry?.volume == internalStorage)
+        session.skipEntry(session.entries[1].id)
+        #expect(session.canStartImports)
+        #expect(!session.allowsEjection)
+    }
+
+    private func draft(sourcePath: String, roots: DestinationRoots) -> ImportDraft {
+        ImportDraft(
+            sourcePath: sourcePath, photosPath: roots.photosURL.path, videosPath: roots.videosURL.path,
+            shootName: "Camera", workflowProfile: .photoImport, mediaSelection: .photosOnly,
+            destinationLayout: .separateMediaFolders, folderGrouping: .byDay
+        )
     }
 
     @Test("ejection checks a destination from either volume in the scan session")
@@ -296,8 +372,14 @@ struct ScanBothSessionTests {
 
         var attempted = original
         attempted.recordImportStarted(for: card.name)
+        attempted.recordImport(ImportResult(
+            jobID: card.name, importedFiles: 2, skippedFiles: 0, failedFiles: 1, progressPath: nil
+        ))
+        #expect(attempted.entries[1].awaitsImport)
         attempted.skipEntry(skippedEntry)
         attempted.recordImport(successfulInternalCopy)
+        #expect(attempted.entries[1].result?.importedFiles == 2)
+        #expect(attempted.entries[1].result?.failedFiles == 1)
         #expect(attempted.allowsEjection)
         #expect(!attempted.allowsAutomaticEjection)
 
@@ -305,6 +387,28 @@ struct ScanBothSessionTests {
         skippedBeforeCopy.skipEntry(skippedEntry)
         skippedBeforeCopy.recordImport(successfulInternalCopy)
         #expect(skippedBeforeCopy.allowsAutomaticEjection)
+    }
+
+    @Test("interrupted receipts count recordings like History and retain partial lens copies", arguments: [false, true])
+    func groupsInterruptedRecording(completePair: Bool) throws {
+        var session = try scannedSession()
+        let jobID = internalStorage.name
+        let names = ["VID_20181001_210458_00_007.insv", "VID_20181001_210458_10_007.insv", "pending.mp4"]
+        let files = names.enumerated().map { index, filename in
+            JobFileRecord(
+                id: Int64(index + 1), jobID: jobID, sourcePath: "/Volumes/Internal/DCIM/\(filename)",
+                relativePath: "DCIM/\(filename)", filename: filename,
+                ext: index == 2 ? ".mp4" : ".insv", size: 10, modificationDateString: "",
+                mediaKind: .video, fingerprint: nil, captureDate: nil, decision: .new,
+                destinationDirectory: "/tmp", plannedDestinationPath: "/tmp/\(filename)",
+                copyStatus: index == 0 ? .copied : (index == 1 ? (completePair ? .copied : .failed) : .pending)
+            )
+        }
+        session.recordInterruptedImport(jobID: jobID, files: files, message: "Stopped", includeEmptyReceipt: false)
+        #expect(session.entries[0].result?.importedFiles == (completePair ? 1 : 0))
+        #expect(session.entries[0].result?.failedFiles == (completePair ? 0 : 1))
+        #expect(session.entries[0].copyInterruption == "Stopped")
+        #expect(session.entries[0].awaitsImport)
     }
 
     @Test("replacing a Scan Both review needs confirmation while the sibling is still pending")
@@ -348,10 +452,501 @@ struct ScanBothSessionTests {
         return session
     }
 
-    private static func volume(_ name: String, disk: String, device: String = "camera") -> MountedVolume {
+    private static func volume(_ name: String, disk: String, device: String = "camera", at url: URL? = nil) -> MountedVolume {
         MountedVolume(
-            id: name, name: name, mountURL: URL(fileURLWithPath: "/Volumes/\(name)"),
+            id: name, name: name, mountURL: url ?? URL(fileURLWithPath: "/Volumes/\(name)"),
             volumeUUID: name, isRemovable: true, wholeDiskIdentifier: disk, deviceGroupIdentifier: device
         )
+    }
+
+    @Test("destination approvals allow new folders and reject a retargeted path")
+    func checksApprovedDestinationIdentity() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: root, withIntermediateDirectories: false)
+        defer { try? fm.removeItem(at: root) }
+        let directory = root.appendingPathComponent("planned", isDirectory: true)
+        let plan = ImportFilePlan(
+            update: nil, willCopy: true, disposition: .copy,
+            destinationPath: directory.appendingPathComponent("IMG_001.jpg").path
+        )
+        let approval = try #require(ReviewedImportDestinations(plans: [plan]))
+        try fm.createDirectory(at: directory, withIntermediateDirectories: false)
+        #expect(approval.matches())
+        let existingDirectoryApproval = try #require(ReviewedImportDestinations(plans: [plan]))
+        let replacement = root.appendingPathComponent("replacement")
+        try fm.moveItem(at: directory, to: replacement)
+        try fm.createSymbolicLink(at: directory, withDestinationURL: replacement)
+        #expect(!approval.matches())
+        #expect(!existingDirectoryApproval.matches())
+    }
+
+    @Test("new history only changes a plan for an unchanged source file")
+    func refreshesHistoryWithoutHidingMissingFiles() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let source = root.appendingPathComponent("source")
+        let destination = root.appendingPathComponent("destination")
+        for folder in [source, destination] { try fm.createDirectory(at: folder, withIntermediateDirectories: true) }
+        defer { try? fm.removeItem(at: root) }
+        let file = source.appendingPathComponent("IMG_001.jpg")
+        let bytes = Data("photo".utf8)
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        try bytes.write(to: file)
+        try fm.setAttributes([.modificationDate: date], ofItemAtPath: file.path)
+        let roots = DestinationRoots(photosURL: destination, videosURL: destination)
+        let pool = try DatabasePoolFactory(databaseURL: root.appendingPathComponent("state.sqlite")).makeMigratedPool()
+        let jobs = JobRepository(pool: pool)
+        let dedupe = DedupeRepository(pool: pool)
+        let summary = try MediaScanner(jobRepository: jobs, dedupeRepository: dedupe).scan(
+            ScanRequest(mountURL: source, volumeName: "Card", volumeUUID: "Card", location: "Camera", roots: roots)
+        )
+        let files = try jobs.fetchJobFiles(jobID: summary.jobID)
+        let id = try #require(files.first?.id)
+        let engine = ImportEngine(jobRepository: jobs, dedupeRepository: dedupe, portableReceiptsEnabled: true)
+        #expect(engine.refreshedReviewHistory(files: files, sourcePath: source.path).isEmpty)
+        let ledger = PortableImportReceiptLedger(sourceRootURL: source)
+        try ledger.append(
+            identity: PortableFileIdentity(size: Int64(bytes.count), modificationDate: date, relativePath: file.lastPathComponent)
+        )
+        #expect(engine.refreshedReviewHistory(files: files, sourcePath: source.path)[id] == .known(.portableLedger))
+        let previouslyKnown = try MediaScanner(jobRepository: jobs, dedupeRepository: dedupe).scan(
+            ScanRequest(
+                mountURL: source, volumeName: "Card", volumeUUID: "Card", location: "Camera",
+                roots: roots, portableReceiptsEnabled: true
+            )
+        )
+        let knownFiles = try jobs.fetchJobFiles(jobID: previouslyKnown.jobID)
+        let knownID = try #require(knownFiles.first?.id)
+        #expect(knownFiles.first?.knownSource == .portableLedger)
+        try fm.removeItem(at: ledger.ledgerURL)
+        let refreshed = engine.refreshedReviewHistory(files: knownFiles, sourcePath: source.path)
+        #expect(refreshed[knownID] == .unmatched)
+        let builder = ImportPlanBuilder(
+            sessions: [], organizationPreset: .classicDatedFolders, roots: roots, fallbackLocation: "Camera", volumeName: nil
+        )
+        #expect(builder.plans(files: knownFiles, refreshedHistory: refreshed).first?.willCopy == true)
+        // Copy through a second job to supply the local dedupe record, then remove the original media.
+        let other = try MediaScanner(jobRepository: jobs, dedupeRepository: dedupe).scan(
+            ScanRequest(mountURL: source, volumeName: "Other", volumeUUID: "Other", location: "Camera", roots: roots)
+        )
+        let result = try ImportEngine(jobRepository: jobs, dedupeRepository: dedupe).importFiles(jobID: other.jobID)
+        #expect(result.importedFiles == 1)
+        #expect(engine.refreshedReviewHistory(files: files, sourcePath: source.path)[id] == .known(.localLedger))
+        let locallyKnown = try MediaScanner(jobRepository: jobs, dedupeRepository: dedupe).scan(
+            ScanRequest(mountURL: source, volumeName: "Card", volumeUUID: "Card", location: "Camera", roots: roots)
+        )
+        let locallyKnownFiles = try jobs.fetchJobFiles(jobID: locallyKnown.jobID)
+        let locallyKnownID = try #require(locallyKnownFiles.first?.id)
+        #expect(locallyKnownFiles.first?.knownSource == .localLedger)
+        try fm.removeItem(at: file)
+        #expect(engine.refreshedReviewHistory(files: files, sourcePath: source.path).isEmpty)
+        try bytes.write(to: file)
+        try fm.setAttributes([.modificationDate: date], ofItemAtPath: file.path)
+        #expect(engine.refreshedReviewHistory(files: locallyKnownFiles, sourcePath: source.path)[locallyKnownID] == .known(.localLedger))
+        #expect(try dedupe.forgetImportedFiles(jobID: other.jobID) == 1)
+        #expect(engine.refreshedReviewHistory(files: locallyKnownFiles, sourcePath: source.path)[locallyKnownID] == .unmatched)
+    }
+
+    enum CopyScenario: Sendable, Equatable {
+        case bothSucceed
+        case receiptAfterHistoryNavigation
+        case firstCopyChangesSecondPlan
+        case destinationChangesInWorker
+        case destinationFillsInWorker
+        case disconnectBeforeCopy
+        case firstVolumeDisconnectsBeforeSecond
+        case unmountNotificationBeforeCopy
+        case unmountDuringCopy
+        case unmountDuringFirstCopy
+        case cancelDuringFirstCopy
+        case destinationReplacedAfterPartialCopy
+        case nestedDestinationReplacedAfterPartialCopy
+        case sourceChangesInWorker
+        case sourceChangesInSameSecond
+        case sourceChangesWithPortableHistory
+        case knownSourceChangesBeforeStart
+        case sourceMissingInWorker
+        case sourceFolderMissingBeforeStart
+        case sourceFolderMissingInWorker
+    }
+
+    @Test("one Start drives the real Scan Both import flow",
+          arguments: [CopyScenario.bothSucceed, .receiptAfterHistoryNavigation, .firstCopyChangesSecondPlan,
+                      .destinationChangesInWorker, .destinationFillsInWorker,
+                      .disconnectBeforeCopy, .unmountNotificationBeforeCopy, .unmountDuringCopy, .destinationReplacedAfterPartialCopy,
+                      .unmountDuringFirstCopy, .cancelDuringFirstCopy, .nestedDestinationReplacedAfterPartialCopy,
+                      .sourceChangesInWorker, .sourceChangesInSameSecond, .sourceChangesWithPortableHistory, .knownSourceChangesBeforeStart,
+                      .sourceMissingInWorker, .sourceFolderMissingBeforeStart, .sourceFolderMissingInWorker,
+                      .firstVolumeDisconnectsBeforeSecond])
+    func startsBatchThroughAppModel(_ scenario: CopyScenario) async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let destination = root.appendingPathComponent("Destination")
+        let internalFolder = root.appendingPathComponent("Internal")
+        let cardFolder = root.appendingPathComponent("Card")
+        let first = Self.volume("Internal", disk: "disk4", at: internalFolder)
+        let second = Self.volume("Card", disk: "disk5", at: cardFolder)
+        let suite = "SDImportAppTests.scanBoth.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? fm.removeItem(at: root)
+        }
+        for folder in [internalFolder, cardFolder, destination] {
+            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        let firstFile = internalFolder.appendingPathComponent("Shared.jpg")
+        let laterFile = internalFolder.appendingPathComponent("ZZ-Later.jpg")
+        let replacesParent = scenario == .nestedDestinationReplacedAfterPartialCopy
+        let stopsDuringFirstFile = scenario == .cancelDuringFirstCopy || scenario == .unmountDuringFirstCopy
+        let hasLaterFile = scenario == .unmountDuringCopy || scenario == .destinationReplacedAfterPartialCopy || replacesParent
+        let testsHistoryExclusion = scenario == .sourceChangesWithPortableHistory || scenario == .knownSourceChangesBeforeStart
+        let needsSecondInternalFile = hasLaterFile || testsHistoryExclusion || scenario == .receiptAfterHistoryNavigation
+        let secondFile = cardFolder.appendingPathComponent(scenario == .firstCopyChangesSecondPlan ? "Shared.jpg" : "Card.jpg")
+        try Data("internal image".utf8).write(to: firstFile)
+        try Data("longer card image".utf8).write(to: secondFile)
+        if needsSecondInternalFile { try Data("another internal image".utf8).write(to: laterFile) }
+        for url in [firstFile, secondFile] + (needsSecondInternalFile ? [laterFile] : []) {
+            try fm.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)], ofItemAtPath: url.path)
+        }
+        if testsHistoryExclusion {
+            try PortableImportReceiptLedger(sourceRootURL: internalFolder).append(identity: PortableFileIdentity(
+                size: 14, modificationTimeEpochSeconds: 1_700_000_000, relativePath: firstFile.lastPathComponent
+            ))
+        }
+        let session = try #require(ScanBothSession(deviceName: "Fixture Camera", entries: [
+            .init(id: UUID(), volume: first), .init(id: UUID(), volume: second)
+        ]))
+        let lateChange = OSAllocatedUnfairLock(initialState: Optional<URL>.none)
+        let movedSource = root.appendingPathComponent("MovedSource")
+        let firstFinished = OSAllocatedUnfairLock(initialState: false)
+        let capacity = OSAllocatedUnfairLock(
+            initialState: (available: true, shouldFill: scenario == .destinationFillsInWorker)
+        )
+        let unmountDelivered = DispatchSemaphore(value: 0)
+        let reachedLateCopy = OSAllocatedUnfairLock(initialState: false)
+        let model = AppModel(
+            purchaseManager: PurchaseManager(distribution: .direct, startsStoreTask: false),
+            defaults: defaults, startsBootstrap: false,
+            scanBothMountLookup: { volume in
+                if scenario == .firstVolumeDisconnectsBeforeSecond, volume == first,
+                   firstFinished.withLock({ $0 }) { return nil }
+                if !Thread.isMainThread, volume == second {
+                    if scenario == .disconnectBeforeCopy { return nil }
+                    if scenario == .unmountNotificationBeforeCopy {
+                        _ = unmountDelivered.wait(timeout: .now() + 5)
+                    }
+                    let change = lateChange.withLock { path in
+                        defer { path = nil }
+                        return path
+                    }
+                    if let change {
+                        switch scenario {
+                        case .sourceMissingInWorker:
+                            try? FileManager.default.removeItem(at: change)
+                        case .sourceChangesInSameSecond, .sourceChangesWithPortableHistory:
+                            let timestamp = testsHistoryExclusion ? 1_700_000_000 : 1_700_000_000.5
+                            try? Data("different data".utf8).write(to: change)
+                            try? FileManager.default.setAttributes(
+                                [.modificationDate: Date(timeIntervalSince1970: timestamp)], ofItemAtPath: change.path
+                            )
+                        case .sourceChangesInWorker:
+                            try? Data("different data".utf8).write(to: change)
+                            try? FileManager.default.setAttributes(
+                                [.modificationDate: Date(timeIntervalSince1970: 1_700_000_010)], ofItemAtPath: change.path
+                            )
+                        default:
+                            try? FileManager.default.createDirectory(
+                                at: change.deletingLastPathComponent(), withIntermediateDirectories: true
+                            )
+                            try? Data("another process created this destination".utf8).write(to: change)
+                        }
+                    }
+                }
+                return volume
+            },
+            destinationCapacity: { path in
+                if scenario == .sourceFolderMissingInWorker, !Thread.isMainThread {
+                    try FileManager.default.moveItem(at: internalFolder, to: movedSource)
+                }
+                let available = capacity.withLock { state in
+                    if state.shouldFill && !Thread.isMainThread {
+                        state.shouldFill = false
+                        state.available = false
+                    }
+                    return state.available
+                }
+                return VolumeCapacity(
+                    volumeID: "test-destination", displayPath: path,
+                    availableBytes: available ? 10_000 : 0, totalBytes: 10_000
+                )
+            },
+            observeCopyProgress: { progress in
+                if scenario == .firstVolumeDisconnectsBeforeSecond, progress.status == "completed" {
+                    firstFinished.withLock { $0 = true }
+                }
+                if stopsDuringFirstFile {
+                    guard progress.currentSourcePath == firstFile.path, progress.copiedBytes > 0,
+                          progress.importedFiles == 0 else { return }
+                } else {
+                    guard hasLaterFile, progress.importedFiles == 1 else { return }
+                    if scenario == .unmountDuringCopy {
+                        guard progress.currentSourcePath == laterFile.path, progress.copiedBytes > 14 else { return }
+                    } else {
+                        guard progress.currentSourcePath == nil else { return }
+                    }
+                }
+                let shouldInterrupt = reachedLateCopy.withLock { reached in
+                    defer { reached = true }
+                    return !reached
+                }
+                guard shouldInterrupt else { return }
+                if scenario == .unmountDuringCopy || stopsDuringFirstFile {
+                    _ = unmountDelivered.wait(timeout: .now() + 5)
+                } else {
+                    try? FileManager.default.removeItem(at: laterFile)
+                }
+            }
+        )
+        model.bootstrap(at: root.appendingPathComponent("State"), startsRuntimeServices: false)
+        model.portableImportReceiptsEnabled = testsHistoryExclusion
+        model.importDefaults.photosPath = destination.path
+        model.importDefaults.videosPath = destination.path
+        model.beginScanBoth(session)
+        try await waitForImport(model)
+        let entries = try #require(model.scanBothSession?.entries)
+        #expect(entries.allSatisfy { $0.summary != nil })
+        var lateConflictPath: URL?
+        var sharedDestination: URL?
+        for entry in entries.reversed() {
+            model.reviewScanBothVolume(entry.id)
+            if testsHistoryExclusion, entry.volume == first {
+                try #require(model.previewRows.contains { $0.disposition == .known(.portableLedger) })
+                try #require(model.previewRows.contains { $0.willCopy })
+            }
+            if (scenario == .firstVolumeDisconnectsBeforeSecond || scenario == .receiptAfterHistoryNavigation),
+               entry.volume == first {
+                let customDestination = root.appendingPathComponent("CustomDestination")
+                try fm.createDirectory(at: customDestination, withIntermediateDirectories: false)
+                model.photosPath = customDestination.path
+                model.videosPath = customDestination.path
+                model.destinationPathDidChange(clearFeedback: false)
+            }
+            if replacesParent {
+                model.useImportMediaSelection(.photosAndVideos)
+                model.useDestinationLayout(.singleLibrary)
+                model.useFolderGrouping(entry.volume == first ? .oneShootFolder : .byDay)
+            }
+            if (hasLaterFile || stopsDuringFirstFile), entry.volume == first {
+                let path = try #require(model.previewRows.first(where: \.willCopy)?.destinationPath)
+                sharedDestination = URL(fileURLWithPath: path).deletingLastPathComponent()
+            }
+            if scenario == .destinationChangesInWorker, entry.volume == first {
+                let path = try #require(model.previewRows.first(where: \.willCopy)?.destinationPath)
+                lateConflictPath = URL(fileURLWithPath: path)
+            }
+            model.importCurrentJob()
+        }
+        model.reviewScanBothVolume(entries[0].id)
+        model.returnToScanBothResults()
+        #expect(model.canStartScanBothImports)
+        #expect(try fm.contentsOfDirectory(atPath: destination.path).isEmpty)
+
+        let changeInWorker: URL?
+        switch scenario {
+        case .sourceChangesInWorker, .sourceChangesInSameSecond, .sourceChangesWithPortableHistory, .sourceMissingInWorker:
+            changeInWorker = firstFile
+        default:
+            changeInWorker = lateConflictPath
+        }
+        lateChange.withLock { $0 = changeInWorker }
+        if scenario == .sourceFolderMissingBeforeStart {
+            try fm.moveItem(at: internalFolder, to: movedSource)
+        }
+        if scenario == .knownSourceChangesBeforeStart {
+            try Data("different data".utf8).write(to: firstFile)
+            try fm.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)], ofItemAtPath: firstFile.path)
+        }
+        model.startScanBothImports()
+        if scenario == .unmountNotificationBeforeCopy {
+            model.invalidateScansAtUnmount(second.mountURL)
+            unmountDelivered.signal()
+        }
+        if scenario == .unmountDuringCopy || stopsDuringFirstFile {
+            let deadline = ContinuousClock.now + .seconds(5)
+            while !reachedLateCopy.withLock({ $0 }), model.isWorking, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            if scenario == .cancelDuringFirstCopy {
+                model.cancelImport()
+            } else {
+                model.invalidateScansAtUnmount(second.mountURL)
+            }
+            unmountDelivered.signal()
+            #expect(reachedLateCopy.withLock { $0 })
+        }
+        try await waitForImport(model)
+        let after = try #require(model.scanBothSession)
+        switch scenario {
+        case .bothSucceed:
+            #expect(after.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+            #expect(after.allowsAutomaticEjection)
+        case .receiptAfterHistoryNavigation:
+            let firstJobID = try #require(after.entries[0].jobID)
+            let secondJobID = try #require(after.entries[1].jobID)
+            try #require(after.entries.compactMap(\.result).map(\.importedFiles) == [2, 1])
+            model.openImportInHistory(jobID: secondJobID)
+            #expect(model.selectedJobID == secondJobID)
+            model.loadJobDetail(jobID: firstJobID)
+            let deadline = ContinuousClock.now + .seconds(5)
+            while model.isHistoryDetailLoading, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            #expect(model.selectedJobFiles.filter { $0.copyStatus == .copied }.count == 2)
+            model.selection = .import
+            let receipt = try #require(model.currentImportReceipt)
+            #expect(receipt.result.jobID == secondJobID)
+            #expect(receipt.job?.id == secondJobID)
+            #expect(receipt.files.filter { $0.copyStatus == .copied }.map(\.filename) == [secondFile.lastPathComponent])
+            #expect(receipt.files.first?.finalDestinationPath?.contains("/CustomDestination/") == false)
+            model.openImportInHistory(jobID: receipt.result.jobID)
+            #expect(model.selectedJobID == secondJobID)
+        case .firstCopyChangesSecondPlan:
+            #expect(after.entries[0].result?.importedFiles == 1)
+            #expect(after.entries[1].confirmation == nil)
+            #expect(model.importUIPhase == .review)
+            #expect(!model.needsRescan(try #require(after.entries[1].jobID)))
+            model.importCurrentJob()
+            #expect(model.canStartScanBothImports)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries[1].result?.importedFiles == 1)
+        case .destinationChangesInWorker:
+            #expect(after.entries.allSatisfy { $0.result == nil })
+            #expect(after.entries[1].confirmation != nil)
+            #expect(model.importUIPhase == .review)
+            let firstJobID = try #require(after.entries[0].jobID)
+            #expect(!model.needsRescan(firstJobID))
+            model.importCurrentJob()
+            #expect(model.canStartScanBothImports)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+        case .destinationFillsInWorker:
+            #expect(after.entries.allSatisfy { $0.result == nil })
+            #expect(after.entries[1].confirmation != nil)
+            #expect(model.importUIPhase == .review)
+            #expect(!model.needsRescan(try #require(after.entries[0].jobID)))
+            #expect(model.previewSpaceRequirements.contains { !$0.isSatisfied })
+            #expect(model.canImportPlannedFiles)
+            capacity.withLock { $0.available = true }
+            model.importCurrentJob()
+            #expect(model.canStartScanBothImports)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+        case .disconnectBeforeCopy, .unmountNotificationBeforeCopy:
+            #expect(model.importUIPhase == .failed)
+            #expect(model.importFailure?.message.contains(second.name) == true)
+            #expect(after.entries.allSatisfy { $0.result == nil })
+            #expect(!after.allowsEjection)
+            #expect(try fm.contentsOfDirectory(atPath: destination.path).isEmpty)
+            model.returnToScanBothResults()
+            model.skipScanBothImport(after.entries[1].id)
+            let firstJobID = try #require(after.entries[0].jobID)
+            #expect(!model.needsRescan(firstJobID))
+            #expect(after.entries[0].confirmation != nil)
+            #expect(model.canStartScanBothImports)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries[0].result?.importedFiles == 1)
+        case .unmountDuringCopy:
+            let folder = try #require(sharedDestination)
+            #expect(model.importUIPhase == .failed)
+            #expect(model.importFailure?.message.contains(second.name) == true)
+            #expect(after.entries[0].result?.importedFiles == 1)
+            #expect(after.entries[0].copyInterruption?.contains(second.name) == true)
+            #expect(after.entries[1].result == nil)
+            #expect(!after.allowsAutomaticEjection)
+            #expect(try fm.contentsOfDirectory(atPath: folder.path) == [firstFile.lastPathComponent])
+            model.returnToScanBothResults()
+            #expect(model.scanBothSession?.entries[0].result?.importedFiles == 1)
+        case .cancelDuringFirstCopy, .unmountDuringFirstCopy:
+            let folder = try #require(sharedDestination)
+            let firstJobID = try #require(after.entries[0].jobID)
+            #expect(after.entries[1].result == nil)
+            #expect(try fm.contentsOfDirectory(atPath: folder.path).isEmpty)
+            model.returnToScanBothResults()
+            if scenario == .cancelDuringFirstCopy {
+                #expect(model.jobs.first { $0.id == firstJobID }?.status == .cancelled)
+                #expect(model.scanBothSession?.entries[0].result?.importedFiles == 0)
+                #expect(model.scanBothSession?.entries[0].copyInterruption != nil)
+                #expect(model.scanBothSession?.entries[1].confirmation != nil)
+                #expect(model.needsRescan(firstJobID))
+            } else {
+                #expect(model.jobs.allSatisfy { $0.id != firstJobID })
+                #expect(model.scanBothSession?.entries[0].result == nil)
+                #expect(model.scanBothSession?.entries[0].confirmation != nil)
+                #expect(!model.needsRescan(firstJobID))
+            }
+        case .destinationReplacedAfterPartialCopy, .nestedDestinationReplacedAfterPartialCopy:
+            let folder = try #require(sharedDestination)
+            #expect(after.entries[0].result?.importedFiles == 1)
+            #expect(after.entries[0].copyInterruption != nil)
+            #expect(after.entries[1].confirmation != nil)
+            let cardPath = try #require(after.entries[1].confirmation?.plans.first(where: \.willCopy)?.destinationPath)
+            let cardFolder = URL(fileURLWithPath: cardPath).deletingLastPathComponent()
+            try #require((replacesParent ? cardFolder.deletingLastPathComponent() : cardFolder).path == folder.path)
+            model.returnToScanBothResults()
+            model.skipScanBothImport(after.entries[0].id)
+            let archive = root.appendingPathComponent("Archive", isDirectory: true)
+            try fm.moveItem(at: folder, to: archive)
+            try fm.createDirectory(at: folder, withIntermediateDirectories: false)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries[1].confirmation == nil)
+            #expect(try fm.contentsOfDirectory(atPath: folder.path).isEmpty)
+            model.importCurrentJob()
+            #expect(model.canStartScanBothImports)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+            #expect(model.scanBothSession?.entries[0].copyInterruption != nil)
+            #expect(try fm.contentsOfDirectory(atPath: archive.path) == [firstFile.lastPathComponent])
+            #expect(try fm.contentsOfDirectory(atPath: cardFolder.path) == [secondFile.lastPathComponent])
+            #expect(model.scanBothSession?.allowsAutomaticEjection == false)
+        case .sourceChangesInWorker, .sourceChangesInSameSecond, .sourceChangesWithPortableHistory,
+             .knownSourceChangesBeforeStart, .sourceMissingInWorker:
+            let firstJobID = try #require(after.entries[0].jobID)
+            #expect(model.needsRescan(firstJobID))
+            #expect(after.entries[1].confirmation != nil)
+            #expect(after.entries.allSatisfy { $0.result == nil })
+            #expect(try fm.contentsOfDirectory(atPath: destination.path).isEmpty)
+        case .sourceFolderMissingBeforeStart, .sourceFolderMissingInWorker:
+            let firstJobID = try #require(after.entries[0].jobID)
+            #expect(model.needsRescan(firstJobID))
+            #expect(after.entries[0].confirmation == nil)
+            #expect(after.entries[1].confirmation != nil)
+            #expect(after.removedMountPaths.isEmpty)
+            #expect(model.folderAccessFeedback != nil)
+            #expect(try fm.contentsOfDirectory(atPath: destination.path).isEmpty)
+        case .firstVolumeDisconnectsBeforeSecond:
+            #expect(after.entries[0].result?.importedFiles == 1)
+            #expect(after.entries[1].confirmation != nil)
+            #expect(after.entries[1].result == nil)
+            #expect(after.removedMountPaths.contains(first.mountPath))
+            #expect(model.isShowingScanBothResults)
+            model.destinationPathDidChange(clearFeedback: !model.isReviewingScanBothVolume)
+            #expect(model.folderAccessFeedback?.text.contains(first.name) == true)
+        }
+    }
+
+    private func waitForImport(_ model: AppModel) async throws {
+        let deadline = ContinuousClock.now + .seconds(10)
+        while model.isWorking, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try #require(!model.isWorking)
     }
 }

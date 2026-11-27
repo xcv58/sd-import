@@ -88,9 +88,11 @@ Record the build number and per-volume counts.
 2. Select **Scan Both** and grant folder access when macOS asks. Confirm
    internal storage finishes scanning before the SD card starts scanning.
 3. Confirm the review shows each volume's label, sample filenames, and file
-   count. Open each volume's **Review import** and return with **Back to Scan
-   Results**. Check that the file list and copy action are scoped to the
-   selected volume. Leave the copy action unselected during the scan check.
+   count. Open each volume's **Review import** and check its file list and
+   destination. Choose **Confirm Plan** and check the volume is **Ready**
+   and the destination is still empty. Confirm both, then choose **Start
+   Imports** once. Watch Internal copy first and SD Card follow without an
+   additional prompt. Check the receipt and History for both imports.
 4. Repeat and decline access to one volume when asked. Confirm the skipped
    volume shows its reason and the sibling's scan result remains available.
    If the device can unmount one volume separately, repeat by safely
@@ -108,8 +110,9 @@ result and reported the SD Card as unmounted. After restoring both mounts,
 choosing SD Card by itself opened its individual review. The camera scans
 recorded zero imported files.
 
-The native fixture tests also verify that importing one scan job leaves the
-other pending.
+The native fixture tests verify that confirmations leave the destinations empty,
+the other plan stays ready during the first copy, and a new filename conflict
+requires a revised plan.
 
 ## Disclosure headers
 
