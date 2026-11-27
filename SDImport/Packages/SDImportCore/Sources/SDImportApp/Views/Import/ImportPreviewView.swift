@@ -430,7 +430,8 @@ struct ImportPreviewView: View {
             .help(L10n.tr("Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups."))
         }
 
-        if model.folderGrouping == .byDay, model.previewSessions.count > 1 {
+        if model.canCustomizeDates
+            || (showsDateCustomization && model.folderGrouping == .byDay && !model.previewSessions.isEmpty) {
             DisclosureGroup(L10n.tr("Customize Dates"), isExpanded: $showsDateCustomization) {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach($model.previewSessions) { $session in

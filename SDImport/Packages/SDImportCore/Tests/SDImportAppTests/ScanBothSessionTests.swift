@@ -751,10 +751,28 @@ struct ScanBothSessionTests {
                 #expect(model.previewSessions.first { $0.date == newDate }?.label == "New Photos")
 
                 model.returnToScanBothResults()
-                try ledger.append(identity: PortableFileIdentity(
+                let receipt = PortableFileIdentity(
                     size: known.size, modificationTimeEpochSeconds: 1_700_000_000, relativePath: firstFile.lastPathComponent
-                ))
+                )
+                try ledger.append(identity: receipt)
                 model.reviewScanBothVolume(entry.id)
+                #expect(model.previewSessions.map(\.date) == [newDate])
+
+                try fm.removeItem(at: ledger.ledgerURL)
+                model.importCurrentJob()
+                #expect(model.importUIPhase == .review)
+                #expect(model.scanBothSession?.entries[0].confirmation == nil)
+                #expect(model.previewRows.first { $0.id == known.id }?.willCopy == true)
+                #expect(model.previewSessions.map(\.date) == [known.date, newDate].sorted())
+                #expect(model.previewSessions.first { $0.date == known.date }?.photoCount == 1)
+                #expect(model.previewSessions.first { $0.date == newDate }?.label == "New Photos")
+
+                try ledger.append(identity: receipt)
+                model.importCurrentJob()
+                #expect(model.importUIPhase == .review)
+                #expect(model.scanBothSession?.entries[0].confirmation == nil)
+                #expect(model.scanBothSession?.entries[1].confirmation != nil)
+                #expect(model.previewRows.first { $0.id == known.id }?.disposition == .known(.portableLedger))
                 #expect(model.previewSessions.map(\.date) == [newDate])
 
                 for (index, requested) in [true, false, true].enumerated() {
@@ -1028,6 +1046,423 @@ struct ScanBothSessionTests {
     @Test("Scan Both keeps re-import edits, date choices, and drafts separate from approval")
     func reimportsKnownFileInBatch() async throws {
         try await startsBatchThroughAppModel(.reimportKnownFile)
+    }
+
+    @Test("revalidating a changed Scan Both destination keeps its date controls and folder",
+          arguments: [ImportFolderGrouping.byDay, .oneShootFolder])
+    func revalidatesLateDestinationChange(_ grouping: ImportFolderGrouping) async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let destination = root.appendingPathComponent("Destination")
+        let internalFolder = root.appendingPathComponent("Internal")
+        let cardFolder = root.appendingPathComponent("Card")
+        let suite = "SDImportAppTests.scanBothDates.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? fm.removeItem(at: root)
+        }
+        for folder in [internalFolder, cardFolder, destination] {
+            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        let firstName = grouping == .byDay ? "VID_20231114_210458_00_007.insv" : "First.jpg"
+        let laterName = grouping == .byDay ? "Later.mp4" : "Later.jpg"
+        let firstFile = internalFolder.appendingPathComponent(firstName)
+        let firstDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let laterDate = firstDate.addingTimeInterval(86_400)
+        for (url, date) in [
+            (firstFile, firstDate), (internalFolder.appendingPathComponent(laterName), laterDate),
+            (cardFolder.appendingPathComponent("Card.jpg"), firstDate)
+        ] {
+            try Data(url.lastPathComponent.utf8).write(to: url)
+            try fm.setAttributes([.creationDate: date, .modificationDate: date], ofItemAtPath: url.path)
+        }
+        let session = try #require(ScanBothSession(deviceName: "Fixture Camera", entries: [
+            .init(id: UUID(), volume: Self.volume("Internal", disk: "disk4", at: internalFolder)),
+            .init(id: UUID(), volume: Self.volume("Card", disk: "disk5", at: cardFolder))
+        ]))
+        let model = AppModel(
+            purchaseManager: PurchaseManager(distribution: .direct, startsStoreTask: false),
+            defaults: defaults, startsBootstrap: false, scanBothMountLookup: { $0 },
+            destinationCapacity: { path in
+                VolumeCapacity(volumeID: "fixture", displayPath: path, availableBytes: 10_000, totalBytes: 10_000)
+            }
+        )
+        model.bootstrap(at: root.appendingPathComponent("State"), startsRuntimeServices: false)
+        model.importDefaults.photosPath = destination.path
+        model.importDefaults.videosPath = destination.path
+        model.beginScanBoth(session)
+        try await waitForImport(model)
+        model.reviewScanBothVolume(session.entries[1].id)
+        model.importCurrentJob()
+        try #require(model.scanBothSession?.entries[1].confirmation != nil)
+
+        model.reviewScanBothVolume(session.entries[0].id)
+        model.useFolderGrouping(grouping)
+        try #require(model.previewSessions.count == 2 && model.canImportPlannedFiles)
+        let initialDates = model.previewSessions.map(\.date)
+        let firstRow = try #require(model.previewRows.first { $0.filename == firstName })
+        let laterRow = try #require(model.previewRows.first { $0.filename == laterName })
+        let output = URL(fileURLWithPath: try #require(firstRow.destinationPath))
+        try fm.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if grouping == .byDay {
+            try Data("different recording".utf8).write(to: output)
+        } else {
+            try fm.copyItem(at: firstFile, to: output)
+            try fm.setAttributes([.modificationDate: firstDate], ofItemAtPath: output.path)
+        }
+
+        model.importCurrentJob()
+        #expect(model.importUIPhase == .review)
+        #expect(model.scanBothSession?.entries[0].confirmation == nil)
+        #expect(model.scanBothSession?.entries[1].confirmation != nil)
+        #expect(model.previewSessions.map(\.date) == initialDates)
+        #expect(model.previewRows.first { $0.id == laterRow.id }?.destinationPath == laterRow.destinationPath)
+        if grouping == .byDay {
+            #expect(model.previewRows.first { $0.id == firstRow.id }?.disposition.attention == .blocking)
+            #expect(!model.canImportPlannedFiles)
+            let index = try #require(model.previewSessions.firstIndex { $0.date == firstRow.date })
+            model.previewSessions[index].label = "Recording"
+            #expect(model.canImportPlannedFiles)
+            #expect(model.previewRows.first { $0.id == firstRow.id }?.destinationPath != firstRow.destinationPath)
+
+            let laterIndex = try #require(model.previewSessions.firstIndex { $0.date == laterRow.date })
+            model.previewSessions[laterIndex].label = "Later Session"
+            let firstPath = try #require(model.previewRows.first { $0.id == firstRow.id }?.destinationPath)
+            let matchingOutput = URL(fileURLWithPath: firstPath)
+            try fm.createDirectory(at: matchingOutput.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.copyItem(at: firstFile, to: matchingOutput)
+            try fm.setAttributes([.modificationDate: firstDate], ofItemAtPath: matchingOutput.path)
+            model.importCurrentJob()
+            #expect(model.previewSessions.map(\.date) == [laterRow.date])
+            #expect(model.previewSessions.first?.label == "Later Session")
+            #expect(model.canCustomizeDates)
+
+            model.previewSessions[0].label = model.location
+            #expect(!model.canCustomizeDates)
+            model.previewSessions[0].includeVideos = false
+            #expect(model.canCustomizeDates)
+            model.previewSessions[0].includeVideos = true
+            model.previewSessions[0].label = "Later Session"
+
+            let alternate = root.appendingPathComponent("Alternate")
+            let relativePath = matchingOutput.resolvingSymlinksInPath().pathComponents
+                .dropFirst(destination.resolvingSymlinksInPath().pathComponents.count).joined(separator: "/")
+            let conflictingOutput = alternate.appendingPathComponent(relativePath)
+            try fm.createDirectory(at: conflictingOutput.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("different recording at the alternate destination".utf8).write(to: conflictingOutput)
+            model.selectVideosPath(alternate.path)
+            #expect(model.previewSessions.map(\.date) == initialDates)
+            #expect(model.previewRows.first { $0.id == firstRow.id }?.disposition.attention == .blocking)
+            #expect(!model.canImportPlannedFiles)
+            let restoredIndex = try #require(model.previewSessions.firstIndex { $0.date == firstRow.date })
+            #expect(model.previewSessions[restoredIndex].label == "Recording")
+            model.previewSessions[restoredIndex].label = "Resolved"
+            #expect(model.canImportPlannedFiles)
+        } else {
+            #expect(model.previewRows.first { $0.id == firstRow.id }?.disposition == .alreadyExists)
+            #expect(model.previewRows.first { $0.id == firstRow.id }?.destinationPath == firstRow.destinationPath)
+            #expect(model.previewRows.filter(\.willCopy).map(\.id) == [laterRow.id])
+        }
+
+        model.importCurrentJob()
+        try #require(model.canStartScanBothImports)
+        model.startScanBothImports()
+        try await waitForImport(model)
+        #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles)
+            == [grouping == .byDay ? 2 : 1, 1])
+    }
+
+    enum ReviewEdit: CaseIterable {
+        case shoot, saveTo, organize
+    }
+
+    @Test("Scan Both refreshes dates after editing the review and starts both approved imports",
+          arguments: ReviewEdit.allCases)
+    func refreshesDatesAfterReviewEdit(_ edit: ReviewEdit) async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let internalFolder = root.appendingPathComponent("Internal")
+        let cardFolder = root.appendingPathComponent("Card")
+        let library = root.appendingPathComponent("Library")
+        let alternate = root.appendingPathComponent("Alternate")
+        let suite = "SDImportAppTests.scanBothReviewEdit.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? fm.removeItem(at: root)
+        }
+        for folder in [internalFolder, cardFolder, library, alternate] {
+            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        let firstName = edit == .saveTo ? "VID_20231114_210458_00_007.insv" : "First.jpg"
+        let firstFile = internalFolder.appendingPathComponent(firstName)
+        let firstDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let laterDate = firstDate.addingTimeInterval(86_400)
+        for (url, date) in [
+            (firstFile, firstDate), (internalFolder.appendingPathComponent("Later.jpg"), laterDate),
+            (cardFolder.appendingPathComponent("Card.jpg"), laterDate)
+        ] {
+            try Data(url.lastPathComponent.utf8).write(to: url)
+            try fm.setAttributes([.creationDate: date, .modificationDate: date], ofItemAtPath: url.path)
+        }
+        let session = try #require(ScanBothSession(deviceName: "Fixture Camera", entries: [
+            .init(id: UUID(), volume: Self.volume("Internal", disk: "disk4", at: internalFolder)),
+            .init(id: UUID(), volume: Self.volume("Card", disk: "disk5", at: cardFolder))
+        ]))
+        let model = AppModel(
+            purchaseManager: PurchaseManager(distribution: .direct, startsStoreTask: false),
+            defaults: defaults, startsBootstrap: false, scanBothMountLookup: { $0 },
+            destinationCapacity: { path in
+                VolumeCapacity(volumeID: "fixture", displayPath: path, availableBytes: 10_000, totalBytes: 10_000)
+            }
+        )
+        model.bootstrap(at: root.appendingPathComponent("State"), startsRuntimeServices: false)
+        model.importDefaults.photosPath = library.path
+        model.importDefaults.videosPath = library.path
+        model.beginScanBoth(session)
+        try await waitForImport(model)
+        model.reviewScanBothVolume(session.entries[1].id)
+        model.importCurrentJob()
+        try #require(model.scanBothSession?.entries[1].confirmation != nil)
+
+        model.reviewScanBothVolume(session.entries[0].id)
+        model.useFolderGrouping(.byDay)
+        if edit == .saveTo {
+            model.useImportMediaSelection(.photosAndVideos)
+            model.useDestinationLayout(.separateMediaFolders)
+        }
+        let selectPath = edit == .saveTo ? model.selectVideosPath : model.selectPhotosPath
+        let originalDates = model.previewSessions.map(\.date)
+        try #require(originalDates.count == 2)
+        selectPath(alternate.path)
+        let firstRow = try #require(model.previewRows.first { $0.filename == firstName })
+        let match = URL(fileURLWithPath: try #require(firstRow.destinationPath))
+        selectPath(library.path)
+        try fm.createDirectory(at: match.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fm.copyItem(at: firstFile, to: match)
+        try fm.setAttributes([.modificationDate: firstDate], ofItemAtPath: match.path)
+        selectPath(alternate.path)
+        try #require(model.previewSessions.count == 1)
+        try #require(model.previewRows.first { $0.id == firstRow.id }?.disposition == .alreadyExists)
+
+        switch edit {
+        case .shoot:
+            model.location = "Another Shoot"
+        case .saveTo:
+            model.useDestinationLayout(.singleLibrary)
+            let conflict = URL(fileURLWithPath: try #require(
+                model.previewRows.first { $0.id == firstRow.id }?.destinationPath
+            ))
+            model.useDestinationLayout(.separateMediaFolders)
+            try fm.createDirectory(at: conflict.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("Different recording".utf8).write(to: conflict)
+            model.useDestinationLayout(.singleLibrary)
+            #expect(model.previewRows.first { $0.id == firstRow.id }?.disposition.attention == .blocking)
+            #expect(model.canCustomizeDates)
+            let index = try #require(model.previewSessions.firstIndex { $0.date == firstRow.date })
+            model.previewSessions[index].label = "Recording"
+        case .organize:
+            model.useFolderGrouping(.oneShootFolder)
+            let folders = Set(model.previewRows.filter(\.willCopy).compactMap { row in
+                row.destinationPath.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
+            })
+            #expect(folders.count == 1)
+        }
+        #expect(model.previewSessions.map(\.date) == originalDates)
+        #expect(model.previewRows.filter(\.willCopy).count == 2)
+        model.importCurrentJob()
+        try #require(model.canStartScanBothImports)
+        model.startScanBothImports()
+        try await waitForImport(model)
+        #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [2, 1])
+    }
+
+    enum ReviewChange: CaseIterable {
+        case matchingLabel, removedReceipt, oneShootConflict, recoverVideos, changedShootDefault
+    }
+
+    @Test("Scan Both keeps approval and destination dates in sync", arguments: ReviewChange.allCases)
+    func keepsApprovalInSyncWithDates(_ change: ReviewChange) async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let internalFolder = root.appendingPathComponent("Internal")
+        let cardFolder = root.appendingPathComponent("Card")
+        let destination = root.appendingPathComponent("Destination")
+        let suite = "SDImportAppTests.scanBothApprovalDates.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? fm.removeItem(at: root)
+        }
+        for folder in [internalFolder, cardFolder, destination] {
+            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        let hasInsta360Recording = change == .oneShootConflict || change == .changedShootDefault
+        let firstName = hasInsta360Recording ? "VID_20231114_210458_00_007.insv" : "First.jpg"
+        let laterName = switch change {
+        case .oneShootConflict, .changedShootDefault: "Later.dng"
+        case .recoverVideos: "Later.mp4"
+        default: "Later.jpg"
+        }
+        let firstFile = internalFolder.appendingPathComponent(firstName)
+        let firstDate = Date(timeIntervalSince1970: 1_700_000_000)
+        var fixtureFiles = [
+            (firstFile, firstDate),
+            (internalFolder.appendingPathComponent(laterName), firstDate.addingTimeInterval(86_400)),
+            (cardFolder.appendingPathComponent("Card.jpg"), firstDate)
+        ]
+        if change == .recoverVideos {
+            fixtureFiles.append((internalFolder.appendingPathComponent("Last.mp4"), firstDate.addingTimeInterval(172_800)))
+        }
+        for (url, date) in fixtureFiles {
+            try Data(url.lastPathComponent.utf8).write(to: url)
+            try fm.setAttributes([.creationDate: date, .modificationDate: date], ofItemAtPath: url.path)
+        }
+        let ledger = PortableImportReceiptLedger(sourceRootURL: internalFolder)
+        let hasReceipt = change == .removedReceipt || change == .recoverVideos || change == .changedShootDefault
+        if hasReceipt {
+            try ledger.append(identity: PortableFileIdentity(
+                size: Int64(firstName.utf8.count), modificationDate: firstDate, relativePath: firstName
+            ))
+        }
+        let session = try #require(ScanBothSession(deviceName: "Fixture Camera", entries: [
+            .init(id: UUID(), volume: Self.volume("Internal", disk: "disk4", at: internalFolder)),
+            .init(id: UUID(), volume: Self.volume("Card", disk: "disk5", at: cardFolder))
+        ]))
+        let model = AppModel(
+            purchaseManager: PurchaseManager(distribution: .direct, startsStoreTask: false),
+            defaults: defaults, startsBootstrap: false, scanBothMountLookup: { $0 },
+            destinationCapacity: { path in
+                VolumeCapacity(volumeID: "fixture", displayPath: path, availableBytes: 10_000, totalBytes: 10_000)
+            }
+        )
+        model.bootstrap(at: root.appendingPathComponent("State"), startsRuntimeServices: false)
+        model.portableImportReceiptsEnabled = hasReceipt
+        model.importDefaults.photosPath = destination.path
+        model.importDefaults.videosPath = destination.path
+        model.beginScanBoth(session)
+        try await waitForImport(model)
+        model.reviewScanBothVolume(session.entries[1].id)
+        let updatedShoot = "Updated Shoot"
+        if change == .changedShootDefault {
+            try #require(model.scanBothSession?.entries[0].summary?.location != updatedShoot)
+            model.location = updatedShoot
+            model.useFolderGrouping(.byDay)
+            model.saveImportDraftAsDefaults()
+            try #require(model.importDefaults.shootName == updatedShoot)
+        }
+        model.importCurrentJob()
+        try #require(model.scanBothSession?.entries[1].confirmation != nil)
+        model.reviewScanBothVolume(session.entries[0].id)
+
+        func row(named filename: String) throws -> ImportPreviewRow {
+            try #require(model.previewRows.first { $0.filename == filename })
+        }
+        let firstDay = try row(named: firstName).date
+        let laterDay = try row(named: laterName).date
+        let bothDays = [firstDay, laterDay].sorted()
+        try #require(firstDay != laterDay)
+
+        switch change {
+        case .matchingLabel:
+            model.useFolderGrouping(.byDay)
+            let index = try #require(model.previewSessions.firstIndex { $0.date == firstDay })
+            model.previewSessions[index].label = "Identical"
+            let match = URL(fileURLWithPath: try #require(try row(named: firstName).destinationPath))
+            try fm.createDirectory(at: match.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.copyItem(at: firstFile, to: match)
+            try fm.setAttributes([.modificationDate: firstDate], ofItemAtPath: match.path)
+            model.previewSessions[index].label = "Original"
+            model.previewSessions[index].label = "Identical"
+            #expect(try row(named: firstName).disposition == .alreadyExists)
+
+            model.importCurrentJob()
+            let approved = try #require(model.scanBothSession?.entries[0].confirmation)
+            #expect(approved.draft.sessions.map(\.date) == [laterDay])
+            #expect(approved.draft.hiddenSessions[firstDay]?.label == "Identical")
+            model.reviewScanBothVolume(session.entries[0].id)
+            #expect(model.previewSessions.map(\.date) == [laterDay])
+            model.returnToScanBothResults()
+            let retained = try #require(model.scanBothSession?.entries[0].confirmation)
+            #expect(retained.plans == approved.plans)
+            #expect(retained.draft == approved.draft)
+        case .removedReceipt:
+            model.useFolderGrouping(.oneShootFolder)
+            try #require(try row(named: firstName).disposition == .known(.portableLedger))
+            try #require(model.previewSessions.map(\.date) == [laterDay])
+            let oldLaterPath = try row(named: laterName).destinationPath
+            try fm.removeItem(at: ledger.ledgerURL)
+            model.importCurrentJob()
+            #expect(model.importUIPhase == .review)
+            #expect(model.scanBothSession?.entries[0].confirmation == nil)
+            #expect(model.previewSessions.map(\.date) == bothDays)
+            #expect(try row(named: firstName).willCopy)
+            #expect(try row(named: laterName).destinationPath != oldLaterPath)
+            model.importCurrentJob()
+        case .oneShootConflict:
+            model.useImportMediaSelection(.photosAndVideos)
+            model.useFolderGrouping(.oneShootFolder)
+            try #require(model.previewSessions.map(\.date) == bothDays)
+            let fullRangePath = try #require(try row(named: firstName).destinationPath)
+            model.useFolderGrouping(.byDay)
+            let conflict = URL(fileURLWithPath: fullRangePath)
+            try fm.createDirectory(at: conflict.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("Unrelated footage".utf8).write(to: conflict)
+            model.useFolderGrouping(.oneShootFolder)
+            #expect(model.previewSessions.map(\.date) == bothDays)
+            #expect(try row(named: firstName).disposition == .filenameConflict(destinationPath: fullRangePath))
+            #expect(!model.canImportPlannedFiles)
+            model.importCurrentJob()
+            #expect(!model.canStartScanBothImports)
+            #expect(try row(named: firstName).destinationPath == fullRangePath)
+
+            try fm.removeItem(at: conflict)
+            model.importCurrentJob()
+            #expect(model.scanBothSession?.entries[0].confirmation == nil)
+            model.importCurrentJob()
+        case .recoverVideos:
+            model.useFolderGrouping(.oneShootFolder)
+            model.useImportMediaSelection(.photosOnly)
+            try #require(model.previewTotals.copyFiles == 0)
+            #expect(model.previewSessions.isEmpty)
+
+            model.applyWorkflowProfile(.footageBackup)
+            let videoDays = [laterDay, try row(named: "Last.mp4").date].sorted()
+            #expect(model.previewSessions.map(\.date) == videoDays)
+            #expect(model.previewTotals.copyFiles == 2)
+            let folder = try #require(model.previewDestinations.first)
+            #expect(model.previewDestinations.count == 1)
+            #expect(URL(fileURLWithPath: folder.path).lastPathComponent.hasPrefix(
+                ImportPlanBuilder.dateRangeTitle(for: videoDays)
+            ))
+            model.importCurrentJob()
+        case .changedShootDefault:
+            #expect(model.location == updatedShoot)
+            try #require(try row(named: firstName).disposition == .known(.portableLedger))
+            #expect(try row(named: firstName).destinationPath?.contains(updatedShoot) == true)
+            #expect(try row(named: laterName).destinationPath?.contains(updatedShoot) == true)
+            let previewedPath = try #require(try row(named: laterName).destinationPath)
+            model.importCurrentJob()
+            let confirmed = try #require(model.scanBothSession?.entries[0].confirmation)
+            #expect(confirmed.plans.filter(\.willCopy).compactMap(\.destinationPath) == [previewedPath])
+        }
+
+        try #require(model.canStartScanBothImports)
+        let approvedPaths = model.scanBothSession?.entries.flatMap { entry in
+            entry.confirmation?.plans.filter(\.willCopy).compactMap(\.destinationPath) ?? []
+        } ?? []
+        model.startScanBothImports()
+        try await waitForImport(model)
+        let expectedCount = change == .matchingLabel || change == .changedShootDefault ? 1 : 2
+        #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [expectedCount, 1])
+        if change == .changedShootDefault {
+            try #require(approvedPaths.count == 2)
+            for path in approvedPaths {
+                let url = URL(fileURLWithPath: path)
+                #expect(try Data(contentsOf: url) == Data(url.lastPathComponent.utf8))
+            }
+        }
     }
 
     private func waitForImport(_ model: AppModel) async throws {
