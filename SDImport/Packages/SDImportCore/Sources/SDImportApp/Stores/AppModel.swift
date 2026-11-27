@@ -2408,7 +2408,7 @@ final class AppModel: ObservableObject {
         let rowsChanged = freshRows != previewRows
         let planChanged = rowsChanged
             || confirmation.map { $0.plans != plans || !$0.destinations.matches() } == true
-        if rowsChanged, isReviewingScanBothVolume {
+        if rowsChanged, isReviewingScanBothVolume, folderGrouping == .byDay {
             rebuildPreviewSessions(files: currentPreviewFiles, defaultLabel: location)
         } else {
             updatePreviewPlanCache(rows: freshRows)
@@ -4926,7 +4926,8 @@ final class AppModel: ObservableObject {
             plans: plans,
             sessions: sessions,
             importMediaSelection: importMediaSelection,
-            organizationPreset: organizationPreset
+            organizationPreset: organizationPreset,
+            folderGrouping: folderGrouping
         )
         // Clearing a re-import selection can hide a date until it is included again.
         let visibleDates = Set(updated.map(\.date))

@@ -8,13 +8,15 @@ public struct ImportPreviewSessionFilter: Sendable {
         plans: [ImportFilePlan],
         sessions: [ImportPlanSession],
         importMediaSelection: ImportMediaSelection,
-        organizationPreset: ImportOrganizationPreset
+        organizationPreset: ImportOrganizationPreset,
+        folderGrouping: ImportFolderGrouping = .byDay
     ) -> [ImportPlanSession] {
         let countsByDate = sessionCounts(
             files: files,
             plans: plans,
             importMediaSelection: importMediaSelection,
-            organizationPreset: organizationPreset
+            organizationPreset: organizationPreset,
+            folderGrouping: folderGrouping
         )
 
         return sessions.compactMap { session in
@@ -39,7 +41,8 @@ public struct ImportPreviewSessionFilter: Sendable {
         files: [JobFileRecord],
         plans: [ImportFilePlan],
         importMediaSelection: ImportMediaSelection,
-        organizationPreset: ImportOrganizationPreset
+        organizationPreset: ImportOrganizationPreset,
+        folderGrouping: ImportFolderGrouping
     ) -> [String: SessionCounts] {
         var countsByDate: [String: SessionCounts] = [:]
         let plansBySourcePath = Dictionary(
@@ -58,7 +61,8 @@ public struct ImportPreviewSessionFilter: Sendable {
                           file: file,
                           plan: plan,
                           importMediaSelection: importMediaSelection,
-                          organizationPreset: organizationPreset
+                          organizationPreset: organizationPreset,
+                          folderGrouping: folderGrouping
                       )
                   }) else {
                 continue
@@ -75,7 +79,8 @@ public struct ImportPreviewSessionFilter: Sendable {
                 file: file,
                 plan: plan,
                 importMediaSelection: importMediaSelection,
-                organizationPreset: organizationPreset
+                organizationPreset: organizationPreset,
+                folderGrouping: folderGrouping
             ) else {
                 continue
             }
@@ -104,13 +109,22 @@ public struct ImportPreviewSessionFilter: Sendable {
         file: JobFileRecord,
         plan: ImportFilePlan,
         importMediaSelection: ImportMediaSelection,
-        organizationPreset: ImportOrganizationPreset
+        organizationPreset: ImportOrganizationPreset,
+        folderGrouping: ImportFolderGrouping
     ) -> Bool {
         if plan.willCopy {
             return true
         }
 
-        guard plan.disposition == .excluded else {
+        switch plan.disposition {
+        case .filenameConflict where folderGrouping == .byDay:
+            return true
+        case .alreadyExists where folderGrouping == .oneShootFolder:
+            // Matching files still belong to the shoot and contribute to its folder name.
+            return true
+        case .excluded:
+            break
+        default:
             return false
         }
 
