@@ -69,15 +69,27 @@ public struct CopyEngine {
     private let fileManager: FileManager
     private let chunkSize: Int
     private let sourceDirectory: CopySourceDirectory?
+    let canRenameExclusively: (URL) -> Bool?
 
     public init(
         fileManager: FileManager = .default,
         chunkSize: Int = 16 * 1024 * 1024,
         sourceDirectory: CopySourceDirectory? = nil
     ) {
+        self.init(fileManager: fileManager, chunkSize: chunkSize, sourceDirectory: sourceDirectory,
+                  canRenameExclusively: Self.supportsExclusiveRename(in:))
+    }
+
+    init(
+        fileManager: FileManager = .default,
+        chunkSize: Int = 16 * 1024 * 1024,
+        sourceDirectory: CopySourceDirectory? = nil,
+        canRenameExclusively: @escaping (URL) -> Bool?
+    ) {
         self.fileManager = fileManager
         self.chunkSize = chunkSize
         self.sourceDirectory = sourceDirectory
+        self.canRenameExclusively = canRenameExclusively
     }
 
     public func copyFile(
@@ -93,7 +105,7 @@ public struct CopyEngine {
         try fileManager.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
 
         if !replacesExisting || !fileManager.fileExists(atPath: destinationURL.path),
-           Self.supportsExclusiveRename(in: destinationDirectory) == false {
+           canRenameExclusively(destinationDirectory) == false {
             let staged = try stageFile(
                 from: sourceURL, to: destinationURL, expectedSize: expectedSize,
                 modificationDate: modificationDate, onChunk: onChunk, shouldCancel: shouldCancel
@@ -131,15 +143,21 @@ public struct CopyEngine {
         to staging: URL,
         expectedSize: Int64,
         modificationDate: Date?,
+        expectedSourceEpoch: Int64? = nil,
+        reviewedSource: ReviewedFileIdentity? = nil,
+        directoryFD: Int32 = AT_FDCWD,
         onChunk: ((Int) -> Void)?,
         shouldCancel: () -> Bool,
-        didCreate: (ImportCopyFileIdentity) throws -> Void = { _ in }
+        didCreate: (ImportCopyFileIdentity) throws -> Void = { _ in },
+        didInterrupt: ((StagedImportCopy) -> Void)? = nil
     ) throws -> StagedImportCopy {
         let verified = try copyWithBoundedBuffer(
             from: source, to: staging, expectedSize: expectedSize, modificationDate: modificationDate,
-            shouldCancel: shouldCancel, onChunk: onChunk, didCreate: didCreate
+            expectedSourceEpoch: expectedSourceEpoch, reviewedSource: reviewedSource, directoryFD: directoryFD,
+            shouldCancel: shouldCancel, onChunk: onChunk, didCreate: didCreate, didInterrupt: didInterrupt
         )
-        guard let info = try Self.fileInfo(at: staging), verified.matches(info) else {
+        guard let info = try Self.fileInfo(at: staging, directoryFD: directoryFD), verified.matches(info) else {
+            didInterrupt?(verified)
             throw SDImportError.reviewedDestinationChanged
         }
         return verified
@@ -161,14 +179,18 @@ public struct CopyEngine {
         return result[1 + index] & bit != 0
     }
 
-    func publishFile(from staging: URL, to destination: URL, replacesExisting: Bool = false) throws {
+    func publishFile(
+        from staging: URL, to destination: URL, replacesExisting: Bool = false, directoryFD: Int32 = AT_FDCWD
+    ) throws {
         if replacesExisting && fileManager.fileExists(atPath: destination.path) {
             _ = try fileManager.replaceItemAt(
                 destination, withItemAt: staging, backupItemName: nil, options: [.usingNewMetadataOnly]
             )
             return
         }
-        guard renamex_np(staging.path, destination.path, UInt32(RENAME_EXCL)) == 0 else {
+        let stagePath = Self.copyPath(staging, directoryFD: directoryFD)
+        let finalPath = Self.copyPath(destination, directoryFD: directoryFD)
+        guard renameatx_np(directoryFD, stagePath, directoryFD, finalPath, UInt32(RENAME_EXCL)) == 0 else {
             let code = errno
             if code == EEXIST {
                 throw CocoaError(.fileWriteFileExists, userInfo: [NSFilePathErrorKey: destination.path])
@@ -177,9 +199,13 @@ public struct CopyEngine {
         }
     }
 
-    static func fileInfo(at url: URL) throws -> stat? {
+    private static func copyPath(_ url: URL, directoryFD: Int32) -> String {
+        directoryFD == AT_FDCWD ? url.path : url.lastPathComponent
+    }
+
+    static func fileInfo(at url: URL, directoryFD: Int32 = AT_FDCWD) throws -> stat? {
         var info = stat()
-        guard lstat(url.path, &info) == 0 else {
+        guard fstatat(directoryFD, copyPath(url, directoryFD: directoryFD), &info, AT_SYMLINK_NOFOLLOW) == 0 else {
             let code = errno
             if code == ENOENT { return nil }
             throw SDImportError.fileSystemError(operation: "inspect copy", path: url.path, code: code)
@@ -187,8 +213,12 @@ public struct CopyEngine {
         return info
     }
 
-    static func publishedFileMatches(_ attempt: ImportCopyAttempt) throws -> Bool {
-        guard let info = try fileInfo(at: attempt.destination),
+    static func publishedFileMatches(
+        _ attempt: ImportCopyAttempt,
+        directoryFD: Int32 = AT_FDCWD,
+        shouldCancel: () -> Bool = { Task.isCancelled }
+    ) throws -> Bool {
+        guard let info = try fileInfo(at: attempt.destination, directoryFD: directoryFD),
               info.st_size == attempt.fingerprint.size else {
             return false
         }
@@ -202,7 +232,8 @@ public struct CopyEngine {
         } else {
             return false
         }
-        return try readDigest(at: attempt.destination, identity: ImportCopyFileIdentity(info)) == expected
+        return try readDigest(at: attempt.destination, identity: ImportCopyFileIdentity(info),
+                              directoryFD: directoryFD, shouldCancel: shouldCancel) == expected
     }
 
     static func restoreCopyDate(_ date: Date, at url: URL, identity: ImportCopyFileIdentity) throws {
@@ -211,9 +242,11 @@ public struct CopyEngine {
         try setModificationDate(date, descriptor: file.fileDescriptor, path: url.path)
     }
 
-    private static func openVerifiedCopy(at url: URL, identity: ImportCopyFileIdentity?) throws -> FileHandle {
+    private static func openVerifiedCopy(
+        at url: URL, identity: ImportCopyFileIdentity?, directoryFD: Int32 = AT_FDCWD
+    ) throws -> FileHandle {
         let flags = O_RDONLY | O_CLOEXEC | O_NONBLOCK | (identity == nil ? 0 : O_NOFOLLOW)
-        let descriptor = open(url.path, flags)
+        let descriptor = openat(directoryFD, copyPath(url, directoryFD: directoryFD), flags)
         guard descriptor >= 0 else {
             throw SDImportError.fileSystemError(operation: "open copy for verification", path: url.path, code: errno)
         }
@@ -246,9 +279,13 @@ public struct CopyEngine {
             && initial.st_mtimespec.tv_nsec == current.st_mtimespec.tv_nsec
     }
 
-    static func readDigest(at url: URL, identity: ImportCopyFileIdentity? = nil) throws -> Data {
-        let file = try openVerifiedCopy(at: url, identity: identity)
-        return try readDigest(from: file, at: url, identity: identity)
+    static func readDigest(
+        at url: URL, identity: ImportCopyFileIdentity? = nil, directoryFD: Int32 = AT_FDCWD,
+        shouldCancel: () -> Bool = { Task.isCancelled }
+    ) throws -> Data {
+        let file = try openVerifiedCopy(at: url, identity: identity, directoryFD: directoryFD)
+        return try readDigest(from: file, at: url, identity: identity, directoryFD: directoryFD,
+                              shouldCancel: shouldCancel)
     }
 
     func readSourceDigest(at url: URL) throws -> Data {
@@ -261,17 +298,20 @@ public struct CopyEngine {
         try sourceDirectory?.verify()
     }
 
-    private static func readDigest(from file: FileHandle, at url: URL, identity: ImportCopyFileIdentity?) throws -> Data {
+    private static func readDigest(
+        from file: FileHandle, at url: URL, identity: ImportCopyFileIdentity?, directoryFD: Int32 = AT_FDCWD,
+        shouldCancel: () -> Bool = { Task.isCancelled }
+    ) throws -> Data {
         defer { try? file.close() }
         var opened = stat()
         guard fstat(file.fileDescriptor, &opened) == 0 else { throw SDImportError.missingFileAttributes(url) }
         var digest = SHA256()
         while let bytes = try file.read(upToCount: 1024 * 1024), !bytes.isEmpty {
-            if Task.isCancelled { throw SDImportError.cancelled }
+            if shouldCancel() { throw SDImportError.cancelled }
             digest.update(data: bytes)
         }
         if let identity {
-            guard let current = try fileInfo(at: url), identity.matches(current),
+            guard let current = try fileInfo(at: url, directoryFD: directoryFD), identity.matches(current),
                   unchangedFileContents(opened, current) else {
                 throw SDImportError.reviewedDestinationChanged
             }
@@ -284,9 +324,13 @@ public struct CopyEngine {
         to temporaryURL: URL,
         expectedSize: Int64,
         modificationDate: Date?,
+        expectedSourceEpoch: Int64?,
+        reviewedSource: ReviewedFileIdentity?,
+        directoryFD: Int32,
         shouldCancel: () -> Bool,
         onChunk: ((Int) -> Void)?,
-        didCreate: (ImportCopyFileIdentity) throws -> Void
+        didCreate: (ImportCopyFileIdentity) throws -> Void,
+        didInterrupt: ((StagedImportCopy) -> Void)?
     ) throws -> StagedImportCopy {
         if shouldCancel() { throw SDImportError.cancelled }
         let sourcePath = sourceURL.path
@@ -304,7 +348,21 @@ public struct CopyEngine {
             }
         }
 
-        let outputFD = open(destinationPath, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
+        func reviewedSourceInfo() throws -> stat? {
+            guard expectedSourceEpoch != nil || reviewedSource != nil else { return nil }
+            var source = stat()
+            guard fstat(inputFD, &source) == 0, source.st_size == expectedSize,
+                  expectedSourceEpoch == nil || Int64(source.st_mtimespec.tv_sec) == expectedSourceEpoch,
+                  reviewedSource?.matches(source) != false else {
+                throw SDImportError.reviewedSourceChanged
+            }
+            return source
+        }
+        let initialSource = try reviewedSourceInfo()
+        let outputFD = openat(
+            directoryFD, Self.copyPath(temporaryURL, directoryFD: directoryFD),
+            O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
+        )
         guard outputFD >= 0 else {
             let code = errno
             if code == EEXIST {
@@ -331,6 +389,16 @@ public struct CopyEngine {
         }
 
         var digest = SHA256()
+        var bytesWritten: Int64 = 0
+        var finishedWriting = false
+        defer {
+            if let didInterrupt, !finishedWriting {
+                var current = stat()
+                if fstat(outputFD, &current) == 0, current.st_size == bytesWritten {
+                    didInterrupt(StagedImportCopy(info: current, digest: Data(digest.finalize())))
+                }
+            }
+        }
         while true {
             if shouldCancel() {
                 throw SDImportError.cancelled
@@ -367,7 +435,12 @@ public struct CopyEngine {
                 hasAllocatedData = true
             }
             digest.update(bufferPointer: UnsafeRawBufferPointer(start: buffer, count: bytesRead))
+            bytesWritten += Int64(bytesRead)
             onChunk?(bytesRead)
+        }
+        if let initialSource, let currentSource = try reviewedSourceInfo(),
+           !Self.unchangedFileContents(initialSource, currentSource) {
+            throw SDImportError.reviewedSourceChanged
         }
         if let modificationDate {
             try Self.setModificationDate(modificationDate, descriptor: outputFD, path: destinationPath)
@@ -379,6 +452,7 @@ public struct CopyEngine {
         guard finished.st_size == expectedSize else {
             throw SDImportError.copySizeMismatch(expected: expectedSize, actual: finished.st_size)
         }
+        finishedWriting = true
         return StagedImportCopy(info: finished, digest: Data(digest.finalize()))
     }
 }

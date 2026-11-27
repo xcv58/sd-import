@@ -7,6 +7,386 @@ import Testing
 
 @Suite("MediaScanner and ImportEngine")
 struct MediaScannerImportTests {
+    @Test("a changed source behind an Already Exists approval stops the batch before any copy")
+    func reviewsSourceBehindDestinationSkip() throws {
+        let fixture = try Fixture()
+        let fm = FileManager.default
+        let source = fixture.mountURL.appendingPathComponent("IMG_SKIP.JPG")
+        let other = fixture.mountURL.appendingPathComponent("IMG_COPY.JPG")
+        let bytes = Data("sample".utf8)
+        try fixture.writeFile(source, bytes: bytes)
+        try fixture.writeFile(other, bytes: Data("another file".utf8))
+        let jobID = "destination-skip-mismatch"
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+        let existingPath = try #require(files.first { $0.filename == source.lastPathComponent }?.plannedDestinationPath)
+        let existing = URL(fileURLWithPath: existingPath)
+        try fixture.writeFile(existing, bytes: bytes)
+        let plans = ImportPlanBuilder.plansForStoredImport(files: files)
+        #expect(plans.contains { $0.disposition == .alreadyExists })
+        #expect(plans.contains { $0.willCopy })
+        let approval = try #require(ReviewedImportDestinations(plans: plans))
+        let engine = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+            reviewedDestinations: approval
+        )
+        try fm.removeItem(at: source)
+        #expect(throws: SDImportError.reviewedSourceChanged) {
+            _ = try engine.importFiles(preparing: {
+                try fixture.jobRepository.updateJobImportPlan(
+                    jobID: jobID, destinationRoots: nil, updates: plans.compactMap(\.update)
+                )
+            }, jobID: jobID, requiresReviewedDestinations: true)
+        }
+        #expect(try fm.contentsOfDirectory(atPath: existing.deletingLastPathComponent().path) == [existing.lastPathComponent])
+    }
+
+    @Test("an Already Exists file is rechecked before the next volume can start", arguments: [false, true])
+    func rechecksApprovedDestinationSkip(replaceWithSameMetadata: Bool) throws {
+        let fixture = try Fixture()
+        let source = fixture.mountURL.appendingPathComponent("IMG_SKIP.JPG")
+        let pending = fixture.mountURL.appendingPathComponent("IMG_COPY.JPG")
+        let previousBytes = Data("previous copy".utf8)
+        try fixture.writeFile(source, bytes: previousBytes)
+        try fixture.writeFile(pending, bytes: Data("new copy".utf8))
+        let jobID = "late-destination-skip-mismatch"
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+        let priorPath = try #require(files.first { $0.filename == source.lastPathComponent }?.plannedDestinationPath)
+        let prior = URL(fileURLWithPath: priorPath)
+        try fixture.writeFile(prior, bytes: previousBytes)
+        let plans = ImportPlanBuilder.plansForStoredImport(files: files)
+        #expect(plans.contains { $0.disposition == .alreadyExists })
+        #expect(plans.contains { $0.willCopy })
+        let engine = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+            destinationSpaceChecker: DestinationSpaceChecker(capacityProvider: { path in
+                try FileManager.default.removeItem(at: prior)
+                if replaceWithSameMetadata {
+                    try Data(repeating: 0, count: previousBytes.count).write(to: prior)
+                    try FileManager.default.setAttributes(
+                        [.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)], ofItemAtPath: prior.path
+                    )
+                }
+                return try DestinationSpaceChecker.fileSystemCapacity(for: path)
+            }),
+            reviewedDestinations: try #require(ReviewedImportDestinations(plans: plans))
+        )
+        #expect(throws: SDImportError.reviewedDestinationChanged) {
+            _ = try engine.importFiles(preparing: {
+                try fixture.jobRepository.updateJobImportPlan(
+                    jobID: jobID, destinationRoots: nil, updates: plans.compactMap(\.update)
+                )
+            }, jobID: jobID, requiresReviewedDestinations: true)
+        }
+        let updated = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+        #expect(updated.first { $0.filename == pending.lastPathComponent }?.copyStatus == .copied)
+        #expect(try fixture.jobRepository.fetchJob(id: jobID)?.status == .importedWithErrors)
+    }
+
+    @Test("a history exclusion is rechecked after copying", arguments: [false, true])
+    func rechecksApprovedHistorySkip(removeLedger: Bool) throws {
+        let fixture = try Fixture()
+        let known = fixture.mountURL.appendingPathComponent("IMG_KNOWN.JPG")
+        let new = fixture.mountURL.appendingPathComponent("IMG_NEW.JPG")
+        let historyBytes = Data("already imported".utf8)
+        try fixture.writeFile(known, bytes: historyBytes)
+        try fixture.writeFile(new, bytes: Data("new copy".utf8))
+        let ledger = PortableImportReceiptLedger(sourceRootURL: fixture.mountURL)
+        try ledger.append(identity: PortableFileIdentity(
+            size: Int64(historyBytes.count), modificationTimeEpochSeconds: 1_700_000_000,
+            relativePath: known.lastPathComponent
+        ))
+        let jobID = "history-skip-changed-during-copy"
+        var sources: [String: ReviewedFileIdentity] = [:]
+        _ = try fixture.scanner.scan(
+            fixture.scanRequest(jobID: jobID, portableReceiptsEnabled: true),
+            recordReviewedSource: { sources[$0] = $1 }
+        )
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+        #expect(files.first { $0.filename == known.lastPathComponent }?.knownSource == .portableLedger)
+        let plans = ImportPlanBuilder.plansForStoredImport(files: files)
+        let engine = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+            portableReceiptsEnabled: true,
+            reviewedDestinations: try #require(ReviewedImportDestinations(plans: plans)), reviewedSourceFiles: sources
+        )
+        var invalidated = false
+        let expected: SDImportError = removeLedger ? .reviewedDestinationChanged : .reviewedSourceChanged
+        #expect(throws: expected) {
+            _ = try engine.importFiles(jobID: jobID, requiresReviewedDestinations: true, onProgress: { progress in
+                guard progress.importedFiles == 1, !invalidated else { return }
+                do {
+                    try FileManager.default.removeItem(at: removeLedger ? ledger.ledgerURL : known)
+                    invalidated = true
+                } catch {
+                    Issue.record("Could not invalidate the history exclusion: \(error)")
+                }
+            })
+        }
+        #expect(invalidated)
+        #expect(try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+            .first { $0.filename == new.lastPathComponent }?.copyStatus == .copied)
+        #expect(try fixture.jobRepository.fetchJob(id: jobID)?.status == .importedWithErrors)
+    }
+
+    @Test("a reviewed copy can use a write-and-search destination", .enabled(if: geteuid() != 0))
+    func copiesIntoWriteOnlyDestination() throws {
+        let fixture = try Fixture()
+        let bytes = Data("sample".utf8)
+        try fixture.writeFile(fixture.mountURL.appendingPathComponent("IMG_0001.JPG"), bytes: bytes)
+        let jobID = "reviewed-write-only-destination"
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+        let path = try #require(files.first?.plannedDestinationPath)
+        let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try #require(chmod(directory.path, 0o300) == 0)
+        defer { _ = chmod(directory.path, 0o700) }
+        let plans = ImportPlanBuilder.plansForStoredImport(files: files)
+        let engine = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+            reviewedDestinations: try #require(ReviewedImportDestinations(plans: plans))
+        )
+        let result = try engine.importFiles(jobID: jobID, requiresReviewedDestinations: true)
+        #expect(result.importedFiles == 1)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: path)) == bytes)
+    }
+
+    @Test("moving a destination before or after publication leaves no unrecorded copy", arguments: [false, true])
+    func pinsReviewedDestinationAfterJournal(moveAfterPublication: Bool) throws {
+        let fixture = try Fixture()
+        let fm = FileManager.default
+        let source = fixture.mountURL.appendingPathComponent("IMG_0001.JPG")
+        try fixture.writeFile(source, bytes: Data("sample".utf8))
+        let jobID = "approved-directory-moved"
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+        let directoryPath = try #require(files.first?.destinationDirectory)
+        let finalPath = try #require(files.first?.plannedDestinationPath)
+        let directory = URL(fileURLWithPath: directoryPath, isDirectory: true)
+        let moved = fixture.rootURL.appendingPathComponent("renamed-destination")
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        let plans = ImportPlanBuilder.plansForStoredImport(files: files)
+        let approval = try #require(ReviewedImportDestinations(plans: plans))
+        let engine = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+            reviewedDestinations: approval
+        )
+        var movedDirectory = false
+        #expect(throws: SDImportError.reviewedDestinationChanged) {
+            _ = try engine.importFiles(jobID: jobID, requiresReviewedDestinations: true, shouldCancel: {
+                guard !movedDirectory,
+                      moveAfterPublication ? fm.fileExists(atPath: finalPath)
+                          : (try? fixture.jobRepository.copyAttempts(jobID: jobID).isEmpty) == false else {
+                    return false
+                }
+                do {
+                    try fm.moveItem(at: directory, to: moved)
+                    try fm.createDirectory(at: directory, withIntermediateDirectories: false)
+                    movedDirectory = true
+                } catch {
+                    Issue.record("Could not replace the destination fixture: \(error)")
+                }
+                return false
+            })
+        }
+        #expect(movedDirectory)
+        #expect(try fm.contentsOfDirectory(atPath: directory.path).isEmpty)
+        #expect(try fm.contentsOfDirectory(atPath: moved.path).isEmpty)
+        #expect(try !fixture.jobRepository.hasUnresolvedCopies(jobID: jobID))
+    }
+
+    @Test("an approved folder created by the first copy remains pinned between files")
+    func remembersMaterializedDestination() throws {
+        let fixture = try Fixture()
+        let fm = FileManager.default
+        for name in ["first.jpg", "second.jpg"] {
+            try fixture.writeFile(fixture.mountURL.appendingPathComponent(name), bytes: Data(name.utf8))
+        }
+        let summary = try fixture.scanner.scan(fixture.scanRequest(jobID: "materialized-directory"))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: summary.jobID)
+        let plans = ImportPlanBuilder.plansForStoredImport(files: files)
+        let directory = URL(fileURLWithPath: try #require(files.first?.destinationDirectory), isDirectory: true)
+        let moved = fixture.rootURL.appendingPathComponent("moved")
+        #expect(!fm.fileExists(atPath: directory.path))
+        let engine = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+            reviewedDestinations: try #require(ReviewedImportDestinations(plans: plans))
+        )
+        var replaced = false
+        #expect(throws: SDImportError.reviewedDestinationChanged) {
+            _ = try engine.importFiles(jobID: summary.jobID, requiresReviewedDestinations: true, onProgress: { progress in
+                guard !replaced, progress.importedFiles == 1 else { return }
+                do {
+                    try fm.moveItem(at: directory, to: moved)
+                    try fm.createDirectory(at: directory, withIntermediateDirectories: false)
+                    replaced = true
+                } catch {
+                    Issue.record("Could not replace the new destination: \(error)")
+                }
+            })
+        }
+        #expect(replaced)
+        #expect(try fm.contentsOfDirectory(atPath: moved.path).count == 1)
+        #expect(try fm.contentsOfDirectory(atPath: directory.path).isEmpty)
+    }
+
+    @Test("a new common parent is tracked across both confirmed plans")
+    func remembersMaterializedParent() throws {
+        let fixture = try Fixture()
+        let fm = FileManager.default
+        let alias = fixture.rootURL.appendingPathComponent("alias")
+        try fm.createSymbolicLink(at: alias, withDestinationURL: fixture.photosURL)
+        let parent = fixture.photosURL.appendingPathComponent("Shoot", isDirectory: true)
+        let photos = parent.appendingPathComponent("Photos", isDirectory: true)
+        let videos = alias.appendingPathComponent("Shoot/Video", isDirectory: true)
+        let firstPlan = ImportFilePlan(
+            update: nil, willCopy: true, disposition: .copy,
+            destinationPath: photos.appendingPathComponent("first.jpg").path
+        )
+        let secondPlan = ImportFilePlan(
+            update: nil, willCopy: true, disposition: .copy,
+            destinationPath: videos.appendingPathComponent("second.mp4").path
+        )
+        let secondApproval = try #require(ReviewedImportDestinations(plans: [secondPlan]))
+        let firstApproval = try #require(ReviewedImportDestinations(plans: [firstPlan]))
+            .sharingMaterializedDirectories(with: [secondApproval])
+        try fm.createDirectory(at: photos, withIntermediateDirectories: true)
+        let opened = try #require(ImportCopyDirectoryIdentity(at: photos))
+        #expect(firstApproval.remember(opened, at: photos))
+        #expect(secondApproval.matches())
+
+        try fm.moveItem(at: parent, to: fixture.rootURL.appendingPathComponent("Archived"))
+        try fm.createDirectory(at: parent, withIntermediateDirectories: false)
+        #expect(!secondApproval.matches())
+        let freshApproval = try #require(ReviewedImportDestinations(plans: [secondPlan]))
+        #expect(freshApproval.matches())
+    }
+
+    @Test("loss of an earlier approved output folder stops an otherwise completed batch job")
+    func rechecksEveryOutputDirectoryBeforeSuccess() throws {
+        let fixture = try Fixture()
+        let fm = FileManager.default
+        let photo = fixture.mountURL.appendingPathComponent("IMG_0001.JPG")
+        let video = fixture.mountURL.appendingPathComponent("VID_0001.MP4")
+        try fixture.writeFile(photo, bytes: Data("sample photo".utf8))
+        try fixture.writeFile(video, bytes: Data("sample video".utf8))
+        let summary = try fixture.scanner.scan(fixture.scanRequest(jobID: "two-reviewed-output-directories"))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: summary.jobID)
+        let photoPath = try #require(files.first { $0.filename == photo.lastPathComponent }?.destinationDirectory)
+        let videoPath = try #require(files.first { $0.filename == video.lastPathComponent }?.destinationDirectory)
+        try #require(photoPath != videoPath)
+        let moved = fixture.rootURL.appendingPathComponent("ArchivedPhotos")
+        let approval = try #require(ReviewedImportDestinations(plans: ImportPlanBuilder.plansForStoredImport(files: files)))
+        let engine = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository, reviewedDestinations: approval
+        )
+        var didMove = false
+        #expect(throws: SDImportError.reviewedDestinationChanged) {
+            _ = try engine.importFiles(jobID: summary.jobID, requiresReviewedDestinations: true, onProgress: { progress in
+                guard !didMove, progress.importedFiles == 1, progress.currentSourcePath == video.path else { return }
+                do {
+                    try fm.moveItem(at: URL(fileURLWithPath: photoPath), to: moved)
+                    didMove = true
+                } catch {
+                    Issue.record("Could not move the previously approved photo folder: \(error)")
+                }
+            })
+        }
+        #expect(didMove)
+        #expect(try fm.contentsOfDirectory(atPath: moved.path) == [photo.lastPathComponent])
+        #expect(try fm.contentsOfDirectory(atPath: videoPath) == [video.lastPathComponent])
+        #expect(try fixture.jobRepository.fetchJob(id: summary.jobID)?.status == .importedWithErrors)
+    }
+
+    @Test("a reviewed direct copy removes only unchanged reservations on cancellation",
+          arguments: [false, true], [false, true])
+    func cancelsDirectCopy(duringVerification: Bool, outputWasEdited: Bool) throws {
+        let fixture = try Fixture()
+        let fm = FileManager.default
+        let source = fixture.mountURL.appendingPathComponent("IMG_0001.JPG")
+        let original = Data("sample".utf8)
+        let edited = Data("edited".utf8)
+        try fixture.writeFile(source, bytes: original)
+        let summary = try fixture.scanner.scan(fixture.scanRequest(jobID: "direct-copy-cancelled"))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: summary.jobID)
+        let finalPath = try #require(files.first?.plannedDestinationPath)
+        let plans = ImportPlanBuilder.plansForStoredImport(files: files)
+        let engine = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+            copyEngine: CopyEngine(canRenameExclusively: { _ in false }),
+            reviewedDestinations: try #require(ReviewedImportDestinations(plans: plans))
+        )
+        var verificationChecks = 0
+        var cancelled = false
+        #expect(throws: SDImportError.cancelled) {
+            _ = try engine.importFiles(jobID: summary.jobID, requiresReviewedDestinations: true, shouldCancel: {
+                guard fm.fileExists(atPath: finalPath) else { return false }
+                if duringVerification {
+                    guard let attempts = try? fixture.jobRepository.copyAttempts(jobID: summary.jobID),
+                          attempts.first?.staged != nil else { return false }
+                    verificationChecks += 1
+                    // First check is before verification. The second is during the digest.
+                    guard verificationChecks > 1 else { return false }
+                } else {
+                    // Wait for data to arrive while the exclusive output is still being written.
+                    guard let attrs = try? fm.attributesOfItem(atPath: finalPath),
+                          (attrs[.size] as? NSNumber)?.intValue == original.count else { return false }
+                }
+                if outputWasEdited, !cancelled {
+                    do {
+                        let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: finalPath))
+                        defer { try? handle.close() }
+                        try handle.write(contentsOf: edited)
+                    } catch {
+                        Issue.record("Could not edit the reserved output: \(error)")
+                    }
+                }
+                cancelled = true
+                return true
+            })
+        }
+        #expect(cancelled)
+        if outputWasEdited {
+            #expect(try Data(contentsOf: URL(fileURLWithPath: finalPath)) == edited)
+            #expect(try fixture.jobRepository.isUnverifiedDestination(URL(fileURLWithPath: finalPath)))
+        } else {
+            #expect(!fm.fileExists(atPath: finalPath))
+        }
+        #expect(try !fixture.jobRepository.hasUnresolvedCopies(jobID: summary.jobID))
+        #expect(try fixture.jobRepository.fetchJob(id: summary.jobID)?.status == .cancelled)
+    }
+
+    @Test("an unreviewed import can retry after losing a staging file")
+    func unreviewedStagingFailureRemainsRetryable() throws {
+        let fixture = try Fixture()
+        let source = fixture.mountURL.appendingPathComponent("IMG_0001.JPG")
+        try fixture.writeFile(source, bytes: Data("sample".utf8))
+        let jobID = "unreviewed-retry"
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: jobID))
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
+        let destination = try #require(files.first?.destinationDirectory)
+        var removedStage = false
+        let result = try fixture.importEngine.importFiles(jobID: jobID, onProgress: { progress in
+            guard !removedStage, progress.copiedBytes > 0,
+                  let names = try? FileManager.default.contentsOfDirectory(atPath: destination),
+                  let stage = names.first(where: { $0.hasPrefix(".sdimport-") && $0.hasSuffix(".part") })
+            else { return }
+            let path = URL(fileURLWithPath: destination).appendingPathComponent(stage)
+            do {
+                try FileManager.default.removeItem(at: path)
+                removedStage = true
+            } catch {
+                Issue.record("The staging fixture could not be removed: \(error)")
+            }
+        })
+        #expect(removedStage)
+        #expect(result.failedFiles == 1)
+        #expect(try !fixture.jobRepository.needsDestinationReview(jobID: jobID))
+        #expect(try fixture.importEngine.importFiles(jobID: jobID).importedFiles == 1)
+    }
+
     @Test("scan import and rescan marks the same source as known")
     func scanImportAndRescanUsesDedupe() throws {
         let fixture = try Fixture()

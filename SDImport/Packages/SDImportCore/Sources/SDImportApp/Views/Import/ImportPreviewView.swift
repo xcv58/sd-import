@@ -1213,7 +1213,7 @@ private struct ImportReviewFooter: View {
             Spacer(minLength: 12)
 
             if model.canImportPlannedFiles {
-                Text(L10n.tr("Press Return to start"))
+                Text(model.isReviewingScanBothVolume ? L10n.tr("Press Return to confirm") : L10n.tr("Press Return to start"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

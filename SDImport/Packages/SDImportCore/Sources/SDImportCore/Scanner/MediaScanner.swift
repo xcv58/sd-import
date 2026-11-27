@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public struct ScanRequest: Sendable {
@@ -75,6 +76,14 @@ public struct MediaScanner {
         _ request: ScanRequest,
         shouldCancel: () -> Bool = { false }
     ) throws -> ScanSummary {
+        try scan(request, recordReviewedSource: nil, shouldCancel: shouldCancel)
+    }
+
+    public func scan(
+        _ request: ScanRequest,
+        recordReviewedSource: ((String, ReviewedFileIdentity) -> Void)?,
+        shouldCancel: () -> Bool = { false }
+    ) throws -> ScanSummary {
         var files: [JobFileRecord] = []
         var portableFingerprints: Set<String> = []
         var portableIdentitiesToBackfill: [(sourcePath: String, identity: PortableFileIdentity)] = []
@@ -101,6 +110,14 @@ public struct MediaScanner {
             }
             if classifier.shouldIgnore(filename: fileURL.lastPathComponent) {
                 continue
+            }
+            if let recordReviewedSource {
+                var info = stat()
+                guard lstat(fileURL.path, &info) == 0 else {
+                    throw SDImportError.missingFileAttributes(fileURL)
+                }
+                guard info.st_mode & S_IFMT == S_IFREG else { continue }
+                recordReviewedSource(fileURL.path, ReviewedFileIdentity(info))
             }
             let attributes = try attributes(for: fileURL)
             let ext = fileURL.pathExtension.isEmpty ? "" : ".\(fileURL.pathExtension.lowercased())"

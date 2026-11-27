@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 import OSLog
 import SDImportCommerce
 import SDImportCore
@@ -10,18 +11,25 @@ private let diagnosticsLogger = Logger(subsystem: appLogSubsystem, category: "Di
 
 typealias ImportPreviewSession = ImportPlanSession
 
+struct CompletedImportReceipt {
+    let result: ImportResult
+    let job: ImportJob?
+    let files: [JobFileRecord]
+}
+
 struct ScanBothSession {
-    struct Confirmation {
+    struct Confirmation: Sendable {
         let draft: ImportDraft
         let plans: [ImportFilePlan]
         let destinationAccess: [SecurityScopedResourceAccess]
+        let destinations: ReviewedImportDestinations
     }
 
     struct Entry: Identifiable {
         enum State {
             case waiting
             case scanning
-            case complete(ScanSummary, [String], SecurityScopedResourceAccess?)
+            case complete(ScanSummary, [String], SecurityScopedResourceAccess?, [String: ReviewedFileIdentity] = [:])
             case skipped(ScanBothIssue)
         }
 
@@ -38,16 +46,22 @@ struct ScanBothSession {
         var hasStartedImport = false
         var confirmation: Confirmation?
         var result: ImportResult?
+        var copyInterruption: String?
 
         var summary: ScanSummary? {
-            if case .complete(let summary, _, _) = state { return summary }
+            if case .complete(let summary, _, _, _) = state { return summary }
             return nil
         }
 
         var jobID: String? { summary?.jobID }
 
         var access: SecurityScopedResourceAccess? {
-            if case .complete(_, _, let access) = state { return access }
+            if case .complete(_, _, let access, _) = state { return access }
+            return nil
+        }
+
+        var reviewedSourceFiles: [String: ReviewedFileIdentity]? {
+            if case .complete(_, _, _, let files) = state { return files }
             return nil
         }
 
@@ -88,15 +102,20 @@ struct ScanBothSession {
     init?(prompt: MountedDevicePrompt) {
         let group = prompt.deviceGroup
         guard group.volumes.count == 2 else { return nil }
-        var entries = group.volumes.compactMap { volume in
+        let entries = group.volumes.compactMap { volume in
             prompt.mountID(for: volume).map { Entry(id: $0, volume: volume) }
         }
+        self.init(deviceName: group.displayName, entries: entries)
+    }
+
+    init?(deviceName: String, entries: [Entry]) {
         guard entries.count == 2 else { return nil }
+        var entries = entries
         // Use chooser order when the firmware doesn't identify an internal volume.
         if !Self.isInternal(entries[0].volume), Self.isInternal(entries[1].volume) {
             entries.swapAt(0, 1)
         }
-        deviceName = group.displayName
+        self.deviceName = deviceName
         self.entries = entries
     }
 
@@ -152,10 +171,25 @@ struct ScanBothSession {
     }
 
     mutating func recordImport(_ result: ImportResult) {
-        guard result.failedFiles == 0,
-              let index = entries.firstIndex(where: { $0.jobID == result.jobID }) else { return }
-        entries[index].disposition = .imported
+        guard let index = entries.firstIndex(where: { $0.jobID == result.jobID }) else { return }
         entries[index].result = result
+        entries[index].copyInterruption = nil
+        if result.failedFiles == 0 { entries[index].disposition = .imported }
+    }
+
+    mutating func recordInterruptedImport(
+        jobID: String, files: [JobFileRecord], message: String, includeEmptyReceipt: Bool
+    ) {
+        guard let index = entries.firstIndex(where: { $0.jobID == jobID }) else { return }
+        guard includeEmptyReceipt || files.contains(where: { $0.copyStatus == .copied || $0.copyStatus == .failed }) else {
+            return
+        }
+        let totals = ImportReceiptTotals(files: files)
+        entries[index].result = ImportResult(
+            jobID: jobID, importedFiles: totals.copiedFiles, skippedFiles: totals.skippedFiles,
+            failedFiles: totals.failedFiles, progressPath: nil
+        )
+        entries[index].copyInterruption = message
     }
 
     mutating func skipEntry(_ id: UUID) {
@@ -228,19 +262,40 @@ enum ScanBothIssue: Error {
     }
 }
 
-struct ActiveCopySources {
+struct ActiveCopySources: Sendable {
+    private struct StopEvents: Sendable {
+        var userCancelled = false
+        var disconnectedVolume: String?
+        var unmountedPaths: Set<String> = []
+    }
+
     let volumes: [MountedVolume]
-    private(set) var disconnectedVolume: String?
+    private let stop = OSAllocatedUnfairLock(initialState: StopEvents())
+
+    var disconnectedVolume: String? { stop.withLock { $0.disconnectedVolume } }
 
     init(volumes: [MountedVolume]) {
         self.volumes = volumes
     }
 
     mutating func noteUnmount(at path: String) -> Bool {
-        guard disconnectedVolume == nil,
-              let volume = volumes.first(where: { $0.mountPath == path }) else { return false }
-        disconnectedVolume = volume.name
-        return true
+        guard let volume = volumes.first(where: { $0.mountPath == path }) else { return false }
+        return stop.withLock { events in
+            events.unmountedPaths.insert(path)
+            guard events.disconnectedVolume == nil else { return false }
+            events.disconnectedVolume = volume.name
+            return true
+        }
+    }
+
+    func noteUserCancellation() {
+        stop.withLock { $0.userCancelled = true }
+    }
+
+    func wasStoppedOnlyBySiblingUnmount(sourcePath: String) -> Bool {
+        stop.withLock {
+            !$0.userCancelled && !$0.unmountedPaths.isEmpty && !$0.unmountedPaths.contains(sourcePath)
+        }
     }
 }
 
@@ -578,11 +633,12 @@ final class AppModel: ObservableObject {
         }
     }
     private var previousScanBothSession: ScanBothSession?
-    @Published var currentResult: ImportResult? {
+    @Published private(set) var currentImportReceipt: CompletedImportReceipt? {
         didSet {
             rebuildSourceEjectionTargetCache()
         }
     }
+    var currentResult: ImportResult? { currentImportReceipt?.result }
     @Published var importProgress: ImportProgress?
     @Published var jobs: [ImportJob] = [] {
         didSet {
@@ -731,6 +787,9 @@ final class AppModel: ObservableObject {
     private let backgroundPromptStateStore: () throws -> BackgroundPromptAgentStateStore
     private let backgroundPrompt: BackgroundPromptCoordinator
     private let purchaseManager: PurchaseManager
+    private let scanBothMountLookup: @Sendable (MountedVolume) -> MountedVolume?
+    private let destinationCapacity: DestinationSpaceChecker.CapacityProvider
+    private let observeCopyProgress: (@Sendable (ImportProgress) -> Void)?
     private var initialOnboardingSourcePath: String
     private var applicationSupportURL: URL?
     private var reportsURL: URL?
@@ -783,6 +842,7 @@ final class AppModel: ObservableObject {
     private var scanBothSourceAccess: SecurityScopedResourceAccess? { scanBothSession?.reviewingEntry?.access }
 
     private var knownImportedPreviewFileIDs: Set<Int64> = []
+    private var scanBothReviewHistory: [Int64: ImportHistoryMatch] = [:]
     private var currentPreviewFiles: [JobFileRecord] = [] {
         didSet {
             rebuildPreviewPlanCache()
@@ -798,9 +858,15 @@ final class AppModel: ObservableObject {
         },
         backgroundPromptSleep: @escaping BackgroundPromptRetryScheduler.Sleep = { try await Task.sleep(for: $0) },
         backgroundPromptRetryNow: @escaping () -> Date = Date.init,
-        startsBootstrap: Bool = true
+        startsBootstrap: Bool = true,
+        scanBothMountLookup: (@Sendable (MountedVolume) -> MountedVolume?)? = nil,
+        destinationCapacity: @escaping DestinationSpaceChecker.CapacityProvider = DestinationSpaceChecker.fileSystemCapacity,
+        observeCopyProgress: (@Sendable (ImportProgress) -> Void)? = nil
     ) {
         self.purchaseManager = purchaseManager
+        self.scanBothMountLookup = scanBothMountLookup ?? Self.currentPromptVolume
+        self.destinationCapacity = destinationCapacity
+        self.observeCopyProgress = observeCopyProgress
         self.defaults = defaults
         self.loginItem = loginItem
         self.backgroundPromptStateStore = backgroundPromptStateStore
@@ -877,9 +943,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func bootstrap() {
+    func bootstrap(at suppliedStateURL: URL? = nil, startsRuntimeServices: Bool = true) {
         do {
-            let stateURL = try DatabasePoolFactory.defaultApplicationSupportDirectory()
+            let stateURL = try suppliedStateURL ?? DatabasePoolFactory.defaultApplicationSupportDirectory()
             try FileManager.default.createDirectory(at: stateURL, withIntermediateDirectories: true)
             let databaseURL = stateURL.appendingPathComponent("state.sqlite", isDirectory: false)
             let pool = try DatabasePoolFactory(databaseURL: databaseURL).makeMigratedPool()
@@ -890,6 +956,7 @@ final class AppModel: ObservableObject {
             dedupeRepository = DedupeRepository(pool: pool)
             settingsRepository = SettingsRepository(pool: pool)
             bookmarkStore = BookmarkStore(pool: pool)
+            guard startsRuntimeServices else { return }
             let legacyImportMessage: String?
             if AppDistribution.current.importsUnsandboxedLegacyState {
                 do {
@@ -1358,7 +1425,7 @@ final class AppModel: ObservableObject {
         insta360RescanRecovery = nil
         rescanContext = nil
         currentSummary = nil
-        currentResult = nil
+        currentImportReceipt = nil
         importProgress = nil
         ejectedSourceJobID = nil
         ejectedSourceName = nil
@@ -1377,7 +1444,7 @@ final class AppModel: ObservableObject {
     }
 
     func destinationPathDidChange(clearFeedback: Bool = true) {
-        if clearFeedback {
+        if clearFeedback, !isShowingScanBothResults {
             folderAccessFeedback = nil
         }
         validatePaths()
@@ -1526,7 +1593,7 @@ final class AppModel: ObservableObject {
             && sourceValidation.isUsable
             && !sourceNeedsAccess
             && requiredDestinationPathsAreUsable()
-            && previewSpaceRequirements.allSatisfy(\.isSatisfied)
+            && (isReviewingScanBothVolume || previewSpaceRequirements.allSatisfy(\.isSatisfied))
     }
 
     var importReadinessMessage: String? {
@@ -1620,7 +1687,7 @@ final class AppModel: ObservableObject {
         singleScanMount = nil
         insta360RescanRecovery = nil
         rescanContext = recovering
-        currentResult = nil
+        currentImportReceipt = nil
         importProgress = nil
         ejectedSourceJobID = nil
         ejectedSourceName = nil
@@ -1950,7 +2017,7 @@ final class AppModel: ObservableObject {
         sessions: [ImportPreviewSession]
     ) -> [ImportFilePlan] {
         importPlanBuilder(sessions: sessions)?.plans(
-            files: files, knownImportedFileIDs: isReviewingScanBothVolume ? knownImportedPreviewFileIDs : []
+            files: files, refreshedHistory: isReviewingScanBothVolume ? scanBothReviewHistory : [:]
         ) ?? []
     }
 
@@ -2148,7 +2215,7 @@ final class AppModel: ObservableObject {
         let rowsNeedingSpace = rows.filter { row in
             row.willCopy
                 && row.size > 0
-                && !isKnownImportedFile(row)
+                && (isReviewingScanBothVolume || !isKnownImportedFile(row))
         }
         let requiredByDirectory = Dictionary(grouping: rowsNeedingSpace) { row in
             row.destinationPath.map {
@@ -2162,7 +2229,7 @@ final class AppModel: ObservableObject {
             }
             let requiredBytes = directoryRows.reduce(Int64(0)) { $0 + $1.size }
             do {
-                guard let capacity = try DestinationSpaceChecker.fileSystemCapacity(for: destinationDirectory) else {
+                guard let capacity = try destinationCapacity(destinationDirectory) else {
                     unknownRequirements.append(
                         ImportPreviewSpaceRequirement(
                             volumeID: "unknown:\(destinationDirectory)",
@@ -2241,13 +2308,20 @@ final class AppModel: ObservableObject {
                 requireRescan(for: jobID)
                 return
             }
+            guard let destinations = ReviewedImportDestinations(plans: plan.files) else {
+                showFolderAccessError { L10n.tr("The destination folder is unavailable.") }
+                return
+            }
             var grantedPaths: Set<String> = []
             let destinationAccess = ([folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }
                 + scanBothReviewDestinationAccess).filter {
                 $0.isActive && grantedPaths.insert($0.url.standardizedFileURL.path).inserted
             }
             scanBothSession?.setConfirmation(
-                .init(draft: currentImportDraft, plans: plan.files, destinationAccess: destinationAccess),
+                .init(
+                    draft: currentImportDraft, plans: plan.files,
+                    destinationAccess: destinationAccess, destinations: destinations
+                ),
                 for: jobID
             )
             returnToScanBothResults()
@@ -2266,8 +2340,12 @@ final class AppModel: ObservableObject {
             return nil
         }
         guard sourceValidation.isUsable else {
-            let validation = sourceValidation
-            showFolderAccessError { validation.message }
+            if let entry = scanBothSession?.reviewingEntry, let jobID = entry.jobID {
+                requireRescan(for: jobID)
+            } else {
+                let validation = sourceValidation
+                showFolderAccessError { validation.message }
+            }
             return nil
         }
         guard requiredDestinationPathsAreUsable() else {
@@ -2280,16 +2358,24 @@ final class AppModel: ObservableObject {
                 dedupeRepository: dedupeRepository
             )
         }
+        refreshScanBothReviewHistory(files: currentPreviewFiles)
         guard let builder = importPlanBuilder(sessions: previewSessions) else { return nil }
         let plans = builder.plans(
             files: currentPreviewFiles,
-            knownImportedFileIDs: isReviewingScanBothVolume ? knownImportedPreviewFileIDs : []
+            refreshedHistory: isReviewingScanBothVolume ? scanBothReviewHistory : [:]
         )
         let freshRows = makePreviewRows(files: currentPreviewFiles, plans: plans)
-        let planChanged = freshRows != previewRows || confirmation.map { $0.plans != plans } == true
+        let planChanged = freshRows != previewRows
+            || confirmation.map { $0.plans != plans || !$0.destinations.matches() } == true
         updatePreviewPlanCache(rows: freshRows)
         guard !planChanged else {
-            showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
+            if let entry = scanBothSession?.reviewingEntry, let jobID = entry.jobID,
+               let scanned = entry.reviewedSourceFiles,
+               !ReviewedFileIdentity.matchesSources(of: confirmation?.plans ?? plans, files: currentPreviewFiles, scanned: scanned) {
+                requireRescan(for: jobID)
+            } else {
+                showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
+            }
             return nil
         }
         folderAccessFeedback = nil
@@ -2329,7 +2415,6 @@ final class AppModel: ObservableObject {
         )
         let updates = currentPreviewFiles.compactMap { file -> JobFilePlanUpdate? in
             guard
-                file.knownSource == .portableLedger,
                 let id = file.id,
                 portableOverrideIDs.contains(id)
             else {
@@ -2370,6 +2455,7 @@ final class AppModel: ObservableObject {
 
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
+                    self.refreshScanBothReviewHistory(files: files)
                     self.currentPreviewFiles = files
                     self.selectedJobFiles = files
                     self.jobs = jobs
@@ -2404,10 +2490,13 @@ final class AppModel: ObservableObject {
         jobID: String,
         databaseURL: URL,
         builder: ImportPlanBuilder,
-        approvedPlans: [ImportFilePlan]
+        approvedPlans: [ImportFilePlan],
+        reviewedDestinations: ReviewedImportDestinations? = nil
     ) {
         let scanBothEntry = scanBothSession?.entry(for: jobID)
         let isScanBothImport = scanBothEntry != nil
+        let reviewedSourceFiles = scanBothEntry?.reviewedSourceFiles
+        let startedApproval = scanBothEntry?.confirmation
         let expectedSource = scanBothEntry?.volume
             ?? singleScanMount.flatMap { $0.jobID == jobID ? $0.volume : nil }
         let currentSource = expectedSource.flatMap { volume in
@@ -2427,8 +2516,10 @@ final class AppModel: ObservableObject {
         let plannedVolumes = scanBothEntry == nil
             ? [expectedSource].compactMap { $0 }
             : scanBothSession?.plannedCopyVolumes ?? []
-        activeCopySources = ActiveCopySources(volumes: plannedVolumes)
-        currentResult = nil
+        let volumeLookup = isScanBothImport ? scanBothMountLookup : Self.currentPromptVolume
+        let copySources = ActiveCopySources(volumes: plannedVolumes)
+        activeCopySources = copySources
+        currentImportReceipt = nil
         importProgress = nil
         ejectedSourceJobID = nil
         ejectedSourceName = nil
@@ -2437,6 +2528,8 @@ final class AppModel: ObservableObject {
         importLogger.info("Import started jobID=\(jobID, privacy: .private)")
         let portableImportReceiptsEnabled = self.portableImportReceiptsEnabled
         let reviewedSourcePath = currentSummary?.mountPath
+        let destinationCapacity = self.destinationCapacity
+        let observeCopyProgress = self.observeCopyProgress
         let retainedAccess = (
             Array(folderAccesses.values) + scanBothReviewDestinationAccess
                 + [scanBothSourceAccess].compactMap { $0 } + (rescanContext?.access ?? [])
@@ -2463,7 +2556,7 @@ final class AppModel: ObservableObject {
                     } else {
                         sourceDirectory = nil
                     }
-                    if let missing = plannedVolumes.first(where: { Self.currentPromptVolume(matching: $0) == nil }) {
+                    if let missing = plannedVolumes.first(where: { volumeLookup($0) == nil }) {
                         throw CopyVolumeUnavailable(volume: missing)
                     }
                     if Task.isCancelled { throw SDImportError.cancelled }
@@ -2471,8 +2564,16 @@ final class AppModel: ObservableObject {
                         jobRepository: repositories.jobRepository,
                         dedupeRepository: repositories.dedupeRepository,
                         copyEngine: CopyEngine(sourceDirectory: sourceDirectory),
+                        destinationSpaceChecker: DestinationSpaceChecker(capacityProvider: destinationCapacity),
                         portableReceiptsEnabled: portableImportReceiptsEnabled,
-                        reviewedInsta360RescanMembers: reviewedInsta360RescanMembers
+                        reviewedInsta360RescanMembers: reviewedInsta360RescanMembers,
+                        reviewedDestinations: reviewedDestinations,
+                        reviewedSourceFiles: reviewedSourceFiles,
+                        preserveUntouchedScanOnCancellation: {
+                            guard isScanBothImport, let expectedSource else { return false }
+                            return copySources.wasStoppedOnlyBySiblingUnmount(sourcePath: expectedSource.mountPath)
+                                && volumeLookup(expectedSource) != nil
+                        }
                     )
                     var lastPublishedAt = Date(timeIntervalSince1970: 0)
                     let minimumUpdateInterval: TimeInterval = 0.75
@@ -2480,10 +2581,14 @@ final class AppModel: ObservableObject {
                     return try engine.importFiles(
                         preparing: {
                             let files = try repositories.jobRepository.fetchJobFiles(jobID: jobID)
-                            let known = isScanBothImport
-                                ? Self.knownImportedFileIDs(files: files, dedupeRepository: repositories.dedupeRepository)
-                                : []
-                            guard builder.plans(files: files, knownImportedFileIDs: known) == approvedPlans else {
+                            let history = reviewedSourcePath.map { sourcePath in
+                                isScanBothImport ? engine.refreshedReviewHistory(files: files, sourcePath: sourcePath) : [:]
+                            } ?? [:]
+                            guard builder.plans(files: files, refreshedHistory: history) == approvedPlans else {
+                                if let reviewedSourceFiles,
+                                   !ReviewedFileIdentity.matchesSources(of: approvedPlans, files: files, scanned: reviewedSourceFiles) {
+                                    throw SDImportError.reviewedSourceChanged
+                                }
                                 throw SDImportError.reviewedDestinationChanged
                             }
                             if Task.isCancelled { throw SDImportError.cancelled }
@@ -2496,6 +2601,7 @@ final class AppModel: ObservableObject {
                         jobID: jobID,
                         requiresReviewedDestinations: true,
                         onProgress: { progress in
+                            observeCopyProgress?(progress)
                             if progress.status == "aborted" {
                                 return
                             }
@@ -2527,13 +2633,16 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.rememberEjectionDestinations(finalDestinations, for: jobID)
-                    self.currentResult = result
+                    self.currentImportReceipt = CompletedImportReceipt(
+                        result: result, job: jobs.first { $0.id == result.jobID }, files: files
+                    )
                     self.importProgress = nil
                     self.jobs = jobs
-                    if result.failedFiles > 0 || self.activeCopySources?.disconnectedVolume != nil {
+                    self.scanBothSession?.recordImport(result)
+                    if result.failedFiles > 0 || (!isScanBothImport && self.activeCopySources?.disconnectedVolume != nil) {
                         self.jobsRequiringRescan.insert(jobID)
                     } else {
-                        self.scanBothSession?.recordImport(result)
+                        if isScanBothImport { self.jobsRequiringRescan.remove(jobID) }
                     }
                     self.selectedJobID = jobID
                     self.selectedJobFiles = files
@@ -2585,7 +2694,7 @@ final class AppModel: ObservableObject {
                         L10n.tr("An existing Insta360 lens file could not be verified. Choose a different folder for both files.")
                     }
                 }
-            } catch SDImportError.reviewedDestinationChanged {
+            } catch let error as SDImportError where Self.canRecoverImportReview(error, isScanBothImport: isScanBothImport) {
                 let snapshot = try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID)
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
@@ -2593,30 +2702,52 @@ final class AppModel: ObservableObject {
                     if let snapshot {
                         self.jobs = snapshot.jobs
                         self.selectedJobFiles = snapshot.files
+                        self.refreshScanBothReviewHistory(files: snapshot.files)
                         self.currentPreviewFiles = snapshot.files
+                        self.recordScanBothInterruption(jobID: jobID, files: snapshot.files, message: Self.errorMessage(for: error))
                     } else {
                         self.rebuildPreviewPlanCache()
                     }
                     self.importProgress = nil
-                    self.jobsRequiringRescan.insert(jobID)
+                    if error == .reviewedSourceChanged || !isScanBothImport || snapshot?.job?.status != .scanned {
+                        self.jobsRequiringRescan.insert(jobID)
+                    }
                     self.finishImportAttempt(
                         attemptID, event: .recover(hasScannedJob: self.currentSummary?.jobID == jobID)
                     )
-                    self.showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
+                    self.showFolderAccessError { Self.errorMessage(for: error) }
                 }
             } catch let error as CopyVolumeUnavailable {
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
-                    self.jobsRequiringRescan.insert(jobID)
+                    if !isScanBothImport { self.jobsRequiringRescan.insert(jobID) }
                     self.invalidateScansAtUnmount(error.volume.mountURL)
+                    if let expectedSource, copySources.wasStoppedOnlyBySiblingUnmount(sourcePath: expectedSource.mountPath),
+                       self.liveScanBothVolume(matching: expectedSource) != nil {
+                        self.scanBothSession?.setConfirmation(startedApproval, for: jobID)
+                    }
                     self.finishImportAttempt(attemptID, event: .cancelled)
                 }
             } catch let error as SDImportError where error == .cancelled || error == .sourceVolumeUnavailable {
                 let snapshot = try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID)
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
-                    self.jobsRequiringRescan.insert(jobID)
-                    if error == .sourceVolumeUnavailable, let expectedSource {
+                    let sourceFolderChanged = isScanBothImport && error == .sourceVolumeUnavailable
+                        && expectedSource.map { self.liveScanBothVolume(matching: $0) != nil } == true
+                    let interruption = sourceFolderChanged
+                        ? Self.errorMessage(for: SDImportError.reviewedSourceChanged)
+                        : L10n.tr("Import cancelled")
+                    let untouchedSiblingDisconnect = isScanBothImport && error == .cancelled && snapshot?.job?.status == .scanned
+                        && expectedSource.map {
+                            copySources.wasStoppedOnlyBySiblingUnmount(sourcePath: $0.mountPath)
+                                && self.liveScanBothVolume(matching: $0) != nil
+                        } == true
+                    if untouchedSiblingDisconnect {
+                        self.scanBothSession?.setConfirmation(startedApproval, for: jobID)
+                    } else {
+                        self.jobsRequiringRescan.insert(jobID)
+                    }
+                    if error == .sourceVolumeUnavailable, !sourceFolderChanged, let expectedSource {
                         self.invalidateScansAtUnmount(expectedSource.mountURL)
                     }
                     if let snapshot {
@@ -2628,23 +2759,38 @@ final class AppModel: ObservableObject {
                         } else {
                             self.rebuildPreviewPlanCache()
                         }
+                        self.recordScanBothInterruption(
+                            jobID: jobID, files: snapshot.files, message: interruption,
+                            includeEmptyReceipt: snapshot.job?.status == .cancelled
+                        )
                     }
-                    self.currentResult = nil
+                    self.currentImportReceipt = nil
                     self.importProgress = nil
-                    self.statusMessage = L10n.tr("Import cancelled")
-                    self.finishImportAttempt(attemptID, event: .cancelled)
+                    self.statusMessage = interruption
+                    if sourceFolderChanged {
+                        self.finishImportAttempt(attemptID, event: .recover(hasScannedJob: self.currentSummary?.jobID == jobID))
+                        self.showFolderAccessError { Self.errorMessage(for: SDImportError.reviewedSourceChanged) }
+                    } else {
+                        self.finishImportAttempt(attemptID, event: .cancelled)
+                    }
                 }
                 importLogger.notice("Import cancelled jobID=\(jobID, privacy: .private)")
             } catch {
+                let snapshot = isScanBothImport ? try? Self.historySnapshot(databaseURL: databaseURL, jobID: jobID) : nil
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.jobsRequiringRescan.insert(jobID)
-                    self.currentResult = nil
+                    self.currentImportReceipt = nil
                     self.importProgress = nil
                     let failedOperation = self.activeImportOperation ?? .copy
                     let render: () -> String = { L10n.tr("Import failed: \(Self.errorMessage(for: error))") }
                     self.setLocalizedStatusMessage(render)
                     let message = self.statusMessage
+                    if let snapshot {
+                        self.jobs = snapshot.jobs
+                        self.selectedJobFiles = snapshot.files
+                        self.recordScanBothInterruption(jobID: jobID, files: snapshot.files, message: message)
+                    }
                     self.finishImportAttempt(
                         attemptID, event: .failed(operation: failedOperation, message: message),
                         failureRenderer: render
@@ -2655,8 +2801,28 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func recordScanBothInterruption(
+        jobID: String, files: [JobFileRecord], message: String, includeEmptyReceipt: Bool = false
+    ) {
+        scanBothSession?.recordInterruptedImport(
+            jobID: jobID, files: files, message: importDisconnectionMessage ?? message, includeEmptyReceipt: includeEmptyReceipt
+        )
+    }
+
+    nonisolated private static func canRecoverImportReview(_ error: SDImportError, isScanBothImport: Bool) -> Bool {
+        switch error {
+        case .reviewedDestinationChanged, .reviewedSourceChanged:
+            return true
+        case .insufficientDestinationSpace:
+            return isScanBothImport
+        default:
+            return false
+        }
+    }
+
     func cancelImport() {
         guard importTask != nil, importAttempt?.operation != .eject else { return }
+        activeCopySources?.noteUserCancellation()
         importAttempt?.requestCancellation()
         statusMessage = L10n.tr("Cancelling...")
         importTask?.cancel()
@@ -2793,7 +2959,7 @@ final class AppModel: ObservableObject {
         insta360RescanRecovery = nil
         rescanContext = nil
         currentSummary = nil
-        currentResult = nil
+        currentImportReceipt = nil
         importProgress = nil
         previewSessions = []
         currentPreviewFiles = []
@@ -2901,14 +3067,18 @@ final class AppModel: ObservableObject {
               pendingMountPrompt?.deviceGroup.volumes.count == 2,
               let session = ScanBothSession(prompt: prompt),
               session.entries.allSatisfy({ promptContains($0.volume, id: prompt.id, mountID: $0.id) }),
-              let databaseURL else { return }
+              databaseURL != nil else { return }
         guard confirmLeavingScanBothResults(actionTitle: L10n.tr("Start New Scan")) else {
             mountPrompts.dismiss(prompt.id)
             return
         }
         guard session.entries.allSatisfy({ promptContains($0.volume, id: prompt.id, mountID: $0.id) }) else { return }
         guard mountPrompts.dismiss(prompt.id) else { return }
+        beginScanBoth(session)
+    }
 
+    func beginScanBoth(_ session: ScanBothSession) {
+        guard !isWorking, !isEjectingSource, let databaseURL else { return }
         retainPendingScanBothResults()
         sourcePathDidChange()
         resetImportDraftFromDefaults()
@@ -2955,19 +3125,22 @@ final class AppModel: ObservableObject {
                     jobRepository: repositories.jobRepository,
                     dedupeRepository: repositories.dedupeRepository
                 )
-                let summary = try scanner.scan(request) { Task.isCancelled }
+                var reviewedSources: [String: ReviewedFileIdentity] = [:]
+                let summary = try scanner.scan(request, recordReviewedSource: { path, identity in
+                    reviewedSources[path] = identity
+                }, shouldCancel: { Task.isCancelled })
                 try Task.checkCancellation()
                 let filenames = try repositories.jobRepository.previewFilenames(jobID: summary.jobID, limit: 5)
-                return (summary, filenames)
+                return (summary, filenames, reviewedSources)
             }
-            let (summary, filenames) = try await withTaskCancellationHandler {
+            let (summary, filenames, reviewedSources) = try await withTaskCancellationHandler {
                 try await worker.value
             } onCancel: {
                 worker.cancel()
             }
             try Task.checkCancellation()
             guard liveScanBothVolume(matching: volume) != nil else { throw ScanBothIssue.removed }
-            return .complete(summary, filenames, access)
+            return .complete(summary, filenames, access, reviewedSources)
         } catch {
             if let issue = error as? ScanBothIssue { throw issue }
             guard liveScanBothVolume(matching: volume) != nil else { throw ScanBothIssue.removed }
@@ -3005,15 +3178,14 @@ final class AppModel: ObservableObject {
 
     private func liveScanBothVolume(matching volume: MountedVolume) -> MountedVolume? {
         guard scanBothSession?.removedMountPaths.contains(volume.mountPath) == false else { return nil }
-        return Self.currentPromptVolume(matching: volume)
+        return scanBothMountLookup(volume)
     }
 
     func reviewScanBothVolume(_ entryID: UUID) {
         guard isShowingScanBothResults, !isWorking, !isEjectingSource,
               let entry = scanBothSession?.entries.first(where: { $0.id == entryID }),
-              entry.awaitsImport, let summary = entry.summary, !needsRescan(summary.jobID),
-              openScanBothVolume(entry, summary: summary) else { return }
-        scanBothSession?.setConfirmation(nil, for: summary.jobID)
+              entry.awaitsImport, let summary = entry.summary, !needsRescan(summary.jobID) else { return }
+        _ = openScanBothVolume(entry, summary: summary)
     }
 
     func startScanBothImports() {
@@ -3051,14 +3223,20 @@ final class AppModel: ObservableObject {
             scanBothSession?.setConfirmation(nil, for: summary.jobID)
             return
         }
+        let siblingApprovals = session.entries.compactMap { sibling in
+            sibling.id == entry.id ? nil : sibling.confirmation?.destinations
+        }
         startImport(
             jobID: summary.jobID, databaseURL: databaseURL,
-            builder: plan.builder, approvedPlans: confirmation.plans
+            builder: plan.builder, approvedPlans: confirmation.plans,
+            reviewedDestinations: confirmation.destinations.sharingMaterializedDirectories(with: siblingApprovals)
         )
     }
 
     private func openScanBothVolume(_ entry: ScanBothSession.Entry, summary: ScanSummary) -> Bool {
-        guard liveScanBothVolume(matching: entry.volume) != nil else {
+        guard liveScanBothVolume(matching: entry.volume) != nil,
+              PathValidator().validate(path: summary.mountPath, purpose: .source, allowsWhitespaceFallback: false).isUsable
+        else {
             requireRescan(for: summary.jobID)
             return false
         }
@@ -3072,7 +3250,7 @@ final class AppModel: ObservableObject {
             scanBothSession?.reviewingJobID = summary.jobID
             scanBothReviewDestinationAccess = entry.confirmation?.destinationAccess ?? []
             folderAccessFeedback = nil
-            currentResult = nil
+            currentImportReceipt = nil
             resetImportDraftFromDefaults()
             previewSessions = []
             workflowProfileWasManuallyChosenForCurrentJob = false
@@ -3116,6 +3294,7 @@ final class AppModel: ObservableObject {
         currentPreviewFiles = files
         useOriginalInsta360Folders = true
         knownImportedPreviewFileIDs = Self.knownImportedFileIDs(files: files, dedupeRepository: dedupeRepository)
+        refreshScanBothReviewHistory(files: files)
         applyRecommendationAfterScan(files: files, summary: summary)
         rebuildPreviewSessions(files: files, defaultLabel: summary.location)
         rebuildPreviewPlanCache()
@@ -3126,7 +3305,7 @@ final class AppModel: ObservableObject {
         scanBothSession?.reviewingJobID = nil
         folderAccessFeedback = nil
         currentSummary = nil
-        currentResult = nil
+        currentImportReceipt = nil
         importProgress = nil
         previewSessions = []
         currentPreviewFiles = []
@@ -3904,6 +4083,11 @@ final class AppModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func openImportInHistory(jobID: String) {
+        loadJobDetail(jobID: jobID)
+        selection = .history
     }
 
     func loadJobDetail(jobID: String) {
@@ -4771,11 +4955,12 @@ final class AppModel: ObservableObject {
     nonisolated private static func historySnapshot(
         databaseURL: URL,
         jobID: String
-    ) throws -> (jobs: [ImportJob], files: [JobFileRecord]) {
+    ) throws -> (jobs: [ImportJob], files: [JobFileRecord], job: ImportJob?) {
         let repositories = try makeRepositories(databaseURL: databaseURL)
         return (
             try repositories.jobRepository.listImportHistoryJobs(limit: 100),
-            try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+            try repositories.jobRepository.fetchJobFiles(jobID: jobID),
+            try repositories.jobRepository.fetchJob(id: jobID)
         )
     }
 
@@ -4808,6 +4993,20 @@ final class AppModel: ObservableObject {
                 return ((try? dedupeRepository.contains(fingerprint)) == true) ? id : nil
             }
         )
+    }
+
+    private func refreshScanBothReviewHistory(files: [JobFileRecord]) {
+        guard let entry = scanBothSession?.reviewingEntry, let summary = currentSummary,
+              let jobRepository, let dedupeRepository else {
+            scanBothReviewHistory = [:]
+            return
+        }
+        let engine = ImportEngine(
+            jobRepository: jobRepository, dedupeRepository: dedupeRepository,
+            portableReceiptsEnabled: portableImportReceiptsEnabled,
+            reviewedSourceFiles: entry.reviewedSourceFiles
+        )
+        scanBothReviewHistory = engine.refreshedReviewHistory(files: files, sourcePath: summary.mountPath)
     }
 
     private func loadStoredConfiguration() throws {
@@ -5175,7 +5374,7 @@ final class AppModel: ObservableObject {
         observer.start()
     }
 
-    private func invalidateScansAtUnmount(_ url: URL) {
+    func invalidateScansAtUnmount(_ url: URL) {
         let path = url.standardizedFileURL.path
         if activeCopySources?.noteUnmount(at: path) == true {
             importAttempt?.requestCancellation()

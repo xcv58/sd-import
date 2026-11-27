@@ -100,10 +100,17 @@ struct ManualImportView: View {
                             Spacer()
                             scanBothReviewActions(entry)
                         }
-                        if let result = entry.result {
-                            scanBothCopySummary(result)
+                        if model.ejectedSourceJobID == nil, session.removedMountPaths.contains(entry.volume.mountPath) {
+                            AppStatusLabel(
+                                title: L10n.tr("Card is not mounted"),
+                                systemImage: "exclamationmark.triangle",
+                                role: .warning
+                            )
                         }
-                        if case .complete(let summary, let filenames, _) = entry.state {
+                        if let result = entry.result {
+                            scanBothCopySummary(result, interruption: entry.copyInterruption)
+                        }
+                        if case .complete(let summary, let filenames, _, _) = entry.state {
                             let scannedPath = URL(fileURLWithPath: summary.mountPath, isDirectory: true)
                                 .standardizedFileURL.path
                             if scannedPath != entry.volume.mountPath {
@@ -192,8 +199,14 @@ struct ManualImportView: View {
     }
 
     @ViewBuilder
-    private func scanBothCopySummary(_ result: ImportResult) -> some View {
+    private func scanBothCopySummary(_ result: ImportResult, interruption: String?) -> some View {
         LabeledContent(L10n.tr("Copied"), value: L10n.tr("\(result.importedFiles) files"))
+        if result.failedFiles > 0 {
+            LabeledContent(L10n.tr("Failed"), value: L10n.tr("\(result.failedFiles) files"))
+        }
+        if let interruption {
+            AppStatusLabel(title: interruption, systemImage: "exclamationmark.triangle", role: .warning)
+        }
         if let warning = result.portableReceiptWarning {
             AppStatusLabel(
                 title: L10n.portableReceiptWarning(warning, sizeWarning: result.portableReceiptSizeWarning),
@@ -211,7 +224,7 @@ struct ManualImportView: View {
                 .foregroundStyle(.secondary)
         case .scanning:
             Text(L10n.tr("Scanning"))
-        case .complete(let summary, _, _):
+        case .complete(let summary, _, _, _):
             Text(L10n.tr("\(summary.scannedFiles) files scanned"))
                 .foregroundStyle(.secondary)
         case .skipped(let issue):
@@ -260,7 +273,8 @@ struct ManualImportView: View {
 
     @ViewBuilder
     private var completionPage: some View {
-        if let result = model.currentResult {
+        if let receipt = model.currentImportReceipt {
+            let result = receipt.result
             AppPage(status: model.folderAccessFeedback?.text, statusRole: .error) {
                 VStack(alignment: .leading, spacing: 18) {
                     phaseHeading(
@@ -273,7 +287,7 @@ struct ManualImportView: View {
                         ForEach(session.entries) { entry in
                             if let earlierResult = entry.result, earlierResult.jobID != result.jobID {
                                 AppSection(entry.volume.name, systemImage: "externaldrive") {
-                                    scanBothCopySummary(earlierResult)
+                                    scanBothCopySummary(earlierResult, interruption: entry.copyInterruption)
                                 }
                             }
                         }
@@ -281,7 +295,7 @@ struct ManualImportView: View {
                             Text(name).font(.headline)
                         }
                     }
-                    ImportResultView(result: result)
+                    ImportResultView(receipt: receipt)
                     scanBothBackButton
                 }
             }

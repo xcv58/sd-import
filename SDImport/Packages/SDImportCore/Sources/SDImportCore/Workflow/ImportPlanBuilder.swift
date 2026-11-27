@@ -121,6 +121,11 @@ public struct ImportFilePlan: Equatable, Sendable {
     }
 }
 
+public enum ImportHistoryMatch: Equatable, Sendable {
+    case unmatched
+    case known(KnownFileSource)
+}
+
 public struct ImportPlanBuilder: Sendable {
     public let sessions: [ImportPlanSession]
     public let mediaSelection: ImportMediaSelection
@@ -158,7 +163,7 @@ public struct ImportPlanBuilder: Sendable {
         plans(files: files).compactMap(\.update)
     }
 
-    public func plans(files: [JobFileRecord], knownImportedFileIDs: Set<Int64> = []) -> [ImportFilePlan] {
+    public func plans(files: [JobFileRecord], refreshedHistory: [Int64: ImportHistoryMatch] = [:]) -> [ImportFilePlan] {
         let groups = Insta360ClipDetector().groups(files: files)
         var recordingMasterBySourcePath: [String: JobFileRecord] = [:]
         var recordingIDBySourcePath: [String: String] = [:]
@@ -180,7 +185,7 @@ public struct ImportPlanBuilder: Sendable {
                 file: $0,
                 insta360RecordingMaster: recordingMasterBySourcePath[$0.sourcePath],
                 completedInsta360Folder: completedFolderBySourcePath[$0.sourcePath],
-                knownLocally: $0.id.map { knownImportedFileIDs.contains($0) } == true,
+                refreshedHistoryMatch: $0.id.flatMap { refreshedHistory[$0] },
                 reservedDestinationPaths: &reservedDestinationPaths
             )
         }
@@ -272,7 +277,7 @@ public struct ImportPlanBuilder: Sendable {
         file: JobFileRecord,
         insta360RecordingMaster: JobFileRecord?,
         completedInsta360Folder: URL? = nil,
-        knownLocally: Bool = false,
+        refreshedHistoryMatch: ImportHistoryMatch? = nil,
         reservedDestinationPaths: inout Set<String>
     ) -> ImportFilePlan {
         guard let id = file.id else {
@@ -367,9 +372,20 @@ public struct ImportPlanBuilder: Sendable {
                 update: nil, willCopy: false, disposition: .notReady, destinationPath: nil
             )
         }
-        let knownSource: KnownFileSource? = knownLocally ? .localLedger : file.knownSource
-        let knownFromImportHistory = recovery == nil
-            && (knownLocally || (file.decision == .known && file.knownSource != .destination))
+        let knownSource: KnownFileSource?
+        let historyMatched: Bool
+        switch refreshedHistoryMatch {
+        case .known(let source) where source != .portableLedger || file.portableReceiptOverride != true:
+            knownSource = source
+            historyMatched = true
+        case .unmatched, .known:
+            knownSource = nil
+            historyMatched = false
+        case nil:
+            knownSource = file.knownSource
+            historyMatched = file.decision == .known && file.knownSource != .destination
+        }
+        let knownFromImportHistory = recovery == nil && historyMatched
         if knownFromImportHistory && !isInsta360RecordingFile {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(

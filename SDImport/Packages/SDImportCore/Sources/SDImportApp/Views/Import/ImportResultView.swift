@@ -5,23 +5,21 @@ struct ImportResultView: View {
     @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
 
-    let result: ImportResult
-
-    private var job: ImportJob? {
-        model.selectedJob()
-    }
+    let receipt: CompletedImportReceipt
+    private var result: ImportResult { receipt.result }
+    private var job: ImportJob? { receipt.job }
 
     private var copiedFiles: [JobFileRecord] {
-        model.selectedJobFiles.filter { $0.copyStatus == .copied }
+        receipt.files.filter { $0.copyStatus == .copied }
     }
 
     private var totals: ImportReceiptTotals {
-        ImportReceiptTotals(files: model.selectedJobFiles)
+        ImportReceiptTotals(files: receipt.files)
     }
 
     private var folderSummaries: [ReceiptFolderSummary] {
         let unitIDBySourcePath = Insta360ClipDetector()
-            .unitIDBySourcePath(files: model.selectedJobFiles)
+            .unitIDBySourcePath(files: receipt.files)
         let grouped = Dictionary(grouping: copiedFiles) { file in
             file.finalDestinationPath.map {
                 URL(fileURLWithPath: $0, isDirectory: false).deletingLastPathComponent().path
@@ -174,7 +172,7 @@ struct ImportResultView: View {
             .disabled(job?.summaryMarkdownPath == nil && job?.summaryJSONPath == nil)
 
             Button {
-                model.selection = .history
+                model.openImportInHistory(jobID: result.jobID)
             } label: {
                 Label(L10n.tr("Open in History"), systemImage: "list.bullet.rectangle")
             }
