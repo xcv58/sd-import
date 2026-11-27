@@ -46,7 +46,9 @@ public struct ImportEngine {
     }
 
     private func isHistoryExcluded(_ file: JobFileRecord) -> Bool {
-        file.decision == .known && (file.knownSource == .localLedger || file.knownSource == .portableLedger)
+        file.reimportRequested != true
+            && file.decision == .known
+            && (file.knownSource == .localLedger || file.knownSource == .portableLedger)
     }
 
     private func verifyReviewedHistorySkips(files: [JobFileRecord], sourcePath: String) throws {
@@ -70,7 +72,7 @@ public struct ImportEngine {
                 .load().fingerprints) ?? []
             : []
         var matches: [Int64: ImportHistoryMatch] = [:]
-        for file in files where file.isPendingImport || isHistoryExcluded(file) {
+        for file in files where file.reimportRequested != true && (file.isPendingImport || isHistoryExcluded(file)) {
             guard let id = file.id else { continue }
             if isHistoryExcluded(file) { matches[id] = .unmatched }
             let localMatch = (try? dedupeRepository.contains(fingerprint(for: file, currentIdentity: nil))) == true
@@ -237,6 +239,7 @@ public struct ImportEngine {
             guard
                 portableReceiptsEnabled,
                 file.portableReceiptOverride != true,
+                file.reimportRequested != true,
                 let identity
             else {
                 return false
@@ -392,7 +395,7 @@ public struct ImportEngine {
                 portableIdentity = nil
             }
             let fingerprint = fingerprint(for: file, currentIdentity: portableIdentity)
-            if !isReviewedInsta360RescanMember(file),
+            if !isReviewedInsta360RescanMember(file), file.reimportRequested != true,
                try dedupeRepository.contains(fingerprint) || hasPortableReceipt(portableIdentity, file: file)
             {
                 if reviewedDestinations != nil { try stopForPlanChange() }
@@ -628,7 +631,8 @@ public struct ImportEngine {
             let fingerprint = fingerprint(for: file, currentIdentity: portableIdentity)
             refreshPortableFingerprints()
 
-            if !isReviewedInsta360RescanMember(file), try dedupeRepository.contains(fingerprint) {
+            if !isReviewedInsta360RescanMember(file), file.reimportRequested != true,
+               try dedupeRepository.contains(fingerprint) {
                 if reviewedDestinations != nil { try stopForPlanChange() }
                 markDone(file, status: .skipped)
                 processedBytes += file.size

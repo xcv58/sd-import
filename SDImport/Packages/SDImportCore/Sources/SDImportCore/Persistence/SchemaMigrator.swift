@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 public enum SchemaMigrator {
-    public static let currentUserVersion: Int32 = 9
+    public static let currentUserVersion: Int32 = 10
     public static let initialMigrationIdentifier = "v1_initial_schema"
     public static let identityScopedFingerprintMigrationIdentifier = "v2_identity_scoped_fingerprints"
     public static let knownFileSourceMigrationIdentifier = "v3_known_file_source"
@@ -13,6 +13,7 @@ public enum SchemaMigrator {
 
     private static let copyAttemptStateMigrationIdentifier = "v8_copy_attempt_state"
     private static let rescanOriginMigrationIdentifier = "v9_rescan_origin"
+    private static let importHistoryActionsMigrationIdentifier = "v10_import_history_actions"
 
     public static func makeMigrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
@@ -148,6 +149,15 @@ public enum SchemaMigrator {
             try db.execute(sql: """
                 ALTER TABLE jobs ADD COLUMN volume_mount_path TEXT;
                 ALTER TABLE jobs ADD COLUMN rescan_of_job_id TEXT;
+                """)
+            try db.execute(sql: "PRAGMA user_version = 9")
+        }
+
+        migrator.registerMigration(importHistoryActionsMigrationIdentifier) { db in
+            try db.execute(sql: """
+                ALTER TABLE jobs ADD COLUMN local_history_forgotten BOOLEAN NOT NULL DEFAULT 0;
+                CREATE INDEX idx_items_first_job ON items(first_job_id);
+                ALTER TABLE job_files ADD COLUMN reimport_requested BOOLEAN NOT NULL DEFAULT 0;
                 """)
             try db.execute(sql: "PRAGMA user_version = \(Self.currentUserVersion)")
         }

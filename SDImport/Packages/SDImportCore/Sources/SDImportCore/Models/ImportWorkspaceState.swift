@@ -15,7 +15,7 @@ public enum ImportOperationKind: String, Equatable, Sendable {
     case scan
     case prepareImport
     case copy
-    case portableReceiptOverride
+    case reimportSelection
     case eject
 }
 
@@ -89,7 +89,7 @@ public enum ImportWorkspaceTransition {
             return ImportWorkspaceSnapshot(phase: .scanning, activeOperation: .scan)
         case .scanSucceeded:
             guard snapshot.activeOperation == .scan
-                    || snapshot.activeOperation == .portableReceiptOverride
+                    || snapshot.activeOperation == .reimportSelection
             else { return snapshot }
             return ImportWorkspaceSnapshot(phase: .review)
         case .beginPreparation(let operation):
@@ -98,7 +98,7 @@ public enum ImportWorkspaceTransition {
                 snapshot.phase != .scanning,
                 snapshot.phase != .preparing,
                 snapshot.phase != .copying,
-                operation == .prepareImport || operation == .portableReceiptOverride
+                operation == .prepareImport || operation == .reimportSelection
             else { return snapshot }
             return ImportWorkspaceSnapshot(phase: .preparing, activeOperation: operation)
         case .beginCopy:

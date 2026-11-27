@@ -59,7 +59,9 @@ public struct JobRepository {
             let rows = try Row.fetchAll(
                 db,
                 sql: """
-                SELECT *
+                SELECT jobs.*, EXISTS (
+                    SELECT 1 FROM items WHERE first_job_id = jobs.job_id
+                ) AS has_local_import_records
                 FROM jobs
                 WHERE status != ?
                 ORDER BY COALESCE(completed_at, started_at, created_at) DESC
@@ -67,7 +69,17 @@ public struct JobRepository {
                 """,
                 arguments: [ImportJobStatus.scanned.databaseValue, limit]
             )
-            return try rows.map(decodeJob)
+            return try rows.map { row in
+                let localTracking: ImportJob.LocalTracking
+                if row["has_local_import_records"] as Bool {
+                    localTracking = .tracked
+                } else if row["local_history_forgotten"] as Bool {
+                    localTracking = .forgotten
+                } else {
+                    localTracking = .untracked
+                }
+                return try decodeJob(row, localTracking: localTracking)
+            }
         }
     }
 
@@ -107,18 +119,35 @@ public struct JobRepository {
     }
 
     public func fetchJobFiles(jobID: String) throws -> [JobFileRecord] {
-        try pool.read { db in
-            let rows = try Row.fetchAll(
-                db,
-                sql: "SELECT * FROM job_files WHERE job_id = ? ORDER BY id",
-                arguments: [jobID]
-            )
-            let paths = try Self.unverifiedDestinationPaths(db)
-            return try rows.map { row in
-                var file = try decodeJobFile(row)
-                file.unverifiedDestinationPaths = paths
-                return file
+        try pool.read { db in try fetchJobFiles(jobID: jobID, db: db) }
+    }
+
+    public func setReimportSelection(jobID: String, fileIDs: Set<Int64>, requested: Bool) throws -> [JobFileRecord] {
+        try pool.write { db in
+            for id in fileIDs {
+                try db.execute(
+                    sql: """
+                    UPDATE job_files SET reimport_requested = ?
+                    WHERE job_id = ? AND id = ? AND copy_status != ?
+                    """,
+                    arguments: [requested, jobID, id, CopyStatus.copied.databaseValue]
+                )
             }
+            return try fetchJobFiles(jobID: jobID, db: db)
+        }
+    }
+
+    private func fetchJobFiles(jobID: String, db: Database) throws -> [JobFileRecord] {
+        let rows = try Row.fetchAll(
+            db,
+            sql: "SELECT * FROM job_files WHERE job_id = ? ORDER BY id",
+            arguments: [jobID]
+        )
+        let paths = try Self.unverifiedDestinationPaths(db)
+        return try rows.map { row in
+            var file = try decodeJobFile(row)
+            file.unverifiedDestinationPaths = paths
+            return file
         }
     }
 
@@ -653,8 +682,9 @@ public struct JobRepository {
             INSERT INTO job_files (
                 job_id, src_path, rel_path, filename, ext, size, mtime, mtime_epoch_seconds,
                 media_type, hash, capture_date, decision, known_source, dest_dir,
-                dest_path, final_dest_path, copy_status, error, portable_receipt_override, completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                dest_path, final_dest_path, copy_status, error, portable_receipt_override, completed_at,
+                reimport_requested
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             arguments: [
                 file.jobID,
@@ -676,12 +706,17 @@ public struct JobRepository {
                 file.copyStatus.databaseValue,
                 file.error,
                 file.portableReceiptOverride ?? false,
-                DateCoding.optionalString(from: file.completedAt)
+                DateCoding.optionalString(from: file.completedAt),
+                file.reimportRequested ?? false
             ]
         )
     }
 
     private func decodeJob(_ row: Row) throws -> ImportJob {
+        try decodeJob(row, localTracking: nil)
+    }
+
+    private func decodeJob(_ row: Row, localTracking: ImportJob.LocalTracking?) throws -> ImportJob {
         let statusValue: String = row["status"]
         guard let status = ImportJobStatus(databaseValue: statusValue) else {
             throw SDImportError.invalidDatabaseValue(column: "status", value: statusValue)
@@ -711,7 +746,8 @@ public struct JobRepository {
             summaryMarkdownPath: row["summary_markdown_path"],
             appVersion: row["app_version"],
             volumeMountPath: row["volume_mount_path"],
-            rescanOfJobID: row["rescan_of_job_id"]
+            rescanOfJobID: row["rescan_of_job_id"],
+            localTracking: localTracking
         )
     }
 
@@ -751,7 +787,8 @@ public struct JobRepository {
             copyStatus: copyStatus,
             error: row["error"],
             portableReceiptOverride: row["portable_receipt_override"],
-            completedAt: DateCoding.date(from: row["completed_at"])
+            completedAt: DateCoding.date(from: row["completed_at"]),
+            reimportRequested: row["reimport_requested"]
         )
     }
 }

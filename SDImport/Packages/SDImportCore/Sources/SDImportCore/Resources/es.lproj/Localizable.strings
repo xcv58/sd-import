@@ -60,10 +60,15 @@
 "Allow %@ in System Settings → General → Login Items & Extensions." = "Permita %1$@ en Ajustes del Sistema → General → Ítems de inicio y extensiones.";
 "Allow Access" = "Permitir acceso";
 "Allow Access & Scan" = "Permitir acceso y analizar";
+"Clear Re-import Selection" = "Borrar selección de reimportación";
 "Confirm Plan" = "Confirmar plan";
 "Confirms this volume for Start Imports" = "Confirma este volumen para iniciar las importaciones";
+"Could not update re-import selection: %@" = "No se pudo actualizar la selección de reimportación: %@";
 "Edit Plan" = "Editar plan";
+"Include All Previously Imported Files" = "Incluir todos los archivos importados anteriormente";
+"Skip Again" = "Volver a omitir";
 "Start Imports" = "Iniciar importaciones";
+"Updating re-import selection…" = "Actualizando la selección de reimportación…";
 "macOS needs your permission to read this source." = "macOS necesita su permiso para leer este origen.";
 "Allow Access to %@" = "Permitir acceso a %1$@";
 "Allow Access to Source" = "Permitir acceso al origen";
@@ -247,6 +252,7 @@
 "Forget imported files?" = "¿Olvidar archivos importados?";
 "Forgot %lld imported files" = "Se olvidaron %1$lld archivos importados";
 "Forgot 1 imported file" = "Se olvidó 1 archivo importado";
+"Forgotten on this Mac" = "Olvidado en este Mac";
 "General" = "General";
 "Grid" = "Cuadrícula";
 "Helper build %@ · last started %@" = "Versión del asistente %1$@ · Último inicio %2$@";

@@ -85,7 +85,6 @@ struct HistoryView: View {
                             HistoryRow(job: job)
                             .tag(job.id)
                             .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
-                            .accessibilityLabel("\(HistoryJobPresentation.title(for: job)), \(HistoryJobPresentation.subtitle(for: job))")
                         }
                     }
                     .listStyle(.inset)
@@ -175,11 +174,17 @@ private struct HistoryRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                if let localTrackingStatus = HistoryJobPresentation.localTrackingStatus(for: job) {
+                    Text(localTrackingStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }

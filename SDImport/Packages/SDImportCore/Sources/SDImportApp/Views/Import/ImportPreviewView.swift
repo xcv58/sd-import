@@ -190,7 +190,7 @@ struct ImportPreviewView: View {
                 sessionControls
             }
 
-            portableReceiptOverride
+            reimportControls
             destinationTree
 
             if let warning = selectedMediaAvailabilityMessage {
@@ -490,38 +490,26 @@ struct ImportPreviewView: View {
     }
 
     @ViewBuilder
-    private var portableReceiptOverride: some View {
-        let count = model.previewRows.filter(\.isPortableKnown).count
-        if count > 0 {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    portableReceiptLabel(count: count)
-                    Button(L10n.tr("Import Anyway")) {
-                        model.importPortableKnownFilesAnyway()
+    private var reimportControls: some View {
+        let eligible = model.previewRows.filter(\.canReimport)
+        let selected = model.previewRows.filter(\.canSkipReimport)
+        if !eligible.isEmpty || !selected.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                if !eligible.isEmpty {
+                    Button(L10n.tr("Include All Previously Imported Files")) {
+                        model.setReimportSelection(Set(eligible.map(\.id)), requested: true)
                     }
                     .buttonStyle(.bordered)
+                    .accessibilityIdentifier("import.review.reimport-all")
                 }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    portableReceiptLabel(count: count)
-                    Button(L10n.tr("Import Anyway")) {
-                        model.importPortableKnownFilesAnyway()
+                if !selected.isEmpty {
+                    Button(L10n.tr("Clear Re-import Selection")) {
+                        model.setReimportSelection(Set(selected.map(\.id)), requested: false)
                     }
                     .buttonStyle(.bordered)
                 }
             }
         }
-    }
-
-    private func portableReceiptLabel(count: Int) -> some View {
-        AppStatusLabel(
-            title: count == 1
-                ? L10n.tr("1 file was imported on another Mac")
-                : L10n.tr("\(count) files were imported on another Mac"),
-            systemImage: "externaldrive.badge.checkmark",
-            role: .neutral
-        )
-        .font(.caption)
     }
 
     @ViewBuilder
@@ -574,7 +562,7 @@ struct ImportPreviewView: View {
                 sessionControls
             }
 
-            portableReceiptOverride
+            reimportControls
 
             HStack(spacing: 8) {
                 if canRecoverPhotos {
@@ -738,6 +726,9 @@ struct ImportPreviewView: View {
                             item: item,
                             destinationText: destinationText(for: item.primaryRow)
                         )
+                        .contextMenu {
+                            ReimportSelectionActions(rows: item.rows)
+                        }
                     }
                     .disclosureGroupStyle(FullWidthDisclosureGroupStyle())
                     .padding(.horizontal, 10)
@@ -799,6 +790,9 @@ struct ImportPreviewView: View {
                     selectedRowID = item.primaryRow.id
                     presentQuickLook(for: item.primaryRow)
                     return .handled
+                }
+                .contextMenu {
+                    ReimportSelectionActions(rows: item.rows)
                 }
                 .accessibilityHint(L10n.tr("Press Space for Quick Look"))
                 .accessibilityIdentifier("import.review.grid-item.\(item.primaryRow.id)")
@@ -1059,6 +1053,7 @@ struct ImportPreviewView: View {
                 selectedRowID = row.id
                 presentQuickLook(for: row)
             }
+            ReimportSelectionActions(rows: [row])
         }
         .accessibilityHint(L10n.tr("Press Space for Quick Look"))
     }
@@ -1665,6 +1660,8 @@ private struct ImportFileInspector: View {
                     .font(.headline)
                     .textSelection(.enabled)
                 PreviewStatusBadge(row: row)
+                ReimportSelectionActions(rows: [row])
+                    .buttonStyle(.bordered)
 
                 inspectorField(L10n.tr("Type"), value: row.mediaKind.displayTitle)
                 inspectorField(L10n.tr("Capture Date"), value: L10n.storedMessage(row.date))
@@ -1708,14 +1705,28 @@ private struct ImportFileInspector: View {
     }
 }
 
-private extension ImportPreviewRow {
-    var isPortableKnown: Bool {
-        if case .known(let source) = disposition {
-            return source == .portableLedger
-        }
-        return false
-    }
+private struct ReimportSelectionActions: View {
+    @EnvironmentObject private var model: AppModel
+    let rows: [ImportPreviewRow]
 
+    var body: some View {
+        let eligible = rows.filter(\.canReimport)
+        let selected = rows.filter(\.canSkipReimport)
+        if !eligible.isEmpty {
+            Button(L10n.tr("Import Anyway")) {
+                model.setReimportSelection(Set(eligible.map(\.id)), requested: true)
+            }
+            .accessibilityIdentifier("import.review.reimport-selection")
+        }
+        if !selected.isEmpty {
+            Button(L10n.tr("Skip Again")) {
+                model.setReimportSelection(Set(selected.map(\.id)), requested: false)
+            }
+        }
+    }
+}
+
+private extension ImportPreviewRow {
     var isKnown: Bool {
         switch disposition {
         case .known, .alreadyExists, .copied:

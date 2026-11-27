@@ -10,6 +10,10 @@ enum HistoryJobPresentation {
         L10n.tr("\(statusTitle(for: job)) · \(job.importedFiles) copied · \(job.skippedFiles) skipped · \(job.failedFiles) failed")
     }
 
+    static func localTrackingStatus(for job: ImportJob) -> String? {
+        job.localTracking == .forgotten ? L10n.tr("Forgotten on this Mac") : nil
+    }
+
     static func timestamp(for job: ImportJob) -> String {
         let date = job.completedAt ?? job.startedAt ?? job.createdAt
         return date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(L10n.presentationLocale))

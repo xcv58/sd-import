@@ -550,6 +550,7 @@ struct ScanBothSessionTests {
 
     enum CopyScenario: Sendable, Equatable {
         case bothSucceed
+        case reimportKnownFile
         case receiptAfterHistoryNavigation
         case firstCopyChangesSecondPlan
         case destinationChangesInWorker
@@ -601,7 +602,8 @@ struct ScanBothSessionTests {
         let replacesParent = scenario == .nestedDestinationReplacedAfterPartialCopy
         let stopsDuringFirstFile = scenario == .cancelDuringFirstCopy || scenario == .unmountDuringFirstCopy
         let hasLaterFile = scenario == .unmountDuringCopy || scenario == .destinationReplacedAfterPartialCopy || replacesParent
-        let testsHistoryExclusion = scenario == .sourceChangesWithPortableHistory || scenario == .knownSourceChangesBeforeStart
+        let testsHistoryExclusion = scenario == .sourceChangesWithPortableHistory
+            || scenario == .knownSourceChangesBeforeStart || scenario == .reimportKnownFile
         let needsSecondInternalFile = hasLaterFile || testsHistoryExclusion || scenario == .receiptAfterHistoryNavigation
         let secondFile = cardFolder.appendingPathComponent(scenario == .firstCopyChangesSecondPlan ? "Shared.jpg" : "Card.jpg")
         try Data("internal image".utf8).write(to: firstFile)
@@ -725,6 +727,13 @@ struct ScanBothSessionTests {
                 try #require(model.previewRows.contains { $0.disposition == .known(.portableLedger) })
                 try #require(model.previewRows.contains { $0.willCopy })
             }
+            if scenario == .reimportKnownFile, entry.volume == first {
+                let known = try #require(model.previewRows.first { $0.canReimport })
+                model.setReimportSelection([known.id], requested: true)
+                try await waitForImport(model)
+                #expect(model.previewRows.first { $0.id == known.id }?.willCopy == true)
+                #expect(model.scanBothSession?.entries[1].confirmation != nil)
+            }
             if (scenario == .firstVolumeDisconnectsBeforeSecond || scenario == .receiptAfterHistoryNavigation),
                entry.volume == first {
                 let customDestination = root.appendingPathComponent("CustomDestination")
@@ -792,6 +801,8 @@ struct ScanBothSessionTests {
         case .bothSucceed:
             #expect(after.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
             #expect(after.allowsAutomaticEjection)
+        case .reimportKnownFile:
+            #expect(after.entries.compactMap(\.result).map(\.importedFiles) == [2, 1])
         case .receiptAfterHistoryNavigation:
             let firstJobID = try #require(after.entries[0].jobID)
             let secondJobID = try #require(after.entries[1].jobID)
@@ -940,6 +951,11 @@ struct ScanBothSessionTests {
             model.destinationPathDidChange(clearFeedback: !model.isReviewingScanBothVolume)
             #expect(model.folderAccessFeedback?.text.contains(first.name) == true)
         }
+    }
+
+    @Test("Scan Both imports a reselected file and preserves the sibling confirmation")
+    func reimportsKnownFileInBatch() async throws {
+        try await startsBatchThroughAppModel(.reimportKnownFile)
     }
 
     private func waitForImport(_ model: AppModel) async throws {

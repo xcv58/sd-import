@@ -195,9 +195,13 @@ struct RepositoryTests {
                 location: "TEST",
                 photosRoot: "/tmp/photos",
                 videosRoot: "/tmp/videos",
-                status: .imported
+                status: .imported,
+                importedFiles: 1
             )
         )
+        #expect(try jobRepository.listImportHistoryJobs().first?.localTracking == .untracked)
+        #expect(try dedupeRepository.forgetImportedFiles(jobID: "job-1") == 0)
+        #expect(try jobRepository.listImportHistoryJobs().first?.localTracking == .untracked)
         try jobRepository.insertJobFile(
             JobFileRecord(
                 jobID: "job-1",
@@ -224,8 +228,15 @@ struct RepositoryTests {
         )
 
         #expect(try dedupeRepository.contains(fingerprint))
+        #expect(try jobRepository.listImportHistoryJobs().first?.localTracking == .tracked)
         #expect(try dedupeRepository.forgetImportedFiles(jobID: "job-1") == 1)
         #expect(try dedupeRepository.contains(fingerprint) == false)
+        #expect(try dedupeRepository.forgetImportedFiles(jobID: "job-1") == 0)
+        let historyJob = try #require(jobRepository.listImportHistoryJobs().first)
+        #expect(historyJob.localTracking == .forgotten)
+        #expect(historyJob.status == .imported)
+        #expect(historyJob.importedFiles == 1)
+        #expect(try jobRepository.fetchJobFiles(jobID: "job-1").first?.copyStatus == .copied)
     }
 
     @Test("forgetting a job keeps fingerprints first imported by other jobs")

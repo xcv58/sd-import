@@ -21,6 +21,7 @@ public struct JobFileRecord: Identifiable, Hashable, Codable, Sendable {
     public let copyStatus: CopyStatus
     public let error: String?
     public let portableReceiptOverride: Bool?
+    public let reimportRequested: Bool?
     public let completedAt: Date?
     var unverifiedDestinationPaths: Set<String> = []
 
@@ -30,7 +31,7 @@ public struct JobFileRecord: Identifiable, Hashable, Codable, Sendable {
         case modificationTimeEpochSeconds, mediaKind, fingerprint, captureDate
         case decision, knownSource, destinationDirectory, plannedDestinationPath
         case finalDestinationPath, copyStatus, error, portableReceiptOverride
-        case completedAt
+        case completedAt, reimportRequested
     }
 
     public var isPendingImport: Bool {
@@ -58,7 +59,8 @@ public struct JobFileRecord: Identifiable, Hashable, Codable, Sendable {
         copyStatus: CopyStatus,
         error: String? = nil,
         portableReceiptOverride: Bool? = nil,
-        completedAt: Date? = nil
+        completedAt: Date? = nil,
+        reimportRequested: Bool? = nil
     ) {
         self.id = id
         self.jobID = jobID
@@ -81,5 +83,6 @@ public struct JobFileRecord: Identifiable, Hashable, Codable, Sendable {
         self.error = error
         self.portableReceiptOverride = portableReceiptOverride
         self.completedAt = completedAt
+        self.reimportRequested = reimportRequested
     }
 }

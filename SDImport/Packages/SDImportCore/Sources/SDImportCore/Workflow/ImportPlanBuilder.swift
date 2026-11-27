@@ -385,7 +385,7 @@ public struct ImportPlanBuilder: Sendable {
             knownSource = file.knownSource
             historyMatched = file.decision == .known && file.knownSource != .destination
         }
-        let knownFromImportHistory = recovery == nil && historyMatched
+        let knownFromImportHistory = recovery == nil && historyMatched && file.reimportRequested != true
         if knownFromImportHistory && !isInsta360RecordingFile {
             return ImportFilePlan(
                 update: JobFilePlanUpdate(

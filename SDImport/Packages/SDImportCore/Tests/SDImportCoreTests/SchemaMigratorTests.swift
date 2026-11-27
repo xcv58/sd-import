@@ -71,20 +71,25 @@ struct SchemaMigratorTests {
 
         try SchemaMigrator.migrate(pool)
 
-        let values = try pool.read { db -> (Int64?, Bool) in
+        let values = try pool.read { db -> (Int64?, Bool, Bool) in
             guard let row = try Row.fetchOne(db, sql: "SELECT * FROM job_files LIMIT 1") else {
                 throw CocoaError(.fileReadCorruptFile)
             }
-            return (row["mtime_epoch_seconds"], row["portable_receipt_override"])
+            return (row["mtime_epoch_seconds"], row["portable_receipt_override"], row["reimport_requested"])
         }
         #expect(values.0 == nil)
         #expect(values.1 == false)
+        #expect(values.2 == false)
         let repository = JobRepository(pool: pool)
         #expect(try repository.needsDestinationReview(jobID: "legacy-job") == false)
         let migratedJob = try repository.fetchJob(id: "legacy-job")
         let legacyJob = try #require(migratedJob)
         #expect(legacyJob.volumeMountPath == nil)
         #expect(legacyJob.rescanOfJobID == nil)
+        let recordedAsForgotten = try pool.read { db in
+            try Bool.fetchOne(db, sql: "SELECT local_history_forgotten FROM jobs WHERE job_id = 'legacy-job'")
+        }
+        #expect(recordedAsForgotten == false)
     }
 
     @Test("preserves unresolved copy evidence from the earlier journal schema")

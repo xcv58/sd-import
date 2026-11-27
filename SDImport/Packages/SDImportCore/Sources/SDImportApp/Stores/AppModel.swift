@@ -319,6 +319,16 @@ struct ImportPreviewRow: Identifiable, Hashable {
     var status: String { disposition.title }
     let willCopy: Bool
     let size: Int64
+    let reimportRequested: Bool
+
+    var canReimport: Bool {
+        if case .known(let source) = disposition { return source != .destination }
+        return false
+    }
+
+    var canSkipReimport: Bool {
+        reimportRequested && disposition != .copied
+    }
 }
 
 struct ImportPreviewTotals: Hashable {
@@ -376,7 +386,7 @@ private struct SourceEjectionTarget: Sendable {
 }
 
 private enum ImportRetryContext {
-    case portableReceiptOverride
+    case reimportSelection(jobID: String, fileIDs: Set<Int64>, requested: Bool)
     case eject(jobID: String, target: SourceEjectionTarget)
 }
 
@@ -2098,7 +2108,8 @@ final class AppModel: ObservableObject {
                 visualGroupID: visualGroups[id]?.id,
                 visualGroupKind: visualGroups[id]?.kind,
                 willCopy: plan.willCopy,
-                size: file.size
+                size: file.size,
+                reimportRequested: file.reimportRequested == true
             )
         }
     }
@@ -2275,7 +2286,7 @@ final class AppModel: ObservableObject {
     }
 
     private func isKnownImportedFile(_ row: ImportPreviewRow) -> Bool {
-        knownImportedPreviewFileIDs.contains(row.id)
+        !row.reimportRequested && knownImportedPreviewFileIDs.contains(row.id)
             && insta360RescanRecovery?.includes(sourcePath: row.sourcePath) != true
     }
 
@@ -2395,73 +2406,50 @@ final class AppModel: ObservableObject {
         return (builder, plans)
     }
 
-    func importPortableKnownFilesAnyway() {
-        guard !isWorking, !isEjectingSource else {
-            statusMessage = L10n.tr("Finish the current scan or import first")
-            return
-        }
-        guard let jobID = currentSummary?.jobID, let databaseURL else {
-            statusMessage = L10n.tr("No scanned job selected")
-            return
-        }
+    func setReimportSelection(_ fileIDs: Set<Int64>, requested: Bool) {
+        guard !isWorking, !isEjectingSource, importUIPhase == .review,
+              let jobID = currentSummary?.jobID, let databaseURL else { return }
 
-        let portableOverrideIDs = Set(
-            previewRows.compactMap { row in
-                if case .known(.portableLedger) = row.disposition {
-                    return row.id
-                }
-                return nil
-            }
-        )
-        let updates = currentPreviewFiles.compactMap { file -> JobFilePlanUpdate? in
-            guard
-                let id = file.id,
-                portableOverrideIDs.contains(id)
-            else {
-                return nil
-            }
-            return JobFilePlanUpdate(
-                id: id,
-                decision: .new,
-                destinationDirectory: nil,
-                plannedDestinationPath: nil,
-                copyStatus: .pending,
-                error: nil,
-                portableReceiptOverride: true
-            )
-        }
-        guard !updates.isEmpty else {
-            return
-        }
+        // Treat a multi-lens recording as one selection, even from a single lens row.
+        let recordings = Set(previewRows.compactMap { row in
+            fileIDs.contains(row.id) && row.visualGroupKind == .insta360Clip ? row.visualGroupID : nil
+        })
+        let selectedIDs = Set(previewRows.compactMap { row -> Int64? in
+            guard requested ? row.canReimport : row.canSkipReimport else { return nil }
+            let selectedRecording = row.visualGroupKind == .insta360Clip
+                && row.visualGroupID.map(recordings.contains) == true
+            return fileIDs.contains(row.id) || selectedRecording ? row.id : nil
+        })
+        guard !selectedIDs.isEmpty else { return }
 
         let attemptID = beginImportAttempt(
-            .portableReceiptOverride, event: .beginPreparation(.portableReceiptOverride),
-            retryContext: .portableReceiptOverride
+            .reimportSelection, event: .beginPreparation(.reimportSelection),
+            retryContext: .reimportSelection(jobID: jobID, fileIDs: selectedIDs, requested: requested)
         )
-        statusMessage = L10n.tr("Preparing files imported on another Mac...")
+        statusMessage = L10n.tr("Updating re-import selection…")
         importTask = Task.detached(priority: .userInitiated) {
             do {
                 try Task.checkCancellation()
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
-                try Task.checkCancellation()
                 guard let files = try repositories.jobRepository.withImportLock(jobID: jobID, {
                     try Task.checkCancellation()
-                    try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: updates)
-                    return try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                    return try repositories.jobRepository.setReimportSelection(
+                        jobID: jobID, fileIDs: selectedIDs, requested: requested
+                    )
                 }) else {
                     throw SDImportError.invalidArgument(L10n.tr("Finish the current scan or import first"))
                 }
-                let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
 
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
+                    self.scanBothSession?.setConfirmation(nil, for: jobID)
                     self.refreshScanBothReviewHistory(files: files)
                     self.currentPreviewFiles = files
-                    self.selectedJobFiles = files
-                    self.jobs = jobs
+                    if self.selectedJobID == jobID {
+                        self.selectedJobFiles = files
+                    }
                     self.rebuildPreviewPlanCache()
-                    let count = updates.count
-                    self.setLocalizedStatusMessage { L10n.tr("Portable receipt overridden for \(count) files") }
+                    self.statusMessage = ""
                     self.finishImportAttempt(attemptID, event: .scanSucceeded)
                 }
             } catch is CancellationError {
@@ -2472,13 +2460,13 @@ final class AppModel: ObservableObject {
             } catch {
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
-                    let render: () -> String = {
-                        L10n.tr("Could not override portable history: \(Self.errorMessage(for: error))")
+                    let render = {
+                        L10n.tr("Could not update re-import selection: \(Self.errorMessage(for: error))")
                     }
                     self.setLocalizedStatusMessage(render)
                     let message = self.statusMessage
                     self.finishImportAttempt(
-                        attemptID, event: .failed(operation: .portableReceiptOverride, message: message),
+                        attemptID, event: .failed(operation: .reimportSelection, message: message),
                         failureRenderer: render
                     )
                 }
@@ -2918,9 +2906,11 @@ final class AppModel: ObservableObject {
         let retryContext = failedImportRetryContext
         failedImportRetryContext = nil
         switch retryContext {
-        case .portableReceiptOverride:
-            transitionImportWorkspace(.recover(hasScannedJob: true))
-            importPortableKnownFilesAnyway()
+        case .reimportSelection(let jobID, let fileIDs, let requested):
+            recoverImportWorkspace()
+            if currentSummary?.jobID == jobID {
+                setReimportSelection(fileIDs, requested: requested)
+            }
             return
         case .eject(let jobID, let target):
             transitionImportWorkspace(
@@ -2938,11 +2928,8 @@ final class AppModel: ObservableObject {
         case .scan:
             transitionImportWorkspace(.recover(hasScannedJob: false))
             scan()
-        case .prepareImport, .copy:
+        case .prepareImport, .copy, .reimportSelection:
             recoverImportWorkspace()
-        case .portableReceiptOverride:
-            transitionImportWorkspace(.recover(hasScannedJob: true))
-            importPortableKnownFilesAnyway()
         case .eject:
             recoverImportWorkspace()
         case nil:
@@ -4453,27 +4440,13 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func forgetImportedFiles(for job: ImportJob) {
+    func forgetImportedFiles(for job: ImportJob) throws {
         guard let dedupeRepository else {
-            statusMessage = L10n.tr("Import history is not ready")
-            return
+            throw SDImportError.invalidArgument(L10n.tr("Import history is not ready"))
         }
 
-        do {
-            let deleted = try dedupeRepository.forgetImportedFiles(jobID: job.id)
-            refreshHistory()
-            if selectedJobID == job.id {
-                loadJobDetail(jobID: job.id)
-            }
-            if deleted == 1 {
-                statusMessage = L10n.tr("Forgot 1 imported file")
-            } else {
-                setLocalizedStatusMessage { L10n.tr("Forgot \(deleted) imported files") }
-            }
-        } catch {
-            let detail = Self.errorMessage(for: error)
-            setLocalizedStatusMessage { L10n.tr("Could not forget imported files: \(detail)") }
-        }
+        try dedupeRepository.forgetImportedFiles(jobID: job.id)
+        refreshHistory()
     }
 
     func selectedJob() -> ImportJob? {
