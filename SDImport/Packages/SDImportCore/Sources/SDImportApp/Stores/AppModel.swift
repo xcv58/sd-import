@@ -18,10 +18,14 @@ struct CompletedImportReceipt {
 }
 
 struct ScanBothSession {
+    struct Draft {
+        let settings: ImportDraft
+        let destinationAccess: [SecurityScopedResourceAccess]
+    }
+
     struct Confirmation: Sendable {
         let draft: ImportDraft
         let plans: [ImportFilePlan]
-        let destinationAccess: [SecurityScopedResourceAccess]
         let destinations: ReviewedImportDestinations
     }
 
@@ -44,6 +48,7 @@ struct ScanBothSession {
         var state: State = .waiting
         var disposition: Disposition = .pending
         var hasStartedImport = false
+        var draft: Draft?
         var confirmation: Confirmation?
         var result: ImportResult?
         var copyInterruption: String?
@@ -149,6 +154,16 @@ struct ScanBothSession {
         entries[index].confirmation = confirmation
     }
 
+    mutating func saveDraft(_ draft: Draft, for jobID: String) {
+        guard let index = entries.firstIndex(where: { $0.jobID == jobID && $0.awaitsImport }),
+              !removedMountPaths.contains(entries[index].volume.mountPath)
+        else { return }
+        entries[index].draft = draft
+        if entries[index].confirmation?.draft != draft.settings {
+            entries[index].confirmation = nil
+        }
+    }
+
     var issueIfNoVolumeScanned: ScanBothIssue? {
         guard entries.allSatisfy({ $0.summary == nil }) else { return nil }
         for entry in entries {
@@ -160,6 +175,7 @@ struct ScanBothSession {
     mutating func noteUnmount(at path: String) -> String? {
         guard let index = entries.firstIndex(where: { $0.volume.mountPath == path }) else { return nil }
         removedMountPaths.insert(path)
+        entries[index].draft = nil
         entries[index].confirmation = nil
         return entries[index].jobID
     }
@@ -174,7 +190,10 @@ struct ScanBothSession {
         guard let index = entries.firstIndex(where: { $0.jobID == result.jobID }) else { return }
         entries[index].result = result
         entries[index].copyInterruption = nil
-        if result.failedFiles == 0 { entries[index].disposition = .imported }
+        if result.failedFiles == 0 {
+            entries[index].disposition = .imported
+            entries[index].draft = nil
+        }
     }
 
     mutating func recordInterruptedImport(
@@ -195,6 +214,7 @@ struct ScanBothSession {
     mutating func skipEntry(_ id: UUID) {
         guard let index = entries.firstIndex(where: { $0.id == id && $0.canSkip }) else { return }
         entries[index].disposition = .skipped
+        entries[index].draft = nil
         entries[index].confirmation = nil
     }
 
@@ -785,6 +805,7 @@ final class AppModel: ObservableObject {
     }
     @Published private var importAttempt: ImportWorkspaceAttempt?
     var isWorking: Bool { importAttempt.map { $0.operation != .eject } ?? false }
+    var canCancelReimportSelection: Bool { reimportSelectionCancellation?.canCancel == true }
     var isEjectingSource: Bool { importAttempt?.operation == .eject }
     @Published private(set) var ejectedSourceJobID: String?
     @Published private(set) var ejectedSourceName: String?
@@ -816,6 +837,7 @@ final class AppModel: ObservableObject {
     private var bookmarkStore: BookmarkStore?
     private var folderAccesses: [BookmarkPurpose: SecurityScopedResourceAccess] = [:]
     private var importTask: Task<Void, Never>?
+    private var reimportSelectionCancellation: ReimportSelectionCancellation?
     private var isRunningScanBothImports = false
     private var scanBothReviewDestinationAccess: [SecurityScopedResourceAccess] = []
     @Published private var activeCopySources: ActiveCopySources?
@@ -2334,15 +2356,11 @@ final class AppModel: ObservableObject {
                 showFolderAccessError { L10n.tr("The destination folder is unavailable.") }
                 return
             }
-            var grantedPaths: Set<String> = []
-            let destinationAccess = ([folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }
-                + scanBothReviewDestinationAccess).filter {
-                $0.isActive && grantedPaths.insert($0.url.standardizedFileURL.path).inserted
-            }
+            let draft = currentScanBothDraft
+            scanBothSession?.saveDraft(draft, for: jobID)
             scanBothSession?.setConfirmation(
                 .init(
-                    draft: currentImportDraft, plans: plan.files,
-                    destinationAccess: destinationAccess, destinations: destinations
+                    draft: draft.settings, plans: plan.files, destinations: destinations
                 ),
                 for: jobID
             )
@@ -2433,6 +2451,8 @@ final class AppModel: ObservableObject {
         })
         guard !selectedIDs.isEmpty else { return }
 
+        let cancellation = ReimportSelectionCancellation()
+        reimportSelectionCancellation = cancellation
         let attemptID = beginImportAttempt(
             .reimportSelection, event: .beginAuxiliaryOperation(.reimportSelection)
         )
@@ -2444,7 +2464,7 @@ final class AppModel: ObservableObject {
                 guard let files = try repositories.jobRepository.withImportLock(jobID: jobID, {
                     try Task.checkCancellation()
                     return try repositories.jobRepository.setReimportSelection(
-                        jobID: jobID, fileIDs: selectedIDs, requested: requested
+                        jobID: jobID, fileIDs: selectedIDs, requested: requested, cancellation: cancellation
                     )
                 }) else {
                     throw SDImportError.invalidArgument(L10n.tr("Finish the current scan or import first"))
@@ -2452,13 +2472,17 @@ final class AppModel: ObservableObject {
 
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
-                    self.scanBothSession?.setConfirmation(nil, for: jobID)
                     self.refreshScanBothReviewHistory(files: files)
                     self.currentPreviewFiles = files
                     if self.selectedJobID == jobID {
                         self.selectedJobFiles = files
                     }
                     self.rebuildPreviewSessions(files: files, defaultLabel: self.location)
+                    if self.scanBothSession?.reviewingJobID == jobID {
+                        let draft = self.currentScanBothDraft
+                        self.scanBothSession?.saveDraft(draft, for: jobID)
+                        self.scanBothSession?.setConfirmation(nil, for: jobID)
+                    }
                     self.statusMessage = ""
                     self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                 }
@@ -2816,6 +2840,7 @@ final class AppModel: ObservableObject {
 
     func cancelImport() {
         guard importTask != nil, importAttempt?.operation != .eject else { return }
+        if let reimportSelectionCancellation, !reimportSelectionCancellation.cancel() { return }
         activeCopySources?.noteUserCancellation()
         importAttempt?.requestCancellation()
         statusMessage = L10n.tr("Cancelling...")
@@ -2858,6 +2883,7 @@ final class AppModel: ObservableObject {
         }
         activeCopySources = nil
         activeImportRetryContext = nil
+        reimportSelectionCancellation = nil
         if attempt.operation == .eject {
             sourceEjectionTask = nil
         } else {
@@ -3235,14 +3261,14 @@ final class AppModel: ObservableObject {
                 return false
             }
             scanBothSession?.reviewingJobID = summary.jobID
-            scanBothReviewDestinationAccess = entry.confirmation?.destinationAccess ?? []
+            scanBothReviewDestinationAccess = entry.draft?.destinationAccess ?? []
             folderAccessFeedback = nil
             currentImportReceipt = nil
             resetImportDraftFromDefaults()
             previewSessions = []
             workflowProfileWasManuallyChosenForCurrentJob = false
             loadScanPreview(summary, files: files, dedupeRepository: dedupeRepository)
-            if let draft = entry.confirmation?.draft {
+            if let draft = entry.draft?.settings {
                 photosPath = draft.photosPath
                 videosPath = draft.videosPath
                 location = draft.shootName
@@ -3289,7 +3315,9 @@ final class AppModel: ObservableObject {
     }
 
     func returnToScanBothResults() {
-        guard isReviewingScanBothVolume, !isWorking, !isEjectingSource else { return }
+        guard let jobID = scanBothSession?.reviewingJobID, !isWorking, !isEjectingSource else { return }
+        let draft = currentScanBothDraft
+        scanBothSession?.saveDraft(draft, for: jobID)
         scanBothSession?.reviewingJobID = nil
         folderAccessFeedback = nil
         currentSummary = nil
@@ -3303,6 +3331,18 @@ final class AppModel: ObservableObject {
         clearPreviewPlanCache()
         resetImportDraftFromDefaults()
         transitionImportWorkspace(.recover(hasScannedJob: true))
+    }
+
+    private var currentScanBothDraft: ScanBothSession.Draft {
+        let roots = effectiveDestinationRoots
+        var grantedPaths: Set<String> = []
+        let destinationAccess = ([folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }
+            + scanBothReviewDestinationAccess).filter { access in
+            access.isActive
+                && [roots.photosURL, roots.videosURL].contains { Self.isSameOrDescendant($0, of: access.url) }
+                && grantedPaths.insert(access.url.standardizedFileURL.path).inserted
+        }
+        return ScanBothSession.Draft(settings: currentImportDraft, destinationAccess: destinationAccess)
     }
 
     func skipScanBothImport(_ entryID: UUID) {

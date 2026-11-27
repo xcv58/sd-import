@@ -164,6 +164,7 @@ struct ImportPreviewView: View {
                     model.cancelImport()
                 }
                 .buttonStyle(.bordered)
+                .disabled(!model.canCancelReimportSelection)
             }
 
             if model.isReviewingScanBothVolume {

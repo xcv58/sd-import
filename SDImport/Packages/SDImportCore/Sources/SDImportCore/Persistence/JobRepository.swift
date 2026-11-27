@@ -2,6 +2,42 @@ import CryptoKit
 import Darwin
 import Foundation
 import GRDB
+import os
+
+public final class ReimportSelectionCancellation: Sendable {
+    private enum State {
+        case updating, cancelled, committing
+    }
+
+    private let state = OSAllocatedUnfairLock(initialState: State.updating)
+
+    public init() {}
+
+    public var canCancel: Bool {
+        state.withLock { $0 == .updating }
+    }
+
+    public func cancel() -> Bool {
+        state.withLock {
+            guard $0 == .updating else { return false }
+            $0 = .cancelled
+            return true
+        }
+    }
+
+    fileprivate func checkCancellation() throws {
+        if state.withLock({ $0 == .cancelled }) {
+            throw CancellationError()
+        }
+    }
+
+    fileprivate func beginCommit() throws {
+        try state.withLock {
+            guard $0 == .updating else { throw CancellationError() }
+            $0 = .committing
+        }
+    }
+}
 
 public struct JobRepository {
     private let pool: DatabasePool
@@ -122,9 +158,13 @@ public struct JobRepository {
         try pool.read { db in try fetchJobFiles(jobID: jobID, db: db) }
     }
 
-    public func setReimportSelection(jobID: String, fileIDs: Set<Int64>, requested: Bool) throws -> [JobFileRecord] {
+    public func setReimportSelection(
+        jobID: String, fileIDs: Set<Int64>, requested: Bool,
+        cancellation: ReimportSelectionCancellation? = nil
+    ) throws -> [JobFileRecord] {
         try pool.write { db in
             for id in fileIDs {
+                try cancellation?.checkCancellation()
                 try db.execute(
                     sql: """
                     UPDATE job_files SET reimport_requested = ?
@@ -133,7 +173,10 @@ public struct JobRepository {
                     arguments: [requested, jobID, id, CopyStatus.copied.databaseValue]
                 )
             }
-            return try fetchJobFiles(jobID: jobID, db: db)
+            let files = try fetchJobFiles(jobID: jobID, db: db)
+            // Resolve cancellation and commit on the database writer before returning the transaction.
+            try cancellation?.beginCommit()
+            return files
         }
     }
 

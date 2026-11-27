@@ -1428,12 +1428,28 @@ struct MediaScannerImportTests {
         let selected = try #require(initial.first { $0.filename == filenames[0] })
         let id = try #require(selected.id)
 
+        let cancellation = ReimportSelectionCancellation()
+        let observer = CancelReimportOnFirstWrite(cancellation: cancellation)
+        fixture.pool.add(transactionObserver: observer)
+        #expect(throws: CancellationError.self) {
+            try fixture.jobRepository.setReimportSelection(
+                jobID: "reimport", fileIDs: [id], requested: true, cancellation: cancellation
+            )
+        }
+        fixture.pool.remove(transactionObserver: observer)
+        #expect(try fixture.jobRepository.fetchJobFiles(jobID: "reimport") == initial)
+
         func setSelection(_ requested: Bool) throws -> [JobFileRecord] {
             try fixture.jobRepository.setReimportSelection(jobID: "reimport", fileIDs: [id], requested: requested)
         }
         #expect(try builder.plans(files: setSelection(true)).filter(\.willCopy).count == 1)
         #expect(try builder.plans(files: setSelection(false)).allSatisfy { !$0.willCopy })
-        let files = try setSelection(true)
+        let committed = ReimportSelectionCancellation()
+        let files = try fixture.jobRepository.setReimportSelection(
+            jobID: "reimport", fileIDs: [id], requested: true, cancellation: committed
+        )
+        #expect(!committed.canCancel)
+        #expect(!committed.cancel())
         let plans = builder.plans(files: files, refreshedHistory: [id: .known(history)])
         let selectedPlan = try #require(plans.first { $0.update?.id == id })
         #expect(selectedPlan.willCopy)
@@ -2864,6 +2880,19 @@ struct MediaScannerImportTests {
         #expect(recoveredFile.copyStatus == .pending)
         #expect(recoveredFile.error == "interrupted import")
     }
+}
+
+private final class CancelReimportOnFirstWrite: TransactionObserver {
+    let cancellation: ReimportSelectionCancellation
+
+    init(cancellation: ReimportSelectionCancellation) {
+        self.cancellation = cancellation
+    }
+
+    func observes(eventsOfKind eventKind: DatabaseEventKind) -> Bool { eventKind.tableName == "job_files" }
+    func databaseDidChange(with event: DatabaseEvent) { _ = cancellation.cancel() }
+    func databaseDidCommit(_ db: Database) {}
+    func databaseDidRollback(_ db: Database) {}
 }
 
 private struct Fixture {

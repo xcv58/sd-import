@@ -230,7 +230,7 @@ struct ScanBothSessionTests {
             let plans = builder.plans(files: files)
             review.setConfirmation(.init(
                 draft: draft(sourcePath: summary.mountPath, roots: roots),
-                plans: plans, destinationAccess: [],
+                plans: plans,
                 destinations: try #require(ReviewedImportDestinations(plans: plans))
             ), for: jobID)
             #expect(review.canStartImports == (jobID == firstJob.id))
@@ -267,7 +267,7 @@ struct ScanBothSessionTests {
             #expect(try repository.listImportHistoryJobs().map(\.id) == [firstJob.id])
             #expect(review.entry(for: firstJob.id)?.result == result)
             review.setConfirmation(.init(
-                draft: secondConfirmation.draft, plans: freshSecondPlans, destinationAccess: [],
+                draft: secondConfirmation.draft, plans: freshSecondPlans,
                 destinations: try #require(ReviewedImportDestinations(plans: freshSecondPlans))
             ), for: siblingJob.id)
         }
@@ -297,7 +297,7 @@ struct ScanBothSessionTests {
         for entry in session.entries {
             let jobID = try #require(entry.jobID)
             session.setConfirmation(.init(
-                draft: draft(sourcePath: entry.volume.mountPath, roots: roots), plans: [], destinationAccess: [],
+                draft: draft(sourcePath: entry.volume.mountPath, roots: roots), plans: [],
                 destinations: try #require(ReviewedImportDestinations(plans: []))
             ), for: jobID)
         }
@@ -766,6 +766,29 @@ struct ScanBothSessionTests {
                     }
                 }
                 #expect(model.scanBothSession?.entries[1].confirmation != nil)
+
+                model.importCurrentJob()
+                try #require(model.scanBothSession?.entries[0].confirmation != nil)
+                model.reviewScanBothVolume(entry.id)
+                let latestDestination = root.appendingPathComponent("Latest Destination")
+                try fm.createDirectory(at: latestDestination, withIntermediateDirectories: false)
+                model.photosPath = latestDestination.path
+                model.videosPath = latestDestination.path
+                model.destinationPathDidChange(clearFeedback: false)
+                model.setReimportSelection([known.id], requested: false)
+                try await waitForImport(model)
+                let latestDraft = model.currentImportDraft
+                model.returnToScanBothResults()
+                #expect(!model.canStartScanBothImports)
+                #expect(model.scanBothSession?.entries[0].confirmation == nil)
+                #expect(model.scanBothSession?.entries[1].confirmation != nil)
+
+                model.reviewScanBothVolume(entry.id)
+                #expect(model.currentImportDraft == latestDraft)
+                model.setReimportSelection([known.id], requested: true)
+                try await waitForImport(model)
+                #expect(model.previewRows.first { $0.id == known.id }?.willCopy == true)
+                #expect(model.previewSessions.first { $0.date == known.date }?.label == "Earlier Photos")
             }
             if (scenario == .firstVolumeDisconnectsBeforeSecond || scenario == .receiptAfterHistoryNavigation),
                entry.volume == first {
@@ -986,7 +1009,7 @@ struct ScanBothSessionTests {
         }
     }
 
-    @Test("Scan Both updates re-import selections in review and preserves the sibling confirmation")
+    @Test("Scan Both keeps re-import edits, date choices, and drafts separate from approval")
     func reimportsKnownFileInBatch() async throws {
         try await startsBatchThroughAppModel(.reimportKnownFile)
     }
