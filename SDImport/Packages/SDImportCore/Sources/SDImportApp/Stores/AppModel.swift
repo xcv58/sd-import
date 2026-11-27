@@ -1957,7 +1957,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func updatePreviewSessionChoices(_ update: (inout ImportPreviewSession) -> Void) {
+    private func updatePreviewSessionChoices(
+        refreshingDates: Bool = false, _ update: (inout ImportPreviewSession) -> Void
+    ) {
         func updated(_ session: ImportPreviewSession) -> ImportPreviewSession {
             var session = session
             update(&session)
@@ -1965,11 +1967,16 @@ final class AppModel: ObservableObject {
         }
 
         hiddenPreviewSessions = hiddenPreviewSessions.mapValues(updated)
-        previewSessions = previewSessions.map(updated)
+        let sessions = previewSessions.map(updated)
+        if !refreshingDates || !refreshScanBothPreviewDates(previousSessions: sessions) {
+            previewSessions = sessions
+        }
     }
 
     func folderGroupingDidChange() {
-        rebuildPreviewPlanCache()
+        if !refreshScanBothPreviewDates() {
+            rebuildPreviewPlanCache()
+        }
     }
 
     func themePreferenceDidChange() {
@@ -1997,8 +2004,9 @@ final class AppModel: ObservableObject {
     private func applyCurrentImportOptions(userInitiated: Bool) {
         normalizeDestinationForCurrentImportType()
         updateWorkflowProfileForCurrentOptions()
+        validatePaths()
 
-        updatePreviewSessionChoices { session in
+        updatePreviewSessionChoices(refreshingDates: true) { session in
             session.includePhotos = importMediaSelection.includes(.photo)
             session.includeVideos = importMediaSelection.includes(.video)
             session.includeSidecars = workflowProfile.includesSidecarsByDefault
@@ -2006,7 +2014,6 @@ final class AppModel: ObservableObject {
         if userInitiated {
             workflowProfileWasManuallyChosenForCurrentJob = true
         }
-        validatePaths()
     }
 
     private func normalizeDestinationForCurrentImportType() {
@@ -2061,8 +2068,7 @@ final class AppModel: ObservableObject {
     }
 
     private func updatePreviewPlanCache(rows: [ImportPreviewRow], refreshingDates: Bool = false) {
-        if refreshingDates, isReviewingScanBothVolume, folderGrouping == .byDay, rows != previewRows {
-            rebuildPreviewSessions(files: currentPreviewFiles, defaultLabel: location)
+        if refreshingDates, folderGrouping == .byDay, rows != previewRows, refreshScanBothPreviewDates() {
             return
         }
         previewRows = rows
@@ -2187,7 +2193,7 @@ final class AppModel: ObservableObject {
 
         hiddenPreviewSessions = hiddenPreviewSessions.mapValues(updated)
         let sessions = previewSessions.map(updated)
-        if sessions != previewSessions {
+        if !refreshScanBothPreviewDates(previousSessions: sessions), sessions != previewSessions {
             previewSessions = sessions
         }
     }
@@ -4929,12 +4935,21 @@ final class AppModel: ObservableObject {
         return nil
     }
 
+    private func refreshScanBothPreviewDates(previousSessions: [ImportPreviewSession]? = nil) -> Bool {
+        guard let jobID = scanBothSession?.reviewingJobID, jobID == currentSummary?.jobID else {
+            return false
+        }
+        rebuildPreviewSessions(files: currentPreviewFiles, defaultLabel: location, previousSessions: previousSessions)
+        return true
+    }
+
     private func rebuildPreviewSessions(
-        files: [JobFileRecord], defaultLabel: String, restoring draft: ImportDraft? = nil
+        files: [JobFileRecord], defaultLabel: String, restoring draft: ImportDraft? = nil,
+        previousSessions: [ImportPreviewSession]? = nil
     ) {
-        let previousSessions = draft?.sessions ?? previewSessions
+        let priorSessions = draft?.sessions ?? previousSessions ?? previewSessions
         let previousHidden = draft?.hiddenSessions ?? hiddenPreviewSessions
-        let visible = Dictionary(uniqueKeysWithValues: previousSessions.map { ($0.date, $0) })
+        let visible = Dictionary(uniqueKeysWithValues: priorSessions.map { ($0.date, $0) })
         let existing = previousHidden.merging(visible) { _, visible in visible }
         let sessions = makePreviewSessions(files: files, defaultLabel: defaultLabel, existing: existing)
         let plans = buildImportPlans(files: files, sessions: sessions)
