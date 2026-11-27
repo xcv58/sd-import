@@ -1974,9 +1974,7 @@ final class AppModel: ObservableObject {
     }
 
     func folderGroupingDidChange() {
-        if !refreshScanBothPreviewDates() {
-            rebuildPreviewPlanCache()
-        }
+        rebuildPreviewPlanCache(refreshingDates: true)
     }
 
     func themePreferenceDidChange() {
@@ -2060,17 +2058,14 @@ final class AppModel: ObservableObject {
     }
 
     private func rebuildPreviewPlanCache(refreshingDates: Bool = false) {
-        let plans = buildImportPlans(files: currentPreviewFiles, sessions: previewSessions)
-        updatePreviewPlanCache(
-            rows: makePreviewRows(files: currentPreviewFiles, plans: plans),
-            refreshingDates: refreshingDates
-        )
-    }
-
-    private func updatePreviewPlanCache(rows: [ImportPreviewRow], refreshingDates: Bool = false) {
-        if refreshingDates, folderGrouping == .byDay, rows != previewRows, refreshScanBothPreviewDates() {
+        if refreshingDates, refreshScanBothPreviewDates() {
             return
         }
+        let plans = buildImportPlans(files: currentPreviewFiles, sessions: previewSessions)
+        updatePreviewPlanCache(rows: makePreviewRows(files: currentPreviewFiles, plans: plans))
+    }
+
+    private func updatePreviewPlanCache(rows: [ImportPreviewRow]) {
         previewRows = rows
         previewTotals = buildPreviewTotals(rows: rows)
         previewDestinations = buildPreviewDestinationDirectories(rows: rows)
@@ -2426,16 +2421,19 @@ final class AppModel: ObservableObject {
                 dedupeRepository: dedupeRepository
             )
         }
+        // Compare against what the user reviewed before refreshing history and dates.
+        let reviewedRows = previewRows
         refreshScanBothReviewHistory(files: currentPreviewFiles)
+        _ = refreshScanBothPreviewDates()
         guard let builder = importPlanBuilder(sessions: previewSessions) else { return nil }
         let plans = builder.plans(
             files: currentPreviewFiles,
             refreshedHistory: isReviewingScanBothVolume ? scanBothReviewHistory : [:]
         )
         let freshRows = makePreviewRows(files: currentPreviewFiles, plans: plans)
-        let planChanged = freshRows != previewRows
+        let planChanged = freshRows != reviewedRows
             || confirmation.map { $0.plans != plans || !$0.destinations.matches() } == true
-        updatePreviewPlanCache(rows: freshRows, refreshingDates: true)
+        updatePreviewPlanCache(rows: freshRows)
         guard !planChanged else {
             if let entry = scanBothSession?.reviewingEntry, let jobID = entry.jobID,
                let scanned = entry.reviewedSourceFiles,

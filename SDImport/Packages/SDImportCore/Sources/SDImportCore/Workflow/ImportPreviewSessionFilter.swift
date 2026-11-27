@@ -117,11 +117,11 @@ public struct ImportPreviewSessionFilter: Sendable {
         }
 
         switch plan.disposition {
-        case .filenameConflict where folderGrouping == .byDay:
+        case .filenameConflict:
             return true
-        case .alreadyExists where folderGrouping == .oneShootFolder:
-            // Matching files still belong to the shoot and contribute to its folder name.
-            return true
+        case .alreadyExists, .noDestination:
+            // The shoot's date range must stay stable when its destination changes.
+            return folderGrouping == .oneShootFolder
         case .excluded:
             break
         default:
