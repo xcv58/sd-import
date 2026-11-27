@@ -741,6 +741,22 @@ struct ScanBothSessionTests {
                 let newDateIndex = try #require(model.previewSessions.firstIndex { $0.date == newDate })
                 model.previewSessions[newDateIndex].label = "New Photos"
 
+                model.returnToScanBothResults()
+                let ledger = PortableImportReceiptLedger(sourceRootURL: internalFolder)
+                try fm.removeItem(at: ledger.ledgerURL)
+                model.reviewScanBothVolume(entry.id)
+                #expect(model.previewRows.first { $0.id == known.id }?.willCopy == true)
+                #expect(model.previewSessions.map(\.date) == [known.date, newDate].sorted())
+                #expect(model.previewSessions.first { $0.date == known.date }?.photoCount == 1)
+                #expect(model.previewSessions.first { $0.date == newDate }?.label == "New Photos")
+
+                model.returnToScanBothResults()
+                try ledger.append(identity: PortableFileIdentity(
+                    size: known.size, modificationTimeEpochSeconds: 1_700_000_000, relativePath: firstFile.lastPathComponent
+                ))
+                model.reviewScanBothVolume(entry.id)
+                #expect(model.previewSessions.map(\.date) == [newDate])
+
                 for (index, requested) in [true, false, true].enumerated() {
                     model.setReimportSelection([known.id], requested: requested)
                     #expect(model.importUIPhase == .review)

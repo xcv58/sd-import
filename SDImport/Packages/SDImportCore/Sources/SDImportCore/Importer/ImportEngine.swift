@@ -72,9 +72,12 @@ public struct ImportEngine {
                 .load().fingerprints) ?? []
             : []
         var matches: [Int64: ImportHistoryMatch] = [:]
-        for file in files where file.reimportRequested != true && (file.isPendingImport || isHistoryExcluded(file)) {
-            guard let id = file.id else { continue }
-            if isHistoryExcluded(file) { matches[id] = .unmatched }
+        for file in files where file.reimportRequested != true {
+            let skippedByHistory = isHistoryExcluded(file)
+            // Preparation can record an existing destination for a file whose re-import choice was later cleared.
+            let matchedDestination = file.decision == .known && file.knownSource == .destination
+            guard let id = file.id, file.isPendingImport || skippedByHistory || matchedDestination else { continue }
+            if skippedByHistory { matches[id] = .unmatched }
             let localMatch = (try? dedupeRepository.contains(fingerprint(for: file, currentIdentity: nil))) == true
             let portableMatchPossible = !portableFingerprints.isEmpty && file.portableReceiptOverride != true
             guard localMatch || portableMatchPossible, let identity = validatedPortableIdentity(for: file) else {

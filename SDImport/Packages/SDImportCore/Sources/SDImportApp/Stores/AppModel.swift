@@ -3266,14 +3266,13 @@ final class AppModel: ObservableObject {
             currentImportReceipt = nil
             resetImportDraftFromDefaults()
             previewSessions = []
-            workflowProfileWasManuallyChosenForCurrentJob = false
-            loadScanPreview(summary, files: files, dedupeRepository: dedupeRepository)
-            if let draft = entry.draft?.settings {
+            let draft = entry.draft?.settings
+            workflowProfileWasManuallyChosenForCurrentJob = draft != nil
+            if let draft {
                 photosPath = draft.photosPath
                 videosPath = draft.videosPath
                 location = draft.shootName
                 workflowProfile = draft.workflowProfile
-                workflowProfileWasManuallyChosenForCurrentJob = true
                 importMediaSelection = draft.mediaSelection
                 destinationLayout = draft.destinationLayout
                 organizationPreset = draft.destinationLayout.organizationPreset
@@ -3281,10 +3280,8 @@ final class AppModel: ObservableObject {
                     preferredMixedDestinationLayout = draft.destinationLayout
                 }
                 folderGrouping = draft.folderGrouping
-                validatePaths()
-                hiddenPreviewSessions = draft.hiddenSessions
-                previewSessions = draft.sessions
             }
+            loadScanPreview(summary, files: files, dedupeRepository: dedupeRepository, restoring: draft)
             recoverImportWorkspace()
             return true
         } catch {
@@ -3295,7 +3292,8 @@ final class AppModel: ObservableObject {
 
     private func loadScanPreview(
         _ summary: ScanSummary, files: [JobFileRecord], dedupeRepository: DedupeRepository,
-        insta360Recovery: Insta360RescanRecovery? = nil, rescanContext: RescanContext? = nil
+        insta360Recovery: Insta360RescanRecovery? = nil, rescanContext: RescanContext? = nil,
+        restoring draft: ImportDraft? = nil
     ) {
         insta360RescanRecovery = insta360Recovery.flatMap { $0.isEmpty ? nil : $0 }
         self.rescanContext = rescanContext
@@ -3310,8 +3308,7 @@ final class AppModel: ObservableObject {
         knownImportedPreviewFileIDs = Self.knownImportedFileIDs(files: files, dedupeRepository: dedupeRepository)
         refreshScanBothReviewHistory(files: files)
         applyRecommendationAfterScan(files: files, summary: summary)
-        rebuildPreviewSessions(files: files, defaultLabel: summary.location)
-        rebuildPreviewPlanCache()
+        rebuildPreviewSessions(files: files, defaultLabel: draft?.shootName ?? summary.location, restoring: draft)
     }
 
     func returnToScanBothResults() {
@@ -4907,9 +4904,13 @@ final class AppModel: ObservableObject {
         return nil
     }
 
-    private func rebuildPreviewSessions(files: [JobFileRecord], defaultLabel: String) {
-        let visible = Dictionary(uniqueKeysWithValues: previewSessions.map { ($0.date, $0) })
-        let existing = hiddenPreviewSessions.merging(visible) { _, visible in visible }
+    private func rebuildPreviewSessions(
+        files: [JobFileRecord], defaultLabel: String, restoring draft: ImportDraft? = nil
+    ) {
+        let previousSessions = draft?.sessions ?? previewSessions
+        let previousHidden = draft?.hiddenSessions ?? hiddenPreviewSessions
+        let visible = Dictionary(uniqueKeysWithValues: previousSessions.map { ($0.date, $0) })
+        let existing = previousHidden.merging(visible) { _, visible in visible }
         let sessions = makePreviewSessions(files: files, defaultLabel: defaultLabel, existing: existing)
         let plans = buildImportPlans(files: files, sessions: sessions)
         let updated = ImportPreviewSessionFilter().visibleSessions(

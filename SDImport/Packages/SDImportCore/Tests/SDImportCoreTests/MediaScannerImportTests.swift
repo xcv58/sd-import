@@ -1474,7 +1474,25 @@ struct MediaScannerImportTests {
         let selectedAgain = try fixture.jobRepository.setReimportSelection(
             jobID: "fresh", fileIDs: [knownAgain], requested: true
         )
-        #expect(builder.plans(files: selectedAgain).first { $0.update?.id == knownAgain }?.disposition == .alreadyExists)
+        let prepared = builder.plans(files: selectedAgain)
+        #expect(prepared.first { $0.update?.id == knownAgain }?.disposition == .alreadyExists)
+        try fixture.jobRepository.updateJobImportPlan(
+            jobID: "fresh", destinationRoots: builder.roots, updates: prepared.compactMap(\.update)
+        )
+        try FileManager.default.removeItem(at: selectedDestination)
+        if history == .portableLedger {
+            #expect(try fixture.dedupeRepository.forgetImportedFiles(jobID: "reimport") == 1)
+        }
+        let cleared = try fixture.jobRepository.setReimportSelection(
+            jobID: "fresh", fileIDs: [knownAgain], requested: false
+        )
+        #expect(cleared.first { $0.id == knownAgain }?.knownSource == .destination)
+        let refreshed = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+            portableReceiptsEnabled: true
+        ).refreshedReviewHistory(files: cleared, sourcePath: fixture.mountURL.path)
+        #expect(builder.plans(files: cleared, refreshedHistory: refreshed)
+            .first { $0.update?.id == knownAgain }?.disposition == .known(history))
     }
 
     @Test("import uses persisted epoch instead of parsing the display timestamp")
