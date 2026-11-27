@@ -2405,9 +2405,14 @@ final class AppModel: ObservableObject {
             refreshedHistory: isReviewingScanBothVolume ? scanBothReviewHistory : [:]
         )
         let freshRows = makePreviewRows(files: currentPreviewFiles, plans: plans)
-        let planChanged = freshRows != previewRows
+        let rowsChanged = freshRows != previewRows
+        let planChanged = rowsChanged
             || confirmation.map { $0.plans != plans || !$0.destinations.matches() } == true
-        updatePreviewPlanCache(rows: freshRows)
+        if rowsChanged, isReviewingScanBothVolume {
+            rebuildPreviewSessions(files: currentPreviewFiles, defaultLabel: location)
+        } else {
+            updatePreviewPlanCache(rows: freshRows)
+        }
         guard !planChanged else {
             if let entry = scanBothSession?.reviewingEntry, let jobID = entry.jobID,
                let scanned = entry.reviewedSourceFiles,

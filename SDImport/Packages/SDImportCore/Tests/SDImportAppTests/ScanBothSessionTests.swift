@@ -751,10 +751,28 @@ struct ScanBothSessionTests {
                 #expect(model.previewSessions.first { $0.date == newDate }?.label == "New Photos")
 
                 model.returnToScanBothResults()
-                try ledger.append(identity: PortableFileIdentity(
+                let receipt = PortableFileIdentity(
                     size: known.size, modificationTimeEpochSeconds: 1_700_000_000, relativePath: firstFile.lastPathComponent
-                ))
+                )
+                try ledger.append(identity: receipt)
                 model.reviewScanBothVolume(entry.id)
+                #expect(model.previewSessions.map(\.date) == [newDate])
+
+                try fm.removeItem(at: ledger.ledgerURL)
+                model.importCurrentJob()
+                #expect(model.importUIPhase == .review)
+                #expect(model.scanBothSession?.entries[0].confirmation == nil)
+                #expect(model.previewRows.first { $0.id == known.id }?.willCopy == true)
+                #expect(model.previewSessions.map(\.date) == [known.date, newDate].sorted())
+                #expect(model.previewSessions.first { $0.date == known.date }?.photoCount == 1)
+                #expect(model.previewSessions.first { $0.date == newDate }?.label == "New Photos")
+
+                try ledger.append(identity: receipt)
+                model.importCurrentJob()
+                #expect(model.importUIPhase == .review)
+                #expect(model.scanBothSession?.entries[0].confirmation == nil)
+                #expect(model.scanBothSession?.entries[1].confirmation != nil)
+                #expect(model.previewRows.first { $0.id == known.id }?.disposition == .known(.portableLedger))
                 #expect(model.previewSessions.map(\.date) == [newDate])
 
                 for (index, requested) in [true, false, true].enumerated() {
