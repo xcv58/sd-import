@@ -99,6 +99,11 @@ Record the build number and per-volume counts.
    unmounting that volume before its scan starts.
 5. Reconnect and choose one volume directly. Confirm the app opens that volume's
    import review.
+6. Open a volume's **Review import** and grant access to a temporary destination.
+   In Settings, choose a different default destination for the same media type.
+   Return to Import, go back to the combined results, and reopen the volume.
+   Confirm the custom destination still has access and **Confirm Plan** is
+   available. Repeat with a review that started with the previous default.
 
 On November 25, 2026, internal TestFlight 1.2 (40) passed on an Insta360 Luna
 Ultra with two exFAT volumes on macOS 27.3. The SD Card joined the open

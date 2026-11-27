@@ -3261,10 +3261,10 @@ final class AppModel: ObservableObject {
                 return false
             }
             scanBothSession?.reviewingJobID = summary.jobID
-            scanBothReviewDestinationAccess = entry.draft?.destinationAccess ?? []
             folderAccessFeedback = nil
             currentImportReceipt = nil
             resetImportDraftFromDefaults()
+            scanBothReviewDestinationAccess = entry.draft?.destinationAccess ?? []
             previewSessions = []
             let draft = entry.draft?.settings
             workflowProfileWasManuallyChosenForCurrentJob = draft != nil
@@ -3331,15 +3331,18 @@ final class AppModel: ObservableObject {
     }
 
     private var currentScanBothDraft: ScanBothSession.Draft {
+        ScanBothSession.Draft(settings: currentImportDraft, destinationAccess: currentScanBothDestinationAccess)
+    }
+
+    private var currentScanBothDestinationAccess: [SecurityScopedResourceAccess] {
         let roots = effectiveDestinationRoots
         var grantedPaths: Set<String> = []
-        let destinationAccess = ([folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }
-            + scanBothReviewDestinationAccess).filter { access in
+        return (scanBothReviewDestinationAccess
+            + [folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }).filter { access in
             access.isActive
                 && [roots.photosURL, roots.videosURL].contains { Self.isSameOrDescendant($0, of: access.url) }
                 && grantedPaths.insert(access.url.standardizedFileURL.path).inserted
         }
-        return ScanBothSession.Draft(settings: currentImportDraft, destinationAccess: destinationAccess)
     }
 
     func skipScanBothImport(_ entryID: UUID) {
@@ -5176,20 +5179,29 @@ final class AppModel: ObservableObject {
         }
         let priorAccess = folderAccesses[purpose]
         do {
+            let access: SecurityScopedResourceAccess?
             if persistBookmark {
                 guard let bookmarkStore else {
                     throw FolderAccessAuthorizationError(purpose: purpose)
                 }
                 try bookmarkStore.saveBookmark(purpose: purpose, url: url)
                 refreshFolderAccess(purpose)
+                access = folderAccesses[purpose]
             } else {
-                folderAccesses[purpose] = SecurityScopedResourceAccess(url: url)
+                access = SecurityScopedResourceAccess(url: url)
             }
-            if
-                AppDistribution.current == .macAppStore,
-                folderAccesses[purpose]?.isActive != true
-            {
+            if AppDistribution.current == .macAppStore, access?.isActive != true {
                 throw FolderAccessAuthorizationError(purpose: purpose)
+            }
+            if !persistBookmark, let access {
+                if isReviewingScanBothVolume, purpose != .source {
+                    if access.isActive {
+                        scanBothReviewDestinationAccess.removeAll { $0.url.standardizedFileURL == url.standardizedFileURL }
+                        scanBothReviewDestinationAccess.append(access)
+                    }
+                } else {
+                    folderAccesses[purpose] = access
+                }
             }
             return true
         } catch {
@@ -5283,6 +5295,10 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshFolderAccess(_ purpose: BookmarkPurpose) {
+        if isReviewingScanBothVolume, purpose != .source {
+            // The open review can still use the previous default after Settings replaces it.
+            scanBothReviewDestinationAccess = currentScanBothDestinationAccess
+        }
         do {
             folderAccesses[purpose] = try bookmarkStore?.beginAccess(
                 purpose: purpose,
