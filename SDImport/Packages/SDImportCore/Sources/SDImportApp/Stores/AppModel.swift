@@ -1486,7 +1486,7 @@ final class AppModel: ObservableObject {
             folderAccessFeedback = nil
         }
         validatePaths()
-        rebuildPreviewPlanCache()
+        rebuildPreviewPlanCache(refreshingDates: true)
     }
 
     func defaultDestinationPathDidChange() {
@@ -1673,6 +1673,21 @@ final class AppModel: ObservableObject {
 
     var previewDestinationIssueCount: Int {
         previewSpaceRequirements.filter { !$0.isSatisfied }.count
+    }
+
+    var canCustomizeDates: Bool {
+        guard folderGrouping == .byDay, let date = previewSessions.first else { return false }
+        let label = date.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let defaults = defaultDateInclusion
+        return previewSessions.count > 1
+            || (!label.isEmpty && label != Self.defaultSessionLabel(for: location))
+            || date.includePhotos != defaults.photos
+            || date.includeVideos != defaults.videos
+            || date.includeSidecars != defaults.sidecars
+            || previewRows.contains { row in
+                guard row.date == date.date, case .filenameConflict = row.disposition else { return false }
+                return true
+            }
     }
 
     func scan() {
@@ -2037,12 +2052,19 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func rebuildPreviewPlanCache() {
+    private func rebuildPreviewPlanCache(refreshingDates: Bool = false) {
         let plans = buildImportPlans(files: currentPreviewFiles, sessions: previewSessions)
-        updatePreviewPlanCache(rows: makePreviewRows(files: currentPreviewFiles, plans: plans))
+        updatePreviewPlanCache(
+            rows: makePreviewRows(files: currentPreviewFiles, plans: plans),
+            refreshingDates: refreshingDates
+        )
     }
 
-    private func updatePreviewPlanCache(rows: [ImportPreviewRow]) {
+    private func updatePreviewPlanCache(rows: [ImportPreviewRow], refreshingDates: Bool = false) {
+        if refreshingDates, isReviewingScanBothVolume, folderGrouping == .byDay, rows != previewRows {
+            rebuildPreviewSessions(files: currentPreviewFiles, defaultLabel: location)
+            return
+        }
         previewRows = rows
         previewTotals = buildPreviewTotals(rows: rows)
         previewDestinations = buildPreviewDestinationDirectories(rows: rows)
@@ -2405,14 +2427,9 @@ final class AppModel: ObservableObject {
             refreshedHistory: isReviewingScanBothVolume ? scanBothReviewHistory : [:]
         )
         let freshRows = makePreviewRows(files: currentPreviewFiles, plans: plans)
-        let rowsChanged = freshRows != previewRows
-        let planChanged = rowsChanged
+        let planChanged = freshRows != previewRows
             || confirmation.map { $0.plans != plans || !$0.destinations.matches() } == true
-        if rowsChanged, isReviewingScanBothVolume, folderGrouping == .byDay {
-            rebuildPreviewSessions(files: currentPreviewFiles, defaultLabel: location)
-        } else {
-            updatePreviewPlanCache(rows: freshRows)
-        }
+        updatePreviewPlanCache(rows: freshRows, refreshingDates: true)
         guard !planChanged else {
             if let entry = scanBothSession?.reviewingEntry, let jobID = entry.jobID,
                let scanned = entry.reviewedSourceFiles,
@@ -4935,15 +4952,21 @@ final class AppModel: ObservableObject {
         previewSessions = updated
     }
 
+    private var defaultDateInclusion: (photos: Bool, videos: Bool, sidecars: Bool) {
+        (
+            organizationPreset != .footageBackup && importMediaSelection.includes(.photo),
+            importMediaSelection.includes(.video),
+            workflowProfile.includesSidecarsByDefault
+        )
+    }
+
     private func makePreviewSessions(
         files: [JobFileRecord],
         defaultLabel: String,
         existing: [String: ImportPreviewSession]
     ) -> [ImportPreviewSession] {
         let grouped = Dictionary(grouping: files) { ImportPlanBuilder.sessionDate(for: $0) }
-        let includePhotos = organizationPreset == .footageBackup ? false : importMediaSelection.includes(.photo)
-        let includeVideos = importMediaSelection.includes(.video)
-        let includeSidecars = workflowProfile.includesSidecarsByDefault
+        let defaults = defaultDateInclusion
         let normalizedDefaultLabel = Self.defaultSessionLabel(for: defaultLabel)
         let cardHasVideos = files.contains { $0.mediaKind == .video }
 
@@ -4959,9 +4982,9 @@ final class AppModel: ObservableObject {
                 photoCount: files.filter { $0.mediaKind == .photo }.count - likelyVideoPreviewJPEGCount,
                 videoCount: files.filter { $0.mediaKind == .video }.count,
                 unsupportedCount: files.filter { $0.mediaKind == .unsupported }.count + likelyVideoPreviewJPEGCount,
-                includePhotos: prior?.includePhotos ?? includePhotos,
-                includeVideos: prior?.includeVideos ?? includeVideos,
-                includeSidecars: prior?.includeSidecars ?? includeSidecars
+                includePhotos: prior?.includePhotos ?? defaults.photos,
+                includeVideos: prior?.includeVideos ?? defaults.videos,
+                includeSidecars: prior?.includeSidecars ?? defaults.sidecars
             )
         }
     }

@@ -1125,6 +1125,40 @@ struct ScanBothSessionTests {
             model.previewSessions[index].label = "Recording"
             #expect(model.canImportPlannedFiles)
             #expect(model.previewRows.first { $0.id == firstRow.id }?.destinationPath != firstRow.destinationPath)
+
+            let laterIndex = try #require(model.previewSessions.firstIndex { $0.date == laterRow.date })
+            model.previewSessions[laterIndex].label = "Later Session"
+            let firstPath = try #require(model.previewRows.first { $0.id == firstRow.id }?.destinationPath)
+            let matchingOutput = URL(fileURLWithPath: firstPath)
+            try fm.createDirectory(at: matchingOutput.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.copyItem(at: firstFile, to: matchingOutput)
+            try fm.setAttributes([.modificationDate: firstDate], ofItemAtPath: matchingOutput.path)
+            model.importCurrentJob()
+            #expect(model.previewSessions.map(\.date) == [laterRow.date])
+            #expect(model.previewSessions.first?.label == "Later Session")
+            #expect(model.canCustomizeDates)
+
+            model.previewSessions[0].label = model.location
+            #expect(!model.canCustomizeDates)
+            model.previewSessions[0].includeVideos = false
+            #expect(model.canCustomizeDates)
+            model.previewSessions[0].includeVideos = true
+            model.previewSessions[0].label = "Later Session"
+
+            let alternate = root.appendingPathComponent("Alternate")
+            let relativePath = matchingOutput.resolvingSymlinksInPath().pathComponents
+                .dropFirst(destination.resolvingSymlinksInPath().pathComponents.count).joined(separator: "/")
+            let conflictingOutput = alternate.appendingPathComponent(relativePath)
+            try fm.createDirectory(at: conflictingOutput.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("different recording at the alternate destination".utf8).write(to: conflictingOutput)
+            model.selectVideosPath(alternate.path)
+            #expect(model.previewSessions.map(\.date) == initialDates)
+            #expect(model.previewRows.first { $0.id == firstRow.id }?.disposition.attention == .blocking)
+            #expect(!model.canImportPlannedFiles)
+            let restoredIndex = try #require(model.previewSessions.firstIndex { $0.date == firstRow.date })
+            #expect(model.previewSessions[restoredIndex].label == "Recording")
+            model.previewSessions[restoredIndex].label = "Resolved"
+            #expect(model.canImportPlannedFiles)
         } else {
             #expect(model.previewRows.first { $0.id == firstRow.id }?.disposition == .alreadyExists)
             #expect(model.previewRows.first { $0.id == firstRow.id }?.destinationPath == firstRow.destinationPath)
