@@ -1279,7 +1279,7 @@ struct ScanBothSessionTests {
     }
 
     enum ReviewChange: CaseIterable {
-        case matchingLabel, removedReceipt, oneShootConflict
+        case matchingLabel, removedReceipt, oneShootConflict, recoverVideos
     }
 
     @Test("Scan Both keeps approval and destination dates in sync", arguments: ReviewChange.allCases)
@@ -1299,19 +1299,28 @@ struct ScanBothSessionTests {
             try fm.createDirectory(at: folder, withIntermediateDirectories: true)
         }
         let firstName = change == .oneShootConflict ? "VID_20231114_210458_00_007.insv" : "First.jpg"
-        let laterName = change == .oneShootConflict ? "Later.dng" : "Later.jpg"
+        let laterName = switch change {
+        case .oneShootConflict: "Later.dng"
+        case .recoverVideos: "Later.mp4"
+        default: "Later.jpg"
+        }
         let firstFile = internalFolder.appendingPathComponent(firstName)
         let firstDate = Date(timeIntervalSince1970: 1_700_000_000)
-        for (url, date) in [
+        var fixtureFiles = [
             (firstFile, firstDate),
             (internalFolder.appendingPathComponent(laterName), firstDate.addingTimeInterval(86_400)),
             (cardFolder.appendingPathComponent("Card.jpg"), firstDate)
-        ] {
+        ]
+        if change == .recoverVideos {
+            fixtureFiles.append((internalFolder.appendingPathComponent("Last.mp4"), firstDate.addingTimeInterval(172_800)))
+        }
+        for (url, date) in fixtureFiles {
             try Data(url.lastPathComponent.utf8).write(to: url)
             try fm.setAttributes([.creationDate: date, .modificationDate: date], ofItemAtPath: url.path)
         }
         let ledger = PortableImportReceiptLedger(sourceRootURL: internalFolder)
-        if change == .removedReceipt {
+        let hasReceipt = change == .removedReceipt || change == .recoverVideos
+        if hasReceipt {
             try ledger.append(identity: PortableFileIdentity(
                 size: Int64(firstName.utf8.count), modificationDate: firstDate, relativePath: firstName
             ))
@@ -1328,7 +1337,7 @@ struct ScanBothSessionTests {
             }
         )
         model.bootstrap(at: root.appendingPathComponent("State"), startsRuntimeServices: false)
-        model.portableImportReceiptsEnabled = change == .removedReceipt
+        model.portableImportReceiptsEnabled = hasReceipt
         model.importDefaults.photosPath = destination.path
         model.importDefaults.videosPath = destination.path
         model.beginScanBoth(session)
@@ -1402,6 +1411,22 @@ struct ScanBothSessionTests {
             try fm.removeItem(at: conflict)
             model.importCurrentJob()
             #expect(model.scanBothSession?.entries[0].confirmation == nil)
+            model.importCurrentJob()
+        case .recoverVideos:
+            model.useFolderGrouping(.oneShootFolder)
+            model.useImportMediaSelection(.photosOnly)
+            try #require(model.previewTotals.copyFiles == 0)
+            #expect(model.previewSessions.isEmpty)
+
+            model.applyWorkflowProfile(.footageBackup)
+            let videoDays = [laterDay, try row(named: "Last.mp4").date].sorted()
+            #expect(model.previewSessions.map(\.date) == videoDays)
+            #expect(model.previewTotals.copyFiles == 2)
+            let folder = try #require(model.previewDestinations.first)
+            #expect(model.previewDestinations.count == 1)
+            #expect(URL(fileURLWithPath: folder.path).lastPathComponent.hasPrefix(
+                ImportPlanBuilder.dateRangeTitle(for: videoDays)
+            ))
             model.importCurrentJob()
         }
 

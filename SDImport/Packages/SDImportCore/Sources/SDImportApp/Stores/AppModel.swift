@@ -614,8 +614,11 @@ final class AppModel: ObservableObject {
     @Published var themePreference: AppThemePreference
     @Published var mediaContentProfile: MediaContentProfile?
     @Published var photoPairSummary: PhotoPairSummary?
-    @Published var previewSessions: [ImportPreviewSession] = [] {
-        didSet {
+    @Published private var visiblePreviewSessions: [ImportPreviewSession] = []
+    var previewSessions: [ImportPreviewSession] {
+        get { visiblePreviewSessions }
+        set {
+            visiblePreviewSessions = newValue
             rebuildPreviewPlanCache()
         }
     }
@@ -1968,7 +1971,7 @@ final class AppModel: ObservableObject {
 
         hiddenPreviewSessions = hiddenPreviewSessions.mapValues(updated)
         let sessions = previewSessions.map(updated)
-        if !refreshingDates || !refreshScanBothPreviewDates(previousSessions: sessions) {
+        if !refreshingDates || refreshScanBothPreviewDates(previousSessions: sessions) == nil {
             previewSessions = sessions
         }
     }
@@ -1988,7 +1991,8 @@ final class AppModel: ObservableObject {
             ? preferredMixedDestinationLayout
             : ImportDestinationLayout(organizationPreset: profile.organizationPreset)
         organizationPreset = destinationLayout.organizationPreset
-        updatePreviewSessionChoices { session in
+        validatePaths()
+        updatePreviewSessionChoices(refreshingDates: userInitiated) { session in
             session.includePhotos = profile.mediaSelection.includes(.photo)
             session.includeVideos = profile.mediaSelection.includes(.video)
             session.includeSidecars = profile.includesSidecarsByDefault
@@ -1996,7 +2000,6 @@ final class AppModel: ObservableObject {
         if userInitiated {
             workflowProfileWasManuallyChosenForCurrentJob = true
         }
-        validatePaths()
     }
 
     private func applyCurrentImportOptions(userInitiated: Bool) {
@@ -2058,10 +2061,10 @@ final class AppModel: ObservableObject {
     }
 
     private func rebuildPreviewPlanCache(refreshingDates: Bool = false) {
-        if refreshingDates, refreshScanBothPreviewDates() {
+        if refreshingDates, refreshScanBothPreviewDates() != nil {
             return
         }
-        let plans = buildImportPlans(files: currentPreviewFiles, sessions: previewSessions)
+        let plans = makePreviewPlan(files: currentPreviewFiles, sessions: previewSessions)?.files ?? []
         updatePreviewPlanCache(rows: makePreviewRows(files: currentPreviewFiles, plans: plans))
     }
 
@@ -2079,18 +2082,15 @@ final class AppModel: ObservableObject {
         previewSpaceRequirements = []
     }
 
-    private func buildImportPlans(
-        files: [JobFileRecord],
-        sessions: [ImportPreviewSession]
-    ) -> [ImportFilePlan] {
-        importPlanBuilder(sessions: sessions)?.plans(
-            files: files, refreshedHistory: isReviewingScanBothVolume ? scanBothReviewHistory : [:]
-        ) ?? []
-    }
+    private typealias PreviewPlan = (builder: ImportPlanBuilder, files: [ImportFilePlan])
 
-    private func importPlanBuilder(sessions: [ImportPreviewSession]) -> ImportPlanBuilder? {
+    private func makePreviewPlan(
+        files: [JobFileRecord],
+        sessions: [ImportPreviewSession],
+        hiddenSessions: [String: ImportPreviewSession]? = nil
+    ) -> PreviewPlan? {
         guard let currentSummary else { return nil }
-        return ImportPlanBuilder(
+        let builder = ImportPlanBuilder(
             sessions: sessions,
             mediaSelection: importMediaSelection,
             organizationPreset: organizationPreset,
@@ -2100,8 +2100,10 @@ final class AppModel: ObservableObject {
             volumeName: currentSummary.volumeName,
             insta360Recovery: insta360RescanRecovery,
             useOriginalInsta360Folders: useOriginalInsta360Folders,
-            hiddenSessions: hiddenPreviewSessions
+            hiddenSessions: hiddenSessions ?? hiddenPreviewSessions
         )
+        let plans = builder.plans(files: files, refreshedHistory: isReviewingScanBothVolume ? scanBothReviewHistory : [:])
+        return (builder, plans)
     }
 
     private var effectiveDestinationRoots: DestinationRoots {
@@ -2188,7 +2190,7 @@ final class AppModel: ObservableObject {
 
         hiddenPreviewSessions = hiddenPreviewSessions.mapValues(updated)
         let sessions = previewSessions.map(updated)
-        if !refreshScanBothPreviewDates(previousSessions: sessions), sessions != previewSessions {
+        if refreshScanBothPreviewDates(previousSessions: sessions) == nil, sessions != previewSessions {
             previewSessions = sessions
         }
     }
@@ -2396,7 +2398,7 @@ final class AppModel: ObservableObject {
 
     private func validatedImportPlan(
         matching confirmation: ScanBothSession.Confirmation? = nil
-    ) -> (builder: ImportPlanBuilder, files: [ImportFilePlan])? {
+    ) -> PreviewPlan? {
         validatePaths()
         guard !sourceNeedsAccess else {
             showFolderAccessError { L10n.tr("macOS needs your permission to read this source.") }
@@ -2424,16 +2426,16 @@ final class AppModel: ObservableObject {
         // Compare against what the user reviewed before refreshing history and dates.
         let reviewedRows = previewRows
         refreshScanBothReviewHistory(files: currentPreviewFiles)
-        _ = refreshScanBothPreviewDates()
-        guard let builder = importPlanBuilder(sessions: previewSessions) else { return nil }
-        let plans = builder.plans(
-            files: currentPreviewFiles,
-            refreshedHistory: isReviewingScanBothVolume ? scanBothReviewHistory : [:]
-        )
-        let freshRows = makePreviewRows(files: currentPreviewFiles, plans: plans)
-        let planChanged = freshRows != reviewedRows
+        let refreshedPlan = refreshScanBothPreviewDates()
+        guard let plan = refreshedPlan ?? makePreviewPlan(files: currentPreviewFiles, sessions: previewSessions) else {
+            return nil
+        }
+        let plans = plan.files
+        if refreshedPlan == nil {
+            updatePreviewPlanCache(rows: makePreviewRows(files: currentPreviewFiles, plans: plans))
+        }
+        let planChanged = previewRows != reviewedRows
             || confirmation.map { $0.plans != plans || !$0.destinations.matches() } == true
-        updatePreviewPlanCache(rows: freshRows)
         guard !planChanged else {
             if let entry = scanBothSession?.reviewingEntry, let jobID = entry.jobID,
                let scanned = entry.reviewedSourceFiles,
@@ -2458,7 +2460,7 @@ final class AppModel: ObservableObject {
             return nil
         }
 
-        return (builder, plans)
+        return plan
     }
 
     func setReimportSelection(_ fileIDs: Set<Int64>, requested: Bool) {
@@ -4933,36 +4935,54 @@ final class AppModel: ObservableObject {
         return nil
     }
 
-    private func refreshScanBothPreviewDates(previousSessions: [ImportPreviewSession]? = nil) -> Bool {
+    private func refreshScanBothPreviewDates(previousSessions: [ImportPreviewSession]? = nil) -> PreviewPlan? {
         guard let jobID = scanBothSession?.reviewingJobID, jobID == currentSummary?.jobID else {
-            return false
+            return nil
         }
-        rebuildPreviewSessions(files: currentPreviewFiles, defaultLabel: location, previousSessions: previousSessions)
-        return true
+        return rebuildPreviewSessions(files: currentPreviewFiles, defaultLabel: location, previousSessions: previousSessions)
     }
 
+    @discardableResult
     private func rebuildPreviewSessions(
         files: [JobFileRecord], defaultLabel: String, restoring draft: ImportDraft? = nil,
         previousSessions: [ImportPreviewSession]? = nil
-    ) {
+    ) -> PreviewPlan? {
         let priorSessions = draft?.sessions ?? previousSessions ?? previewSessions
         let previousHidden = draft?.hiddenSessions ?? hiddenPreviewSessions
         let visible = Dictionary(uniqueKeysWithValues: priorSessions.map { ($0.date, $0) })
         let existing = previousHidden.merging(visible) { _, visible in visible }
         let sessions = makePreviewSessions(files: files, defaultLabel: defaultLabel, existing: existing)
-        let plans = buildImportPlans(files: files, sessions: sessions)
+        let choicesByDate = Dictionary(uniqueKeysWithValues: sessions.map { ($0.date, $0) })
+        // Start with the current shoot range while retaining the choices for every scanned date.
+        let planningSessions = folderGrouping == .oneShootFolder && !priorSessions.isEmpty
+            ? sessions.filter { visible[$0.date] != nil } : sessions
+        guard let initialPlan = makePreviewPlan(files: files, sessions: planningSessions, hiddenSessions: choicesByDate) else {
+            return nil
+        }
         let updated = ImportPreviewSessionFilter().visibleSessions(
             files: files,
-            plans: plans,
+            plans: initialPlan.files,
             sessions: sessions,
             importMediaSelection: importMediaSelection,
             organizationPreset: organizationPreset,
             folderGrouping: folderGrouping
         )
+        let plan: PreviewPlan
+        if folderGrouping == .oneShootFolder,
+           ImportPlanBuilder.dateRangeTitle(for: planningSessions.map(\.date)) != ImportPlanBuilder.dateRangeTitle(for: updated.map(\.date)) {
+            guard let rangedPlan = makePreviewPlan(files: files, sessions: updated, hiddenSessions: choicesByDate) else {
+                return nil
+            }
+            plan = rangedPlan
+        } else {
+            plan = initialPlan
+        }
         // Clearing a re-import selection can hide a date until it is included again.
         let visibleDates = Set(updated.map(\.date))
         hiddenPreviewSessions = existing.filter { !visibleDates.contains($0.key) }
-        previewSessions = updated
+        visiblePreviewSessions = updated
+        updatePreviewPlanCache(rows: makePreviewRows(files: files, plans: plan.files))
+        return plan
     }
 
     private var defaultDateInclusion: (photos: Bool, videos: Bool, sidecars: Bool) {
