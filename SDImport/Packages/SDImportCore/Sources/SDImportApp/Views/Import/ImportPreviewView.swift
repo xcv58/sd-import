@@ -8,6 +8,7 @@ struct ImportPreviewView: View {
     @Environment(\.locale) private var locale
     @AppStorage("SDImport.importPreviewMode") private var previewMode = ImportPreviewMode.grid
     @State private var selectedFileFilter: ImportPreviewFileFilter?
+    @State private var pinnedAutomaticFileFilter: ImportPreviewFileFilter?
     @State private var filePage = 0
     @State private var selectedRowID: Int64?
     @State private var showsDateCustomization = false
@@ -22,8 +23,12 @@ struct ImportPreviewView: View {
     }
 
     private var fileFilter: ImportPreviewFileFilter {
-        if let selectedFileFilter { return selectedFileFilter }
+        if let filter = selectedFileFilter ?? pinnedAutomaticFileFilter { return filter }
         return model.previewTotals.copyFiles == 0 ? .skipped : .copy
+    }
+
+    private var isUpdatingReimportSelection: Bool {
+        model.activeImportOperation == .reimportSelection
     }
 
     private var allItems: [ImportPreviewVisualItem] {
@@ -86,6 +91,7 @@ struct ImportPreviewView: View {
                         fileBrowser
                     }
                 }
+                .disabled(isUpdatingReimportSelection)
                 .onChange(of: selectedFileFilter) { _, filter in
                     guard filter != nil else { return }
                     // Filtering can replace a tall page with the empty state.
@@ -101,10 +107,13 @@ struct ImportPreviewView: View {
         }
         .inspector(isPresented: inspectorBinding) {
             if let selectedRow {
-                ImportFileInspector(row: selectedRow) {
-                    presentQuickLook(for: selectedRow)
-                }
+                ImportFileInspector(
+                    row: selectedRow,
+                    quickLookAction: { presentQuickLook(for: selectedRow) },
+                    setReimportSelection: updateReimportSelection
+                )
                 .frame(minWidth: 260, idealWidth: 300)
+                .disabled(isUpdatingReimportSelection)
             }
         }
         .onAppear {
@@ -114,6 +123,7 @@ struct ImportPreviewView: View {
             thumbnailProvider.cancelAll()
             quickLook.dismiss()
             selectedFileFilter = nil
+            pinnedAutomaticFileFilter = nil
             filePage = 0
             selectedRowID = nil
         }
@@ -146,11 +156,22 @@ struct ImportPreviewView: View {
 
             Spacer(minLength: 12)
 
+            if isUpdatingReimportSelection {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel(L10n.tr("Updating re-import selection…"))
+                Button(L10n.tr("Cancel"), role: .cancel) {
+                    model.cancelImport()
+                }
+                .buttonStyle(.bordered)
+            }
+
             if model.isReviewingScanBothVolume {
                 Button(L10n.tr("Back to Scan Results")) {
                     model.returnToScanBothResults()
                 }
                 .buttonStyle(.bordered)
+                .disabled(isUpdatingReimportSelection)
             }
 
             if let summary = model.currentSummary, model.needsRescan(summary.jobID) {
@@ -158,6 +179,7 @@ struct ImportPreviewView: View {
                     model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(isUpdatingReimportSelection)
             }
 
             ImportReviewPrimaryAction()
@@ -497,19 +519,27 @@ struct ImportPreviewView: View {
             VStack(alignment: .leading, spacing: 8) {
                 if !eligible.isEmpty {
                     Button(L10n.tr("Include All Previously Imported Files")) {
-                        model.setReimportSelection(Set(eligible.map(\.id)), requested: true)
+                        updateReimportSelection(Set(eligible.map(\.id)), requested: true)
                     }
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("import.review.reimport-all")
                 }
                 if !selected.isEmpty {
                     Button(L10n.tr("Clear Re-import Selection")) {
-                        model.setReimportSelection(Set(selected.map(\.id)), requested: false)
+                        updateReimportSelection(Set(selected.map(\.id)), requested: false)
                     }
                     .buttonStyle(.bordered)
                 }
             }
         }
+    }
+
+    private func updateReimportSelection(_ fileIDs: Set<Int64>, requested: Bool) {
+        if selectedFileFilter == nil {
+            // Keep the automatic filter as the copy count changes, without scrolling.
+            pinnedAutomaticFileFilter = fileFilter
+        }
+        model.setReimportSelection(fileIDs, requested: requested)
     }
 
     @ViewBuilder
@@ -727,7 +757,7 @@ struct ImportPreviewView: View {
                             destinationText: destinationText(for: item.primaryRow)
                         )
                         .contextMenu {
-                            ReimportSelectionActions(rows: item.rows)
+                            ReimportSelectionActions(rows: item.rows, setReimportSelection: updateReimportSelection)
                         }
                     }
                     .disclosureGroupStyle(FullWidthDisclosureGroupStyle())
@@ -792,7 +822,7 @@ struct ImportPreviewView: View {
                     return .handled
                 }
                 .contextMenu {
-                    ReimportSelectionActions(rows: item.rows)
+                    ReimportSelectionActions(rows: item.rows, setReimportSelection: updateReimportSelection)
                 }
                 .accessibilityHint(L10n.tr("Press Space for Quick Look"))
                 .accessibilityIdentifier("import.review.grid-item.\(item.primaryRow.id)")
@@ -1053,7 +1083,7 @@ struct ImportPreviewView: View {
                 selectedRowID = row.id
                 presentQuickLook(for: row)
             }
-            ReimportSelectionActions(rows: [row])
+            ReimportSelectionActions(rows: [row], setReimportSelection: updateReimportSelection)
         }
         .accessibilityHint(L10n.tr("Press Space for Quick Look"))
     }
@@ -1652,6 +1682,7 @@ private struct ImportFileInspector: View {
     @Environment(\.locale) private var locale
     let row: ImportPreviewRow
     let quickLookAction: () -> Void
+    let setReimportSelection: (Set<Int64>, Bool) -> Void
 
     var body: some View {
         ScrollView {
@@ -1660,7 +1691,7 @@ private struct ImportFileInspector: View {
                     .font(.headline)
                     .textSelection(.enabled)
                 PreviewStatusBadge(row: row)
-                ReimportSelectionActions(rows: [row])
+                ReimportSelectionActions(rows: [row], setReimportSelection: setReimportSelection)
                     .buttonStyle(.bordered)
 
                 inspectorField(L10n.tr("Type"), value: row.mediaKind.displayTitle)
@@ -1706,21 +1737,21 @@ private struct ImportFileInspector: View {
 }
 
 private struct ReimportSelectionActions: View {
-    @EnvironmentObject private var model: AppModel
     let rows: [ImportPreviewRow]
+    let setReimportSelection: (Set<Int64>, Bool) -> Void
 
     var body: some View {
         let eligible = rows.filter(\.canReimport)
         let selected = rows.filter(\.canSkipReimport)
         if !eligible.isEmpty {
             Button(L10n.tr("Import Anyway")) {
-                model.setReimportSelection(Set(eligible.map(\.id)), requested: true)
+                setReimportSelection(Set(eligible.map(\.id)), true)
             }
             .accessibilityIdentifier("import.review.reimport-selection")
         }
         if !selected.isEmpty {
             Button(L10n.tr("Skip Again")) {
-                model.setReimportSelection(Set(selected.map(\.id)), requested: false)
+                setReimportSelection(Set(selected.map(\.id)), false)
             }
         }
     }

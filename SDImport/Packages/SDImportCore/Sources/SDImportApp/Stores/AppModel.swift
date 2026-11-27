@@ -386,7 +386,6 @@ private struct SourceEjectionTarget: Sendable {
 }
 
 private enum ImportRetryContext {
-    case reimportSelection(jobID: String, fileIDs: Set<Int64>, requested: Bool)
     case eject(jobID: String, target: SourceEjectionTarget)
 }
 
@@ -2423,10 +2422,9 @@ final class AppModel: ObservableObject {
         guard !selectedIDs.isEmpty else { return }
 
         let attemptID = beginImportAttempt(
-            .reimportSelection, event: .beginPreparation(.reimportSelection),
-            retryContext: .reimportSelection(jobID: jobID, fileIDs: selectedIDs, requested: requested)
+            .reimportSelection, event: .beginAuxiliaryOperation(.reimportSelection)
         )
-        statusMessage = L10n.tr("Updating re-import selection…")
+        folderAccessFeedback = nil
         importTask = Task.detached(priority: .userInitiated) {
             do {
                 try Task.checkCancellation()
@@ -2450,25 +2448,21 @@ final class AppModel: ObservableObject {
                     }
                     self.rebuildPreviewPlanCache()
                     self.statusMessage = ""
-                    self.finishImportAttempt(attemptID, event: .scanSucceeded)
+                    self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                 }
             } catch is CancellationError {
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
-                    self.finishImportAttempt(attemptID, event: .cancelled)
+                    self.statusMessage = ""
+                    self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                 }
             } catch {
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
-                    let render = {
+                    self.showFolderAccessError {
                         L10n.tr("Could not update re-import selection: \(Self.errorMessage(for: error))")
                     }
-                    self.setLocalizedStatusMessage(render)
-                    let message = self.statusMessage
-                    self.finishImportAttempt(
-                        attemptID, event: .failed(operation: .reimportSelection, message: message),
-                        failureRenderer: render
-                    )
+                    self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                 }
             }
         }
@@ -2906,12 +2900,6 @@ final class AppModel: ObservableObject {
         let retryContext = failedImportRetryContext
         failedImportRetryContext = nil
         switch retryContext {
-        case .reimportSelection(let jobID, let fileIDs, let requested):
-            recoverImportWorkspace()
-            if currentSummary?.jobID == jobID {
-                setReimportSelection(fileIDs, requested: requested)
-            }
-            return
         case .eject(let jobID, let target):
             transitionImportWorkspace(
                 currentResult == nil

@@ -88,9 +88,7 @@ public enum ImportWorkspaceTransition {
             guard snapshot.activeOperation == nil else { return snapshot }
             return ImportWorkspaceSnapshot(phase: .scanning, activeOperation: .scan)
         case .scanSucceeded:
-            guard snapshot.activeOperation == .scan
-                    || snapshot.activeOperation == .reimportSelection
-            else { return snapshot }
+            guard snapshot.activeOperation == .scan else { return snapshot }
             return ImportWorkspaceSnapshot(phase: .review)
         case .beginPreparation(let operation):
             guard
@@ -98,7 +96,7 @@ public enum ImportWorkspaceTransition {
                 snapshot.phase != .scanning,
                 snapshot.phase != .preparing,
                 snapshot.phase != .copying,
-                operation == .prepareImport || operation == .reimportSelection
+                operation == .prepareImport
             else { return snapshot }
             return ImportWorkspaceSnapshot(phase: .preparing, activeOperation: operation)
         case .beginCopy:
@@ -108,10 +106,13 @@ public enum ImportWorkspaceTransition {
             else { return snapshot }
             return ImportWorkspaceSnapshot(phase: .copying, activeOperation: .copy)
         case .beginAuxiliaryOperation(let operation):
-            guard snapshot.activeOperation == nil, operation == .eject else { return snapshot }
+            guard snapshot.activeOperation == nil,
+                  operation == .eject || (operation == .reimportSelection && snapshot.phase == .review)
+            else { return snapshot }
             return ImportWorkspaceSnapshot(phase: snapshot.phase, activeOperation: operation)
         case .endAuxiliaryOperation:
-            guard snapshot.activeOperation == .eject else { return snapshot }
+            guard snapshot.activeOperation == .eject || snapshot.activeOperation == .reimportSelection
+            else { return snapshot }
             return ImportWorkspaceSnapshot(phase: snapshot.phase)
         case .completed:
             guard snapshot.activeOperation == .prepareImport || snapshot.activeOperation == .copy else {

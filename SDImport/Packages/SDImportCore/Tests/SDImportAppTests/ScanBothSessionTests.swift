@@ -729,9 +729,16 @@ struct ScanBothSessionTests {
             }
             if scenario == .reimportKnownFile, entry.volume == first {
                 let known = try #require(model.previewRows.first { $0.canReimport })
-                model.setReimportSelection([known.id], requested: true)
-                try await waitForImport(model)
-                #expect(model.previewRows.first { $0.id == known.id }?.willCopy == true)
+                for requested in [true, false, true] {
+                    model.setReimportSelection([known.id], requested: requested)
+                    #expect(model.importUIPhase == .review)
+                    #expect(model.activeImportOperation == .reimportSelection)
+                    #expect(!model.canImportPlannedFiles)
+                    try await waitForImport(model)
+                    #expect(model.importUIPhase == .review)
+                    #expect(model.activeImportOperation == nil)
+                    #expect(model.previewRows.first { $0.id == known.id }?.willCopy == requested)
+                }
                 #expect(model.scanBothSession?.entries[1].confirmation != nil)
             }
             if (scenario == .firstVolumeDisconnectsBeforeSecond || scenario == .receiptAfterHistoryNavigation),
@@ -953,7 +960,7 @@ struct ScanBothSessionTests {
         }
     }
 
-    @Test("Scan Both imports a reselected file and preserves the sibling confirmation")
+    @Test("Scan Both updates re-import selections in review and preserves the sibling confirmation")
     func reimportsKnownFileInBatch() async throws {
         try await startsBatchThroughAppModel(.reimportKnownFile)
     }
