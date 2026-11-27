@@ -3336,7 +3336,8 @@ final class AppModel: ObservableObject {
         knownImportedPreviewFileIDs = Self.knownImportedFileIDs(files: files, dedupeRepository: dedupeRepository)
         refreshScanBothReviewHistory(files: files)
         applyRecommendationAfterScan(files: files, summary: summary)
-        rebuildPreviewSessions(files: files, defaultLabel: draft?.shootName ?? summary.location, restoring: draft)
+        let defaultLabel = isReviewingScanBothVolume ? location : summary.location
+        rebuildPreviewSessions(files: files, defaultLabel: defaultLabel, restoring: draft)
     }
 
     func returnToScanBothResults() {

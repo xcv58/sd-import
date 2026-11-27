@@ -1279,7 +1279,7 @@ struct ScanBothSessionTests {
     }
 
     enum ReviewChange: CaseIterable {
-        case matchingLabel, removedReceipt, oneShootConflict, recoverVideos
+        case matchingLabel, removedReceipt, oneShootConflict, recoverVideos, changedShootDefault
     }
 
     @Test("Scan Both keeps approval and destination dates in sync", arguments: ReviewChange.allCases)
@@ -1298,9 +1298,10 @@ struct ScanBothSessionTests {
         for folder in [internalFolder, cardFolder, destination] {
             try fm.createDirectory(at: folder, withIntermediateDirectories: true)
         }
-        let firstName = change == .oneShootConflict ? "VID_20231114_210458_00_007.insv" : "First.jpg"
+        let hasInsta360Recording = change == .oneShootConflict || change == .changedShootDefault
+        let firstName = hasInsta360Recording ? "VID_20231114_210458_00_007.insv" : "First.jpg"
         let laterName = switch change {
-        case .oneShootConflict: "Later.dng"
+        case .oneShootConflict, .changedShootDefault: "Later.dng"
         case .recoverVideos: "Later.mp4"
         default: "Later.jpg"
         }
@@ -1319,7 +1320,7 @@ struct ScanBothSessionTests {
             try fm.setAttributes([.creationDate: date, .modificationDate: date], ofItemAtPath: url.path)
         }
         let ledger = PortableImportReceiptLedger(sourceRootURL: internalFolder)
-        let hasReceipt = change == .removedReceipt || change == .recoverVideos
+        let hasReceipt = change == .removedReceipt || change == .recoverVideos || change == .changedShootDefault
         if hasReceipt {
             try ledger.append(identity: PortableFileIdentity(
                 size: Int64(firstName.utf8.count), modificationDate: firstDate, relativePath: firstName
@@ -1343,6 +1344,14 @@ struct ScanBothSessionTests {
         model.beginScanBoth(session)
         try await waitForImport(model)
         model.reviewScanBothVolume(session.entries[1].id)
+        let updatedShoot = "Updated Shoot"
+        if change == .changedShootDefault {
+            try #require(model.scanBothSession?.entries[0].summary?.location != updatedShoot)
+            model.location = updatedShoot
+            model.useFolderGrouping(.byDay)
+            model.saveImportDraftAsDefaults()
+            try #require(model.importDefaults.shootName == updatedShoot)
+        }
         model.importCurrentJob()
         try #require(model.scanBothSession?.entries[1].confirmation != nil)
         model.reviewScanBothVolume(session.entries[0].id)
@@ -1428,13 +1437,32 @@ struct ScanBothSessionTests {
                 ImportPlanBuilder.dateRangeTitle(for: videoDays)
             ))
             model.importCurrentJob()
+        case .changedShootDefault:
+            #expect(model.location == updatedShoot)
+            try #require(try row(named: firstName).disposition == .known(.portableLedger))
+            #expect(try row(named: firstName).destinationPath?.contains(updatedShoot) == true)
+            #expect(try row(named: laterName).destinationPath?.contains(updatedShoot) == true)
+            let previewedPath = try #require(try row(named: laterName).destinationPath)
+            model.importCurrentJob()
+            let confirmed = try #require(model.scanBothSession?.entries[0].confirmation)
+            #expect(confirmed.plans.filter(\.willCopy).compactMap(\.destinationPath) == [previewedPath])
         }
 
         try #require(model.canStartScanBothImports)
+        let approvedPaths = model.scanBothSession?.entries.flatMap { entry in
+            entry.confirmation?.plans.filter(\.willCopy).compactMap(\.destinationPath) ?? []
+        } ?? []
         model.startScanBothImports()
         try await waitForImport(model)
-        let expectedCount = change == .matchingLabel ? 1 : 2
+        let expectedCount = change == .matchingLabel || change == .changedShootDefault ? 1 : 2
         #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [expectedCount, 1])
+        if change == .changedShootDefault {
+            try #require(approvedPaths.count == 2)
+            for path in approvedPaths {
+                let url = URL(fileURLWithPath: path)
+                #expect(try Data(contentsOf: url) == Data(url.lastPathComponent.utf8))
+            }
+        }
     }
 
     private func waitForImport(_ model: AppModel) async throws {
