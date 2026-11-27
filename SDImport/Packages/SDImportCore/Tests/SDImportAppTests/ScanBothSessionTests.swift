@@ -612,6 +612,12 @@ struct ScanBothSessionTests {
         for url in [firstFile, secondFile] + (needsSecondInternalFile ? [laterFile] : []) {
             try fm.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)], ofItemAtPath: url.path)
         }
+        if scenario == .reimportKnownFile {
+            let laterDate = Date(timeIntervalSince1970: 1_700_086_400)
+            try fm.setAttributes(
+                [.creationDate: laterDate, .modificationDate: laterDate], ofItemAtPath: laterFile.path
+            )
+        }
         if testsHistoryExclusion {
             try PortableImportReceiptLedger(sourceRootURL: internalFolder).append(identity: PortableFileIdentity(
                 size: 14, modificationTimeEpochSeconds: 1_700_000_000, relativePath: firstFile.lastPathComponent
@@ -729,7 +735,13 @@ struct ScanBothSessionTests {
             }
             if scenario == .reimportKnownFile, entry.volume == first {
                 let known = try #require(model.previewRows.first { $0.canReimport })
-                for requested in [true, false, true] {
+                let newDate = try #require(model.previewRows.first { $0.willCopy }?.date)
+                try #require(newDate != known.date)
+                #expect(model.previewSessions.map(\.date) == [newDate])
+                let newDateIndex = try #require(model.previewSessions.firstIndex { $0.date == newDate })
+                model.previewSessions[newDateIndex].label = "New Photos"
+
+                for (index, requested) in [true, false, true].enumerated() {
                     model.setReimportSelection([known.id], requested: requested)
                     #expect(model.importUIPhase == .review)
                     #expect(model.activeImportOperation == .reimportSelection)
@@ -738,6 +750,20 @@ struct ScanBothSessionTests {
                     #expect(model.importUIPhase == .review)
                     #expect(model.activeImportOperation == nil)
                     #expect(model.previewRows.first { $0.id == known.id }?.willCopy == requested)
+                    #expect(model.previewSessions.first { $0.date == newDate }?.label == "New Photos")
+                    if requested {
+                        let dateIndex = try #require(model.previewSessions.firstIndex { $0.date == known.date })
+                        #expect(model.previewSessions[dateIndex].photoCount == 1)
+                        if index == 0 {
+                            model.previewSessions[dateIndex].label = "Earlier Photos"
+                            model.previewSessions[dateIndex].includeSidecars = true
+                        } else {
+                            #expect(model.previewSessions[dateIndex].label == "Earlier Photos")
+                            #expect(model.previewSessions[dateIndex].includeSidecars)
+                        }
+                    } else {
+                        #expect(model.previewSessions.map(\.date) == [newDate])
+                    }
                 }
                 #expect(model.scanBothSession?.entries[1].confirmation != nil)
             }

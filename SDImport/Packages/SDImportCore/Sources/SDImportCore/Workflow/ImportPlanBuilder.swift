@@ -136,6 +136,7 @@ public struct ImportPlanBuilder: Sendable {
     public let volumeName: String?
     private let insta360Recovery: Insta360RescanRecovery?
     private let useOriginalInsta360Folders: Bool
+    private let hiddenSessions: [String: ImportPlanSession]
 
     public init(
         sessions: [ImportPlanSession],
@@ -146,7 +147,8 @@ public struct ImportPlanBuilder: Sendable {
         fallbackLocation: String,
         volumeName: String?,
         insta360Recovery: Insta360RescanRecovery? = nil,
-        useOriginalInsta360Folders: Bool = true
+        useOriginalInsta360Folders: Bool = true,
+        hiddenSessions: [String: ImportPlanSession] = [:]
     ) {
         self.sessions = sessions
         self.mediaSelection = mediaSelection
@@ -157,6 +159,7 @@ public struct ImportPlanBuilder: Sendable {
         self.volumeName = volumeName
         self.insta360Recovery = insta360Recovery
         self.useOriginalInsta360Folders = useOriginalInsta360Folders
+        self.hiddenSessions = hiddenSessions
     }
 
     public func updates(files: [JobFileRecord]) -> [JobFilePlanUpdate] {
@@ -304,7 +307,7 @@ public struct ImportPlanBuilder: Sendable {
         let isUnmatchedInsta360Proxy = !isInsta360RecordingFile
             && file.ext.trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased() == "lrv"
         let date = Self.sessionDate(for: insta360RecordingMaster ?? file)
-        let session = sessions.first { $0.date == date }
+        let session = sessions.first { $0.date == date } ?? hiddenSessions[date]
         let label = folderLabel(for: session)
         let folderDate = folderDate(for: date)
 

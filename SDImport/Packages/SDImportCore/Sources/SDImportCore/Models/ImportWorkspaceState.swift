@@ -176,6 +176,7 @@ public struct ImportDraft: Equatable, Sendable {
     public var destinationLayout: ImportDestinationLayout
     public var folderGrouping: ImportFolderGrouping
     public var sessions: [ImportPlanSession]
+    public var hiddenSessions: [String: ImportPlanSession]
 
     public init(
         sourcePath: String,
@@ -186,7 +187,8 @@ public struct ImportDraft: Equatable, Sendable {
         mediaSelection: ImportMediaSelection,
         destinationLayout: ImportDestinationLayout,
         folderGrouping: ImportFolderGrouping,
-        sessions: [ImportPlanSession] = []
+        sessions: [ImportPlanSession] = [],
+        hiddenSessions: [String: ImportPlanSession] = [:]
     ) {
         self.sourcePath = sourcePath
         self.photosPath = photosPath
@@ -197,5 +199,6 @@ public struct ImportDraft: Equatable, Sendable {
         self.destinationLayout = destinationLayout
         self.folderGrouping = folderGrouping
         self.sessions = sessions
+        self.hiddenSessions = hiddenSessions
     }
 }

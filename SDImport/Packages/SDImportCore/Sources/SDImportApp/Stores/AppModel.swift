@@ -599,6 +599,7 @@ final class AppModel: ObservableObject {
             rebuildPreviewPlanCache()
         }
     }
+    private var hiddenPreviewSessions: [String: ImportPreviewSession] = [:]
     @Published private(set) var previewRows: [ImportPreviewRow] = []
     @Published private(set) var previewTotals: ImportPreviewTotals = .empty
     @Published private(set) var previewDestinations: [ImportPreviewDestination] = []
@@ -610,7 +611,13 @@ final class AppModel: ObservableObject {
             }
         }
     }
-    @Published var currentSummary: ScanSummary?
+    @Published var currentSummary: ScanSummary? {
+        didSet {
+            if currentSummary?.jobID != oldValue?.jobID {
+                hiddenPreviewSessions = [:]
+            }
+        }
+    }
     private var insta360RescanRecovery: Insta360RescanRecovery?
     private var rescanContext: RescanContext?
     var hasInsta360RescanLensesToCopy: Bool {
@@ -1474,7 +1481,8 @@ final class AppModel: ObservableObject {
             mediaSelection: importMediaSelection,
             destinationLayout: destinationLayout,
             folderGrouping: folderGrouping,
-            sessions: previewSessions
+            sessions: previewSessions,
+            hiddenSessions: hiddenPreviewSessions
         )
     }
 
@@ -1907,11 +1915,20 @@ final class AppModel: ObservableObject {
         _ keyPath: WritableKeyPath<ImportPreviewSession, Bool>,
         to isIncluded: Bool
     ) {
-        previewSessions = previewSessions.map { session in
-            var session = session
+        updatePreviewSessionChoices { session in
             session[keyPath: keyPath] = isIncluded
+        }
+    }
+
+    private func updatePreviewSessionChoices(_ update: (inout ImportPreviewSession) -> Void) {
+        func updated(_ session: ImportPreviewSession) -> ImportPreviewSession {
+            var session = session
+            update(&session)
             return session
         }
+
+        hiddenPreviewSessions = hiddenPreviewSessions.mapValues(updated)
+        previewSessions = previewSessions.map(updated)
     }
 
     func folderGroupingDidChange() {
@@ -1929,12 +1946,10 @@ final class AppModel: ObservableObject {
             ? preferredMixedDestinationLayout
             : ImportDestinationLayout(organizationPreset: profile.organizationPreset)
         organizationPreset = destinationLayout.organizationPreset
-        previewSessions = previewSessions.map { session in
-            var session = session
+        updatePreviewSessionChoices { session in
             session.includePhotos = profile.mediaSelection.includes(.photo)
             session.includeVideos = profile.mediaSelection.includes(.video)
             session.includeSidecars = profile.includesSidecarsByDefault
-            return session
         }
         if userInitiated {
             workflowProfileWasManuallyChosenForCurrentJob = true
@@ -1946,12 +1961,10 @@ final class AppModel: ObservableObject {
         normalizeDestinationForCurrentImportType()
         updateWorkflowProfileForCurrentOptions()
 
-        previewSessions = previewSessions.map { session in
-            var session = session
+        updatePreviewSessionChoices { session in
             session.includePhotos = importMediaSelection.includes(.photo)
             session.includeVideos = importMediaSelection.includes(.video)
             session.includeSidecars = workflowProfile.includesSidecarsByDefault
-            return session
         }
         if userInitiated {
             workflowProfileWasManuallyChosenForCurrentJob = true
@@ -2041,7 +2054,8 @@ final class AppModel: ObservableObject {
             fallbackLocation: Self.defaultSessionLabel(for: location),
             volumeName: currentSummary.volumeName,
             insta360Recovery: insta360RescanRecovery,
-            useOriginalInsta360Folders: useOriginalInsta360Folders
+            useOriginalInsta360Folders: useOriginalInsta360Folders,
+            hiddenSessions: hiddenPreviewSessions
         )
     }
 
@@ -2114,24 +2128,22 @@ final class AppModel: ObservableObject {
     }
 
     private func syncPreviewSessionLabels(from previousLocation: String, to nextLocation: String) {
-        guard !previewSessions.isEmpty else {
-            return
-        }
-
         let previousLabel = Self.defaultSessionLabel(for: previousLocation)
         let nextLabel = Self.defaultSessionLabel(for: nextLocation)
         guard previousLabel != nextLabel else {
             return
         }
 
-        var sessions = previewSessions
-        var didUpdate = false
-        for index in sessions.indices where Self.defaultSessionLabel(for: sessions[index].label) == previousLabel {
-            sessions[index].label = nextLabel
-            didUpdate = true
+        func updated(_ session: ImportPreviewSession) -> ImportPreviewSession {
+            guard Self.defaultSessionLabel(for: session.label) == previousLabel else { return session }
+            var session = session
+            session.label = nextLabel
+            return session
         }
 
-        if didUpdate {
+        hiddenPreviewSessions = hiddenPreviewSessions.mapValues(updated)
+        let sessions = previewSessions.map(updated)
+        if sessions != previewSessions {
             previewSessions = sessions
         }
     }
@@ -2446,7 +2458,7 @@ final class AppModel: ObservableObject {
                     if self.selectedJobID == jobID {
                         self.selectedJobFiles = files
                     }
-                    self.rebuildPreviewPlanCache()
+                    self.rebuildPreviewSessions(files: files, defaultLabel: self.location)
                     self.statusMessage = ""
                     self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                 }
@@ -3244,6 +3256,7 @@ final class AppModel: ObservableObject {
                 }
                 folderGrouping = draft.folderGrouping
                 validatePaths()
+                hiddenPreviewSessions = draft.hiddenSessions
                 previewSessions = draft.sessions
             }
             recoverImportWorkspace()
@@ -4855,16 +4868,21 @@ final class AppModel: ObservableObject {
     }
 
     private func rebuildPreviewSessions(files: [JobFileRecord], defaultLabel: String) {
-        let existing = Dictionary(uniqueKeysWithValues: previewSessions.map { ($0.date, $0) })
+        let visible = Dictionary(uniqueKeysWithValues: previewSessions.map { ($0.date, $0) })
+        let existing = hiddenPreviewSessions.merging(visible) { _, visible in visible }
         let sessions = makePreviewSessions(files: files, defaultLabel: defaultLabel, existing: existing)
         let plans = buildImportPlans(files: files, sessions: sessions)
-        previewSessions = ImportPreviewSessionFilter().visibleSessions(
+        let updated = ImportPreviewSessionFilter().visibleSessions(
             files: files,
             plans: plans,
             sessions: sessions,
             importMediaSelection: importMediaSelection,
             organizationPreset: organizationPreset
         )
+        // Clearing a re-import selection can hide a date until it is included again.
+        let visibleDates = Set(updated.map(\.date))
+        hiddenPreviewSessions = existing.filter { !visibleDates.contains($0.key) }
+        previewSessions = updated
     }
 
     private func makePreviewSessions(
