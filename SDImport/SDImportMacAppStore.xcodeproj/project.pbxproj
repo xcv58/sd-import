@@ -584,14 +584,14 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 35;
+				CURRENT_PROJECT_VERSION = 43;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Packaging/MacAppStore/SDImportAgent-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.4;
+				MARKETING_VERSION = 1.2;
 				OTHER_SWIFT_FLAGS = "$(inherited) -parse-as-library";
 				PRODUCT_BUNDLE_IDENTIFIER = media.jenny.sdimport.agent;
 				PRODUCT_NAME = SDImportAgent;
@@ -608,14 +608,14 @@
 				CODE_SIGN_ENTITLEMENTS = Packaging/MacAppStore/SDImportAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 35;
+				CURRENT_PROJECT_VERSION = 43;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Packaging/MacAppStore/SDImportAgent-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.4;
+				MARKETING_VERSION = 1.2;
 				OTHER_SWIFT_FLAGS = "$(inherited) -parse-as-library";
 				PRODUCT_BUNDLE_IDENTIFIER = media.jenny.sdimport.agent;
 				PRODUCT_NAME = SDImportAgent;
@@ -649,11 +649,11 @@
 				CODE_SIGN_ENTITLEMENTS = Packaging/MacAppStore/SDImport.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 35;
+				CURRENT_PROJECT_VERSION = 43;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Packaging/MacAppStore/SDImport-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MARKETING_VERSION = 1.1.4;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = media.jenny.sdimport;
 				PRODUCT_MODULE_NAME = SDImportForMac;
 				PRODUCT_NAME = "SD Card Import";
@@ -670,11 +670,11 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 35;
+				CURRENT_PROJECT_VERSION = 43;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Packaging/MacAppStore/SDImport-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MARKETING_VERSION = 1.1.4;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = media.jenny.sdimport;
 				PRODUCT_MODULE_NAME = SDImportForMac;
 				PRODUCT_NAME = "SD Card Import";
