@@ -66,8 +66,14 @@ the app manually and use `Import From Card...` if automatic prompting fails.
 - Optional portable import receipts add a hidden `.sd-import/imported-v1.jsonl`
   history ledger to writable sources. This option is off by default. Read-only
   sources continue without writing portable history.
-- Files recognized from portable history are labeled `Other Mac`. Choose
-  `Import Anyway` only when you want to copy those files again.
+- Files recognized from portable history are labeled `Other Mac`. To copy
+  previously imported files again, open `Skipped` in Review Import and choose
+  `Import Anyway` from a file's context menu or details. To include every
+  previously imported file in the current media and date selection, choose
+  `Include All Previously Imported Files`. These choices apply to this scan.
+- In History, `Forget Files` removes this Mac's duplicate tracking for the
+  import. The history entry shows `Forgotten on this Mac` and still records
+  what was copied.
 - If a source file changes after scanning, rescan before copying it.
 - Ordinary filename conflicts get a suffix to preserve both files. If an
   Insta360 recording has a filename conflict, choose another destination to

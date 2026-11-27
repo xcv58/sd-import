@@ -15,7 +15,7 @@ public enum ImportOperationKind: String, Equatable, Sendable {
     case scan
     case prepareImport
     case copy
-    case portableReceiptOverride
+    case reimportSelection
     case eject
 }
 
@@ -88,9 +88,7 @@ public enum ImportWorkspaceTransition {
             guard snapshot.activeOperation == nil else { return snapshot }
             return ImportWorkspaceSnapshot(phase: .scanning, activeOperation: .scan)
         case .scanSucceeded:
-            guard snapshot.activeOperation == .scan
-                    || snapshot.activeOperation == .portableReceiptOverride
-            else { return snapshot }
+            guard snapshot.activeOperation == .scan else { return snapshot }
             return ImportWorkspaceSnapshot(phase: .review)
         case .beginPreparation(let operation):
             guard
@@ -98,7 +96,7 @@ public enum ImportWorkspaceTransition {
                 snapshot.phase != .scanning,
                 snapshot.phase != .preparing,
                 snapshot.phase != .copying,
-                operation == .prepareImport || operation == .portableReceiptOverride
+                operation == .prepareImport
             else { return snapshot }
             return ImportWorkspaceSnapshot(phase: .preparing, activeOperation: operation)
         case .beginCopy:
@@ -108,10 +106,13 @@ public enum ImportWorkspaceTransition {
             else { return snapshot }
             return ImportWorkspaceSnapshot(phase: .copying, activeOperation: .copy)
         case .beginAuxiliaryOperation(let operation):
-            guard snapshot.activeOperation == nil, operation == .eject else { return snapshot }
+            guard snapshot.activeOperation == nil,
+                  operation == .eject || (operation == .reimportSelection && snapshot.phase == .review)
+            else { return snapshot }
             return ImportWorkspaceSnapshot(phase: snapshot.phase, activeOperation: operation)
         case .endAuxiliaryOperation:
-            guard snapshot.activeOperation == .eject else { return snapshot }
+            guard snapshot.activeOperation == .eject || snapshot.activeOperation == .reimportSelection
+            else { return snapshot }
             return ImportWorkspaceSnapshot(phase: snapshot.phase)
         case .completed:
             guard snapshot.activeOperation == .prepareImport || snapshot.activeOperation == .copy else {
@@ -175,6 +176,7 @@ public struct ImportDraft: Equatable, Sendable {
     public var destinationLayout: ImportDestinationLayout
     public var folderGrouping: ImportFolderGrouping
     public var sessions: [ImportPlanSession]
+    public var hiddenSessions: [String: ImportPlanSession]
 
     public init(
         sourcePath: String,
@@ -185,7 +187,8 @@ public struct ImportDraft: Equatable, Sendable {
         mediaSelection: ImportMediaSelection,
         destinationLayout: ImportDestinationLayout,
         folderGrouping: ImportFolderGrouping,
-        sessions: [ImportPlanSession] = []
+        sessions: [ImportPlanSession] = [],
+        hiddenSessions: [String: ImportPlanSession] = [:]
     ) {
         self.sourcePath = sourcePath
         self.photosPath = photosPath
@@ -196,5 +199,6 @@ public struct ImportDraft: Equatable, Sendable {
         self.destinationLayout = destinationLayout
         self.folderGrouping = folderGrouping
         self.sessions = sessions
+        self.hiddenSessions = hiddenSessions
     }
 }

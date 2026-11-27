@@ -60,10 +60,15 @@
 "Allow %@ in System Settings → General → Login Items & Extensions." = "请在“系统设置 → 通用 → 登录项与扩展”中允许 %1$@。";
 "Allow Access" = "允许访问";
 "Allow Access & Scan" = "允许访问并扫描";
+"Clear Re-import Selection" = "清除重新导入选择";
 "Confirm Plan" = "确认导入计划";
 "Confirms this volume for Start Imports" = "确认将此宗卷纳入待开始的导入";
+"Could not update re-import selection: %@" = "无法更新重新导入选择：%@";
 "Edit Plan" = "编辑导入计划";
+"Include All Previously Imported Files" = "包括所有已导入的文件";
+"Skip Again" = "再次跳过";
 "Start Imports" = "开始导入";
+"Updating re-import selection…" = "正在更新重新导入选择…";
 "macOS needs your permission to read this source." = "macOS 需要你的许可才能读取此来源。";
 "Allow Access to %@" = "允许访问 %1$@";
 "Allow Access to Source" = "允许访问来源";
@@ -247,6 +252,7 @@
 "Forget imported files?" = "忘记已导入的文件？";
 "Forgot %lld imported files" = "已忘记 %1$lld 个已导入文件";
 "Forgot 1 imported file" = "已忘记 1 个已导入文件";
+"Forgotten on this Mac" = "已在此 Mac 上忘记导入记录";
 "General" = "通用";
 "Grid" = "网格";
 "Helper build %@ · last started %@" = "辅助程序版本 %1$@ · 上次启动 %2$@";

@@ -1,6 +1,12 @@
 import Foundation
 
 public struct ImportJob: Identifiable, Hashable, Codable, Sendable {
+    public enum LocalTracking: String, Codable, Sendable {
+        case tracked
+        case forgotten
+        case untracked
+    }
+
     public let id: String
     public let createdAt: Date
     public var startedAt: Date?
@@ -25,6 +31,7 @@ public struct ImportJob: Identifiable, Hashable, Codable, Sendable {
     public var summaryJSONPath: String?
     public var summaryMarkdownPath: String?
     public var appVersion: String?
+    public let localTracking: LocalTracking?
 
     public var isImportHistoryEntry: Bool {
         status != .scanned
@@ -61,7 +68,8 @@ public struct ImportJob: Identifiable, Hashable, Codable, Sendable {
         summaryMarkdownPath: String? = nil,
         appVersion: String? = nil,
         volumeMountPath: String? = nil,
-        rescanOfJobID: String? = nil
+        rescanOfJobID: String? = nil,
+        localTracking: LocalTracking? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -87,5 +95,6 @@ public struct ImportJob: Identifiable, Hashable, Codable, Sendable {
         self.summaryJSONPath = summaryJSONPath
         self.summaryMarkdownPath = summaryMarkdownPath
         self.appVersion = appVersion
+        self.localTracking = localTracking
     }
 }

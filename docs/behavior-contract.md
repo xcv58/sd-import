@@ -81,7 +81,7 @@ Optional portable receipt rules:
 - Read-only, locked, full, removed, or otherwise unwritable sources never fail the media import; portable history is skipped with a warning.
 - Import reloads portable history before copying pending files so receipts added after the original scan are honored.
 - Import verifies the source file's current size and modification epoch against the scan before dedupe or copy. Changed files fail with a rescan-required message, and source identity is checked again before a portable receipt is written.
-- A user can explicitly choose `Import Anyway` for files known only from portable receipts. That choice is stored separately from errors and survives destination replanning and retries.
+- Review Import can include previously imported files for the current scan, from local tracking or portable receipts. These choices survive destination replanning. Destination conflicts and source validation still apply, and a fresh scan starts with duplicate tracking enabled.
 - Existing local dedupe entries are backfilled to a writable source when portable receipts are enabled.
 
 Known tradeoff:

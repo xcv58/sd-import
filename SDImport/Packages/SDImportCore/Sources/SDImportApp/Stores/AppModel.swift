@@ -18,10 +18,14 @@ struct CompletedImportReceipt {
 }
 
 struct ScanBothSession {
+    struct Draft {
+        let settings: ImportDraft
+        let destinationAccess: [SecurityScopedResourceAccess]
+    }
+
     struct Confirmation: Sendable {
         let draft: ImportDraft
         let plans: [ImportFilePlan]
-        let destinationAccess: [SecurityScopedResourceAccess]
         let destinations: ReviewedImportDestinations
     }
 
@@ -44,6 +48,7 @@ struct ScanBothSession {
         var state: State = .waiting
         var disposition: Disposition = .pending
         var hasStartedImport = false
+        var draft: Draft?
         var confirmation: Confirmation?
         var result: ImportResult?
         var copyInterruption: String?
@@ -149,6 +154,16 @@ struct ScanBothSession {
         entries[index].confirmation = confirmation
     }
 
+    mutating func saveDraft(_ draft: Draft, for jobID: String) {
+        guard let index = entries.firstIndex(where: { $0.jobID == jobID && $0.awaitsImport }),
+              !removedMountPaths.contains(entries[index].volume.mountPath)
+        else { return }
+        entries[index].draft = draft
+        if entries[index].confirmation?.draft != draft.settings {
+            entries[index].confirmation = nil
+        }
+    }
+
     var issueIfNoVolumeScanned: ScanBothIssue? {
         guard entries.allSatisfy({ $0.summary == nil }) else { return nil }
         for entry in entries {
@@ -160,6 +175,7 @@ struct ScanBothSession {
     mutating func noteUnmount(at path: String) -> String? {
         guard let index = entries.firstIndex(where: { $0.volume.mountPath == path }) else { return nil }
         removedMountPaths.insert(path)
+        entries[index].draft = nil
         entries[index].confirmation = nil
         return entries[index].jobID
     }
@@ -174,7 +190,10 @@ struct ScanBothSession {
         guard let index = entries.firstIndex(where: { $0.jobID == result.jobID }) else { return }
         entries[index].result = result
         entries[index].copyInterruption = nil
-        if result.failedFiles == 0 { entries[index].disposition = .imported }
+        if result.failedFiles == 0 {
+            entries[index].disposition = .imported
+            entries[index].draft = nil
+        }
     }
 
     mutating func recordInterruptedImport(
@@ -195,6 +214,7 @@ struct ScanBothSession {
     mutating func skipEntry(_ id: UUID) {
         guard let index = entries.firstIndex(where: { $0.id == id && $0.canSkip }) else { return }
         entries[index].disposition = .skipped
+        entries[index].draft = nil
         entries[index].confirmation = nil
     }
 
@@ -319,6 +339,16 @@ struct ImportPreviewRow: Identifiable, Hashable {
     var status: String { disposition.title }
     let willCopy: Bool
     let size: Int64
+    let reimportRequested: Bool
+
+    var canReimport: Bool {
+        if case .known(let source) = disposition { return source != .destination }
+        return false
+    }
+
+    var canSkipReimport: Bool {
+        reimportRequested && disposition != .copied
+    }
 }
 
 struct ImportPreviewTotals: Hashable {
@@ -376,7 +406,6 @@ private struct SourceEjectionTarget: Sendable {
 }
 
 private enum ImportRetryContext {
-    case portableReceiptOverride
     case eject(jobID: String, target: SourceEjectionTarget)
 }
 
@@ -590,6 +619,7 @@ final class AppModel: ObservableObject {
             rebuildPreviewPlanCache()
         }
     }
+    private var hiddenPreviewSessions: [String: ImportPreviewSession] = [:]
     @Published private(set) var previewRows: [ImportPreviewRow] = []
     @Published private(set) var previewTotals: ImportPreviewTotals = .empty
     @Published private(set) var previewDestinations: [ImportPreviewDestination] = []
@@ -601,7 +631,13 @@ final class AppModel: ObservableObject {
             }
         }
     }
-    @Published var currentSummary: ScanSummary?
+    @Published var currentSummary: ScanSummary? {
+        didSet {
+            if currentSummary?.jobID != oldValue?.jobID {
+                hiddenPreviewSessions = [:]
+            }
+        }
+    }
     private var insta360RescanRecovery: Insta360RescanRecovery?
     private var rescanContext: RescanContext?
     var hasInsta360RescanLensesToCopy: Bool {
@@ -769,6 +805,7 @@ final class AppModel: ObservableObject {
     }
     @Published private var importAttempt: ImportWorkspaceAttempt?
     var isWorking: Bool { importAttempt.map { $0.operation != .eject } ?? false }
+    var canCancelReimportSelection: Bool { reimportSelectionCancellation?.canCancel == true }
     var isEjectingSource: Bool { importAttempt?.operation == .eject }
     @Published private(set) var ejectedSourceJobID: String?
     @Published private(set) var ejectedSourceName: String?
@@ -800,6 +837,7 @@ final class AppModel: ObservableObject {
     private var bookmarkStore: BookmarkStore?
     private var folderAccesses: [BookmarkPurpose: SecurityScopedResourceAccess] = [:]
     private var importTask: Task<Void, Never>?
+    private var reimportSelectionCancellation: ReimportSelectionCancellation?
     private var isRunningScanBothImports = false
     private var scanBothReviewDestinationAccess: [SecurityScopedResourceAccess] = []
     @Published private var activeCopySources: ActiveCopySources?
@@ -1465,7 +1503,8 @@ final class AppModel: ObservableObject {
             mediaSelection: importMediaSelection,
             destinationLayout: destinationLayout,
             folderGrouping: folderGrouping,
-            sessions: previewSessions
+            sessions: previewSessions,
+            hiddenSessions: hiddenPreviewSessions
         )
     }
 
@@ -1898,11 +1937,20 @@ final class AppModel: ObservableObject {
         _ keyPath: WritableKeyPath<ImportPreviewSession, Bool>,
         to isIncluded: Bool
     ) {
-        previewSessions = previewSessions.map { session in
-            var session = session
+        updatePreviewSessionChoices { session in
             session[keyPath: keyPath] = isIncluded
+        }
+    }
+
+    private func updatePreviewSessionChoices(_ update: (inout ImportPreviewSession) -> Void) {
+        func updated(_ session: ImportPreviewSession) -> ImportPreviewSession {
+            var session = session
+            update(&session)
             return session
         }
+
+        hiddenPreviewSessions = hiddenPreviewSessions.mapValues(updated)
+        previewSessions = previewSessions.map(updated)
     }
 
     func folderGroupingDidChange() {
@@ -1920,12 +1968,10 @@ final class AppModel: ObservableObject {
             ? preferredMixedDestinationLayout
             : ImportDestinationLayout(organizationPreset: profile.organizationPreset)
         organizationPreset = destinationLayout.organizationPreset
-        previewSessions = previewSessions.map { session in
-            var session = session
+        updatePreviewSessionChoices { session in
             session.includePhotos = profile.mediaSelection.includes(.photo)
             session.includeVideos = profile.mediaSelection.includes(.video)
             session.includeSidecars = profile.includesSidecarsByDefault
-            return session
         }
         if userInitiated {
             workflowProfileWasManuallyChosenForCurrentJob = true
@@ -1937,12 +1983,10 @@ final class AppModel: ObservableObject {
         normalizeDestinationForCurrentImportType()
         updateWorkflowProfileForCurrentOptions()
 
-        previewSessions = previewSessions.map { session in
-            var session = session
+        updatePreviewSessionChoices { session in
             session.includePhotos = importMediaSelection.includes(.photo)
             session.includeVideos = importMediaSelection.includes(.video)
             session.includeSidecars = workflowProfile.includesSidecarsByDefault
-            return session
         }
         if userInitiated {
             workflowProfileWasManuallyChosenForCurrentJob = true
@@ -2032,7 +2076,8 @@ final class AppModel: ObservableObject {
             fallbackLocation: Self.defaultSessionLabel(for: location),
             volumeName: currentSummary.volumeName,
             insta360Recovery: insta360RescanRecovery,
-            useOriginalInsta360Folders: useOriginalInsta360Folders
+            useOriginalInsta360Folders: useOriginalInsta360Folders,
+            hiddenSessions: hiddenPreviewSessions
         )
     }
 
@@ -2098,30 +2143,29 @@ final class AppModel: ObservableObject {
                 visualGroupID: visualGroups[id]?.id,
                 visualGroupKind: visualGroups[id]?.kind,
                 willCopy: plan.willCopy,
-                size: file.size
+                size: file.size,
+                reimportRequested: file.reimportRequested == true
             )
         }
     }
 
     private func syncPreviewSessionLabels(from previousLocation: String, to nextLocation: String) {
-        guard !previewSessions.isEmpty else {
-            return
-        }
-
         let previousLabel = Self.defaultSessionLabel(for: previousLocation)
         let nextLabel = Self.defaultSessionLabel(for: nextLocation)
         guard previousLabel != nextLabel else {
             return
         }
 
-        var sessions = previewSessions
-        var didUpdate = false
-        for index in sessions.indices where Self.defaultSessionLabel(for: sessions[index].label) == previousLabel {
-            sessions[index].label = nextLabel
-            didUpdate = true
+        func updated(_ session: ImportPreviewSession) -> ImportPreviewSession {
+            guard Self.defaultSessionLabel(for: session.label) == previousLabel else { return session }
+            var session = session
+            session.label = nextLabel
+            return session
         }
 
-        if didUpdate {
+        hiddenPreviewSessions = hiddenPreviewSessions.mapValues(updated)
+        let sessions = previewSessions.map(updated)
+        if sessions != previewSessions {
             previewSessions = sessions
         }
     }
@@ -2275,7 +2319,7 @@ final class AppModel: ObservableObject {
     }
 
     private func isKnownImportedFile(_ row: ImportPreviewRow) -> Bool {
-        knownImportedPreviewFileIDs.contains(row.id)
+        !row.reimportRequested && knownImportedPreviewFileIDs.contains(row.id)
             && insta360RescanRecovery?.includes(sourcePath: row.sourcePath) != true
     }
 
@@ -2312,15 +2356,11 @@ final class AppModel: ObservableObject {
                 showFolderAccessError { L10n.tr("The destination folder is unavailable.") }
                 return
             }
-            var grantedPaths: Set<String> = []
-            let destinationAccess = ([folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }
-                + scanBothReviewDestinationAccess).filter {
-                $0.isActive && grantedPaths.insert($0.url.standardizedFileURL.path).inserted
-            }
+            let draft = currentScanBothDraft
+            scanBothSession?.saveDraft(draft, for: jobID)
             scanBothSession?.setConfirmation(
                 .init(
-                    draft: currentImportDraft, plans: plan.files,
-                    destinationAccess: destinationAccess, destinations: destinations
+                    draft: draft.settings, plans: plan.files, destinations: destinations
                 ),
                 for: jobID
             )
@@ -2395,92 +2435,70 @@ final class AppModel: ObservableObject {
         return (builder, plans)
     }
 
-    func importPortableKnownFilesAnyway() {
-        guard !isWorking, !isEjectingSource else {
-            statusMessage = L10n.tr("Finish the current scan or import first")
-            return
-        }
-        guard let jobID = currentSummary?.jobID, let databaseURL else {
-            statusMessage = L10n.tr("No scanned job selected")
-            return
-        }
+    func setReimportSelection(_ fileIDs: Set<Int64>, requested: Bool) {
+        guard !isWorking, !isEjectingSource, importUIPhase == .review,
+              let jobID = currentSummary?.jobID, let databaseURL else { return }
 
-        let portableOverrideIDs = Set(
-            previewRows.compactMap { row in
-                if case .known(.portableLedger) = row.disposition {
-                    return row.id
-                }
-                return nil
-            }
-        )
-        let updates = currentPreviewFiles.compactMap { file -> JobFilePlanUpdate? in
-            guard
-                let id = file.id,
-                portableOverrideIDs.contains(id)
-            else {
-                return nil
-            }
-            return JobFilePlanUpdate(
-                id: id,
-                decision: .new,
-                destinationDirectory: nil,
-                plannedDestinationPath: nil,
-                copyStatus: .pending,
-                error: nil,
-                portableReceiptOverride: true
-            )
-        }
-        guard !updates.isEmpty else {
-            return
-        }
+        // Treat a multi-lens recording as one selection, even from a single lens row.
+        let recordings = Set(previewRows.compactMap { row in
+            fileIDs.contains(row.id) && row.visualGroupKind == .insta360Clip ? row.visualGroupID : nil
+        })
+        let selectedIDs = Set(previewRows.compactMap { row -> Int64? in
+            guard requested ? row.canReimport : row.canSkipReimport else { return nil }
+            let selectedRecording = row.visualGroupKind == .insta360Clip
+                && row.visualGroupID.map(recordings.contains) == true
+            return fileIDs.contains(row.id) || selectedRecording ? row.id : nil
+        })
+        guard !selectedIDs.isEmpty else { return }
 
+        let cancellation = ReimportSelectionCancellation()
+        reimportSelectionCancellation = cancellation
         let attemptID = beginImportAttempt(
-            .portableReceiptOverride, event: .beginPreparation(.portableReceiptOverride),
-            retryContext: .portableReceiptOverride
+            .reimportSelection, event: .beginAuxiliaryOperation(.reimportSelection)
         )
-        statusMessage = L10n.tr("Preparing files imported on another Mac...")
+        folderAccessFeedback = nil
         importTask = Task.detached(priority: .userInitiated) {
             do {
                 try Task.checkCancellation()
                 let repositories = try Self.makeRepositories(databaseURL: databaseURL)
-                try Task.checkCancellation()
                 guard let files = try repositories.jobRepository.withImportLock(jobID: jobID, {
                     try Task.checkCancellation()
-                    try repositories.jobRepository.updateJobFileImportPlan(jobID: jobID, updates: updates)
-                    return try repositories.jobRepository.fetchJobFiles(jobID: jobID)
+                    return try repositories.jobRepository.setReimportSelection(
+                        jobID: jobID, fileIDs: selectedIDs, requested: requested, cancellation: cancellation
+                    )
                 }) else {
                     throw SDImportError.invalidArgument(L10n.tr("Finish the current scan or import first"))
                 }
-                let jobs = try repositories.jobRepository.listImportHistoryJobs(limit: 100)
 
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
                     self.refreshScanBothReviewHistory(files: files)
                     self.currentPreviewFiles = files
-                    self.selectedJobFiles = files
-                    self.jobs = jobs
-                    self.rebuildPreviewPlanCache()
-                    let count = updates.count
-                    self.setLocalizedStatusMessage { L10n.tr("Portable receipt overridden for \(count) files") }
-                    self.finishImportAttempt(attemptID, event: .scanSucceeded)
+                    if self.selectedJobID == jobID {
+                        self.selectedJobFiles = files
+                    }
+                    self.rebuildPreviewSessions(files: files, defaultLabel: self.location)
+                    if self.scanBothSession?.reviewingJobID == jobID {
+                        let draft = self.currentScanBothDraft
+                        self.scanBothSession?.saveDraft(draft, for: jobID)
+                        self.scanBothSession?.setConfirmation(nil, for: jobID)
+                    }
+                    self.statusMessage = ""
+                    self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                 }
             } catch is CancellationError {
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
-                    self.finishImportAttempt(attemptID, event: .cancelled)
+                    self.statusMessage = ""
+                    self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                 }
             } catch {
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
-                    let render: () -> String = {
-                        L10n.tr("Could not override portable history: \(Self.errorMessage(for: error))")
+                    self.showFolderAccessError {
+                        L10n.tr("Could not update re-import selection: \(Self.errorMessage(for: error))")
                     }
-                    self.setLocalizedStatusMessage(render)
-                    let message = self.statusMessage
-                    self.finishImportAttempt(
-                        attemptID, event: .failed(operation: .portableReceiptOverride, message: message),
-                        failureRenderer: render
-                    )
+                    self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
                 }
             }
         }
@@ -2822,6 +2840,7 @@ final class AppModel: ObservableObject {
 
     func cancelImport() {
         guard importTask != nil, importAttempt?.operation != .eject else { return }
+        if let reimportSelectionCancellation, !reimportSelectionCancellation.cancel() { return }
         activeCopySources?.noteUserCancellation()
         importAttempt?.requestCancellation()
         statusMessage = L10n.tr("Cancelling...")
@@ -2864,6 +2883,7 @@ final class AppModel: ObservableObject {
         }
         activeCopySources = nil
         activeImportRetryContext = nil
+        reimportSelectionCancellation = nil
         if attempt.operation == .eject {
             sourceEjectionTask = nil
         } else {
@@ -2918,10 +2938,6 @@ final class AppModel: ObservableObject {
         let retryContext = failedImportRetryContext
         failedImportRetryContext = nil
         switch retryContext {
-        case .portableReceiptOverride:
-            transitionImportWorkspace(.recover(hasScannedJob: true))
-            importPortableKnownFilesAnyway()
-            return
         case .eject(let jobID, let target):
             transitionImportWorkspace(
                 currentResult == nil
@@ -2938,11 +2954,8 @@ final class AppModel: ObservableObject {
         case .scan:
             transitionImportWorkspace(.recover(hasScannedJob: false))
             scan()
-        case .prepareImport, .copy:
+        case .prepareImport, .copy, .reimportSelection:
             recoverImportWorkspace()
-        case .portableReceiptOverride:
-            transitionImportWorkspace(.recover(hasScannedJob: true))
-            importPortableKnownFilesAnyway()
         case .eject:
             recoverImportWorkspace()
         case nil:
@@ -3248,19 +3261,18 @@ final class AppModel: ObservableObject {
                 return false
             }
             scanBothSession?.reviewingJobID = summary.jobID
-            scanBothReviewDestinationAccess = entry.confirmation?.destinationAccess ?? []
             folderAccessFeedback = nil
             currentImportReceipt = nil
             resetImportDraftFromDefaults()
+            scanBothReviewDestinationAccess = entry.draft?.destinationAccess ?? []
             previewSessions = []
-            workflowProfileWasManuallyChosenForCurrentJob = false
-            loadScanPreview(summary, files: files, dedupeRepository: dedupeRepository)
-            if let draft = entry.confirmation?.draft {
+            let draft = entry.draft?.settings
+            workflowProfileWasManuallyChosenForCurrentJob = draft != nil
+            if let draft {
                 photosPath = draft.photosPath
                 videosPath = draft.videosPath
                 location = draft.shootName
                 workflowProfile = draft.workflowProfile
-                workflowProfileWasManuallyChosenForCurrentJob = true
                 importMediaSelection = draft.mediaSelection
                 destinationLayout = draft.destinationLayout
                 organizationPreset = draft.destinationLayout.organizationPreset
@@ -3268,9 +3280,8 @@ final class AppModel: ObservableObject {
                     preferredMixedDestinationLayout = draft.destinationLayout
                 }
                 folderGrouping = draft.folderGrouping
-                validatePaths()
-                previewSessions = draft.sessions
             }
+            loadScanPreview(summary, files: files, dedupeRepository: dedupeRepository, restoring: draft)
             recoverImportWorkspace()
             return true
         } catch {
@@ -3281,7 +3292,8 @@ final class AppModel: ObservableObject {
 
     private func loadScanPreview(
         _ summary: ScanSummary, files: [JobFileRecord], dedupeRepository: DedupeRepository,
-        insta360Recovery: Insta360RescanRecovery? = nil, rescanContext: RescanContext? = nil
+        insta360Recovery: Insta360RescanRecovery? = nil, rescanContext: RescanContext? = nil,
+        restoring draft: ImportDraft? = nil
     ) {
         insta360RescanRecovery = insta360Recovery.flatMap { $0.isEmpty ? nil : $0 }
         self.rescanContext = rescanContext
@@ -3296,12 +3308,13 @@ final class AppModel: ObservableObject {
         knownImportedPreviewFileIDs = Self.knownImportedFileIDs(files: files, dedupeRepository: dedupeRepository)
         refreshScanBothReviewHistory(files: files)
         applyRecommendationAfterScan(files: files, summary: summary)
-        rebuildPreviewSessions(files: files, defaultLabel: summary.location)
-        rebuildPreviewPlanCache()
+        rebuildPreviewSessions(files: files, defaultLabel: draft?.shootName ?? summary.location, restoring: draft)
     }
 
     func returnToScanBothResults() {
-        guard isReviewingScanBothVolume, !isWorking, !isEjectingSource else { return }
+        guard let jobID = scanBothSession?.reviewingJobID, !isWorking, !isEjectingSource else { return }
+        let draft = currentScanBothDraft
+        scanBothSession?.saveDraft(draft, for: jobID)
         scanBothSession?.reviewingJobID = nil
         folderAccessFeedback = nil
         currentSummary = nil
@@ -3315,6 +3328,21 @@ final class AppModel: ObservableObject {
         clearPreviewPlanCache()
         resetImportDraftFromDefaults()
         transitionImportWorkspace(.recover(hasScannedJob: true))
+    }
+
+    private var currentScanBothDraft: ScanBothSession.Draft {
+        ScanBothSession.Draft(settings: currentImportDraft, destinationAccess: currentScanBothDestinationAccess)
+    }
+
+    private var currentScanBothDestinationAccess: [SecurityScopedResourceAccess] {
+        let roots = effectiveDestinationRoots
+        var grantedPaths: Set<String> = []
+        return (scanBothReviewDestinationAccess
+            + [folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }).filter { access in
+            access.isActive
+                && [roots.photosURL, roots.videosURL].contains { Self.isSameOrDescendant($0, of: access.url) }
+                && grantedPaths.insert(access.url.standardizedFileURL.path).inserted
+        }
     }
 
     func skipScanBothImport(_ entryID: UUID) {
@@ -4453,27 +4481,13 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func forgetImportedFiles(for job: ImportJob) {
+    func forgetImportedFiles(for job: ImportJob) throws {
         guard let dedupeRepository else {
-            statusMessage = L10n.tr("Import history is not ready")
-            return
+            throw SDImportError.invalidArgument(L10n.tr("Import history is not ready"))
         }
 
-        do {
-            let deleted = try dedupeRepository.forgetImportedFiles(jobID: job.id)
-            refreshHistory()
-            if selectedJobID == job.id {
-                loadJobDetail(jobID: job.id)
-            }
-            if deleted == 1 {
-                statusMessage = L10n.tr("Forgot 1 imported file")
-            } else {
-                setLocalizedStatusMessage { L10n.tr("Forgot \(deleted) imported files") }
-            }
-        } catch {
-            let detail = Self.errorMessage(for: error)
-            setLocalizedStatusMessage { L10n.tr("Could not forget imported files: \(detail)") }
-        }
+        try dedupeRepository.forgetImportedFiles(jobID: job.id)
+        refreshHistory()
     }
 
     func selectedJob() -> ImportJob? {
@@ -4893,17 +4907,26 @@ final class AppModel: ObservableObject {
         return nil
     }
 
-    private func rebuildPreviewSessions(files: [JobFileRecord], defaultLabel: String) {
-        let existing = Dictionary(uniqueKeysWithValues: previewSessions.map { ($0.date, $0) })
+    private func rebuildPreviewSessions(
+        files: [JobFileRecord], defaultLabel: String, restoring draft: ImportDraft? = nil
+    ) {
+        let previousSessions = draft?.sessions ?? previewSessions
+        let previousHidden = draft?.hiddenSessions ?? hiddenPreviewSessions
+        let visible = Dictionary(uniqueKeysWithValues: previousSessions.map { ($0.date, $0) })
+        let existing = previousHidden.merging(visible) { _, visible in visible }
         let sessions = makePreviewSessions(files: files, defaultLabel: defaultLabel, existing: existing)
         let plans = buildImportPlans(files: files, sessions: sessions)
-        previewSessions = ImportPreviewSessionFilter().visibleSessions(
+        let updated = ImportPreviewSessionFilter().visibleSessions(
             files: files,
             plans: plans,
             sessions: sessions,
             importMediaSelection: importMediaSelection,
             organizationPreset: organizationPreset
         )
+        // Clearing a re-import selection can hide a date until it is included again.
+        let visibleDates = Set(updated.map(\.date))
+        hiddenPreviewSessions = existing.filter { !visibleDates.contains($0.key) }
+        previewSessions = updated
     }
 
     private func makePreviewSessions(
@@ -5156,20 +5179,29 @@ final class AppModel: ObservableObject {
         }
         let priorAccess = folderAccesses[purpose]
         do {
+            let access: SecurityScopedResourceAccess?
             if persistBookmark {
                 guard let bookmarkStore else {
                     throw FolderAccessAuthorizationError(purpose: purpose)
                 }
                 try bookmarkStore.saveBookmark(purpose: purpose, url: url)
                 refreshFolderAccess(purpose)
+                access = folderAccesses[purpose]
             } else {
-                folderAccesses[purpose] = SecurityScopedResourceAccess(url: url)
+                access = SecurityScopedResourceAccess(url: url)
             }
-            if
-                AppDistribution.current == .macAppStore,
-                folderAccesses[purpose]?.isActive != true
-            {
+            if AppDistribution.current == .macAppStore, access?.isActive != true {
                 throw FolderAccessAuthorizationError(purpose: purpose)
+            }
+            if !persistBookmark, let access {
+                if isReviewingScanBothVolume, purpose != .source {
+                    if access.isActive {
+                        scanBothReviewDestinationAccess.removeAll { $0.url.standardizedFileURL == url.standardizedFileURL }
+                        scanBothReviewDestinationAccess.append(access)
+                    }
+                } else {
+                    folderAccesses[purpose] = access
+                }
             }
             return true
         } catch {
@@ -5263,6 +5295,10 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshFolderAccess(_ purpose: BookmarkPurpose) {
+        if isReviewingScanBothVolume, purpose != .source {
+            // The open review can still use the previous default after Settings replaces it.
+            scanBothReviewDestinationAccess = currentScanBothDestinationAccess
+        }
         do {
             folderAccesses[purpose] = try bookmarkStore?.beginAccess(
                 purpose: purpose,

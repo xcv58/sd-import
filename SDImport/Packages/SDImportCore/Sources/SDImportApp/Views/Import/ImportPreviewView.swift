@@ -8,6 +8,7 @@ struct ImportPreviewView: View {
     @Environment(\.locale) private var locale
     @AppStorage("SDImport.importPreviewMode") private var previewMode = ImportPreviewMode.grid
     @State private var selectedFileFilter: ImportPreviewFileFilter?
+    @State private var pinnedAutomaticFileFilter: ImportPreviewFileFilter?
     @State private var filePage = 0
     @State private var selectedRowID: Int64?
     @State private var showsDateCustomization = false
@@ -22,8 +23,12 @@ struct ImportPreviewView: View {
     }
 
     private var fileFilter: ImportPreviewFileFilter {
-        if let selectedFileFilter { return selectedFileFilter }
+        if let filter = selectedFileFilter ?? pinnedAutomaticFileFilter { return filter }
         return model.previewTotals.copyFiles == 0 ? .skipped : .copy
+    }
+
+    private var isUpdatingReimportSelection: Bool {
+        model.activeImportOperation == .reimportSelection
     }
 
     private var allItems: [ImportPreviewVisualItem] {
@@ -86,6 +91,7 @@ struct ImportPreviewView: View {
                         fileBrowser
                     }
                 }
+                .disabled(isUpdatingReimportSelection)
                 .onChange(of: selectedFileFilter) { _, filter in
                     guard filter != nil else { return }
                     // Filtering can replace a tall page with the empty state.
@@ -101,10 +107,13 @@ struct ImportPreviewView: View {
         }
         .inspector(isPresented: inspectorBinding) {
             if let selectedRow {
-                ImportFileInspector(row: selectedRow) {
-                    presentQuickLook(for: selectedRow)
-                }
+                ImportFileInspector(
+                    row: selectedRow,
+                    quickLookAction: { presentQuickLook(for: selectedRow) },
+                    setReimportSelection: updateReimportSelection
+                )
                 .frame(minWidth: 260, idealWidth: 300)
+                .disabled(isUpdatingReimportSelection)
             }
         }
         .onAppear {
@@ -114,6 +123,7 @@ struct ImportPreviewView: View {
             thumbnailProvider.cancelAll()
             quickLook.dismiss()
             selectedFileFilter = nil
+            pinnedAutomaticFileFilter = nil
             filePage = 0
             selectedRowID = nil
         }
@@ -146,11 +156,23 @@ struct ImportPreviewView: View {
 
             Spacer(minLength: 12)
 
+            if isUpdatingReimportSelection {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel(L10n.tr("Updating re-import selection…"))
+                Button(L10n.tr("Cancel"), role: .cancel) {
+                    model.cancelImport()
+                }
+                .buttonStyle(.bordered)
+                .disabled(!model.canCancelReimportSelection)
+            }
+
             if model.isReviewingScanBothVolume {
                 Button(L10n.tr("Back to Scan Results")) {
                     model.returnToScanBothResults()
                 }
                 .buttonStyle(.bordered)
+                .disabled(isUpdatingReimportSelection)
             }
 
             if let summary = model.currentSummary, model.needsRescan(summary.jobID) {
@@ -158,6 +180,7 @@ struct ImportPreviewView: View {
                     model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(isUpdatingReimportSelection)
             }
 
             ImportReviewPrimaryAction()
@@ -190,7 +213,7 @@ struct ImportPreviewView: View {
                 sessionControls
             }
 
-            portableReceiptOverride
+            reimportControls
             destinationTree
 
             if let warning = selectedMediaAvailabilityMessage {
@@ -490,22 +513,21 @@ struct ImportPreviewView: View {
     }
 
     @ViewBuilder
-    private var portableReceiptOverride: some View {
-        let count = model.previewRows.filter(\.isPortableKnown).count
-        if count > 0 {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    portableReceiptLabel(count: count)
-                    Button(L10n.tr("Import Anyway")) {
-                        model.importPortableKnownFilesAnyway()
+    private var reimportControls: some View {
+        let eligible = model.previewRows.filter(\.canReimport)
+        let selected = model.previewRows.filter(\.canSkipReimport)
+        if !eligible.isEmpty || !selected.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                if !eligible.isEmpty {
+                    Button(L10n.tr("Include All Previously Imported Files")) {
+                        updateReimportSelection(Set(eligible.map(\.id)), requested: true)
                     }
                     .buttonStyle(.bordered)
+                    .accessibilityIdentifier("import.review.reimport-all")
                 }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    portableReceiptLabel(count: count)
-                    Button(L10n.tr("Import Anyway")) {
-                        model.importPortableKnownFilesAnyway()
+                if !selected.isEmpty {
+                    Button(L10n.tr("Clear Re-import Selection")) {
+                        updateReimportSelection(Set(selected.map(\.id)), requested: false)
                     }
                     .buttonStyle(.bordered)
                 }
@@ -513,15 +535,12 @@ struct ImportPreviewView: View {
         }
     }
 
-    private func portableReceiptLabel(count: Int) -> some View {
-        AppStatusLabel(
-            title: count == 1
-                ? L10n.tr("1 file was imported on another Mac")
-                : L10n.tr("\(count) files were imported on another Mac"),
-            systemImage: "externaldrive.badge.checkmark",
-            role: .neutral
-        )
-        .font(.caption)
+    private func updateReimportSelection(_ fileIDs: Set<Int64>, requested: Bool) {
+        if selectedFileFilter == nil {
+            // Keep the automatic filter as the copy count changes, without scrolling.
+            pinnedAutomaticFileFilter = fileFilter
+        }
+        model.setReimportSelection(fileIDs, requested: requested)
     }
 
     @ViewBuilder
@@ -574,7 +593,7 @@ struct ImportPreviewView: View {
                 sessionControls
             }
 
-            portableReceiptOverride
+            reimportControls
 
             HStack(spacing: 8) {
                 if canRecoverPhotos {
@@ -738,6 +757,9 @@ struct ImportPreviewView: View {
                             item: item,
                             destinationText: destinationText(for: item.primaryRow)
                         )
+                        .contextMenu {
+                            ReimportSelectionActions(rows: item.rows, setReimportSelection: updateReimportSelection)
+                        }
                     }
                     .disclosureGroupStyle(FullWidthDisclosureGroupStyle())
                     .padding(.horizontal, 10)
@@ -799,6 +821,9 @@ struct ImportPreviewView: View {
                     selectedRowID = item.primaryRow.id
                     presentQuickLook(for: item.primaryRow)
                     return .handled
+                }
+                .contextMenu {
+                    ReimportSelectionActions(rows: item.rows, setReimportSelection: updateReimportSelection)
                 }
                 .accessibilityHint(L10n.tr("Press Space for Quick Look"))
                 .accessibilityIdentifier("import.review.grid-item.\(item.primaryRow.id)")
@@ -1059,6 +1084,7 @@ struct ImportPreviewView: View {
                 selectedRowID = row.id
                 presentQuickLook(for: row)
             }
+            ReimportSelectionActions(rows: [row], setReimportSelection: updateReimportSelection)
         }
         .accessibilityHint(L10n.tr("Press Space for Quick Look"))
     }
@@ -1657,6 +1683,7 @@ private struct ImportFileInspector: View {
     @Environment(\.locale) private var locale
     let row: ImportPreviewRow
     let quickLookAction: () -> Void
+    let setReimportSelection: (Set<Int64>, Bool) -> Void
 
     var body: some View {
         ScrollView {
@@ -1665,6 +1692,8 @@ private struct ImportFileInspector: View {
                     .font(.headline)
                     .textSelection(.enabled)
                 PreviewStatusBadge(row: row)
+                ReimportSelectionActions(rows: [row], setReimportSelection: setReimportSelection)
+                    .buttonStyle(.bordered)
 
                 inspectorField(L10n.tr("Type"), value: row.mediaKind.displayTitle)
                 inspectorField(L10n.tr("Capture Date"), value: L10n.storedMessage(row.date))
@@ -1708,14 +1737,28 @@ private struct ImportFileInspector: View {
     }
 }
 
-private extension ImportPreviewRow {
-    var isPortableKnown: Bool {
-        if case .known(let source) = disposition {
-            return source == .portableLedger
-        }
-        return false
-    }
+private struct ReimportSelectionActions: View {
+    let rows: [ImportPreviewRow]
+    let setReimportSelection: (Set<Int64>, Bool) -> Void
 
+    var body: some View {
+        let eligible = rows.filter(\.canReimport)
+        let selected = rows.filter(\.canSkipReimport)
+        if !eligible.isEmpty {
+            Button(L10n.tr("Import Anyway")) {
+                setReimportSelection(Set(eligible.map(\.id)), true)
+            }
+            .accessibilityIdentifier("import.review.reimport-selection")
+        }
+        if !selected.isEmpty {
+            Button(L10n.tr("Skip Again")) {
+                setReimportSelection(Set(selected.map(\.id)), false)
+            }
+        }
+    }
+}
+
+private extension ImportPreviewRow {
     var isKnown: Bool {
         switch disposition {
         case .known, .alreadyExists, .copied:

@@ -5,6 +5,7 @@ struct HistoryDetailView: View {
     @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
     @State private var isShowingForgetConfirmation = false
+    @State private var forgetFilesError: Error?
     @State private var fileFilter: HistoryFileFilter = .all
     @State private var filePage = 0
 
@@ -33,6 +34,7 @@ struct HistoryDetailView: View {
             detail(job)
                 .onChange(of: job.id) {
                     filePage = 0
+                    forgetFilesError = nil
                 }
         } else {
             ContentUnavailableView(L10n.tr("No Job Selected"), systemImage: "clock.arrow.circlepath")
@@ -43,6 +45,13 @@ struct HistoryDetailView: View {
     private func detail(_ job: ImportJob) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             header(job)
+            if let forgetFilesError {
+                AppStatusLabel(
+                    title: L10n.tr("Could not forget imported files: \(L10n.errorMessage(for: forgetFilesError))"),
+                    systemImage: "exclamationmark.triangle",
+                    role: .error
+                )
+            }
             metrics(job)
             Divider()
             fileSection
@@ -50,7 +59,12 @@ struct HistoryDetailView: View {
         .padding(.trailing, 8)
         .alert(L10n.tr("Forget imported files?"), isPresented: $isShowingForgetConfirmation) {
             Button(L10n.tr("Forget Files"), role: .destructive) {
-                model.forgetImportedFiles(for: job)
+                do {
+                    try model.forgetImportedFiles(for: job)
+                    forgetFilesError = nil
+                } catch {
+                    forgetFilesError = error
+                }
             }
             Button(L10n.tr("Cancel"), role: .cancel) {}
         } message: {
@@ -67,6 +81,11 @@ struct HistoryDetailView: View {
                 Text(HistoryJobPresentation.subtitle(for: job))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                if let localTrackingStatus = HistoryJobPresentation.localTrackingStatus(for: job) {
+                    Text(localTrackingStatus)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 Text(job.id)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -106,7 +125,7 @@ struct HistoryDetailView: View {
                 } label: {
                     Label(L10n.tr("Forget Files…"), systemImage: "trash")
                 }
-                .disabled(model.isWorking || (job.importedFiles == 0 && files.allSatisfy { $0.copyStatus != .copied }))
+                .disabled(model.isWorking || model.isHistoryLoading || job.localTracking != .tracked)
             } label: {
                 Label(L10n.tr("More"), systemImage: "ellipsis.circle")
             }

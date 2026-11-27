@@ -60,10 +60,15 @@
 "Allow %@ in System Settings → General → Login Items & Extensions." = "시스템 설정 → 일반 → 로그인 항목 및 확장 프로그램에서 %1$@을(를) 허용하세요.";
 "Allow Access" = "접근 허용";
 "Allow Access & Scan" = "접근 허용 및 스캔";
+"Clear Re-import Selection" = "다시 가져올 파일 선택 해제";
 "Confirm Plan" = "계획 확인";
 "Confirms this volume for Start Imports" = "가져오기를 시작할 수 있도록 이 볼륨을 확인합니다";
+"Could not update re-import selection: %@" = "다시 가져올 파일 선택을 업데이트할 수 없습니다: %@";
 "Edit Plan" = "계획 편집";
+"Include All Previously Imported Files" = "이전에 가져온 모든 파일 포함";
+"Skip Again" = "다시 건너뛰기";
 "Start Imports" = "가져오기 시작";
+"Updating re-import selection…" = "다시 가져올 파일 선택 업데이트 중…";
 "macOS needs your permission to read this source." = "macOS에서 이 소스를 읽으려면 사용자의 권한이 필요합니다.";
 "Allow Access to %@" = "%1$@ 접근 허용";
 "Allow Access to Source" = "소스 접근 허용";
@@ -247,6 +252,7 @@
 "Forget imported files?" = "가져온 파일의 기억을 지울까요?";
 "Forgot %lld imported files" = "가져온 파일 %1$lld개의 기억을 지웠습니다";
 "Forgot 1 imported file" = "가져온 파일 1개의 기억을 지웠습니다";
+"Forgotten on this Mac" = "이 Mac에서 가져오기 기록을 지움";
 "General" = "일반";
 "Grid" = "격자";
 "Helper build %@ · last started %@" = "도우미 빌드 %1$@ · 마지막 시작 %2$@";

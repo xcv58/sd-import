@@ -230,7 +230,7 @@ struct ScanBothSessionTests {
             let plans = builder.plans(files: files)
             review.setConfirmation(.init(
                 draft: draft(sourcePath: summary.mountPath, roots: roots),
-                plans: plans, destinationAccess: [],
+                plans: plans,
                 destinations: try #require(ReviewedImportDestinations(plans: plans))
             ), for: jobID)
             #expect(review.canStartImports == (jobID == firstJob.id))
@@ -267,7 +267,7 @@ struct ScanBothSessionTests {
             #expect(try repository.listImportHistoryJobs().map(\.id) == [firstJob.id])
             #expect(review.entry(for: firstJob.id)?.result == result)
             review.setConfirmation(.init(
-                draft: secondConfirmation.draft, plans: freshSecondPlans, destinationAccess: [],
+                draft: secondConfirmation.draft, plans: freshSecondPlans,
                 destinations: try #require(ReviewedImportDestinations(plans: freshSecondPlans))
             ), for: siblingJob.id)
         }
@@ -297,7 +297,7 @@ struct ScanBothSessionTests {
         for entry in session.entries {
             let jobID = try #require(entry.jobID)
             session.setConfirmation(.init(
-                draft: draft(sourcePath: entry.volume.mountPath, roots: roots), plans: [], destinationAccess: [],
+                draft: draft(sourcePath: entry.volume.mountPath, roots: roots), plans: [],
                 destinations: try #require(ReviewedImportDestinations(plans: []))
             ), for: jobID)
         }
@@ -550,6 +550,7 @@ struct ScanBothSessionTests {
 
     enum CopyScenario: Sendable, Equatable {
         case bothSucceed
+        case reimportKnownFile
         case receiptAfterHistoryNavigation
         case firstCopyChangesSecondPlan
         case destinationChangesInWorker
@@ -601,7 +602,8 @@ struct ScanBothSessionTests {
         let replacesParent = scenario == .nestedDestinationReplacedAfterPartialCopy
         let stopsDuringFirstFile = scenario == .cancelDuringFirstCopy || scenario == .unmountDuringFirstCopy
         let hasLaterFile = scenario == .unmountDuringCopy || scenario == .destinationReplacedAfterPartialCopy || replacesParent
-        let testsHistoryExclusion = scenario == .sourceChangesWithPortableHistory || scenario == .knownSourceChangesBeforeStart
+        let testsHistoryExclusion = scenario == .sourceChangesWithPortableHistory
+            || scenario == .knownSourceChangesBeforeStart || scenario == .reimportKnownFile
         let needsSecondInternalFile = hasLaterFile || testsHistoryExclusion || scenario == .receiptAfterHistoryNavigation
         let secondFile = cardFolder.appendingPathComponent(scenario == .firstCopyChangesSecondPlan ? "Shared.jpg" : "Card.jpg")
         try Data("internal image".utf8).write(to: firstFile)
@@ -609,6 +611,12 @@ struct ScanBothSessionTests {
         if needsSecondInternalFile { try Data("another internal image".utf8).write(to: laterFile) }
         for url in [firstFile, secondFile] + (needsSecondInternalFile ? [laterFile] : []) {
             try fm.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)], ofItemAtPath: url.path)
+        }
+        if scenario == .reimportKnownFile {
+            let laterDate = Date(timeIntervalSince1970: 1_700_086_400)
+            try fm.setAttributes(
+                [.creationDate: laterDate, .modificationDate: laterDate], ofItemAtPath: laterFile.path
+            )
         }
         if testsHistoryExclusion {
             try PortableImportReceiptLedger(sourceRootURL: internalFolder).append(identity: PortableFileIdentity(
@@ -725,6 +733,79 @@ struct ScanBothSessionTests {
                 try #require(model.previewRows.contains { $0.disposition == .known(.portableLedger) })
                 try #require(model.previewRows.contains { $0.willCopy })
             }
+            if scenario == .reimportKnownFile, entry.volume == first {
+                let known = try #require(model.previewRows.first { $0.canReimport })
+                let newDate = try #require(model.previewRows.first { $0.willCopy }?.date)
+                try #require(newDate != known.date)
+                #expect(model.previewSessions.map(\.date) == [newDate])
+                let newDateIndex = try #require(model.previewSessions.firstIndex { $0.date == newDate })
+                model.previewSessions[newDateIndex].label = "New Photos"
+
+                model.returnToScanBothResults()
+                let ledger = PortableImportReceiptLedger(sourceRootURL: internalFolder)
+                try fm.removeItem(at: ledger.ledgerURL)
+                model.reviewScanBothVolume(entry.id)
+                #expect(model.previewRows.first { $0.id == known.id }?.willCopy == true)
+                #expect(model.previewSessions.map(\.date) == [known.date, newDate].sorted())
+                #expect(model.previewSessions.first { $0.date == known.date }?.photoCount == 1)
+                #expect(model.previewSessions.first { $0.date == newDate }?.label == "New Photos")
+
+                model.returnToScanBothResults()
+                try ledger.append(identity: PortableFileIdentity(
+                    size: known.size, modificationTimeEpochSeconds: 1_700_000_000, relativePath: firstFile.lastPathComponent
+                ))
+                model.reviewScanBothVolume(entry.id)
+                #expect(model.previewSessions.map(\.date) == [newDate])
+
+                for (index, requested) in [true, false, true].enumerated() {
+                    model.setReimportSelection([known.id], requested: requested)
+                    #expect(model.importUIPhase == .review)
+                    #expect(model.activeImportOperation == .reimportSelection)
+                    #expect(!model.canImportPlannedFiles)
+                    try await waitForImport(model)
+                    #expect(model.importUIPhase == .review)
+                    #expect(model.activeImportOperation == nil)
+                    #expect(model.previewRows.first { $0.id == known.id }?.willCopy == requested)
+                    #expect(model.previewSessions.first { $0.date == newDate }?.label == "New Photos")
+                    if requested {
+                        let dateIndex = try #require(model.previewSessions.firstIndex { $0.date == known.date })
+                        #expect(model.previewSessions[dateIndex].photoCount == 1)
+                        if index == 0 {
+                            model.previewSessions[dateIndex].label = "Earlier Photos"
+                            model.previewSessions[dateIndex].includeSidecars = true
+                        } else {
+                            #expect(model.previewSessions[dateIndex].label == "Earlier Photos")
+                            #expect(model.previewSessions[dateIndex].includeSidecars)
+                        }
+                    } else {
+                        #expect(model.previewSessions.map(\.date) == [newDate])
+                    }
+                }
+                #expect(model.scanBothSession?.entries[1].confirmation != nil)
+
+                model.importCurrentJob()
+                try #require(model.scanBothSession?.entries[0].confirmation != nil)
+                model.reviewScanBothVolume(entry.id)
+                let latestDestination = root.appendingPathComponent("Latest Destination")
+                try fm.createDirectory(at: latestDestination, withIntermediateDirectories: false)
+                model.photosPath = latestDestination.path
+                model.videosPath = latestDestination.path
+                model.destinationPathDidChange(clearFeedback: false)
+                model.setReimportSelection([known.id], requested: false)
+                try await waitForImport(model)
+                let latestDraft = model.currentImportDraft
+                model.returnToScanBothResults()
+                #expect(!model.canStartScanBothImports)
+                #expect(model.scanBothSession?.entries[0].confirmation == nil)
+                #expect(model.scanBothSession?.entries[1].confirmation != nil)
+
+                model.reviewScanBothVolume(entry.id)
+                #expect(model.currentImportDraft == latestDraft)
+                model.setReimportSelection([known.id], requested: true)
+                try await waitForImport(model)
+                #expect(model.previewRows.first { $0.id == known.id }?.willCopy == true)
+                #expect(model.previewSessions.first { $0.date == known.date }?.label == "Earlier Photos")
+            }
             if (scenario == .firstVolumeDisconnectsBeforeSecond || scenario == .receiptAfterHistoryNavigation),
                entry.volume == first {
                 let customDestination = root.appendingPathComponent("CustomDestination")
@@ -792,6 +873,8 @@ struct ScanBothSessionTests {
         case .bothSucceed:
             #expect(after.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
             #expect(after.allowsAutomaticEjection)
+        case .reimportKnownFile:
+            #expect(after.entries.compactMap(\.result).map(\.importedFiles) == [2, 1])
         case .receiptAfterHistoryNavigation:
             let firstJobID = try #require(after.entries[0].jobID)
             let secondJobID = try #require(after.entries[1].jobID)
@@ -940,6 +1023,11 @@ struct ScanBothSessionTests {
             model.destinationPathDidChange(clearFeedback: !model.isReviewingScanBothVolume)
             #expect(model.folderAccessFeedback?.text.contains(first.name) == true)
         }
+    }
+
+    @Test("Scan Both keeps re-import edits, date choices, and drafts separate from approval")
+    func reimportsKnownFileInBatch() async throws {
+        try await startsBatchThroughAppModel(.reimportKnownFile)
     }
 
     private func waitForImport(_ model: AppModel) async throws {

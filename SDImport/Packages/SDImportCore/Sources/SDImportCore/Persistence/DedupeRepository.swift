@@ -79,7 +79,14 @@ public struct DedupeRepository {
                 sql: "DELETE FROM items WHERE first_job_id = ?",
                 arguments: [jobID]
             )
-            return db.changesCount
+            let deleted = db.changesCount
+            if deleted > 0 {
+                try db.execute(
+                    sql: "UPDATE jobs SET local_history_forgotten = 1 WHERE job_id = ?",
+                    arguments: [jobID]
+                )
+            }
+            return deleted
         }
     }
 }

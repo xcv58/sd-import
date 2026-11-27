@@ -1388,6 +1388,113 @@ struct MediaScannerImportTests {
         )
     }
 
+    @Test("one-time re-import preserves history and respects the reviewed destination",
+          arguments: [KnownFileSource.localLedger, .portableLedger])
+    func reimportSelectedHistoryMatch(_ history: KnownFileSource) throws {
+        let fixture = try Fixture()
+        let bytes = Data("source image".utf8)
+        let filenames = ["Selected.JPG", "Skipped.JPG"]
+        for filename in filenames {
+            let source = fixture.mountURL.appendingPathComponent(filename)
+            try fixture.writeFile(source, bytes: bytes)
+            if history == .portableLedger {
+                try PortableImportReceiptLedger(sourceRootURL: fixture.mountURL).append(
+                    identity: PortableFileIdentity(
+                        size: Int64(bytes.count),
+                        modificationTimeEpochSeconds: 1_700_000_000,
+                        relativePath: filename
+                    )
+                )
+            }
+        }
+        if history == .localLedger {
+            _ = try fixture.scanner.scan(fixture.scanRequest(jobID: "original"))
+            #expect(try fixture.importEngine.importFiles(jobID: "original").importedFiles == 2)
+        }
+        let destination = fixture.rootURL.appendingPathComponent("SecondDestination")
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
+        let builder = ImportPlanBuilder(
+            sessions: [],
+            organizationPreset: .classicDatedFolders,
+            roots: DestinationRoots(photosURL: destination, videosURL: destination),
+            fallbackLocation: "TEST",
+            volumeName: "CARD"
+        )
+        let request = fixture.scanRequest(jobID: "reimport", portableReceiptsEnabled: true)
+        _ = try fixture.scanner.scan(request)
+        let initial = try fixture.jobRepository.fetchJobFiles(jobID: "reimport")
+        #expect(initial.count == 2)
+        #expect(initial.allSatisfy { $0.knownSource == history })
+        let selected = try #require(initial.first { $0.filename == filenames[0] })
+        let id = try #require(selected.id)
+
+        let cancellation = ReimportSelectionCancellation()
+        let observer = CancelReimportOnFirstWrite(cancellation: cancellation)
+        fixture.pool.add(transactionObserver: observer)
+        #expect(throws: CancellationError.self) {
+            try fixture.jobRepository.setReimportSelection(
+                jobID: "reimport", fileIDs: [id], requested: true, cancellation: cancellation
+            )
+        }
+        fixture.pool.remove(transactionObserver: observer)
+        #expect(try fixture.jobRepository.fetchJobFiles(jobID: "reimport") == initial)
+
+        func setSelection(_ requested: Bool) throws -> [JobFileRecord] {
+            try fixture.jobRepository.setReimportSelection(jobID: "reimport", fileIDs: [id], requested: requested)
+        }
+        #expect(try builder.plans(files: setSelection(true)).filter(\.willCopy).count == 1)
+        #expect(try builder.plans(files: setSelection(false)).allSatisfy { !$0.willCopy })
+        let committed = ReimportSelectionCancellation()
+        let files = try fixture.jobRepository.setReimportSelection(
+            jobID: "reimport", fileIDs: [id], requested: true, cancellation: committed
+        )
+        #expect(!committed.canCancel)
+        #expect(!committed.cancel())
+        let plans = builder.plans(files: files, refreshedHistory: [id: .known(history)])
+        let selectedPlan = try #require(plans.first { $0.update?.id == id })
+        #expect(selectedPlan.willCopy)
+        #expect(plans.filter(\.willCopy).count == 1)
+        let selectedDestination = URL(fileURLWithPath: try #require(selectedPlan.destinationPath))
+        try fixture.jobRepository.updateJobFileImportPlan(jobID: "reimport", updates: plans.compactMap(\.update))
+        let result = try ImportEngine(
+            jobRepository: fixture.jobRepository,
+            dedupeRepository: fixture.dedupeRepository,
+            portableReceiptsEnabled: true,
+            reviewedDestinations: ReviewedImportDestinations(plans: plans)
+        ).importFiles(jobID: "reimport", requiresReviewedDestinations: true)
+        #expect(result.importedFiles == 1)
+        #expect(try Data(contentsOf: selectedDestination) == bytes)
+        let imported = try fixture.jobRepository.fetchJobFiles(jobID: "reimport")
+        #expect(imported.first { $0.filename == filenames[1] }?.copyStatus == .skipped)
+
+        _ = try fixture.scanner.scan(fixture.scanRequest(jobID: "fresh", portableReceiptsEnabled: true))
+        let fresh = try fixture.jobRepository.fetchJobFiles(jobID: "fresh")
+        #expect(fresh.allSatisfy { $0.decision == .known && $0.reimportRequested != true })
+        let knownAgain = try #require(fresh.first { $0.filename == filenames[0] }?.id)
+        let selectedAgain = try fixture.jobRepository.setReimportSelection(
+            jobID: "fresh", fileIDs: [knownAgain], requested: true
+        )
+        let prepared = builder.plans(files: selectedAgain)
+        #expect(prepared.first { $0.update?.id == knownAgain }?.disposition == .alreadyExists)
+        try fixture.jobRepository.updateJobImportPlan(
+            jobID: "fresh", destinationRoots: builder.roots, updates: prepared.compactMap(\.update)
+        )
+        try FileManager.default.removeItem(at: selectedDestination)
+        if history == .portableLedger {
+            #expect(try fixture.dedupeRepository.forgetImportedFiles(jobID: "reimport") == 1)
+        }
+        let cleared = try fixture.jobRepository.setReimportSelection(
+            jobID: "fresh", fileIDs: [knownAgain], requested: false
+        )
+        #expect(cleared.first { $0.id == knownAgain }?.knownSource == .destination)
+        let refreshed = ImportEngine(
+            jobRepository: fixture.jobRepository, dedupeRepository: fixture.dedupeRepository,
+            portableReceiptsEnabled: true
+        ).refreshedReviewHistory(files: cleared, sourcePath: fixture.mountURL.path)
+        #expect(builder.plans(files: cleared, refreshedHistory: refreshed)
+            .first { $0.update?.id == knownAgain }?.disposition == .known(history))
+    }
+
     @Test("import uses persisted epoch instead of parsing the display timestamp")
     func importPortableIdentityUsesPersistedEpoch() throws {
         let fixture = try Fixture()
@@ -2791,6 +2898,19 @@ struct MediaScannerImportTests {
         #expect(recoveredFile.copyStatus == .pending)
         #expect(recoveredFile.error == "interrupted import")
     }
+}
+
+private final class CancelReimportOnFirstWrite: TransactionObserver {
+    let cancellation: ReimportSelectionCancellation
+
+    init(cancellation: ReimportSelectionCancellation) {
+        self.cancellation = cancellation
+    }
+
+    func observes(eventsOfKind eventKind: DatabaseEventKind) -> Bool { eventKind.tableName == "job_files" }
+    func databaseDidChange(with event: DatabaseEvent) { _ = cancellation.cancel() }
+    func databaseDidCommit(_ db: Database) {}
+    func databaseDidRollback(_ db: Database) {}
 }
 
 private struct Fixture {
