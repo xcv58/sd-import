@@ -53,8 +53,9 @@ Grant access to each volume as macOS asks. After both scans, choose the
 `Shared Destination`, shoot name, media types, and folder organization once
 for both volumes. If your photo and video defaults use the same folder, it is
 selected for you. Both volumes show their copy counts and planned folders.
-Expand `File Details` for either volume, or use `Skip` to leave it out and
-`Include` to add it back. The footer shows the combined file count, size, and
+The `Files` section shows both volumes. Use its `Source` selector to see
+one volume's files. Use `Skip` to leave a volume out and `Include` to add
+it back. The footer shows the combined file count, size, and
 copy order. Select `Start Imports` to copy the included volumes one at a time.
 Once copying starts, the shared plan settings stay locked for that session.
 Keep the included volumes mounted until the imports finish.

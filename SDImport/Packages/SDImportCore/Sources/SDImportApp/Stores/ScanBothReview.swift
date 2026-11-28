@@ -5,13 +5,16 @@ struct ScanBothReview {
     struct Source {
         let files: [JobFileRecord]
         let history: [Int64: ImportHistoryMatch]
+        let mediaContent: MediaContentProfile
     }
 
     struct VolumePlan {
         let rows: [ImportPreviewRow]
         let totals: ImportPreviewTotals
-        let paths: [String]
+        let destinations: [ImportPreviewDestination]
         let confirmation: ScanBothSession.Confirmation?
+
+        var paths: [String] { destinations.map(\.path) }
 
         var hasConflict: Bool {
             rows.contains { $0.disposition.attention == .blocking }

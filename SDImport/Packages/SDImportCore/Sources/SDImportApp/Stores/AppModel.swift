@@ -2395,7 +2395,9 @@ final class AppModel: ObservableObject {
         return "file:\(row.id)"
     }
 
-    private func buildPreviewDestinationDirectories(rows: [ImportPreviewRow]) -> [ImportPreviewDestination] {
+    private func buildPreviewDestinationDirectories(
+        rows: [ImportPreviewRow], sharedRoot: URL? = nil
+    ) -> [ImportPreviewDestination] {
         let grouped = Dictionary(grouping: rows.filter(\.willCopy)) { row in
             row.destinationPath.map {
                 URL(fileURLWithPath: $0, isDirectory: false).deletingLastPathComponent().path
@@ -2404,7 +2406,7 @@ final class AppModel: ObservableObject {
 
         return grouped
             .map { path, rows in
-                let rootAndRelativePath = previewDestinationRoot(for: path, rows: rows)
+                let rootAndRelativePath = previewDestinationRoot(for: path, rows: rows, sharedRoot: sharedRoot)
                 return ImportPreviewDestination(
                     path: path,
                     root: rootAndRelativePath.root,
@@ -2418,9 +2420,15 @@ final class AppModel: ObservableObject {
 
     private func previewDestinationRoot(
         for destinationPath: String,
-        rows: [ImportPreviewRow]
+        rows: [ImportPreviewRow],
+        sharedRoot: URL?
     ) -> (root: ImportPreviewDestination.Root, relativePath: String) {
         let destination = URL(fileURLWithPath: destinationPath, isDirectory: true).standardizedFileURL
+        if let sharedRoot {
+            return isDescendant(destination, of: sharedRoot)
+                ? (.library, relativePath(from: sharedRoot, to: destination))
+                : (.other, destination.path)
+        }
         let roots = effectiveDestinationRoots
         let photosRoot = roots.photosURL
         let videosRoot = roots.videosURL
@@ -3484,7 +3492,9 @@ final class AppModel: ObservableObject {
                     portableReceiptsEnabled: portableImportReceiptsEnabled, reviewedSourceFiles: entry.reviewedSourceFiles
                 )
                 review.sources[entry.id] = ScanBothReview.Source(
-                    files: files, history: engine.refreshedReviewHistory(files: files, sourcePath: summary.mountPath)
+                    files: files,
+                    history: engine.refreshedReviewHistory(files: files, sourcePath: summary.mountPath),
+                    mediaContent: ImportWorkflowRecommender().recommend(files: files)
                 )
             }
             session.sharedReview = review
@@ -3532,7 +3542,7 @@ final class AppModel: ObservableObject {
                 return ImportFilePlan(update: nil, willCopy: false, disposition: disposition, destinationPath: nil)
             }
             return ScanBothReview.VolumePlan(
-                rows: makePreviewRows(files: source.files, plans: plans), totals: .empty, paths: [], confirmation: nil
+                rows: makePreviewRows(files: source.files, plans: plans), totals: .empty, destinations: [], confirmation: nil
             )
         }
         let draft = ImportDraft(
@@ -3550,16 +3560,14 @@ final class AppModel: ObservableObject {
         let plans = builder.plans(files: source.files, refreshedHistory: source.history)
         let rows = makePreviewRows(files: source.files, plans: plans)
         let totals = buildPreviewTotals(rows: rows)
-        let paths = Set(plans.compactMap { plan in
-            plan.willCopy ? plan.destinationPath.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path } : nil
-        }).sorted()
+        let destinations = buildPreviewDestinationDirectories(rows: rows, sharedRoot: root.resolvedURL)
         let confirmation = ReviewedImportDestinations(plans: plans, root: root).map {
             ScanBothSession.Confirmation(
                 draft: draft, plans: plans, destinations: $0, copyFileCount: totals.copyFiles,
-                destinationPaths: paths, sharedBuilder: builder
+                destinationPaths: destinations.map(\.path), sharedBuilder: builder
             )
         }
-        return ScanBothReview.VolumePlan(rows: rows, totals: totals, paths: paths, confirmation: confirmation)
+        return ScanBothReview.VolumePlan(rows: rows, totals: totals, destinations: destinations, confirmation: confirmation)
     }
 
     private func sharedScanBothBlockingMessage(session: ScanBothSession, review: ScanBothReview) -> String? {

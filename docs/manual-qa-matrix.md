@@ -91,7 +91,8 @@ Record the build number and per-volume counts.
 3. Confirm the review shows both volumes with their scan counts and any
    warnings. Choose a **Shared Destination**, then change the shared shoot
    name, media types, and folder organization. Check that both volumes'
-   copy counts and planned folders update. Expand **File Details** for both.
+   copy counts and planned folders update. Check that **Files** lists both
+   volumes and that filtering by **Source** shows only the chosen volume.
    Skip one volume and confirm the footer updates. Include it again and
    confirm that both volumes appear in the import order. Check that the
    destination is still empty. Choose **Start Imports** once. Watch Internal

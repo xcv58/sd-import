@@ -320,6 +320,6 @@
   "beta.step3.title": "Partagez vos retours.",
   "beta.step3.body": "Envoyez vos retours depuis TestFlight, ou écrivez-nous en précisant la version de l’app et ce qui s’est passé.",
   "beta.feedback": "Envoyer un retour bêta par e-mail",
-  "guide.scan_both": "Utilisez {0}Analyser les deux{/0} pour analyser le stockage interne et la carte mémoire de l’appareil. Vérifiez le plan commun, affichez les détails des fichiers ou ignorez un volume, puis lancez les imports successifs en un clic.",
+  "guide.scan_both": "Utilisez {0}Analyser les deux{/0} pour analyser le stockage interne et la carte mémoire de l’appareil. Vérifiez le plan commun, consultez les fichiers du volume de votre choix ou ignorez un volume, puis lancez les imports successifs en un clic.",
   "guide.rescan": "Si la copie est interrompue, les fichiers déjà copiés restent à destination. Reconnectez la source si nécessaire, choisissez {0}Réanalyser la source{/0} dans l’historique et vérifiez le nouveau plan."
 }

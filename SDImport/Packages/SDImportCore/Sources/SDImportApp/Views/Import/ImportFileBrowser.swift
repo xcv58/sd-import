@@ -3,6 +3,12 @@ import SDImportCore
 import SwiftUI
 
 struct ImportFileBrowser: View {
+    struct SourceFilter {
+        let selection: Binding<UUID?>
+        let options: [UUID?]
+        let title: (UUID?) -> String
+    }
+
     struct Selection {
         var filter: ImportPreviewFileFilter?
         var pinnedFilter: ImportPreviewFileFilter?
@@ -37,8 +43,10 @@ struct ImportFileBrowser: View {
     @Binding var selection: Selection
     let rows: [ImportPreviewRow]
     let copyCount: Int
-    let setReimportSelection: ((Set<Int64>, Bool) -> Void)?
+    let reimportAction: (ImportPreviewRow) -> ((Set<Int64>, Bool) -> Void)?
     let showQuickLook: (ImportPreviewRow) -> Void
+    var sourceNames: [Int64: String] = [:]
+    var sourceFilter: SourceFilter?
 
     private let filePageSize = 100
 
@@ -81,7 +89,19 @@ struct ImportFileBrowser: View {
         Section {
             fileBrowserBody.onDisappear { thumbnailProvider.cancelAll() }
         } header: {
-            fileBrowserToolbar
+            VStack(alignment: .leading, spacing: 10) {
+                fileBrowserToolbar
+                if let sourceFilter {
+                    ImportPlanOptionRow(
+                        L10n.tr("Source"), maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth
+                    ) {
+                        ImportReviewSegmentedControl(
+                            title: L10n.tr("Source"), selection: sourceFilter.selection,
+                            options: sourceFilter.options, optionTitle: sourceFilter.title
+                        )
+                    }
+                }
+            }
                 .id(ScrollTarget.files)
                 .padding(14)
                 .background(
@@ -221,7 +241,7 @@ struct ImportFileBrowser: View {
                             destinationText: destinationText(for: item.primaryRow)
                         )
                         .contextMenu {
-                            ReimportSelectionActions(rows: item.rows, setReimportSelection: setReimportSelection)
+                            ReimportSelectionActions(rows: item.rows, setReimportSelection: reimportAction(item.primaryRow))
                         }
                     }
                     .disclosureGroupStyle(FullWidthDisclosureGroupStyle())
@@ -286,7 +306,7 @@ struct ImportFileBrowser: View {
                     return .handled
                 }
                 .contextMenu {
-                    ReimportSelectionActions(rows: item.rows, setReimportSelection: setReimportSelection)
+                    ReimportSelectionActions(rows: item.rows, setReimportSelection: reimportAction(item.primaryRow))
                 }
                 .accessibilityHint(L10n.tr("Press Space for Quick Look"))
                 .accessibilityIdentifier("import.review.grid-item.\(item.primaryRow.id)")
@@ -380,7 +400,8 @@ struct ImportFileBrowser: View {
             ImportPreviewListRow(
                 row: row,
                 destinationText: destinationText(for: row),
-                isSelected: selection.rowID == row.id
+                isSelected: selection.rowID == row.id,
+                sourceName: sourceNames[row.id]
             )
             .contentShape(Rectangle())
         }
@@ -394,7 +415,7 @@ struct ImportFileBrowser: View {
                 selection.rowID = row.id
                 showQuickLook(row)
             }
-            ReimportSelectionActions(rows: [row], setReimportSelection: setReimportSelection)
+            ReimportSelectionActions(rows: [row], setReimportSelection: reimportAction(row))
         }
         .accessibilityHint(L10n.tr("Press Space for Quick Look"))
     }
@@ -406,32 +427,31 @@ struct ImportFileBrowser: View {
         return row.destinationPath ?? row.status
     }
 
+    private struct GroupKey: Hashable {
+        let source: String?
+        let group: String
+    }
+
+    private func groupKey(for row: ImportPreviewRow) -> GroupKey? {
+        row.visualGroupID.map { GroupKey(source: sourceNames[row.id], group: $0) }
+    }
+
     private func visualItems() -> [ImportPreviewVisualItem] {
-        let displayedPairs = rows.compactMap { row in
-            row.visualGroupID.map { ($0, row) }
-        }
-        let displayedGroups = Dictionary(grouping: displayedPairs) { $0.0 }
-            .mapValues { $0.map(\.1) }
-        var handledGroups: Set<String> = []
+        let pairs = rows.compactMap { row in groupKey(for: row).map { ($0, row) } }
+        var groups = Dictionary(grouping: pairs, by: \.0).mapValues { $0.map(\.1) }
         var items: [ImportPreviewVisualItem] = []
         for row in rows {
-            guard let groupID = row.visualGroupID else {
-                items.append(
-                    ImportPreviewVisualItem(id: "file:\(row.id)", rows: [row], totalGroupCount: 1)
-                )
-                continue
+            let sourceName = sourceNames[row.id]
+            if let key = groupKey(for: row) {
+                guard let members = groups.removeValue(forKey: key) else { continue }
+                items.append(ImportPreviewVisualItem(
+                    id: "group:\(row.id)", rows: members, totalGroupCount: members.count, sourceName: sourceName
+                ))
+            } else {
+                items.append(ImportPreviewVisualItem(
+                    id: "file:\(row.id)", rows: [row], totalGroupCount: 1, sourceName: sourceName
+                ))
             }
-            guard handledGroups.insert(groupID).inserted else {
-                continue
-            }
-            let groupedRows = displayedGroups[groupID] ?? [row]
-            items.append(
-                ImportPreviewVisualItem(
-                    id: "group:\(groupID)",
-                    rows: groupedRows,
-                    totalGroupCount: groupedRows.count
-                )
-            )
         }
         return items
     }
@@ -571,16 +591,25 @@ private struct ImportPreviewListRow: View {
     let row: ImportPreviewRow
     let destinationText: String
     let isSelected: Bool
+    let sourceName: String?
 
     var body: some View {
         HStack(spacing: 12) {
             PreviewStatusBadge(row: row)
                 .frame(width: 112, alignment: .leading)
 
-            Text(row.filename)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(minWidth: 150, maxWidth: 240, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.filename)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let sourceName {
+                    Text(sourceName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(minWidth: 150, maxWidth: 240, alignment: .leading)
 
             Text(row.mediaKind.displayTitle)
                 .foregroundStyle(.secondary)
@@ -612,7 +641,8 @@ private struct ImportPreviewListRow: View {
 
     private var accessibilityLabel: String {
         let size = L10n.fileSize(row.size)
-        return "\(row.filename), \(row.status), \(row.mediaKind.displayTitle), \(size), \(destinationText)"
+        let details = "\(row.filename), \(row.status), \(row.mediaKind.displayTitle), \(size), \(destinationText)"
+        return [sourceName, details].compactMap { $0 }.joined(separator: ", ")
     }
 }
 
@@ -620,6 +650,7 @@ private struct ImportPreviewVisualItem: Identifiable {
     let id: String
     let rows: [ImportPreviewRow]
     let totalGroupCount: Int
+    let sourceName: String?
 
     var primaryRow: ImportPreviewRow {
         if rows.first?.visualGroupKind == .rawJPEG {
@@ -643,6 +674,10 @@ private struct ImportPreviewVisualItem: Identifiable {
     }
 
     var subtitle: String {
+        [sourceName, groupDescription].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private var groupDescription: String {
         switch rows.first?.visualGroupKind {
         case .rawJPEG:
             return rows.count == totalGroupCount

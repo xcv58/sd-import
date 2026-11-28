@@ -320,6 +320,6 @@
   "beta.step3.title": "Feedback teilen.",
   "beta.step3.body": "Sende Feedback über TestFlight oder schreibe uns eine E-Mail mit der App-Version und einer Beschreibung des Problems.",
   "beta.feedback": "Beta-Feedback per E-Mail senden",
-  "guide.scan_both": "Mit {0}Beide scannen{/0} scannst du den internen Speicher und die Speicherkarte der Kamera zusammen. Prüfe den gemeinsamen Plan, öffne bei Bedarf die Dateidetails oder überspringe ein Volume und starte die Importe mit einem Klick nacheinander.",
+  "guide.scan_both": "Mit {0}Beide scannen{/0} scannst du den internen Speicher und die Speicherkarte der Kamera zusammen. Prüfe den gemeinsamen Plan, sieh dir die Dateien eines Volumes an oder überspringe ein Volume und starte die Importe mit einem Klick nacheinander.",
   "guide.rescan": "Wird der Kopiervorgang unterbrochen, bleiben bereits kopierte Dateien am Zielort. Verbinde die Quelle bei Bedarf erneut, wähle im Verlauf {0}Quelle erneut scannen{/0} und prüfe den neuen Plan."
 }

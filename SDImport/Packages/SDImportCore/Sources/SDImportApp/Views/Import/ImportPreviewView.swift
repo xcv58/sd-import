@@ -76,7 +76,7 @@ struct ImportPreviewView: View {
             }
             ImportFileBrowser(
                 selection: $fileSelection, rows: model.previewRows, copyCount: model.previewTotals.copyFiles,
-                setReimportSelection: updateReimportSelection,
+                reimportAction: { _ in updateReimportSelection },
                 showQuickLook: { quickLook.present(row: $0, among: model.previewRows) }
             )
         }
@@ -213,17 +213,7 @@ struct ImportPreviewView: View {
 
     @ViewBuilder
     private func summaryPills(summary: ScanSummary?) -> some View {
-        InfoPill(
-            title: model.previewTotals.copyFiles == 1
-                ? L10n.tr("1 file ready")
-                : L10n.tr("\(model.previewTotals.copyFiles) files ready"),
-            systemImage: "arrow.down.circle",
-            role: .success
-        )
-        InfoPill(
-            title: L10n.fileSize(model.previewTotals.copyBytes),
-            systemImage: "externaldrive"
-        )
+        ImportPlanCopyPills(totals: model.previewTotals)
         if let summary, summary.knownFiles > 0 {
             InfoPill(title: L10n.tr("\(summary.knownFiles) known"), systemImage: "checkmark.seal")
         }
@@ -247,7 +237,7 @@ struct ImportPreviewView: View {
 
     private var importOptionControls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            optionRow(
+            ImportPlanOptionRow(
                 L10n.tr("Copy"),
                 maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth
             ) {
@@ -261,7 +251,7 @@ struct ImportPreviewView: View {
             }
 
             if showsMixedDestinationLayout {
-                optionRow(
+                ImportPlanOptionRow(
                     L10n.tr("Save to"),
                     maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth
                 ) {
@@ -274,7 +264,7 @@ struct ImportPreviewView: View {
                 }
             }
 
-            optionRow(
+            ImportPlanOptionRow(
                 L10n.tr("Organize"),
                 maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth
             ) {
@@ -287,54 +277,6 @@ struct ImportPreviewView: View {
             }
         }
         .disabled(model.isScanBothPlanLocked)
-    }
-
-    private func optionRow<Content: View>(
-        _ title: String,
-        maximumControlWidth: CGFloat? = nil,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: ImportFormLayout.columnSpacing) {
-                Text(title)
-                    .foregroundStyle(.secondary)
-                    .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
-                optionRowControl(maximumWidth: maximumControlWidth) {
-                    content()
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                optionRowControl(maximumWidth: maximumControlWidth) {
-                    content()
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func optionRowControl<Content: View>(
-        maximumWidth: CGFloat?,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        if let maximumWidth {
-            content()
-                .frame(
-                    minWidth: ImportFormLayout.minimumControlWidth,
-                    idealWidth: maximumWidth,
-                    maxWidth: maximumWidth
-                )
-        } else {
-            content()
-                .frame(
-                    minWidth: ImportFormLayout.minimumControlWidth,
-                    maxWidth: .infinity
-                )
-        }
     }
 
     @ViewBuilder
@@ -642,14 +584,7 @@ struct ImportPreviewView: View {
         guard let mediaContent = model.mediaContentProfile else {
             return selection.displayTitle
         }
-        switch selection {
-        case .photosAndVideos:
-            return L10n.tr("Photos + Videos")
-        case .photosOnly:
-            return L10n.tr("Photos (\(mediaContent.photoCount))")
-        case .videosOnly:
-            return L10n.tr("Videos (\(mediaContent.videoCount))")
-        }
+        return selection.displayTitle(photoCount: mediaContent.photoCount, videoCount: mediaContent.videoCount)
     }
 
     private func mediaContentSummary(_ profile: MediaContentProfile) -> String {
@@ -820,7 +755,7 @@ private struct ImportReviewFooter: View {
     }
 }
 
-private struct DestinationTreeRow: View {
+struct DestinationTreeRow: View {
     @Environment(\.locale) private var locale
     let destination: ImportPreviewDestination
     let rootTitle: String
@@ -845,7 +780,9 @@ private struct DestinationTreeRow: View {
         .accessibilityLabel(L10n.tr("\(rootTitle), \(relativePath), \(fileCount), \(bytes)"))
     }
 
-    private var fileCount: String { L10n.tr("\(destination.fileCount) files") }
+    private var fileCount: String {
+        destination.fileCount == 1 ? L10n.tr("1 file") : L10n.tr("\(destination.fileCount) files")
+    }
 
     private var relativePath: String {
         destination.relativePath.isEmpty ? L10n.tr("Root") : destination.relativePath
@@ -868,6 +805,17 @@ private extension ImportPreviewRow {
 }
 
 extension ImportMediaSelection {
+    func displayTitle(photoCount: Int, videoCount: Int) -> String {
+        switch self {
+        case .photosAndVideos:
+            return displayTitle
+        case .photosOnly:
+            return L10n.tr("Photos (\(photoCount))")
+        case .videosOnly:
+            return L10n.tr("Videos (\(videoCount))")
+        }
+    }
+
     var displayTitle: String {
         switch self {
         case .photosAndVideos:

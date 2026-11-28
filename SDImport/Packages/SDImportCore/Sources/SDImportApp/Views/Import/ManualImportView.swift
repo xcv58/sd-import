@@ -475,7 +475,7 @@ struct ImportDestinationFields: View {
                 Text(L10n.tr("Shoot"))
                     .foregroundStyle(.secondary)
                     .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
-                ShootNameField(name: $model.location)
+                ShootNameField(name: $model.location) { model.savePreferences() }
             }
 
             if !model.isReviewingScanBothVolume {

@@ -6,60 +6,61 @@ struct ScanBothReviewView: View {
     @EnvironmentObject private var model: AppModel
     @AccessibilityFocusState private var headingFocused: Bool
     @StateObject private var quickLook = ImportQuickLookController()
-    @State private var fileSelections: [UUID: ImportFileBrowser.Selection] = [:]
+    @State private var fileSource: UUID?
+    @State private var fileSelections: [UUID?: ImportFileBrowser.Selection] = [:]
 
     let session: ScanBothSession
     let review: ScanBothReview
 
     private var isBusy: Bool { model.isWorking || model.isEjectingSource }
 
+    private var fileEntries: [ScanBothSession.Entry] {
+        session.entries.filter {
+            !session.removedMountPaths.contains($0.volume.mountPath) && review.volumes[$0.id]?.rows.isEmpty == false
+        }
+    }
+
+    private var activeFileSource: UUID? {
+        fileEntries.contains(where: { $0.id == fileSource }) ? fileSource : nil
+    }
+
+    private var visibleEntries: [ScanBothSession.Entry] {
+        fileEntries.filter { activeFileSource == nil || $0.id == activeFileSource }
+    }
+
     private var selectedFile: (entry: ScanBothSession.Entry, row: ImportPreviewRow)? {
-        for entry in session.entries where !session.removedMountPaths.contains(entry.volume.mountPath) {
-            guard let id = fileSelections[entry.id]?.rowID,
-                  let row = review.volumes[entry.id]?.displayRows(isSkipped: entry.disposition == .skipped)
-                      .first(where: { $0.id == id }) else { continue }
-            return (entry, row)
+        guard let rowID = fileSelections[activeFileSource]?.rowID else { return nil }
+        for entry in visibleEntries {
+            if let row = fileRows(for: entry).first(where: { $0.id == rowID }) {
+                return (entry, row)
+            }
         }
         return nil
     }
 
     var body: some View {
-        AppPage {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.tr("Review import"))
-                        .font(.title2.weight(.semibold))
-                        .accessibilityAddTraits(.isHeader)
-                        .accessibilityFocused($headingFocused)
-                        .accessibilityIdentifier("import.phase.review.heading")
-                    Text(session.deviceName)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                sharedPlan
-                ForEach(session.entries) { entry in
-                    ScanBothVolumeReview(
-                        entry: entry, title: session.volumeTitle(for: entry), plan: review.volumes[entry.id],
-                        destinationRoot: session.destinationRoot?.resolvedURL.path,
-                        canInclude: session.canInclude(entry),
-                        isDisconnected: model.ejectedSourceJobID == nil
-                            && session.removedMountPaths.contains(entry.volume.mountPath),
-                        fileSelection: fileSelection(for: entry),
-                        setReimportSelection: reimportAction(for: entry),
-                        showQuickLook: { showQuickLook($0, on: entry) }
-                    )
-                }
-                if AppDistribution.current.supportsSourceEjection {
-                    SourceEjectionControl(
-                        sourceName: session.deviceName,
-                        volumeCount: session.entries.count,
-                        isEjected: model.ejectedSourceJobID != nil,
-                        isEjecting: model.isEjectingSource,
-                        canEject: model.canEjectScanBoth
-                    ) {
-                        model.ejectScanBoth()
+        ScrollViewReader { scroll in
+            AppPage(maxContentWidth: .infinity) {
+                LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
+                    heading
+                    sharedPlan
+                    volumeSummaries
+                    if !fileEntries.isEmpty { files }
+                    if AppDistribution.current.supportsSourceEjection {
+                        SourceEjectionControl(
+                            sourceName: session.deviceName,
+                            volumeCount: session.entries.count,
+                            isEjected: model.ejectedSourceJobID != nil,
+                            isEjecting: model.isEjectingSource,
+                            canEject: model.canEjectScanBoth
+                        ) {
+                            model.ejectScanBoth()
+                        }
                     }
                 }
+            }
+            .onChange(of: fileSelections[activeFileSource]?.filter) { _, filter in
+                if filter != nil { scroll.scrollTo(ImportFileBrowser.ScrollTarget.files, anchor: .top) }
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { footer }
@@ -78,35 +79,117 @@ struct ScanBothReviewView: View {
         .onDisappear { quickLook.dismiss() }
     }
 
+    private var heading: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.tr("Review import"))
+                .font(.title2.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($headingFocused)
+                .accessibilityIdentifier("import.phase.review.heading")
+            Text(session.deviceName)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var volumeSummaries: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 14) { volumeCards(minimumWidth: 260) }
+            VStack(spacing: 14) { volumeCards(minimumWidth: 0) }
+        }
+    }
+
+    private func volumeCards(minimumWidth: CGFloat) -> some View {
+        ForEach(session.entries) { entry in
+            ScanBothVolumeReview(
+                entry: entry, title: session.volumeTitle(for: entry), plan: review.volumes[entry.id],
+                canInclude: session.canInclude(entry),
+                isDisconnected: model.ejectedSourceJobID == nil
+                    && session.removedMountPaths.contains(entry.volume.mountPath)
+            )
+            .frame(minWidth: minimumWidth, maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private var inspectorBinding: Binding<Bool> {
         Binding {
             selectedFile != nil
         } set: { isPresented in
-            if !isPresented, let entry = selectedFile?.entry {
-                fileSelections[entry.id]?.rowID = nil
-            }
+            if !isPresented { fileSelections[activeFileSource]?.rowID = nil }
         }
     }
 
-    private func fileSelection(for entry: ScanBothSession.Entry) -> Binding<ImportFileBrowser.Selection> {
-        Binding {
-            fileSelections[entry.id] ?? .init()
-        } set: { updated in
-            if updated.rowID != nil {
-                for sibling in session.entries where sibling.id != entry.id {
-                    fileSelections[sibling.id]?.rowID = nil
-                }
-            }
-            fileSelections[entry.id] = updated
+    private var fileSelection: Binding<ImportFileBrowser.Selection> {
+        let source = activeFileSource
+        return Binding {
+            fileSelections[source] ?? .init()
+        } set: {
+            fileSelections[source] = $0
         }
+    }
+
+    private var sourceSelection: Binding<UUID?> {
+        Binding {
+            activeFileSource
+        } set: { source in
+            fileSelections[activeFileSource]?.rowID = nil
+            fileSource = source
+        }
+    }
+
+    private func fileRows(for entry: ScanBothSession.Entry) -> [ImportPreviewRow] {
+        review.volumes[entry.id]?.displayRows(isSkipped: entry.disposition == .skipped) ?? []
+    }
+
+    private func visibleCopyCount(in entries: [ScanBothSession.Entry]) -> Int {
+        entries.filter(\.awaitsImport).reduce(0) { $0 + (review.volumes[$1.id]?.totals.copyFiles ?? 0) }
+    }
+
+    @ViewBuilder
+    private var files: some View {
+        let entries = visibleEntries
+        let rowsByEntry = entries.map { ($0, fileRows(for: $0)) }
+        let entriesByRowID = Dictionary(uniqueKeysWithValues: rowsByEntry.flatMap { entry, rows in
+            rows.map { ($0.id, entry) }
+        })
+        let names: [Int64: String] = entries.count > 1 ? Dictionary(uniqueKeysWithValues: rowsByEntry.flatMap { entry, rows in
+            let title = session.volumeTitle(for: entry)
+            return rows.map { ($0.id, title) }
+        }) : [:]
+        if let entry = entries.first, entries.count == 1, let reimport = reimportAction(for: entry) {
+            ImportReimportControls(rows: fileRows(for: entry), setReimportSelection: reimport)
+                .disabled(isBusy)
+        }
+        ImportFileBrowser(
+            selection: fileSelection, rows: rowsByEntry.flatMap { $0.1 },
+            copyCount: visibleCopyCount(in: entries),
+            reimportAction: { row in entriesByRowID[row.id].flatMap(reimportAction(for:)) },
+            showQuickLook: { row in
+                if let entry = entriesByRowID[row.id] { showQuickLook(row, on: entry) }
+            },
+            sourceNames: names, sourceFilter: fileSourceFilter
+        )
+        .disabled(isBusy)
+    }
+
+    private var fileSourceFilter: ImportFileBrowser.SourceFilter? {
+        let entries = fileEntries
+        guard entries.count > 1 else { return nil }
+        return ImportFileBrowser.SourceFilter(
+            selection: sourceSelection, options: [nil] + entries.map { Optional($0.id) },
+            title: { id in
+                entries.first(where: { $0.id == id }).map(session.volumeTitle(for:)) ?? L10n.tr("All")
+            }
+        )
     }
 
     private func reimportAction(for entry: ScanBothSession.Entry) -> ((Set<Int64>, Bool) -> Void)? {
         guard !session.hasStartedImports, entry.awaitsImport, let jobID = entry.jobID,
               !session.removedMountPaths.contains(entry.volume.mountPath), !model.needsRescan(jobID) else { return nil }
         return { fileIDs, requested in
-            let copyCount = review.volumes[entry.id]?.totals.copyFiles ?? 0
-            fileSelections[entry.id, default: .init()].keepCurrentFilter(copyCount: copyCount)
+            fileSelections[activeFileSource, default: .init()].keepCurrentFilter(
+                copyCount: visibleCopyCount(in: visibleEntries)
+            )
             model.setReimportSelection(fileIDs, requested: requested, volumeID: entry.id)
         }
     }
@@ -116,81 +199,104 @@ struct ScanBothReviewView: View {
     }
 
     private var sharedPlan: some View {
-        AppSection(L10n.tr("Import Plan"), systemImage: "list.bullet.rectangle") {
-            destination
-            Divider()
+        let media = session.entries.filter(\.awaitsImport).compactMap { review.sources[$0.id]?.mediaContent }
+        let photoCount = media.reduce(0) { $0 + $1.photoCount }
+        let videoCount = media.reduce(0) { $0 + $1.videoCount }
+        return AppSection(L10n.tr("Import Plan"), systemImage: "list.bullet.rectangle") {
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: 20) {
-                    shootField.frame(minWidth: 190)
-                    mediaPicker.fixedSize(horizontal: true, vertical: false)
-                    organizationPicker.fixedSize(horizontal: true, vertical: false)
+                HStack(spacing: 8) { ImportPlanCopyPills(totals: review.totals(in: session)) }
+                VStack(alignment: .leading, spacing: 7) { ImportPlanCopyPills(totals: review.totals(in: session)) }
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                ImportPlanOptionRow(L10n.tr("Copy"), maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth) {
+                    ImportReviewSegmentedControl(
+                        title: L10n.tr("Copy"), selection: binding(\.mediaSelection),
+                        options: ImportMediaSelection.allCases,
+                        optionTitle: { $0.displayTitle(photoCount: photoCount, videoCount: videoCount) }
+                    )
+                    .accessibilityIdentifier("import.scan-both.media")
                 }
-                VStack(alignment: .leading, spacing: 10) {
-                    shootField
-                    mediaPicker
-                    organizationPicker
+                ImportPlanOptionRow(L10n.tr("Organize"), maximumControlWidth: ImportFormLayout.compactSegmentedControlWidth) {
+                    ImportReviewSegmentedControl(
+                        title: L10n.tr("Organize"), selection: binding(\.folderGrouping),
+                        options: ImportFolderGrouping.allCases, optionTitle: { $0.displayTitle }
+                    )
+                    .accessibilityIdentifier("import.scan-both.grouping")
+                }
+                ImportPlanOptionRow(L10n.tr("Shoot")) {
+                    ShootNameField(name: binding(\.shootName))
+                        .accessibilityIdentifier("import.scan-both.shoot")
                 }
             }
             .disabled(isBusy || session.hasStartedImports)
+            ImportPlanOptionRow(L10n.tr("Shared Destination")) { destination }
             if session.hasStartedImports {
                 Label(L10n.tr("Plan settings are locked after imports start."), systemImage: "lock")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            destinations
         }
     }
 
-    private var shootField: some View {
-        LabeledContent(L10n.tr("Shoot")) {
-            TextField(L10n.tr("Shoot name"), text: binding(\.shootName))
-                .textFieldStyle(.roundedBorder)
-                .accessibilityIdentifier("import.scan-both.shoot")
+    @ViewBuilder
+    private var destinations: some View {
+        let queued = review.queuedEntries(in: session)
+        if !queued.isEmpty {
+            Divider()
+            Text(L10n.tr("Destinations"))
+                .font(.subheadline.weight(.semibold))
+            ForEach(queued) { entry in
+                ForEach(review.volumes[entry.id]?.destinations ?? []) { destination in
+                    DestinationTreeRow(destination: destination, rootTitle: session.volumeTitle(for: entry))
+                }
+            }
         }
-    }
-
-    private var mediaPicker: some View {
-        Picker(L10n.tr("Copy"), selection: binding(\.mediaSelection)) {
-            Text(L10n.tr("Photos + Videos")).tag(ImportMediaSelection.photosAndVideos)
-            Text(L10n.tr("Photos")).tag(ImportMediaSelection.photosOnly)
-            Text(L10n.tr("Videos")).tag(ImportMediaSelection.videosOnly)
-        }
-        .accessibilityIdentifier("import.scan-both.media")
-    }
-
-    private var organizationPicker: some View {
-        Picker(L10n.tr("Organize"), selection: binding(\.folderGrouping)) {
-            Text(L10n.tr("By Capture Date")).tag(ImportFolderGrouping.byDay)
-            Text(L10n.tr("One Shoot")).tag(ImportFolderGrouping.oneShootFolder)
-        }
-        .accessibilityIdentifier("import.scan-both.grouping")
     }
 
     private var destination: some View {
         let validation = model.scanBothDestinationValidation
         let needsAccess = model.scanBothDestinationNeedsAccess
         return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.tr("Shared Destination")).fontWeight(.medium)
+            HStack(spacing: 8) {
+                Group {
                     if session.destinationPath.isEmpty {
                         Text(L10n.tr("Choose a destination folder")).foregroundStyle(.secondary)
                     } else {
-                        ScanBothPath(path: session.destinationPath)
+                        Text(verbatim: (session.destinationPath as NSString).abbreviatingWithTildeInPath)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                            .help(session.destinationPath)
                     }
                 }
-                Spacer()
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
+                .overlay { RoundedRectangle(cornerRadius: 5).strokeBorder(AppSurfacePalette.separator.opacity(0.45)) }
                 if session.hasPendingResults, !session.hasStartedImports || needsAccess {
-                    Button(needsAccess ? L10n.tr("Allow Access") : L10n.tr("Choose…")) {
+                    Button {
                         model.chooseScanBothDestination()
+                    } label: {
+                        if needsAccess {
+                            Label(L10n.tr("Allow Access"), systemImage: "lock.open")
+                        } else {
+                            Image(systemName: "folder")
+                        }
                     }
-                    .buttonStyle(.bordered)
+                    .help(L10n.tr("Choose a destination folder"))
+                    .accessibilityLabel(needsAccess ? L10n.tr("Allow Access") : L10n.tr("Choose a destination folder"))
                     .disabled(isBusy)
                     .accessibilityIdentifier("import.scan-both.destination")
                 }
             }
             if let message = model.scanBothDestinationChangeMessage {
                 AppStatusLabel(title: message, systemImage: "exclamationmark.triangle", role: .warning)
-            } else if !session.destinationPath.isEmpty, !validation.isUsable {
+            } else if needsAccess {
+                AppStatusLabel(title: L10n.tr("Permission needed"), systemImage: "lock", role: .warning)
+                    .font(.callout)
+            } else if !session.destinationPath.isEmpty {
                 ValidationStatusView(result: validation)
             }
         }
@@ -278,17 +384,12 @@ struct ScanBothReviewView: View {
 
 private struct ScanBothVolumeReview: View {
     @EnvironmentObject private var model: AppModel
-    @State private var showsFiles = false
 
     let entry: ScanBothSession.Entry
     let title: String
     let plan: ScanBothReview.VolumePlan?
-    let destinationRoot: String?
     let canInclude: Bool
     let isDisconnected: Bool
-    @Binding var fileSelection: ImportFileBrowser.Selection
-    let setReimportSelection: ((Set<Int64>, Bool) -> Void)?
-    let showQuickLook: (ImportPreviewRow) -> Void
 
     private var isBusy: Bool { model.isWorking || model.isEjectingSource }
 
@@ -325,43 +426,8 @@ private struct ScanBothVolumeReview: View {
                     } else if plan.totals.copyFiles == 0 {
                         Text(L10n.tr("Nothing to import")).foregroundStyle(.secondary)
                     }
-                    ForEach(plan.paths, id: \.self) { path in
-                        Label {
-                            ScanBothPath(path: path, relativeTo: destinationRoot)
-                        } icon: {
-                            Image(systemName: "folder").foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                if !plan.rows.isEmpty {
-                    filesDisclosure(for: plan)
                 }
             }
-        }
-    }
-
-    private func filesDisclosure(for plan: ScanBothReview.VolumePlan) -> some View {
-        let isSkipped = entry.disposition == .skipped
-        return DisclosureGroup(isExpanded: $showsFiles) {
-            if showsFiles {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    if let setReimportSelection {
-                        ImportReimportControls(rows: plan.rows, setReimportSelection: setReimportSelection)
-                    }
-                    ImportFileBrowser(
-                        selection: $fileSelection, rows: plan.displayRows(isSkipped: isSkipped),
-                        copyCount: isSkipped ? 0 : plan.totals.copyFiles, setReimportSelection: setReimportSelection,
-                        showQuickLook: showQuickLook
-                    )
-                }
-                .padding(.top, 8)
-                .disabled(isBusy)
-            }
-        } label: {
-            Text(L10n.tr("File Details")).accessibilityValue(title)
-        }
-        .onChange(of: showsFiles) { _, expanded in
-            if !expanded { fileSelection.rowID = nil }
         }
     }
 
@@ -427,18 +493,9 @@ struct ScanBothCopySummary: View {
 
 private struct ScanBothPath: View {
     let path: String
-    var relativeTo: String?
-
-    private var displayPath: String {
-        if let relativeTo {
-            let prefix = relativeTo.hasSuffix("/") ? relativeTo : relativeTo + "/"
-            if path.hasPrefix(prefix) { return String(path.dropFirst(prefix.count)) }
-        }
-        return (path as NSString).abbreviatingWithTildeInPath
-    }
 
     var body: some View {
-        Text(verbatim: displayPath)
+        Text(verbatim: (path as NSString).abbreviatingWithTildeInPath)
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .truncationMode(.middle)

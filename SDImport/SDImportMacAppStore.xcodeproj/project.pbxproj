@@ -20,13 +20,16 @@
 		54C29000506BF3652F50667B /* SDImportCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6199ABE38337D7DFFDC56F07 /* SDImportCore */; };
 		56D9032B7AC0232F53B3864E /* SourceEjectionControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2E92A3118205E0209C1DBD9 /* SourceEjectionControl.swift */; };
 		633FB9F87CA39DBE13995741 /* HistoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CAFE3AE59B1B2CD2D5F8D1 /* HistoryDetailView.swift */; };
+		71A6A86DF27D25C32C3F140C /* ScanBothReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E249CBC2C29D8336D0977328 /* ScanBothReviewView.swift */; };
 		75B2ADA4D3D35975E6419B18 /* StoreKitTestBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B413398B07F91A1E580ED5 /* StoreKitTestBridge.swift */; };
 		761005546E9E4D61EFDD54F2 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479A116D06B74E25AC5DA1D7 /* DiagnosticsView.swift */; };
 		8B5C8F5B9EE4966B3EA89611 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3400B49B9BBC5C0BDCDFE715 /* RootView.swift */; };
 		8C5C6DA9BC73546AEF598F55 /* ImportReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A58CEF8D0ADB0A77F4257B /* ImportReportView.swift */; };
 		8E0F17E630771437AD0A1448 /* MainWindowCommandTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65DB993256884946A4B6551 /* MainWindowCommandTests.swift */; };
 		912C6FE03C427577680B4CE0 /* SDImport.storekit in Resources */ = {isa = PBXBuildFile; fileRef = FDF31B3C5A8097ECE619C8D6 /* SDImport.storekit */; };
+		965A6A46E391B4755509782A /* ScanBothReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E3FC4D0FB9C024DFEFC94D4 /* ScanBothReview.swift */; };
 		A2721566CD4CCDA59AD96AE7 /* ImportThumbnailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3273F6FBED66F5FF362F3181 /* ImportThumbnailProvider.swift */; };
+		A2EA430D33B3BE4FC42A4553 /* ImportFileBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65FC50F576179746E48439DD /* ImportFileBrowser.swift */; };
 		A471B2057FA3EFD527071691 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 94EA7C1176A33A51E1F6E794 /* PrivacyInfo.xcprivacy */; };
 		A92B588D0BEC9EE96A5C10AF /* PurchaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57774FA23C8BA932A890C123 /* PurchaseView.swift */; };
 		AF12F6D73B9F70BB70174A73 /* SDImportApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBDEEFC2DEC320963CE4060C /* SDImportApp.swift */; };
@@ -43,6 +46,7 @@
 		D7EC8C1248DDB03AB51A8A09 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A4380B743818B084CBF5227 /* AppDelegate.swift */; };
 		E0AC45753E31FBB6D8876D3B /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44210DA9F5A19C1A6FE132F0 /* OnboardingFlowView.swift */; };
 		E8CE3C2FB50BD01E339F219E /* ScanSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB298AD0B746836DCB6090A8 /* ScanSummaryView.swift */; };
+		F1E2081B63A74BFC5B493254 /* ImportPlanControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 424CB65CB5F793496C400650 /* ImportPlanControls.swift */; };
 		F8A9BE39D29506F1B3239257 /* HistoryJobPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BD7E9B4708616AFC31577B3 /* HistoryJobPresentation.swift */; };
 		F9FEBCD70870D72243896703 /* ManualImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D8C5317105D816BEC772267 /* ManualImportView.swift */; };
 /* End PBXBuildFile section */
@@ -74,11 +78,14 @@
 		3661EC835F69C0AA6348F071 /* ImportQuickLookController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportQuickLookController.swift; sourceTree = "<group>"; };
 		3A4380B743818B084CBF5227 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		3BD7E9B4708616AFC31577B3 /* HistoryJobPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryJobPresentation.swift; sourceTree = "<group>"; };
+		424CB65CB5F793496C400650 /* ImportPlanControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportPlanControls.swift; sourceTree = "<group>"; };
 		44210DA9F5A19C1A6FE132F0 /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		479A116D06B74E25AC5DA1D7 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
+		4E3FC4D0FB9C024DFEFC94D4 /* ScanBothReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanBothReview.swift; sourceTree = "<group>"; };
 		54F840D44C8C199CCE34FECB /* AppUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdater.swift; sourceTree = "<group>"; };
 		56A19AA103DBA8ABB820E77F /* ImportResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportResultView.swift; sourceTree = "<group>"; };
 		57774FA23C8BA932A890C123 /* PurchaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurchaseView.swift; sourceTree = "<group>"; };
+		65FC50F576179746E48439DD /* ImportFileBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportFileBrowser.swift; sourceTree = "<group>"; };
 		6A12F26D497A12B15B37499B /* SDImportCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SDImportCore; path = Packages/SDImportCore; sourceTree = SOURCE_ROOT; };
 		6A9F7E362FAEB383953CB70D /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		78F876CE3C14937CC69C5924 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -97,6 +104,7 @@
 		D423E0A162E5B7DE5D9C914A /* MountPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountPromptView.swift; sourceTree = "<group>"; };
 		D65DB993256884946A4B6551 /* MainWindowCommandTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowCommandTests.swift; sourceTree = "<group>"; };
 		E0A58CEF8D0ADB0A77F4257B /* ImportReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportReportView.swift; sourceTree = "<group>"; };
+		E249CBC2C29D8336D0977328 /* ScanBothReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanBothReviewView.swift; sourceTree = "<group>"; };
 		EB298AD0B746836DCB6090A8 /* ScanSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanSummaryView.swift; sourceTree = "<group>"; };
 		EBD0981EE84CC3E67FBEB387 /* LoginItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemController.swift; sourceTree = "<group>"; };
 		EC55285EA08BA8E090ABAD12 /* ImportReviewSegmentedControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportReviewSegmentedControl.swift; sourceTree = "<group>"; };
@@ -183,12 +191,15 @@
 		497D563D8CCBDF8070EEA38F /* Import */ = {
 			isa = PBXGroup;
 			children = (
+				65FC50F576179746E48439DD /* ImportFileBrowser.swift */,
+				424CB65CB5F793496C400650 /* ImportPlanControls.swift */,
 				A39E19A562AB20862F5BA056 /* ImportPreviewView.swift */,
 				9C10174E33B9AB8BB08B8EB0 /* ImportProgressPanel.swift */,
 				56A19AA103DBA8ABB820E77F /* ImportResultView.swift */,
 				EC55285EA08BA8E090ABAD12 /* ImportReviewSegmentedControl.swift */,
 				7D8C5317105D816BEC772267 /* ManualImportView.swift */,
 				D423E0A162E5B7DE5D9C914A /* MountPromptView.swift */,
+				E249CBC2C29D8336D0977328 /* ScanBothReviewView.swift */,
 				EB298AD0B746836DCB6090A8 /* ScanSummaryView.swift */,
 				AEE2CE479E30F371191CA829 /* ShootNameField.swift */,
 				F2E92A3118205E0209C1DBD9 /* SourceEjectionControl.swift */,
@@ -200,6 +211,7 @@
 			isa = PBXGroup;
 			children = (
 				0ED63B082771A7831CD18932 /* AppModel.swift */,
+				4E3FC4D0FB9C024DFEFC94D4 /* ScanBothReview.swift */,
 			);
 			path = Stores;
 			sourceTree = "<group>";
@@ -528,6 +540,8 @@
 				633FB9F87CA39DBE13995741 /* HistoryDetailView.swift in Sources */,
 				F8A9BE39D29506F1B3239257 /* HistoryJobPresentation.swift in Sources */,
 				C252A623A339738FF89359F3 /* HistoryView.swift in Sources */,
+				A2EA430D33B3BE4FC42A4553 /* ImportFileBrowser.swift in Sources */,
+				F1E2081B63A74BFC5B493254 /* ImportPlanControls.swift in Sources */,
 				B0C15CFDF8BA2731F9A13583 /* ImportPreviewView.swift in Sources */,
 				D7C094106F46261CBAC7E401 /* ImportProgressPanel.swift in Sources */,
 				CD0C9BFD2685E7B1836232E3 /* ImportQuickLookController.swift in Sources */,
@@ -543,6 +557,8 @@
 				A92B588D0BEC9EE96A5C10AF /* PurchaseView.swift in Sources */,
 				8B5C8F5B9EE4966B3EA89611 /* RootView.swift in Sources */,
 				AF12F6D73B9F70BB70174A73 /* SDImportApp.swift in Sources */,
+				965A6A46E391B4755509782A /* ScanBothReview.swift in Sources */,
+				71A6A86DF27D25C32C3F140C /* ScanBothReviewView.swift in Sources */,
 				E8CE3C2FB50BD01E339F219E /* ScanSummaryView.swift in Sources */,
 				2B960A60640307A657D2F6FF /* SettingsView.swift in Sources */,
 				D29A4EA512E4486383CF2A0B /* ShootNameField.swift in Sources */,

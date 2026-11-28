@@ -7,6 +7,7 @@ struct ShootNameField: View {
 
     @Binding var name: String
     var showsQuickPicks = true
+    var onCommit: (() -> Void)?
 
     private var suggestions: [RecentShootNameChoice] {
         model.recentShootNameSuggestions
@@ -23,7 +24,7 @@ struct ShootNameField: View {
                         maxWidth: .infinity
                     )
                     .onSubmit {
-                        model.savePreferences()
+                        onCommit?()
                     }
 
                 Menu {
@@ -33,7 +34,7 @@ struct ShootNameField: View {
                         ForEach(suggestions) { suggestion in
                             Button {
                                 name = suggestion.name
-                                model.savePreferences()
+                                onCommit?()
                             } label: {
                                 Text(menuTitle(for: suggestion))
                             }
@@ -53,7 +54,7 @@ struct ShootNameField: View {
                     ForEach(suggestions.prefix(3)) { suggestion in
                         Button {
                             name = suggestion.name
-                            model.savePreferences()
+                            onCommit?()
                         } label: {
                             Text(suggestion.name)
                                 .lineLimit(1)

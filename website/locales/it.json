@@ -320,6 +320,6 @@
   "beta.step3.title": "Condividi il tuo feedback.",
   "beta.step3.body": "Invia il feedback da TestFlight oppure scrivici indicando la versione dell’app e cosa è successo.",
   "beta.feedback": "Invia feedback sulla beta via e-mail",
-  "guide.scan_both": "Usa {0}Scansiona entrambi{/0} per scansionare la memoria interna e la scheda della fotocamera. Controlla il piano condiviso, apri i dettagli dei file o salta un volume, quindi avvia le importazioni in sequenza con un clic.",
+  "guide.scan_both": "Usa {0}Scansiona entrambi{/0} per scansionare la memoria interna e la scheda della fotocamera. Controlla il piano condiviso, consulta i file di uno dei volumi o salta un volume, quindi avvia le importazioni in sequenza con un clic.",
   "guide.rescan": "Se la copia si interrompe, i file già copiati restano nella destinazione. Ricollega la sorgente se necessario, scegli {0}Scansiona di nuovo la sorgente{/0} nella cronologia e controlla il nuovo piano."
 }
