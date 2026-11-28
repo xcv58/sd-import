@@ -588,6 +588,26 @@ struct ScanBothSessionTests {
         }
     }
 
+    @Test("saving a Scan Both plan as defaults keeps destination settings changed during review")
+    func savingPlanDefaultsKeepsDestinations() async throws {
+        try await withScannedInlinePlans { model, session, roots in
+            model.reviewScanBothVolume(session.entries[0].id)
+            let sharedPath = model.scanBothSession?.destinationPath
+            model.importDefaults.photosPath = roots.videosURL.path
+            await model.validateAndSaveDestinationSettings()
+
+            model.location = "New Shoot Label"
+            #expect(!model.importDraftUsesDefaults)
+            model.saveImportDraftAsDefaults()
+
+            #expect(model.importDefaults.shootName == "New Shoot Label")
+            #expect(model.importDefaults.photosPath == roots.videosURL.path)
+            #expect(model.importDefaults.videosPath == roots.photosURL.path)
+            #expect(model.scanBothSession?.destinationPath == sharedPath)
+            #expect(model.importDraftUsesDefaults)
+        }
+    }
+
     private func withScannedInlinePlans(
         usesSharedDefault: Bool = true,
         _ test: (AppModel, ScanBothSession, DestinationRoots) async throws -> Void

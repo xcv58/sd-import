@@ -68,12 +68,23 @@ public struct Insta360RescanRecovery: Sendable {
         recordingsBySourcePath[sourcePath] != nil
     }
 
-    public static func foldersForIncompleteCopies(files: [JobFileRecord]) -> [URL] {
+    public static func recordedDestinationFolders(
+        request: ScanRequest, jobRepository: JobRepository
+    ) throws -> [URL] {
+        var attempts = PreviousAttempts(jobID: request.rescanOfJobID, jobRepository: jobRepository)
+        var matchedMasters: Set<String> = []
         var folders: Set<URL> = []
-        for group in Insta360ClipDetector().groups(files: files) where group.masterFiles.count > 1 {
-            let copies = group.masterFiles.compactMap(recordedCopy)
-            guard copies.count < group.masterFiles.count else { continue }
-            folders.formUnion(copies.map(parentFolder))
+        while let previous = try attempts.next() {
+            guard let paths = MatchingPaths(previous: previous, current: request) else { continue }
+            for group in try recordedGroups(jobID: previous.id, jobRepository: jobRepository) {
+                let masters = group.masterFiles.compactMap {
+                    paths.previousKeyInScope($0, current: request)
+                }
+                guard masters.count == group.masterFiles.count,
+                      matchedMasters.isDisjoint(with: masters) else { continue }
+                matchedMasters.formUnion(masters)
+                folders.formUnion(group.files.compactMap(recordedCopy).map(parentFolder))
+            }
         }
         return folders.sorted { $0.path < $1.path }
     }
@@ -89,18 +100,11 @@ public struct Insta360RescanRecovery: Sendable {
 
         // Each new scan has its own job. A cancellation before its first copy can
         // leave useful evidence only on an earlier job in the rescan chain.
-        var visited: Set<String> = []
-        var previousJobID = request.rescanOfJobID
-        while !unmatched.isEmpty, let id = previousJobID, visited.insert(id).inserted,
-              let previous = try jobRepository.fetchJob(id: id) {
-            try Task.checkCancellation()
-            previousJobID = previous.rescanOfJobID
-            guard previous.status != .scanned,
-                  let paths = MatchingPaths(previous: previous, current: request) else { continue }
-            let files = try jobRepository.fetchJobFiles(jobID: id)
+        var attempts = PreviousAttempts(jobID: request.rescanOfJobID, jobRepository: jobRepository)
+        while !unmatched.isEmpty, let previous = try attempts.next() {
+            guard let paths = MatchingPaths(previous: previous, current: request) else { continue }
             var previousByMaster: [String: Insta360ClipGroup] = [:]
-            for group in detector.groups(files: files) where group.masterFiles.count > 1 {
-                guard group.masterFiles.contains(where: { Self.recordedCopy(of: $0) != nil }) else { continue }
+            for group in try Self.recordedGroups(jobID: previous.id, jobRepository: jobRepository) {
                 for file in group.masterFiles {
                     if let key = paths.previousKey(file) { previousByMaster[key] = group }
                 }
@@ -140,6 +144,36 @@ public struct Insta360RescanRecovery: Sendable {
         }
         try Task.checkCancellation()
         recordingsBySourcePath = result
+    }
+
+    private struct PreviousAttempts {
+        var jobID: String?
+        let jobRepository: JobRepository
+        private var visited: Set<String> = []
+
+        init(jobID: String?, jobRepository: JobRepository) {
+            self.jobID = jobID
+            self.jobRepository = jobRepository
+        }
+
+        mutating func next() throws -> ImportJob? {
+            while let id = jobID, visited.insert(id).inserted {
+                try Task.checkCancellation()
+                guard let job = try jobRepository.fetchJob(id: id) else { return nil }
+                jobID = job.rescanOfJobID
+                if job.status != .scanned { return job }
+            }
+            return nil
+        }
+    }
+
+    private static func recordedGroups(
+        jobID: String, jobRepository: JobRepository
+    ) throws -> [Insta360ClipGroup] {
+        let files = try jobRepository.fetchJobFiles(jobID: jobID)
+        return Insta360ClipDetector().groups(files: files).filter { group in
+            group.masterFiles.count > 1 && group.masterFiles.contains { recordedCopy(of: $0) != nil }
+        }
     }
 
     private static func makeRecording(
@@ -206,6 +240,15 @@ public struct Insta360RescanRecovery: Sendable {
 
         func previousKey(_ file: JobFileRecord) -> String? { key(file, prefix: previousPrefix) }
         func currentKey(_ file: JobFileRecord) -> String? { key(file, prefix: currentPrefix) }
+
+        func previousKeyInScope(_ file: JobFileRecord, current: ScanRequest) -> String? {
+            guard let key = previousKey(file) else { return nil }
+            if usesRelativePaths {
+                return key.hasPrefix(currentPrefix) ? key : nil
+            }
+            guard Self.scopePrefix(folder: key, root: current.mountURL.path) != nil else { return nil }
+            return key
+        }
 
         private func key(_ file: JobFileRecord, prefix: String) -> String? {
             guard usesRelativePaths else { return file.sourcePath }

@@ -70,6 +70,7 @@
 "Updating re-import selection…" = "正在更新重新匯入選擇…";
 "macOS needs your permission to read this source." = "macOS 需要你的許可才能讀取這個來源。";
 "Allow Access to %@" = "允許訪問 %1$@";
+"Allow Access to Original Destinations" = "允許存取原目的地資料夾";
 "Allow Access to Source" = "允許訪問來源";
 "Allow Scan" = "允許掃描";
 "Already Exists" = "已存在";
@@ -185,6 +186,7 @@
 "Could not save settings: %@" = "無法保存設定：%1$@";
 "Could not update background helper diagnostics" = "無法更新背景輔助程式診斷信息";
 "Could not update background prompt: %@" = "無法更新背景提示：%1$@";
+"Continue Without Access" = "不授權並繼續";
 "Couldn’t Continue" = "無法繼續";
 "Couldn’t check available space · %@ planned" = "無法檢查可用空間 · 計劃使用 %1$@";
 "Crash Reports" = "當機報告";
@@ -635,6 +637,7 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "請重試。如果你已經啟用試用或購買了終身使用權限，請選擇「回復購買」。";
 "The import plan changed. Review it before copying." = "匯入計畫已變更。請在複製前重新確認。";
 "Reconnect the original card or restore its source folder, then retry." = "請重新連接原本的記憶卡或還原其來源資料夾，然後重試。";
+"SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan." = "允許存取資料夾後，SD Card Import 可以檢查已拷貝的 Insta360 檔案。如果不授權就繼續，這些檔案可能會出現在新的匯入計畫中。";
 "Scan Both" = "掃描兩者";
 "Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "「掃描兩者」會為兩個卷宗使用同一個目的地資料夾。若要匯入到其他位置，請單獨選擇一個卷宗。";
 "Choose one or both storage volumes to scan." = "選擇一個或兩個儲存卷進行掃描。";

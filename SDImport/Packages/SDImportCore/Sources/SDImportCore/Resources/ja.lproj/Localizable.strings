@@ -70,6 +70,7 @@
 "Updating re-import selection…" = "再読み込みの選択を更新中…";
 "macOS needs your permission to read this source." = "この読み込み元を読み取るには、macOS でアクセスを許可する必要があります。";
 "Allow Access to %@" = "%1$@ へのアクセスを許可";
+"Allow Access to Original Destinations" = "元の保存先へのアクセスを許可";
 "Allow Access to Source" = "読み込み元へのアクセスを許可";
 "Allow Scan" = "スキャンを許可";
 "Already Exists" = "すでに存在";
@@ -185,6 +186,7 @@
 "Could not save settings: %@" = "設定を保存できませんでした：%1$@";
 "Could not update background helper diagnostics" = "バックグラウンドヘルパーの診断情報を更新できませんでした";
 "Could not update background prompt: %@" = "バックグラウンド通知を更新できませんでした：%1$@";
+"Continue Without Access" = "アクセスせずに続ける";
 "Couldn’t Continue" = "続行できませんでした";
 "Couldn’t check available space · %@ planned" = "空き容量を確認できません · 予定 %1$@";
 "Crash Reports" = "クラッシュレポート";
@@ -635,6 +637,7 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "もう一度お試しください。トライアルをすでに有効にした場合、または買い切りの無期限アクセスを購入済みの場合は、「購入を復元」を選択してください。";
 "The import plan changed. Review it before copying." = "読み込みプランが変更されました。コピーする前に確認してください。";
 "Reconnect the original card or restore its source folder, then retry." = "元のカードを再接続するか、ソースフォルダを元に戻してから、もう一度お試しください。";
+"SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan." = "フォルダへのアクセスを許可すると、SD Card Importはコピー済みのInsta360ファイルを確認できます。アクセスせずに続けると、これらのファイルが新しいプランに含まれる場合があります。";
 "Scan Both" = "両方をスキャン";
 "Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "「両方をスキャン」では2つのボリュームに同じ保存先を使います。別の保存先に読み込むには、ボリュームを1つ選んでください。";
 "Choose one or both storage volumes to scan." = "スキャンするボリュームを1つまたは両方選択してください。";

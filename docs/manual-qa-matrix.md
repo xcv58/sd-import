@@ -106,10 +106,17 @@ Record the build number and per-volume counts.
 6. Grant access to a temporary **Shared Destination**. In Settings, choose a
    different default destination. Return to Import and open each plan. Confirm
    the shared destination still has access and **Confirm Plan** is available
-   for each. Repeat with a review that started with the previous shared default.
+   for each. Edit the shoot label and choose **Use as Defaults**. Verify that
+   Settings keeps the new default destination. Repeat with a review that started
+   with the previous shared default.
 7. Interrupt an Insta360 import after the first lens file copies. Open the
    other volume's plan and choose **Rescan Source** for the interrupted volume.
    Confirm the fresh review can copy the remaining lens beside the first.
+8. Rescan an interrupted Insta360 import whose original destination grant is
+   unavailable. Confirm the app offers the original folder, including when the
+   latest attempt was interrupted before copying. Cancel the access prompt or
+   folder picker and verify the current review stays open. Repeat and choose
+   **Continue Without Access**. Confirm the app opens a fresh review before copying.
 
 On November 25, 2026, internal TestFlight 1.2 (40) passed on an Insta360 Luna
 Ultra with two exFAT volumes on macOS 27.3. The SD Card joined the open

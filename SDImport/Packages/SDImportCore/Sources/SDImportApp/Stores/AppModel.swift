@@ -1206,13 +1206,16 @@ final class AppModel: ObservableObject {
     }
 
     private func pickCardFolder(startingAt path: String) -> URL? {
-        guard let url = FilePanelPresenter.chooseDirectoryURL(
+        guard let url = chooseCardFolderURL(startingAt: path),
+              retainSelectedFolderAccess(.source, url: url, persistBookmark: true) else { return nil }
+        return url
+    }
+
+    private func chooseCardFolderURL(startingAt path: String) -> URL? {
+        FilePanelPresenter.chooseDirectoryURL(
             title: L10n.tr("Choose SD Card or Source Folder"),
             initialPath: path
-        ), retainSelectedFolderAccess(.source, url: url, persistBookmark: true) else {
-            return nil
-        }
-        return url
+        )
     }
 
     func chooseOnboardingCardFolder() {
@@ -1583,8 +1586,8 @@ final class AppModel: ObservableObject {
     }
 
     var importDraftUsesDefaults: Bool {
-        photosPath == importDefaults.photosPath
-            && videosPath == importDefaults.videosPath
+        (isReviewingScanBothVolume
+            || (photosPath == importDefaults.photosPath && videosPath == importDefaults.videosPath))
             && Self.defaultSessionLabel(for: location) == Self.defaultSessionLabel(for: importDefaults.shootName)
             && workflowProfile == importDefaults.workflowProfile
             && importMediaSelection == importDefaults.mediaSelection
@@ -1594,9 +1597,10 @@ final class AppModel: ObservableObject {
 
     func saveImportDraftAsDefaults() {
         let previousDefaults = importDefaults
+        let savesDestinations = !isReviewingScanBothVolume
         importDefaults = ImportDefaults(
-            photosPath: photosPath,
-            videosPath: videosPath,
+            photosPath: savesDestinations ? photosPath : previousDefaults.photosPath,
+            videosPath: savesDestinations ? videosPath : previousDefaults.videosPath,
             shootName: Self.defaultSessionLabel(for: location),
             workflowProfile: workflowProfile,
             mediaSelection: importMediaSelection,
@@ -1606,7 +1610,7 @@ final class AppModel: ObservableObject {
         )
         validateDefaultPaths()
         if savePreferences(
-            refreshFolderBookmarks: true,
+            refreshFolderBookmarks: savesDestinations,
             folderBookmarkPurposes: Set([.source] + requiredDestinationPurposes())
         ) {
             if settingsFeedback == nil {
@@ -4298,9 +4302,13 @@ final class AppModel: ObservableObject {
             return
         }
         guard confirmLeavingScanBothResults(actionTitle: L10n.tr("Start New Scan")),
-              let url = pickCardFolder(startingAt: path),
-              let chosenPath = validatedSelectedSourcePath(url) else { return }
-        let recoveryAccess = destinationAccessForRescan(recoveringJobID)
+              let url = chooseCardFolderURL(startingAt: path) else { return }
+        // Keep the current source bookmark until the rescan is ready to start.
+        let sourceAccess = SecurityScopedResourceAccess(url: url)
+        defer { withExtendedLifetime(sourceAccess) {} }
+        guard let chosenPath = validatedSelectedSourcePath(url),
+              let recoveryAccess = destinationAccessForRescan(recoveringJobID, sourcePath: chosenPath),
+              retainSelectedFolderAccess(.source, url: url, persistBookmark: true) else { return }
         retainPendingScanBothResults()
         selectSourcePath(chosenPath)
         resetImportDraftFromDefaults()
@@ -4311,7 +4319,9 @@ final class AppModel: ObservableObject {
         )
     }
 
-    private func destinationAccessForRescan(_ jobID: String) -> [SecurityScopedResourceAccess] {
+    private func destinationAccessForRescan(
+        _ jobID: String, sourcePath: String
+    ) -> [SecurityScopedResourceAccess]? {
         let belongsToSession = scanBothSession?.entry(for: jobID) != nil
         let previousAccess = rescanContext?.jobID == jobID ? rescanContext?.access ?? [] : []
         let sessionAccess = belongsToSession ? scanBothDestinationAccess : []
@@ -4319,31 +4329,67 @@ final class AppModel: ObservableObject {
         var access = (sessionAccess + previousAccess + Array(folderAccesses.values)).filter {
             $0.isActive && grantedPaths.insert($0.url.standardizedFileURL.path).inserted
         }
-        guard AppDistribution.current == .macAppStore,
-              let files = try? jobRepository?.fetchJobFiles(jobID: jobID) else { return access }
+        guard AppDistribution.current == .macAppStore, let jobRepository else { return access }
 
-        let originalFolders = Insta360RescanRecovery.foldersForIncompleteCopies(files: files)
+        let sourceURL = URL(fileURLWithPath: sourcePath, isDirectory: true)
+        let request = scanRequest(
+            mountURL: sourceURL,
+            sourceVolume: VolumeDetector().removableSourceVolume(containing: sourceURL),
+            rescanOfJobID: jobID
+        )
         let sharedPath = belongsToSession ? scanBothSession?.destinationPath : nil
         let sharedFolder = sharedPath.flatMap {
             $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true)
         }
-        var offeredFolders: Set<URL> = []
-        for folder in originalFolders {
-            let hasGrant = access.contains { Self.isSameOrDescendant(folder, of: $0.url) }
-            if hasGrant, PathValidator().validate(path: folder.path, purpose: .destination).status != .unwritable {
-                continue
-            }
+        let originalFolders: [URL]
+        do {
+            originalFolders = try Insta360RescanRecovery.recordedDestinationFolders(
+                request: request, jobRepository: jobRepository
+            )
+        } catch {
+            showFolderAccessError { Self.errorMessage(for: error) }
+            return nil
+        }
+        func canVerifyCopies(in folder: URL) -> Bool {
+            access.contains { Self.isSameOrDescendant(folder, of: $0.url) }
+                && PathValidator().validate(path: folder.path, purpose: .destination).status != .unwritable
+        }
+        var missingFolders: [URL: [URL]] = [:]
+        for folder in originalFolders where !canVerifyCopies(in: folder) {
             let suggested = sharedFolder.flatMap { Self.isSameOrDescendant(folder, of: $0) ? $0 : nil } ?? folder
-            guard offeredFolders.insert(suggested).inserted,
-                  let url = FilePanelPresenter.chooseDirectoryURL(
-                      title: L10n.tr("Allow Access to \(suggested.lastPathComponent)"),
-                      initialPath: suggested.path,
-                      prompt: L10n.tr("Allow Access")
-                  ), Self.isSameOrDescendant(folder, of: url) else { continue }
+            missingFolders[suggested, default: []].append(folder)
+        }
+        guard !missingFolders.isEmpty else { return access }
+
+        let alert = NSAlert()
+        alert.messageText = L10n.tr("Allow Access to Original Destinations")
+        alert.informativeText = L10n.tr("SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan.")
+        alert.addButton(withTitle: L10n.tr("Allow Access"))
+        alert.addButton(withTitle: L10n.tr("Continue Without Access"))
+        alert.addButton(withTitle: L10n.tr("Cancel")).keyEquivalent = "\u{1b}"
+        switch alert.runModal() {
+        case .alertSecondButtonReturn:
+            return access
+        case .alertFirstButtonReturn:
+            break
+        default:
+            return nil
+        }
+
+        for (suggested, folders) in missingFolders.sorted(by: { $0.key.path < $1.key.path }) {
+            guard !folders.allSatisfy(canVerifyCopies(in:)) else { continue }
+            guard let url = FilePanelPresenter.chooseDirectoryURL(
+                title: L10n.tr("Allow Access to \(suggested.lastPathComponent)"),
+                initialPath: suggested.path,
+                prompt: L10n.tr("Allow Access")
+            ) else { return nil }
             let grant = SecurityScopedResourceAccess(url: url)
-            if grant.isActive {
-                access.append(grant)
+            guard grant.isActive, folders.allSatisfy({ Self.isSameOrDescendant($0, of: url) }) else {
+                let destination = suggested.path
+                showFolderAccessError { L10n.tr("Choose \(destination) to restore access.") }
+                return nil
             }
+            access.append(grant)
         }
         return access
     }

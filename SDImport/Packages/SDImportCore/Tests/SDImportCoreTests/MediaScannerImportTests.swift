@@ -772,9 +772,6 @@ struct MediaScannerImportTests {
         let uncopied = try #require(interrupted.first { $0.copyStatus != .copied })
         let originalPath = try #require(copied.finalDestinationPath)
         let originalFolder = URL(fileURLWithPath: originalPath).deletingLastPathComponent()
-        #expect(Insta360RescanRecovery.foldersForIncompleteCopies(files: previousFiles).isEmpty)
-        #expect(Insta360RescanRecovery.foldersForIncompleteCopies(files: interrupted)
-            == [originalFolder.resolvingSymlinksInPath()])
         #expect(Set(initialPaths.filter { FileManager.default.fileExists(atPath: $0) }) == [originalPath])
         if scenario == .originalCopyMissing {
             try FileManager.default.removeItem(atPath: originalPath)
@@ -803,6 +800,10 @@ struct MediaScannerImportTests {
                 location: "TEST", roots: defaultRoots, jobID: jobID,
                 portableReceiptsEnabled: true, volumeMountPath: mount.path, rescanOfJobID: previous
             )
+            let folders = try Insta360RescanRecovery.recordedDestinationFolders(
+                request: request, jobRepository: fixture.jobRepository
+            )
+            #expect(folders == (scenario == .differentVolumeAtNewPath ? [] : [originalFolder.resolvingSymlinksInPath()]))
             _ = try fixture.scanner.scan(request)
             let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
             let recovery = try Insta360RescanRecovery(
@@ -961,6 +962,10 @@ struct MediaScannerImportTests {
             location: "TEST", roots: freshRoots, jobID: "rescan",
             volumeMountPath: fixture.mountURL.path, rescanOfJobID: previousJob
         )
+        let originalFolder = otherLensURL.deletingLastPathComponent().resolvingSymlinksInPath()
+        #expect(try Insta360RescanRecovery.recordedDestinationFolders(
+            request: request, jobRepository: fixture.jobRepository
+        ) == [originalFolder])
         _ = try fixture.scanner.scan(request)
         let scanned = try fixture.jobRepository.fetchJobFiles(jobID: request.jobID)
         let recovery = try Insta360RescanRecovery(
@@ -975,7 +980,6 @@ struct MediaScannerImportTests {
             fallbackLocation: "TEST", volumeName: "CARD",
             insta360Recovery: recovery, useOriginalInsta360Folders: false
         ).plans(files: scanned)
-        let originalFolder = otherLensURL.deletingLastPathComponent().resolvingSymlinksInPath()
         if wrongLensAtDestination {
             #expect(original[0].disposition == .alreadyExists)
             #expect(original[1].disposition.attention == .blocking)

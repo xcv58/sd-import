@@ -33,7 +33,8 @@ Reconnect the original card if needed, then choose `Rescan Source` from the
 interrupted import or its History entry. Choose the source folder and confirm
 the fresh import plan. The new scan can recognize files already copied. macOS
 may ask for access to the original destination when completing an interrupted
-Insta360 recording.
+Insta360 recording. **Cancel** keeps your current review. **Continue Without
+Access** starts a new scan and may include files that were already copied.
 
 Select the original source folder on the card or Mac when choosing a folder to
 scan. Source paths through user-created symbolic links are rejected.

@@ -70,6 +70,7 @@
 "Updating re-import selection…" = "Mise à jour de la sélection de réimportation…";
 "macOS needs your permission to read this source." = "macOS a besoin de votre autorisation pour lire cette source.";
 "Allow Access to %@" = "Autoriser l’accès à %1$@";
+"Allow Access to Original Destinations" = "Autoriser l’accès aux destinations d’origine";
 "Allow Access to Source" = "Autoriser l’accès à la source";
 "Allow Scan" = "Autoriser l’analyse";
 "Already Exists" = "Déjà présent";
@@ -185,6 +186,7 @@
 "Could not save settings: %@" = "Impossible d’enregistrer les réglages : %1$@";
 "Could not update background helper diagnostics" = "Impossible de mettre à jour le diagnostic de l’assistant en arrière-plan";
 "Could not update background prompt: %@" = "Impossible de mettre à jour la notification en arrière-plan : %1$@";
+"Continue Without Access" = "Continuer sans accès";
 "Couldn’t Continue" = "Impossible de continuer";
 "Couldn’t check available space · %@ planned" = "Espace disponible non vérifiable · %1$@ prévus";
 "Crash Reports" = "Rapports de plantage";
@@ -635,6 +637,7 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "Réessayez. Si vous avez déjà activé votre essai ou acheté l’accès à vie, choisissez Restaurer les achats.";
 "The import plan changed. Review it before copying." = "Le plan d’importation a changé. Vérifiez-le avant de copier.";
 "Reconnect the original card or restore its source folder, then retry." = "Reconnectez la carte d’origine ou restaurez son dossier source, puis réessayez.";
+"SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan." = "SD Card Import peut vérifier les fichiers Insta360 déjà copiés si vous autorisez l’accès à leurs dossiers. Si vous continuez sans accès, ces fichiers pourront figurer dans le nouveau plan.";
 "Scan Both" = "Analyser les deux";
 "Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "Scanner les deux utilise la même destination pour les deux volumes. Choisissez un seul volume pour l’importer vers une autre destination.";
 "Choose one or both storage volumes to scan." = "Choisissez un ou deux volumes à analyser.";

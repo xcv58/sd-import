@@ -70,6 +70,7 @@
 "Updating re-import selection…" = "Updating re-import selection…";
 "macOS needs your permission to read this source." = "macOS needs your permission to read this source.";
 "Allow Access to %@" = "Allow Access to %@";
+"Allow Access to Original Destinations" = "Allow Access to Original Destinations";
 "Allow Access to Source" = "Allow Access to Source";
 "Allow Scan" = "Allow Scan";
 "Already Exists" = "Already Exists";
@@ -185,6 +186,7 @@
 "Could not save settings: %@" = "Could not save settings: %@";
 "Could not update background helper diagnostics" = "Could not update background helper diagnostics";
 "Could not update background prompt: %@" = "Could not update background prompt: %@";
+"Continue Without Access" = "Continue Without Access";
 "Couldn’t Continue" = "Couldn’t Continue";
 "Couldn’t check available space · %@ planned" = "Couldn’t check available space · %@ planned";
 "Crash Reports" = "Crash Reports";
@@ -635,6 +637,7 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases.";
 "The import plan changed. Review it before copying." = "The import plan changed. Review it before copying.";
 "Reconnect the original card or restore its source folder, then retry." = "Reconnect the original card or restore its source folder, then retry.";
+"SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan." = "SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan.";
 "Scan Both" = "Scan Both";
 "Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination.";
 "Choose one or both storage volumes to scan." = "Choose one or both storage volumes to scan.";
