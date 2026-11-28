@@ -908,11 +908,22 @@ struct MediaScannerImportTests {
         }
     }
 
-    @Test("direct and repeated rescans find a lens published before the copy was committed", arguments: [false, true])
-    func rescanFindsUncommittedInsta360Destination(repeated: Bool) throws {
+    enum InterruptedRecordingCopy: CaseIterable {
+        case directLens
+        case repeatedLens
+        case repeatedProxy
+    }
+
+    @Test("rescans verify recording members published before the copy was committed", arguments: InterruptedRecordingCopy.allCases)
+    func rescanFindsUncommittedInsta360Destination(scenario: InterruptedRecordingCopy) throws {
         let fixture = try Fixture()
         let source = fixture.mountURL.appendingPathComponent("DCIM/Camera01", isDirectory: true)
-        let names = ["VID_20181001_210458_00_009.insv", "VID_20181001_210458_10_009.insv"]
+        let lensNames = ["VID_20181001_210458_00_009.insv", "VID_20181001_210458_10_009.insv"]
+        // This proxy sorts after both lenses, so they are committed when its copy is interrupted.
+        let proxyName = "ZZZ_20181001_210458_01_009.lrv"
+        let includesProxy = scenario == .repeatedProxy
+        let names = includesProxy ? lensNames + [proxyName] : lensNames
+        let interruptedName = includesProxy ? proxyName : lensNames[0]
         for name in names {
             try fixture.writeFile(source.appendingPathComponent(name), bytes: Data(name.utf8))
         }
@@ -925,9 +936,18 @@ struct MediaScannerImportTests {
             mountURL: fixture.mountURL, volumeName: "CARD", volumeUUID: volumeUUID,
             location: "TEST", roots: originalRoots, jobID: previousJobID, volumeMountPath: fixture.mountURL.path
         ))
+        let originalFiles = try fixture.jobRepository.fetchJobFiles(jobID: previousJobID)
+        let originalPlan = ImportPlanBuilder(
+            sessions: [], organizationPreset: .classicDatedFolders, roots: originalRoots,
+            fallbackLocation: "TEST", volumeName: "CARD"
+        ).plans(files: originalFiles)
+        try fixture.jobRepository.updateJobImportPlan(
+            jobID: previousJobID, destinationRoots: originalRoots, updates: originalPlan.compactMap(\.update)
+        )
         try fixture.pool.write { db in
             try db.execute(sql: """
                 CREATE TRIGGER fail_copy_commit BEFORE INSERT ON items
+                WHEN NEW.first_source_path GLOB '*/\(interruptedName)'
                 BEGIN SELECT RAISE(ABORT, 'injected commit failure'); END
                 """)
         }
@@ -939,8 +959,10 @@ struct MediaScannerImportTests {
         }
         let attempt = try #require(fixture.jobRepository.copyAttempts(jobID: previousJobID).first)
         let folder = attempt.destination.deletingLastPathComponent().resolvingSymlinksInPath()
-        #expect(FileManager.default.fileExists(atPath: attempt.destinationPath))
-        #expect(try fixture.jobRepository.fetchJobFiles(jobID: previousJobID).allSatisfy { $0.copyStatus == .pending })
+        #expect(attempt.destination.lastPathComponent == interruptedName)
+        #expect(try Data(contentsOf: attempt.destination) == Data(interruptedName.utf8))
+        let committed = try fixture.jobRepository.fetchJobFiles(jobID: previousJobID).filter { $0.copyStatus == .copied }
+        #expect(committed.map(\.filename) == (includesProxy ? lensNames : []))
 
         func rescanRequest(_ jobID: String, previous: String) -> ScanRequest {
             ScanRequest(
@@ -950,7 +972,7 @@ struct MediaScannerImportTests {
         }
         let replay = RecoveryService(jobRepository: fixture.jobRepository)
         var rescanOfJobID = previousJobID
-        if repeated {
+        if scenario != .directLens {
             let unavailable = custom.deletingLastPathComponent().appendingPathComponent("Temporarily unavailable")
             let manager = FileManager.default
             try manager.moveItem(at: custom, to: unavailable)
@@ -979,7 +1001,7 @@ struct MediaScannerImportTests {
             request: otherSource, jobRepository: fixture.jobRepository
         )
         #expect(otherPreparation.destinationFolders.isEmpty)
-        if repeated {
+        if scenario != .directLens {
             try replay.recoverInterruptedImport(jobID: rescanOfJobID, preparation: otherPreparation)
             #expect(try fixture.jobRepository.copyAttempts(jobID: previousJobID).count == 1)
         }
@@ -993,9 +1015,14 @@ struct MediaScannerImportTests {
             sessions: [], organizationPreset: .classicDatedFolders, roots: roots,
             fallbackLocation: "TEST", volumeName: "CARD", insta360Recovery: recovery
         ).plans(files: files)
-        #expect(plan.filter { $0.disposition == .alreadyExists }.count == 1)
-        let remaining = try #require(plan.first(where: \.willCopy)?.destinationPath)
-        #expect(URL(fileURLWithPath: remaining).deletingLastPathComponent().resolvingSymlinksInPath() == folder)
+        #expect(plan.filter { $0.disposition == .alreadyExists }.count == (includesProxy ? 3 : 1))
+        let copies = plan.filter(\.willCopy)
+        #expect(copies.count == (includesProxy ? 0 : 1))
+        #expect(plan.allSatisfy { $0.disposition.attention != .blocking })
+        for copy in copies {
+            let destination = try #require(copy.destinationPath)
+            #expect(URL(fileURLWithPath: destination).deletingLastPathComponent().resolvingSymlinksInPath() == folder)
+        }
     }
 
     @Test("rescan verifies destination records before treating an Insta360 pair as complete", arguments: [false, true])

@@ -295,9 +295,7 @@ struct ManualImportView: View {
     private func scanBothFooterActions(_ session: ScanBothSession) -> some View {
         if let entry = session.reviewingEntry {
             let needsRescan = entry.summary.map { model.needsRescan($0.jobID) } == true
-            if !needsRescan {
-                ImportReviewUpdateControls()
-            }
+            ImportReviewUpdateControls()
             Button(L10n.tr("Close")) {
                 model.returnToScanBothResults()
             }

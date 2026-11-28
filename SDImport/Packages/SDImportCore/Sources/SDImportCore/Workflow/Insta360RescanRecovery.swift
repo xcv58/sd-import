@@ -90,7 +90,7 @@ public struct Insta360RescanRecovery: Sendable {
                 }
                 guard masters.count == group.masterFiles.count,
                       matchedMasters.isDisjoint(with: masters) else { continue }
-                for file in group.masterFiles {
+                for file in group.files {
                     guard let id = file.id, let copy = pendingCopies[id] else { continue }
                     folders.insert(parentFolder(copy.destination))
                     attemptIDs.insert(copy.id)
