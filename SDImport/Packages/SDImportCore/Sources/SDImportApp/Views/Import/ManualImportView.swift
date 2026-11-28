@@ -146,7 +146,11 @@ struct ManualImportView: View {
                     .accessibilityIdentifier("import.scan-both.destination")
                 }
             }
-            if !session.destinationPath.isEmpty, !validation.isUsable {
+            if let message = model.scanBothDestinationChangeMessage {
+                AppStatusLabel(title: message, systemImage: "exclamationmark.triangle", role: .warning)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if !session.destinationPath.isEmpty, !validation.isUsable {
                 ValidationStatusView(result: validation)
             }
         }

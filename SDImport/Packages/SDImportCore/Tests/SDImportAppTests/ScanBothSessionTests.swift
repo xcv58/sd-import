@@ -392,12 +392,23 @@ struct ScanBothSessionTests {
     func groupsInterruptedRecording(completePair: Bool) throws {
         var session = try scannedSession()
         let jobID = internalStorage.name
-        session.setDestination(path: "/tmp/Original", access: nil)
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let original = base.appendingPathComponent("Original", isDirectory: true)
+        let replacement = base.appendingPathComponent("Replacement", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        for folder in [original, replacement] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        let originalRoot = try #require(ReviewedImportDestinations.Root(at: original))
+        let replacementRoot = try #require(ReviewedImportDestinations.Root(at: replacement))
+        let selectedOriginal = session.setDestination(originalRoot, access: nil)
+        #expect(selectedOriginal)
         #expect(!session.hasStartedImports)
         session.recordImportStarted(for: jobID)
         #expect(session.hasStartedImports)
-        session.setDestination(path: "/tmp/Replacement", access: nil)
-        #expect(session.destinationPath == "/tmp/Original")
+        let changedAfterStart = session.setDestination(replacementRoot, access: nil)
+        #expect(!changedAfterStart)
+        #expect(session.destinationPath == original.path)
         let names = ["VID_20181001_210458_00_007.insv", "VID_20181001_210458_10_007.insv", "pending.mp4"]
         let files = names.enumerated().map { index, filename in
             JobFileRecord(
@@ -415,8 +426,9 @@ struct ScanBothSessionTests {
         #expect(session.entries[0].copyInterruption == "Stopped")
         #expect(session.entries[0].awaitsImport)
         session.skipEntry(session.entries[0].id)
-        session.setDestination(path: "/tmp/Replacement", access: nil)
-        #expect(session.destinationPath == "/tmp/Original")
+        let changedAfterSkip = session.setDestination(replacementRoot, access: nil)
+        #expect(!changedAfterSkip)
+        #expect(session.destinationPath == original.path)
     }
 
     @Test("replacing a Scan Both review needs confirmation while the sibling is still pending")
@@ -649,6 +661,82 @@ struct ScanBothSessionTests {
         }
     }
 
+    @Test("Scan Both requires reselecting a replacement at the same path before copying")
+    func requiresSelectingReplacementDestination() async throws {
+        try await withScannedInlinePlans { model, session, roots in
+            let destination = roots.photosURL
+            let moved = destination.deletingLastPathComponent().appendingPathComponent("Moved")
+            model.reviewScanBothVolume(session.entries[0].id)
+            model.importCurrentJob()
+            try #require(model.scanBothSession?.entries[0].confirmation != nil)
+
+            try FileManager.default.moveItem(at: destination, to: moved)
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
+            model.reviewScanBothVolume(session.entries[1].id)
+            #expect(model.scanBothDestinationValidation.isUsable)
+            #expect(model.scanBothDestinationChangeMessage != nil)
+            #expect(!model.canImportPlannedFiles)
+            model.importCurrentJob()
+            #expect(model.scanBothSession?.entries[1].confirmation == nil)
+
+            model.setScanBothDestination(destination)
+            #expect(model.scanBothDestinationChangeMessage == nil)
+            #expect(model.scanBothSession?.entries[0].confirmation == nil)
+            #expect(model.canImportPlannedFiles)
+        }
+    }
+
+    @Test("Scan Both keeps the original folder identity between volumes")
+    func rejectsReplacementDestinationAfterFirstCopy() async throws {
+        let relocation = OSAllocatedUnfairLock(initialState: Optional<(original: URL, moved: URL)>.none)
+        try await withScannedInlinePlans(observeCopyProgress: { progress in
+            guard progress.status == "completed" else { return }
+            relocation.withLock { folders in
+                guard let current = folders else { return }
+                folders = nil
+                do {
+                    try FileManager.default.moveItem(at: current.original, to: current.moved)
+                    try FileManager.default.createDirectory(at: current.original, withIntermediateDirectories: false)
+                } catch {
+                    Issue.record("Could not replace the destination folder: \(error)")
+                }
+            }
+        }) { model, session, roots in
+            let destination = roots.photosURL
+            let moved = destination.deletingLastPathComponent().appendingPathComponent("Moved")
+            for entry in session.entries {
+                model.reviewScanBothVolume(entry.id)
+                model.importCurrentJob()
+            }
+            try #require(model.canStartScanBothImports)
+            relocation.withLock { $0 = (destination, moved) }
+            model.startScanBothImports()
+            try await waitForImport(model)
+
+            #expect(model.scanBothSession?.entries[0].result?.importedFiles == 1)
+            #expect(model.scanBothSession?.reviewingEntry?.id == session.entries[1].id)
+            #expect(model.isScanBothPlanLocked)
+            #expect(model.scanBothDestinationChangeMessage != nil)
+            model.setScanBothDestination(destination)
+            model.importCurrentJob()
+            #expect(model.scanBothSession?.entries[1].confirmation == nil)
+            #expect(!model.canStartScanBothImports)
+            #expect(try FileManager.default.contentsOfDirectory(atPath: destination.path).isEmpty)
+
+            try FileManager.default.removeItem(at: destination)
+            try FileManager.default.moveItem(at: moved, to: destination)
+            #expect(model.scanBothDestinationChangeMessage == nil)
+            model.importCurrentJob()
+            try #require(model.canStartScanBothImports)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+            let paths = try FileManager.default.subpathsOfDirectory(atPath: destination.path)
+            #expect(paths.contains { $0.hasSuffix("/Internal.jpg") })
+            #expect(paths.contains { $0.hasSuffix("/Card.mp4") })
+        }
+    }
+
     @Test("saving a Scan Both plan as defaults keeps destination settings changed during review")
     func savingPlanDefaultsKeepsDestinations() async throws {
         try await withScannedInlinePlans { model, session, roots in
@@ -705,6 +793,7 @@ struct ScanBothSessionTests {
     private func withScannedInlinePlans(
         usesSharedDefault: Bool = true,
         destinationCapacity: @escaping DestinationSpaceChecker.CapacityProvider = DestinationSpaceChecker.fileSystemCapacity,
+        observeCopyProgress: (@Sendable (ImportProgress) -> Void)? = nil,
         _ test: (AppModel, ScanBothSession, DestinationRoots) async throws -> Void
     ) async throws {
         let manager = FileManager.default
@@ -734,7 +823,7 @@ struct ScanBothSessionTests {
         let model = AppModel(
             purchaseManager: PurchaseManager(distribution: .direct, startsStoreTask: false),
             defaults: defaults, startsBootstrap: false, scanBothMountLookup: { $0 },
-            destinationCapacity: destinationCapacity
+            destinationCapacity: destinationCapacity, observeCopyProgress: observeCopyProgress
         )
         model.bootstrap(at: root.appendingPathComponent("State"), startsRuntimeServices: false)
         model.ejectAfterSuccessfulImport = false

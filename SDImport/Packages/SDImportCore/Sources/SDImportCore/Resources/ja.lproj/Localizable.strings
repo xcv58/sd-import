@@ -552,6 +552,7 @@
 "The bundled background helper could not be found. Reinstall %@ in Applications." = "同梱のバックグラウンドヘルパーが見つかりません。%1$@ を「アプリケーション」に再インストールしてください。";
 "The current scan and review will be discarded. No copied files are deleted." = "現在のスキャンと確認内容は破棄されます。コピー済みファイルは削除されません。";
 "The destination folder is unavailable." = "保存先フォルダを利用できません。";
+"The shared destination changed. Choose the folder again." = "共通の保存先が変わりました。フォルダを選び直してください。";
 "The import database contains an invalid value." = "読み込みデータベースに無効な値が含まれています。";
 "The portable import ledger is not a regular file at %@" = "%1$@ のポータブル読み込み台帳は通常のファイルではありません";
 "The portable import ledger is too large (%@)" = "ポータブル読み込み台帳が大きすぎます（%1$@）";
@@ -649,6 +650,7 @@
 "%lld files scanned" = "%lld個のファイルをスキャン済み";
 "Review %@" = "%@を確認";
 "Rescan Source" = "ソースを再スキャン";
+"Restore the original destination folder or start a new scan." = "元の保存先フォルダを復元するか、新しいスキャンを開始してください。";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "新しいスキャンを開始すると、両方をスキャンする現在のセッションが終了します。残りのボリュームは再スキャンが必要です。";
 "Import stopped because %@ disconnected." = "%@ が接続解除されたため、読み込みを停止しました。";
 "Discard pending scan results?" = "保留中のスキャン結果を破棄しますか？";

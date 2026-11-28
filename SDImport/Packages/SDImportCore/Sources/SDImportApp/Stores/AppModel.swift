@@ -100,9 +100,10 @@ struct ScanBothSession {
     var entries: [Entry]
     var removedMountPaths: Set<String> = []
     var reviewingJobID: String?
-    private(set) var destinationPath = ""
+    private(set) var destinationRoot: ReviewedImportDestinations.Root?
     private(set) var destinationAccess: SecurityScopedResourceAccess?
     private(set) var confirmedDestinationPaths: Set<String>? = []
+    var destinationPath: String { destinationRoot?.url.path ?? "" }
 
     init?(prompt: MountedDevicePrompt) {
         let group = prompt.deviceGroup
@@ -170,16 +171,23 @@ struct ScanBothSession {
         entries.contains(where: \.hasStartedImport)
     }
 
-    mutating func setDestination(path: String, access: SecurityScopedResourceAccess?) {
-        guard path == destinationPath || !hasStartedImports else { return }
-        if destinationPath != path {
+    @discardableResult
+    mutating func setDestination(
+        _ root: ReviewedImportDestinations.Root, access: SecurityScopedResourceAccess?
+    ) -> Bool {
+        let keepsDestination = destinationRoot.map {
+            $0.url.standardizedFileURL.path == root.url.standardizedFileURL.path && $0.matches()
+        } ?? false
+        guard keepsDestination || !hasStartedImports else { return false }
+        if !keepsDestination {
             for index in entries.indices {
                 entries[index].confirmation = nil
                 entries[index].reviewNeedsAttention = false
             }
+            destinationRoot = root
         }
-        destinationPath = path
         destinationAccess = access
+        return true
     }
 
     mutating func saveDraft(_ draft: ImportDraft, needsAttention: Bool, for jobID: String) {
@@ -904,6 +912,19 @@ final class AppModel: ObservableObject {
     var scanBothDestinationValidation: PathValidationResult {
         validateScanBothDestination(scanBothSession?.destinationPath ?? "")
     }
+    var scanBothDestinationChangeMessage: String? {
+        guard let session = scanBothSession, let root = session.destinationRoot else { return nil }
+        let validation = scanBothDestinationValidation
+        guard validation.status == .missing || validation.status == .notDirectory
+                || (validation.isUsable && !root.matches()) else { return nil }
+        return Self.scanBothDestinationChangedMessage(hasStartedImports: session.hasStartedImports)
+    }
+
+    private static func scanBothDestinationChangedMessage(hasStartedImports: Bool) -> String {
+        hasStartedImports
+            ? L10n.tr("Restore the original destination folder or start a new scan.")
+            : L10n.tr("The shared destination changed. Choose the folder again.")
+    }
     var scanBothDestinationNeedsAccess: Bool {
         let validation = scanBothDestinationValidation
         return destinationNeedsAccess(validation, additionalAccess: scanBothDestinationAccess)
@@ -1301,13 +1322,8 @@ final class AppModel: ObservableObject {
     }
 
     func setScanBothDestination(_ url: URL) {
-        guard !isWorking, !isEjectingSource, let session = scanBothSession else { return }
+        guard !isWorking, !isEjectingSource, scanBothSession != nil else { return }
         let path = url.standardizedFileURL.path
-        guard !session.hasStartedImports || path == session.destinationPath else {
-            let destination = session.destinationPath
-            showFolderAccessError { L10n.tr("Choose \(destination) to restore access.") }
-            return
-        }
         let access = SecurityScopedResourceAccess(url: url)
         let validation = validateScanBothDestination(path)
         guard validation.isUsable else {
@@ -1318,8 +1334,17 @@ final class AppModel: ObservableObject {
             showFolderAccessError { L10n.tr("The destination folder is unavailable.") }
             return
         }
+        guard let root = ReviewedImportDestinations.Root(
+            at: URL(fileURLWithPath: validation.expandedPath, isDirectory: true)
+        ) else {
+            showFolderAccessError { L10n.tr("The destination folder is unavailable.") }
+            return
+        }
+        guard scanBothSession?.setDestination(root, access: access.isActive ? access : nil) == true else {
+            showFolderAccessError { Self.scanBothDestinationChangedMessage(hasStartedImports: true) }
+            return
+        }
         folderAccessFeedback = nil
-        scanBothSession?.setDestination(path: path, access: access.isActive ? access : nil)
         if isReviewingScanBothVolume {
             destinationPathDidChange()
         }
@@ -1748,7 +1773,8 @@ final class AppModel: ObservableObject {
             return sourceValidation.message
         }
         if !requiredDestinationPathsAreUsable() {
-            return L10n.tr("Choose usable destination folders")
+            return (isReviewingScanBothVolume ? scanBothDestinationChangeMessage : nil)
+                ?? L10n.tr("Choose usable destination folders")
         }
         if let requirement = previewSpaceRequirements.first(where: { !$0.isKnown }) {
             return L10n.tr("Available space couldn’t be checked for \(requirement.displayPath)")
@@ -2217,9 +2243,9 @@ final class AppModel: ObservableObject {
     }
 
     private var effectiveDestinationRoots: DestinationRoots {
-        if let path = reviewSharedDestinationPath {
-            let root = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL.resolvingSymlinksInPath()
-            return DestinationRoots(photosURL: root, videosURL: root)
+        if isReviewingScanBothVolume, let root = scanBothSession?.destinationRoot {
+            let folder = root.resolvedURL.standardizedFileURL
+            return DestinationRoots(photosURL: folder, videosURL: folder)
         }
         return DestinationRoots(
             photosURL: URL(
@@ -2491,7 +2517,8 @@ final class AppModel: ObservableObject {
                 requireRescan(for: jobID)
                 return
             }
-            guard let destinations = ReviewedImportDestinations(plans: plan.files) else {
+            guard let root = scanBothSession?.destinationRoot,
+                  let destinations = ReviewedImportDestinations(plans: plan.files, root: root) else {
                 showFolderAccessError { L10n.tr("The destination folder is unavailable.") }
                 return
             }
@@ -2532,7 +2559,12 @@ final class AppModel: ObservableObject {
             return nil
         }
         guard requiredDestinationPathsAreUsable() else {
-            showFolderAccessError { L10n.tr("Choose usable destination folders") }
+            if isReviewingScanBothVolume, scanBothDestinationChangeMessage != nil, let session = scanBothSession {
+                let hasStarted = session.hasStartedImports
+                showFolderAccessError { Self.scanBothDestinationChangedMessage(hasStartedImports: hasStarted) }
+            } else {
+                showFolderAccessError { L10n.tr("Choose usable destination folders") }
+            }
             return nil
         }
         if let dedupeRepository {
@@ -3246,13 +3278,14 @@ final class AppModel: ObservableObject {
         let sharedPhotos = validateScanBothDestination(photosPath)
         let sharedVideos = validateScanBothDestination(videosPath)
         if sharedPhotos.isUsable, sharedVideos.isUsable,
-           sharedPhotos.expandedPath == sharedVideos.expandedPath {
-            let path = sharedPhotos.expandedPath
-            let root = URL(fileURLWithPath: path, isDirectory: true)
+           sharedPhotos.expandedPath == sharedVideos.expandedPath,
+           let root = ReviewedImportDestinations.Root(
+               at: URL(fileURLWithPath: sharedPhotos.expandedPath, isDirectory: true)
+           ) {
             let access = [folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }.first {
-                $0.isActive && Self.isSameOrDescendant(root, of: $0.url)
+                $0.isActive && Self.isSameOrDescendant(root.url, of: $0.url)
             }
-            session.setDestination(path: path, access: access)
+            session.setDestination(root, access: access)
         }
         scanBothSession = session
         let attemptID = beginImportAttempt(.scan, event: .beginScan)
@@ -5045,6 +5078,9 @@ final class AppModel: ObservableObject {
     }
 
     private func requiredDestinationPathsAreUsable() -> Bool {
+        if isReviewingScanBothVolume, scanBothSession?.destinationRoot?.matches() != true {
+            return false
+        }
         if useOriginalInsta360Folders, let recovery = insta360RescanRecovery {
             let copyRows = previewRows.filter(\.willCopy)
             let originalFolders = copyRows.compactMap { recovery.originalFolder(for: $0.sourcePath) }

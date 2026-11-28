@@ -552,6 +552,7 @@
 "The bundled background helper could not be found. Reinstall %@ in Applications." = "找不到內置背景輔助程式。請將 %1$@ 重新安裝到“應用程式”。";
 "The current scan and review will be discarded. No copied files are deleted." = "將丟棄當前掃描和預覽結果，不會刪除任何已複製的檔案。";
 "The destination folder is unavailable." = "目標資料夾不可用。";
+"The shared destination changed. Choose the folder again." = "共用目的地資料夾已變更。請重新選擇資料夾。";
 "The import database contains an invalid value." = "匯入資料庫包含無效值。";
 "The portable import ledger is not a regular file at %@" = "%1$@ 處的可攜式匯入記錄檔不是常規檔案";
 "The portable import ledger is too large (%@)" = "可攜式匯入記錄檔過大（%1$@）";
@@ -649,6 +650,7 @@
 "%lld files scanned" = "已掃描 %lld 個檔案";
 "Review %@" = "檢視 %@";
 "Rescan Source" = "重新掃描來源";
+"Restore the original destination folder or start a new scan." = "請還原原目的地資料夾或開始新的掃描。";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "開始新的掃描會結束這次雙卷掃描。剩餘的儲存卷需要重新掃描。";
 "Import stopped because %@ disconnected." = "%@ 已中斷連線，匯入已停止。";
 "Discard pending scan results?" = "要捨棄尚未匯入的掃描結果嗎？";

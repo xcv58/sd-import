@@ -552,6 +552,7 @@
 "The bundled background helper could not be found. Reinstall %@ in Applications." = "O auxiliar incluído não foi encontrado. Reinstale %1$@ em Aplicativos.";
 "The current scan and review will be discarded. No copied files are deleted." = "A verificação e a revisão atuais serão descartadas. Nenhum arquivo copiado será excluído.";
 "The destination folder is unavailable." = "A pasta de destino está indisponível.";
+"The shared destination changed. Choose the folder again." = "O destino compartilhado mudou. Escolha a pasta novamente.";
 "The import database contains an invalid value." = "O banco de dados de importação contém um valor inválido.";
 "The portable import ledger is not a regular file at %@" = "O registro de importação portátil em %1$@ não é um arquivo regular";
 "The portable import ledger is too large (%@)" = "O registro de importação portátil é muito grande (%1$@)";
@@ -649,6 +650,7 @@
 "%lld files scanned" = "%lld arquivos escaneados";
 "Review %@" = "Revisar %@";
 "Rescan Source" = "Escanear a origem novamente";
+"Restore the original destination folder or start a new scan." = "Restaure a pasta de destino original ou inicie um novo escaneamento.";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "Iniciar uma nova verificação encerra esta sessão de escaneamento dos dois volumes. Os volumes restantes precisarão ser escaneados novamente.";
 "Import stopped because %@ disconnected." = "A importação foi interrompida porque %@ foi desconectado.";
 "Discard pending scan results?" = "Descartar os resultados pendentes da verificação?";

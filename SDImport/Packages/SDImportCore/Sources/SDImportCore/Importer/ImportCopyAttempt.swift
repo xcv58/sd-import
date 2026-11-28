@@ -88,6 +88,21 @@ final class OpenImportDestination {
 /// Keeps the approved path and the identity of its deepest existing directory.
 /// New subfolders may appear under that directory without changing the approval.
 public struct ReviewedImportDestinations: Sendable {
+    public struct Root: Sendable {
+        private let directory: Directory
+
+        public var url: URL { directory.path }
+        public var resolvedURL: URL { directory.resolvedPath }
+
+        public init?(at url: URL) {
+            guard let directory = Directory.resolve(url), directory.ancestor == url,
+                  directory.matches() else { return nil }
+            self.directory = directory
+        }
+
+        public func matches() -> Bool { directory.matches() }
+    }
+
     private struct Directory: Sendable {
         let path: URL
         let ancestor: URL
@@ -126,6 +141,7 @@ public struct ReviewedImportDestinations: Sendable {
         }
     }
 
+    private let root: Root?
     private let directories: [String: Directory]
     private let skippedFiles: [String: ReviewedFileIdentity]
     private typealias MaterializedDirectories = OSAllocatedUnfairLock<[String: ImportCopyDirectoryIdentity]>
@@ -133,16 +149,18 @@ public struct ReviewedImportDestinations: Sendable {
     private let otherApprovals: [MaterializedDirectories]
 
     private init(
-        directories: [String: Directory], skippedFiles: [String: ReviewedFileIdentity],
+        root: Root?, directories: [String: Directory], skippedFiles: [String: ReviewedFileIdentity],
         materialized: MaterializedDirectories, otherApprovals: [MaterializedDirectories]
     ) {
+        self.root = root
         self.directories = directories
         self.skippedFiles = skippedFiles
         self.materialized = materialized
         self.otherApprovals = otherApprovals
     }
 
-    public init?(plans: [ImportFilePlan]) {
+    public init?(plans: [ImportFilePlan], root: Root? = nil) {
+        guard root?.matches() != false else { return nil }
         var directories: [String: Directory] = [:]
         var skippedFiles: [String: ReviewedFileIdentity] = [:]
         for plan in plans where plan.willCopy {
@@ -158,7 +176,7 @@ public struct ReviewedImportDestinations: Sendable {
             skippedFiles[path] = identity
         }
         self.init(
-            directories: directories, skippedFiles: skippedFiles,
+            root: root, directories: directories, skippedFiles: skippedFiles,
             materialized: MaterializedDirectories(initialState: [:]), otherApprovals: []
         )
     }
@@ -166,17 +184,22 @@ public struct ReviewedImportDestinations: Sendable {
     /// Record newly created folders in the other confirmed plans, even if copying stops before they run.
     public func sharingMaterializedDirectories(with approvals: [Self]) -> Self {
         Self(
-            directories: directories, skippedFiles: skippedFiles,
+            root: root, directories: directories, skippedFiles: skippedFiles,
             materialized: materialized, otherApprovals: approvals.map(\.materialized)
         )
     }
 
     public func matches() -> Bool {
-        directories.values.allSatisfy { matches($0.path) }
+        root?.matches() != false
+            && directories.values.allSatisfy { matchesApprovedDirectory($0.path) }
             && skippedFiles.allSatisfy { $0.value.matches(path: $0.key) }
     }
 
     func matches(_ directory: URL) -> Bool {
+        root?.matches() != false && matchesApprovedDirectory(directory)
+    }
+
+    private func matchesApprovedDirectory(_ directory: URL) -> Bool {
         guard let approved = directories[directory.path], approved.matches() else { return false }
         let observed = materialized.withLock { $0 }
         var current = approved.resolvedPath
@@ -188,7 +211,7 @@ public struct ReviewedImportDestinations: Sendable {
     }
 
     func matchesSkippedFile(at path: String) -> Bool {
-        skippedFiles[path]?.matches(path: path) == true
+        root?.matches() != false && skippedFiles[path]?.matches(path: path) == true
     }
 
     func remember(_ identity: ImportCopyDirectoryIdentity, at directory: URL) -> Bool {
