@@ -163,6 +163,7 @@ private struct HistoryRow: View {
     let job: ImportJob
 
     private var isForgotten: Bool { job.localTracking == .forgotten }
+    private var hasFailedFiles: Bool { job.failedFiles > 0 }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -174,7 +175,7 @@ private struct HistoryRow: View {
                 Text(HistoryJobPresentation.title(for: job))
                     .lineLimit(1)
                 if isForgotten {
-                    HistoryForgottenBadge(showsIcon: false)
+                    HistoryForgottenBadge(showsIcon: hasFailedFiles)
                 }
                 Text(HistoryJobPresentation.subtitle(for: job))
                     .font(.caption)
@@ -190,13 +191,13 @@ private struct HistoryRow: View {
     }
 
     private var statusImage: String {
-        if isForgotten { return HistoryForgottenBadge.systemImage }
-        return job.failedFiles > 0 ? "exclamationmark.triangle" : "checkmark.circle"
+        if hasFailedFiles { return "exclamationmark.triangle" }
+        return isForgotten ? HistoryForgottenBadge.systemImage : "checkmark.circle"
     }
 
     private var statusStyle: AnyShapeStyle {
-        if isForgotten { return AnyShapeStyle(.primary) }
-        return job.failedFiles > 0 ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary)
+        if hasFailedFiles { return AnyShapeStyle(.red) }
+        return isForgotten ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
     }
 }
 
