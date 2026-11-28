@@ -18,11 +18,6 @@ struct CompletedImportReceipt {
 }
 
 struct ScanBothSession {
-    struct Draft {
-        let settings: ImportDraft
-        let destinationAccess: [SecurityScopedResourceAccess]
-    }
-
     struct Confirmation: Sendable {
         let draft: ImportDraft
         let plans: [ImportFilePlan]
@@ -50,7 +45,7 @@ struct ScanBothSession {
         var state: State = .waiting
         var disposition: Disposition = .pending
         var hasStartedImport = false
-        var draft: Draft?
+        var draft: ImportDraft?
         var confirmation: Confirmation?
         var result: ImportResult?
         var copyInterruption: String?
@@ -104,6 +99,8 @@ struct ScanBothSession {
     var entries: [Entry]
     var removedMountPaths: Set<String> = []
     var reviewingJobID: String?
+    private(set) var destinationPath = ""
+    private(set) var destinationAccess: SecurityScopedResourceAccess?
     private(set) var confirmedDestinationPaths: Set<String>? = []
 
     init?(prompt: MountedDevicePrompt) {
@@ -168,12 +165,27 @@ struct ScanBothSession {
         entries[index].confirmation = confirmation
     }
 
-    mutating func saveDraft(_ draft: Draft, for jobID: String) {
+    var canChangeDestination: Bool {
+        !entries.contains { ($0.result?.importedFiles ?? 0) > 0 }
+    }
+
+    mutating func setDestination(path: String, access: SecurityScopedResourceAccess?) {
+        guard path == destinationPath || canChangeDestination else { return }
+        if destinationPath != path {
+            for index in entries.indices {
+                entries[index].confirmation = nil
+            }
+        }
+        destinationPath = path
+        destinationAccess = access
+    }
+
+    mutating func saveDraft(_ draft: ImportDraft, for jobID: String) {
         guard let index = entries.firstIndex(where: { $0.jobID == jobID && $0.awaitsImport }),
               !removedMountPaths.contains(entries[index].volume.mountPath)
         else { return }
         entries[index].draft = draft
-        if entries[index].confirmation?.draft != draft.settings {
+        if entries[index].confirmation?.draft != draft {
             entries[index].confirmation = nil
         }
     }
@@ -678,13 +690,7 @@ final class AppModel: ObservableObject {
             return insta360RescanRecovery.includes(sourcePath: row.sourcePath)
         }
     }
-    @Published private(set) var scanBothSession: ScanBothSession? {
-        didSet {
-            if scanBothSession?.reviewingJobID == nil {
-                scanBothReviewDestinationAccess = []
-            }
-        }
-    }
+    @Published private(set) var scanBothSession: ScanBothSession?
     private var previousScanBothSession: ScanBothSession?
     @Published private(set) var currentImportReceipt: CompletedImportReceipt? {
         didSet {
@@ -856,7 +862,6 @@ final class AppModel: ObservableObject {
     private var importTask: Task<Void, Never>?
     private var reimportSelectionCancellation: ReimportSelectionCancellation?
     private var isRunningScanBothImports = false
-    private var scanBothReviewDestinationAccess: [SecurityScopedResourceAccess] = []
     @Published private var activeCopySources: ActiveCopySources?
     var importDisconnectionMessage: String? {
         activeCopySources?.disconnectedVolume.map { Self.importDisconnectedMessage($0) }
@@ -884,6 +889,16 @@ final class AppModel: ObservableObject {
         scanBothSession != nil && scanBothSession?.reviewingJobID == nil
     }
     var isReviewingScanBothVolume: Bool { scanBothSession?.reviewingJobID != nil }
+    private var reviewSharedDestinationPath: String? {
+        isReviewingScanBothVolume ? scanBothSession?.destinationPath : nil
+    }
+    var scanBothDestinationValidation: PathValidationResult {
+        PathValidator().validate(path: scanBothSession?.destinationPath ?? "", purpose: .destination)
+    }
+    var scanBothDestinationNeedsAccess: Bool {
+        let validation = scanBothDestinationValidation
+        return destinationNeedsAccess(validation, additionalAccess: scanBothDestinationAccess)
+    }
     var canStartScanBothImports: Bool {
         isShowingScanBothResults && !isWorking && !isEjectingSource && scanBothSession?.canStartImports == true
     }
@@ -898,6 +913,9 @@ final class AppModel: ObservableObject {
         return cardPath
     }
     private var scanBothSourceAccess: SecurityScopedResourceAccess? { scanBothSession?.reviewingEntry?.access }
+    private var scanBothDestinationAccess: [SecurityScopedResourceAccess] {
+        [scanBothSession?.destinationAccess].compactMap { $0 }
+    }
 
     private var knownImportedPreviewFileIDs: Set<Int64> = []
     private var scanBothReviewHistory: [Int64: ImportHistoryMatch] = [:]
@@ -1259,6 +1277,42 @@ final class AppModel: ObservableObject {
         destinationPathDidChange()
     }
 
+    func chooseScanBothDestination() {
+        guard !isWorking, !isEjectingSource, let session = scanBothSession,
+              session.canChangeDestination || scanBothDestinationNeedsAccess,
+              let url = FilePanelPresenter.chooseDirectoryURL(
+                  title: L10n.tr("Shared Destination"),
+                  initialPath: session.destinationPath,
+                  prompt: scanBothDestinationNeedsAccess ? L10n.tr("Allow Access") : nil
+              ) else { return }
+        setScanBothDestination(url)
+    }
+
+    func setScanBothDestination(_ url: URL) {
+        guard !isWorking, !isEjectingSource, let session = scanBothSession else { return }
+        let path = url.standardizedFileURL.path
+        guard session.canChangeDestination || path == session.destinationPath else {
+            let destination = session.destinationPath
+            showFolderAccessError { L10n.tr("Choose \(destination) to restore access.") }
+            return
+        }
+        let access = SecurityScopedResourceAccess(url: url)
+        let validation = PathValidator().validate(path: path, purpose: .destination)
+        guard validation.isUsable else {
+            showFolderAccessError { validation.message }
+            return
+        }
+        guard AppDistribution.current != .macAppStore || access.isActive else {
+            showFolderAccessError { L10n.tr("The destination folder is unavailable.") }
+            return
+        }
+        folderAccessFeedback = nil
+        scanBothSession?.setDestination(path: path, access: access.isActive ? access : nil)
+        if isReviewingScanBothVolume {
+            destinationPathDidChange()
+        }
+    }
+
     func chooseDefaultPhotosFolder() {
         guard let url = FilePanelPresenter.chooseDirectoryURL(
             title: L10n.tr("Choose Default Photo Destination"),
@@ -1516,8 +1570,8 @@ final class AppModel: ObservableObject {
     var currentImportDraft: ImportDraft {
         ImportDraft(
             sourcePath: importSourcePath,
-            photosPath: photosPath,
-            videosPath: videosPath,
+            photosPath: reviewSharedDestinationPath ?? photosPath,
+            videosPath: reviewSharedDestinationPath ?? videosPath,
             shootName: location,
             workflowProfile: workflowProfile,
             mediaSelection: importMediaSelection,
@@ -1585,8 +1639,13 @@ final class AppModel: ObservableObject {
             path: importSourcePath, purpose: .source,
             allowsWhitespaceFallback: !isReviewingScanBothVolume
         )
-        photosValidation = validator.validate(path: photosPath, purpose: .destination)
-        videosValidation = validator.validate(path: videosPath, purpose: .destination)
+        if isReviewingScanBothVolume {
+            photosValidation = scanBothDestinationValidation
+            videosValidation = photosValidation
+        } else {
+            photosValidation = validator.validate(path: photosPath, purpose: .destination)
+            videosValidation = validator.validate(path: videosPath, purpose: .destination)
+        }
         rebuildRecentImportSuggestions()
     }
 
@@ -1637,10 +1696,12 @@ final class AppModel: ObservableObject {
         !isWorking && !isEjectingSource && (sourceValidation.isUsable || sourceNeedsAccess)
     }
 
-    func destinationNeedsAccess(_ validation: PathValidationResult) -> Bool {
+    func destinationNeedsAccess(
+        _ validation: PathValidationResult, additionalAccess: [SecurityScopedResourceAccess] = []
+    ) -> Bool {
         validation.status == .unwritable
             || (validation.isUsable && AppDistribution.current == .macAppStore
-                && !hasActiveFolderAccess(covering: validation.expandedPath))
+                && !hasActiveFolderAccess(covering: validation.expandedPath, additionalAccess: additionalAccess))
     }
 
     var canImportPlannedFiles: Bool {
@@ -1889,7 +1950,7 @@ final class AppModel: ObservableObject {
     private func retainPendingScanBothResults() {
         guard var session = scanBothSession, session.hasPendingResults else { return }
         if let jobID = session.reviewingJobID, currentSummary?.jobID == jobID {
-            session.saveDraft(currentScanBothDraft, for: jobID)
+            session.saveDraft(currentImportDraft, for: jobID)
         }
         session.reviewingJobID = nil
         previousScanBothSession = session
@@ -1914,7 +1975,8 @@ final class AppModel: ObservableObject {
     }
 
     private func scanRequest(
-        mountURL: URL, sourceVolume: MountedVolume?, rescanOfJobID: String? = nil
+        mountURL: URL, sourceVolume: MountedVolume?, rescanOfJobID: String? = nil,
+        plansDestinations: Bool = true
     ) -> ScanRequest {
         let homeURL = FileManager.default.homeDirectoryForCurrentUser
         let photosPath = planningPath(
@@ -1939,7 +2001,8 @@ final class AppModel: ObservableObject {
             reportsDirectoryURL: reportsURL,
             portableReceiptsEnabled: portableImportReceiptsEnabled,
             volumeMountPath: sourceVolume?.mountPath,
-            rescanOfJobID: rescanOfJobID
+            rescanOfJobID: rescanOfJobID,
+            plansDestinations: plansDestinations
         )
     }
 
@@ -2127,6 +2190,10 @@ final class AppModel: ObservableObject {
     }
 
     private var effectiveDestinationRoots: DestinationRoots {
+        if let path = reviewSharedDestinationPath {
+            let root = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL.resolvingSymlinksInPath()
+            return DestinationRoots(photosURL: root, videosURL: root)
+        }
         return DestinationRoots(
             photosURL: URL(
                 fileURLWithPath: resolvedPath(photosPath, validation: photosValidation),
@@ -2401,11 +2468,11 @@ final class AppModel: ObservableObject {
                 showFolderAccessError { L10n.tr("The destination folder is unavailable.") }
                 return
             }
-            let draft = currentScanBothDraft
+            let draft = currentImportDraft
             scanBothSession?.saveDraft(draft, for: jobID)
             scanBothSession?.setConfirmation(
                 .init(
-                    draft: draft.settings,
+                    draft: draft,
                     plans: plan.files,
                     destinations: destinations,
                     copyFileCount: previewTotals.copyFiles,
@@ -2531,7 +2598,7 @@ final class AppModel: ObservableObject {
                     }
                     self.rebuildPreviewSessions(files: files, defaultLabel: self.location)
                     if self.scanBothSession?.reviewingJobID == jobID {
-                        let draft = self.currentScanBothDraft
+                        let draft = self.currentImportDraft
                         self.scanBothSession?.saveDraft(draft, for: jobID)
                         self.scanBothSession?.setConfirmation(nil, for: jobID)
                     }
@@ -2601,7 +2668,7 @@ final class AppModel: ObservableObject {
         let destinationCapacity = self.destinationCapacity
         let observeCopyProgress = self.observeCopyProgress
         let retainedAccess = (
-            Array(folderAccesses.values) + scanBothReviewDestinationAccess
+            Array(folderAccesses.values) + (isScanBothImport ? scanBothDestinationAccess : [])
                 + [scanBothSourceAccess].compactMap { $0 } + (rescanContext?.access ?? [])
         ).filter(\.isActive)
         let reviewedInsta360RescanMembers = Set(approvedPlans.compactMap { plan in
@@ -3144,10 +3211,20 @@ final class AppModel: ObservableObject {
 
     func beginScanBoth(_ session: ScanBothSession) {
         guard !isWorking, !isEjectingSource, let databaseURL else { return }
+        var session = session
         retainPendingScanBothResults()
         sourcePathDidChange()
         resetImportDraftFromDefaults()
         selection = .import
+        if photosValidation.isUsable, videosValidation.isUsable,
+           photosValidation.expandedPath == videosValidation.expandedPath {
+            let path = photosValidation.expandedPath
+            let root = URL(fileURLWithPath: path, isDirectory: true)
+            let access = [folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }.first {
+                $0.isActive && Self.isSameOrDescendant(root, of: $0.url)
+            }
+            session.setDestination(path: path, access: access)
+        }
         scanBothSession = session
         let attemptID = beginImportAttempt(.scan, event: .beginScan)
         importTask = Task {
@@ -3180,8 +3257,10 @@ final class AppModel: ObservableObject {
                 path: sourceURL.path, purpose: .source, allowsWhitespaceFallback: false
             )
             guard validation.isUsable else { throw ScanBothIssue.failed(validation.message) }
+            // The individual review checks destinations using the shared folder and the confirmed plan options.
             let request = scanRequest(
-                mountURL: URL(fileURLWithPath: validation.expandedPath, isDirectory: true), sourceVolume: volume
+                mountURL: URL(fileURLWithPath: validation.expandedPath, isDirectory: true),
+                sourceVolume: volume, plansDestinations: false
             )
             let worker = Task.detached(priority: .userInitiated) {
                 defer { withExtendedLifetime(access) {} }
@@ -3247,6 +3326,7 @@ final class AppModel: ObservableObject {
 
     func reviewScanBothVolume(_ entryID: UUID) {
         guard !isWorking, !isEjectingSource,
+              scanBothSession?.destinationPath.isEmpty == false,
               let entry = scanBothSession?.entries.first(where: { $0.id == entryID }),
               entry.awaitsImport, let summary = entry.summary, !needsRescan(summary.jobID),
               scanBothSession?.reviewingJobID != summary.jobID else { return }
@@ -3319,13 +3399,10 @@ final class AppModel: ObservableObject {
             folderAccessFeedback = nil
             currentImportReceipt = nil
             resetImportDraftFromDefaults()
-            scanBothReviewDestinationAccess = entry.draft?.destinationAccess ?? []
             previewSessions = []
-            let draft = entry.draft?.settings
+            let draft = entry.draft
             workflowProfileWasManuallyChosenForCurrentJob = draft != nil
             if let draft {
-                photosPath = draft.photosPath
-                videosPath = draft.videosPath
                 location = draft.shootName
                 workflowProfile = draft.workflowProfile
                 importMediaSelection = draft.mediaSelection
@@ -3369,7 +3446,7 @@ final class AppModel: ObservableObject {
 
     func returnToScanBothResults() {
         guard let jobID = scanBothSession?.reviewingJobID, !isWorking, !isEjectingSource else { return }
-        let draft = currentScanBothDraft
+        let draft = currentImportDraft
         scanBothSession?.saveDraft(draft, for: jobID)
         scanBothSession?.reviewingJobID = nil
         folderAccessFeedback = nil
@@ -3384,21 +3461,6 @@ final class AppModel: ObservableObject {
         clearPreviewPlanCache()
         resetImportDraftFromDefaults()
         transitionImportWorkspace(.recover(hasScannedJob: true))
-    }
-
-    private var currentScanBothDraft: ScanBothSession.Draft {
-        ScanBothSession.Draft(settings: currentImportDraft, destinationAccess: currentScanBothDestinationAccess)
-    }
-
-    private var currentScanBothDestinationAccess: [SecurityScopedResourceAccess] {
-        let roots = effectiveDestinationRoots
-        var grantedPaths: Set<String> = []
-        return (scanBothReviewDestinationAccess
-            + [folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }).filter { access in
-            access.isActive
-                && [roots.photosURL, roots.videosURL].contains { Self.isSameOrDescendant($0, of: access.url) }
-                && grantedPaths.insert(access.url.standardizedFileURL.path).inserted
-        }
     }
 
     func skipScanBothImport(_ entryID: UUID) {
@@ -4238,12 +4300,7 @@ final class AppModel: ObservableObject {
         guard confirmLeavingScanBothResults(actionTitle: L10n.tr("Start New Scan")),
               let url = pickCardFolder(startingAt: path),
               let chosenPath = validatedSelectedSourcePath(url) else { return }
-        var grantedPaths: Set<String> = []
-        let recoveryAccess = (
-            Array(folderAccesses.values) + scanBothReviewDestinationAccess + (rescanContext?.access ?? [])
-        ).filter {
-            $0.isActive && grantedPaths.insert($0.url.standardizedFileURL.path).inserted
-        }
+        let recoveryAccess = destinationAccessForRescan(recoveringJobID)
         retainPendingScanBothResults()
         selectSourcePath(chosenPath)
         resetImportDraftFromDefaults()
@@ -4252,6 +4309,43 @@ final class AppModel: ObservableObject {
             at: chosenPath, databaseURL: databaseURL,
             recovering: RescanContext(jobID: recoveringJobID, access: recoveryAccess)
         )
+    }
+
+    private func destinationAccessForRescan(_ jobID: String) -> [SecurityScopedResourceAccess] {
+        let belongsToSession = scanBothSession?.entry(for: jobID) != nil
+        let previousAccess = rescanContext?.jobID == jobID ? rescanContext?.access ?? [] : []
+        let sessionAccess = belongsToSession ? scanBothDestinationAccess : []
+        var grantedPaths: Set<String> = []
+        var access = (sessionAccess + previousAccess + Array(folderAccesses.values)).filter {
+            $0.isActive && grantedPaths.insert($0.url.standardizedFileURL.path).inserted
+        }
+        guard AppDistribution.current == .macAppStore,
+              let files = try? jobRepository?.fetchJobFiles(jobID: jobID) else { return access }
+
+        let originalFolders = Insta360RescanRecovery.foldersForIncompleteCopies(files: files)
+        let sharedPath = belongsToSession ? scanBothSession?.destinationPath : nil
+        let sharedFolder = sharedPath.flatMap {
+            $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true)
+        }
+        var offeredFolders: Set<URL> = []
+        for folder in originalFolders {
+            let hasGrant = access.contains { Self.isSameOrDescendant(folder, of: $0.url) }
+            if hasGrant, PathValidator().validate(path: folder.path, purpose: .destination).status != .unwritable {
+                continue
+            }
+            let suggested = sharedFolder.flatMap { Self.isSameOrDescendant(folder, of: $0) ? $0 : nil } ?? folder
+            guard offeredFolders.insert(suggested).inserted,
+                  let url = FilePanelPresenter.chooseDirectoryURL(
+                      title: L10n.tr("Allow Access to \(suggested.lastPathComponent)"),
+                      initialPath: suggested.path,
+                      prompt: L10n.tr("Allow Access")
+                  ), Self.isSameOrDescendant(folder, of: url) else { continue }
+            let grant = SecurityScopedResourceAccess(url: url)
+            if grant.isActive {
+                access.append(grant)
+            }
+        }
+        return access
     }
 
     private func requireRescan(for jobID: String) {
@@ -4892,8 +4986,9 @@ final class AppModel: ObservableObject {
                 return true
             }
         }
+        let access = isReviewingScanBothVolume ? scanBothDestinationAccess : []
         return requiredDestinationValidations().allSatisfy {
-            $0.isUsable && !destinationNeedsAccess($0)
+            $0.isUsable && !destinationNeedsAccess($0, additionalAccess: access)
         }
     }
 
@@ -5288,14 +5383,7 @@ final class AppModel: ObservableObject {
                 throw FolderAccessAuthorizationError(purpose: purpose)
             }
             if !persistBookmark, let access {
-                if isReviewingScanBothVolume, purpose != .source {
-                    if access.isActive {
-                        scanBothReviewDestinationAccess.removeAll { $0.url.standardizedFileURL == url.standardizedFileURL }
-                        scanBothReviewDestinationAccess.append(access)
-                    }
-                } else {
-                    folderAccesses[purpose] = access
-                }
+                folderAccesses[purpose] = access
             }
             return true
         } catch {
@@ -5334,7 +5422,7 @@ final class AppModel: ObservableObject {
         covering path: String, additionalAccess: [SecurityScopedResourceAccess] = []
     ) -> Bool {
         let requestedURL = URL(fileURLWithPath: expanded(path), isDirectory: true)
-        return (Array(folderAccesses.values) + scanBothReviewDestinationAccess + additionalAccess).contains { access in
+        return (Array(folderAccesses.values) + additionalAccess).contains { access in
             access.isActive && Self.isSameOrDescendant(requestedURL, of: access.url)
         }
     }
@@ -5389,10 +5477,6 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshFolderAccess(_ purpose: BookmarkPurpose) {
-        if isReviewingScanBothVolume, purpose != .source {
-            // The open review can still use the previous default after Settings replaces it.
-            scanBothReviewDestinationAccess = currentScanBothDestinationAccess
-        }
         do {
             folderAccesses[purpose] = try bookmarkStore?.beginAccess(
                 purpose: purpose,

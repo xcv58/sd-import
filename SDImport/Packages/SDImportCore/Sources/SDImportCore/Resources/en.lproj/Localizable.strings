@@ -124,6 +124,7 @@
 "Choose SD Card or Source Folder" = "Choose SD Card or Source Folder";
 "Choose Video Destination" = "Choose Video Destination";
 "Choose a card or source folder" = "Choose a card or source folder";
+"Choose %@ to restore access." = "Choose %@ to restore access.";
 "Choose a destination folder" = "Choose a destination folder";
 "Choose a folder" = "Choose a folder";
 "Choose a retention period to preview or delete old history." = "Choose a retention period to preview or delete old history.";
@@ -496,6 +497,7 @@
 "Settings…" = "Settings…";
 "Setup failed" = "Setup failed";
 "Setup skipped. Defaults can be changed in Settings." = "Setup skipped. Defaults can be changed in Settings.";
+"Shared Destination" = "Shared Destination";
 "Shareable with Family Sharing" = "Shareable with Family Sharing";
 "Shoot" = "Shoot";
 "Shoot name" = "Shoot name";
@@ -634,6 +636,7 @@
 "The import plan changed. Review it before copying." = "The import plan changed. Review it before copying.";
 "Reconnect the original card or restore its source folder, then retry." = "Reconnect the original card or restore its source folder, then retry.";
 "Scan Both" = "Scan Both";
+"Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination.";
 "Choose one or both storage volumes to scan." = "Choose one or both storage volumes to scan.";
 "Access declined" = "Access declined";
 "Review scan results" = "Review scan results";

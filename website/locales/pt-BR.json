@@ -320,6 +320,6 @@
   "beta.step3.title": "Compartilhe seu feedback.",
   "beta.step3.body": "Envie seu feedback pelo TestFlight ou por e-mail, informando a versão do app e o que aconteceu.",
   "beta.feedback": "Enviar feedback do beta por e-mail",
-  "guide.scan_both": "Quando {0}Escanear ambos{/0} estiver disponível, escaneie juntos o armazenamento interno e o cartão de memória da câmera. Revise e confirme cada cópia separadamente.",
+  "guide.scan_both": "Use {0}Escanear ambos{/0} para escanear o armazenamento interno e o cartão de memória da câmera. Escolha um destino comum, confirme o plano de cada volume e inicie as importações em sequência com um clique.",
   "guide.rescan": "Se a cópia for interrompida, os arquivos já copiados permanecem no destino. Reconecte a origem se necessário, escolha {0}Escanear a origem novamente{/0} no Histórico e revise o novo plano."
 }

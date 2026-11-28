@@ -978,7 +978,7 @@ struct ImportPreviewView<Overview: View>: View {
     }
 
     private var showsMixedDestinationLayout: Bool {
-        model.importMediaSelection == .photosAndVideos
+        !model.isReviewingScanBothVolume && model.importMediaSelection == .photosAndVideos
             && (model.mediaContentProfile?.photoCount ?? 1) > 0
             && (model.mediaContentProfile?.videoCount ?? 1) > 0
     }

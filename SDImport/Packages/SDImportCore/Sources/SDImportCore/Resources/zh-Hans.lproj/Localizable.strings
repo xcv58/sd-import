@@ -124,6 +124,7 @@
 "Choose SD Card or Source Folder" = "选择 SD 卡或来源文件夹";
 "Choose Video Destination" = "选择视频目标位置";
 "Choose a card or source folder" = "选择存储卡或来源文件夹";
+"Choose %@ to restore access." = "请选择%@以恢复访问权限。";
 "Choose a destination folder" = "选择目标文件夹";
 "Choose a folder" = "选择文件夹";
 "Choose a retention period to preview or delete old history." = "选择保留期限，以预览或删除旧历史。";
@@ -496,6 +497,7 @@
 "Settings…" = "设置…";
 "Setup failed" = "设置失败";
 "Setup skipped. Defaults can be changed in Settings." = "已跳过设置。可在“设置”中更改默认值。";
+"Shared Destination" = "共用目标文件夹";
 "Shareable with Family Sharing" = "可通过家人共享";
 "Shoot" = "拍摄";
 "Shoot name" = "拍摄名称";
@@ -634,6 +636,7 @@
 "The import plan changed. Review it before copying." = "导入计划已更改。请在复制前重新检查。";
 "Reconnect the original card or restore its source folder, then retry." = "重新连接原来的存储卡或恢复其源文件夹，然后重试。";
 "Scan Both" = "扫描两者";
+"Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "“扫描两者”会为两个卷使用同一个目标文件夹。若要导入到其他位置，请单独选择一个卷。";
 "Choose one or both storage volumes to scan." = "选择一个或两个存储卷进行扫描。";
 "Access declined" = "访问权限已拒绝";
 "Review scan results" = "查看扫描结果";

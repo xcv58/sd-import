@@ -68,6 +68,16 @@ public struct Insta360RescanRecovery: Sendable {
         recordingsBySourcePath[sourcePath] != nil
     }
 
+    public static func foldersForIncompleteCopies(files: [JobFileRecord]) -> [URL] {
+        var folders: Set<URL> = []
+        for group in Insta360ClipDetector().groups(files: files) where group.masterFiles.count > 1 {
+            let copies = group.masterFiles.compactMap(recordedCopy)
+            guard copies.count < group.masterFiles.count else { continue }
+            folders.formUnion(copies.map(parentFolder))
+        }
+        return folders.sorted { $0.path < $1.path }
+    }
+
     func recording(for sourcePath: String) -> Recording? {
         recordingsBySourcePath[sourcePath]
     }

@@ -485,11 +485,11 @@ struct ScanBothSessionTests {
             model.reviewScanBothVolume(cardID)
             #expect(model.importUIPhase == .review)
             #expect(model.scanBothSession?.reviewingEntry?.id == cardID)
-            #expect(model.scanBothSession?.entries[0].draft?.settings.shootName == "Modified Internal Plan")
+            #expect(model.scanBothSession?.entries[0].draft?.shootName == "Modified Internal Plan")
             #expect(model.importMediaSelection == .videosOnly)
             let previewPaths = model.previewDestinations.map(\.path)
             try #require(previewPaths.count == 1)
-            #expect(previewPaths[0].hasPrefix(roots.videosURL.path + "/"))
+            #expect(previewPaths[0].hasPrefix(roots.photosURL.path + "/"))
             model.importCurrentJob()
             let approvedCard = try #require(model.scanBothSession?.entries[1].confirmation)
             #expect(approvedCard.copyFileCount == 1)
@@ -504,7 +504,7 @@ struct ScanBothSessionTests {
             #expect(model.scanBothSession?.reviewingEntry == nil)
             #expect(model.scanBothSession?.entries[0].disposition == .skipped)
             #expect(model.canStartScanBothImports)
-            #expect(try FileManager.default.contentsOfDirectory(atPath: roots.videosURL.path).isEmpty)
+            #expect(try FileManager.default.contentsOfDirectory(atPath: roots.photosURL.path).isEmpty)
         }
     }
 
@@ -520,11 +520,7 @@ struct ScanBothSessionTests {
 
             let internalID = session.entries[0].id
             model.reviewScanBothVolume(internalID)
-            let editedDestination = roots.photosURL.deletingLastPathComponent()
-                .appendingPathComponent("Edited", isDirectory: true)
-            try FileManager.default.createDirectory(at: editedDestination, withIntermediateDirectories: false)
-            model.photosPath = editedDestination.path
-            model.destinationPathDidChange(clearFeedback: false)
+            model.location = "Edited Internal Plan"
 
             model.beginScanBoth(session)
             model.cancelImport()
@@ -532,26 +528,68 @@ struct ScanBothSessionTests {
             let restored = try #require(model.scanBothSession)
             #expect(model.importUIPhase == .review)
             #expect(restored.reviewingEntry == nil)
-            #expect(restored.entries[0].draft?.settings.photosPath == editedDestination.path)
+            #expect(restored.destinationPath == roots.photosURL.path)
+            #expect(restored.entries[0].draft?.shootName == "Edited Internal Plan")
             #expect(restored.entries[0].confirmation == nil)
             #expect(restored.entries[1].confirmation?.plans == cardApproval.plans)
             #expect(!model.canStartScanBothImports)
 
             model.reviewScanBothVolume(internalID)
-            #expect(model.photosPath == editedDestination.path)
+            #expect(model.location == "Edited Internal Plan")
             model.importCurrentJob()
             try #require(model.canStartScanBothImports)
             model.startScanBothImports()
             try await waitForImport(model)
             #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+            let copiedPaths = try FileManager.default.subpathsOfDirectory(atPath: roots.photosURL.path)
+            #expect(copiedPaths.contains { $0.hasSuffix("/Internal.jpg") })
+            #expect(copiedPaths.contains { $0.hasSuffix("/Card.mp4") })
+        }
+    }
+
+    @Test("both volumes use the chosen destination and changing it clears both approvals")
+    func confirmsPlansUnderOneDestination() async throws {
+        try await withScannedInlinePlans(usesSharedDefault: false) { model, session, roots in
+            #expect(model.scanBothSession?.destinationPath == "")
+            model.reviewScanBothVolume(session.entries[0].id)
+            #expect(model.scanBothSession?.reviewingEntry == nil)
+            model.setScanBothDestination(roots.photosURL)
+
+            for entry in session.entries {
+                model.reviewScanBothVolume(entry.id)
+                model.location = "Trip \(entry.volume.name)"
+                model.importCurrentJob()
+            }
+            try #require(model.canStartScanBothImports)
+
+            model.setScanBothDestination(roots.videosURL)
+            #expect(model.scanBothSession?.entries.allSatisfy { $0.confirmation == nil } == true)
+            #expect(!model.canStartScanBothImports)
+            for entry in session.entries {
+                model.reviewScanBothVolume(entry.id)
+                #expect(model.location == "Trip \(entry.volume.name)")
+                #expect(model.previewDestinations.count == 1)
+                #expect(model.previewDestinations.first?.path.hasPrefix(roots.videosURL.path + "/") == true)
+                model.importCurrentJob()
+            }
+            try #require(model.canStartScanBothImports)
+            #expect(try FileManager.default.contentsOfDirectory(atPath: roots.videosURL.path).isEmpty)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+            let copiedPaths = try FileManager.default.subpathsOfDirectory(atPath: roots.videosURL.path)
+            #expect(copiedPaths.contains { $0.hasSuffix("/Internal.jpg") })
+            #expect(copiedPaths.contains { $0.hasSuffix("/Card.mp4") })
             #expect(try FileManager.default.contentsOfDirectory(atPath: roots.photosURL.path).isEmpty)
-            #expect(try FileManager.default.subpathsOfDirectory(atPath: editedDestination.path).contains {
-                $0.hasSuffix("/Internal.jpg")
-            })
+            #expect(model.importDefaults.photosPath == roots.photosURL.path)
+            #expect(model.importDefaults.videosPath == roots.videosURL.path)
+            model.setScanBothDestination(roots.photosURL)
+            #expect(model.scanBothSession?.destinationPath == roots.videosURL.path)
         }
     }
 
     private func withScannedInlinePlans(
+        usesSharedDefault: Bool = true,
         _ test: (AppModel, ScanBothSession, DestinationRoots) async throws -> Void
     ) async throws {
         let manager = FileManager.default
@@ -585,7 +623,7 @@ struct ScanBothSessionTests {
         model.bootstrap(at: root.appendingPathComponent("State"), startsRuntimeServices: false)
         model.ejectAfterSuccessfulImport = false
         model.importDefaults.photosPath = roots.photosURL.path
-        model.importDefaults.videosPath = roots.videosURL.path
+        model.importDefaults.videosPath = usesSharedDefault ? roots.photosURL.path : roots.videosURL.path
         model.importDefaults.destinationLayout = .singleLibrary
         model.beginScanBoth(session)
         try await waitForImport(model)
@@ -858,6 +896,11 @@ struct ScanBothSessionTests {
         try await waitForImport(model)
         let entries = try #require(model.scanBothSession?.entries)
         #expect(entries.allSatisfy { $0.summary != nil })
+        if scenario == .firstVolumeDisconnectsBeforeSecond || scenario == .receiptAfterHistoryNavigation {
+            let customDestination = root.appendingPathComponent("CustomDestination")
+            try fm.createDirectory(at: customDestination, withIntermediateDirectories: false)
+            model.setScanBothDestination(customDestination)
+        }
         var lateConflictPath: URL?
         var sharedDestination: URL?
         for entry in entries.reversed() {
@@ -937,11 +980,7 @@ struct ScanBothSessionTests {
                 model.importCurrentJob()
                 try #require(model.scanBothSession?.entries[0].confirmation != nil)
                 model.reviewScanBothVolume(entry.id)
-                let latestDestination = root.appendingPathComponent("Latest Destination")
-                try fm.createDirectory(at: latestDestination, withIntermediateDirectories: false)
-                model.photosPath = latestDestination.path
-                model.videosPath = latestDestination.path
-                model.destinationPathDidChange(clearFeedback: false)
+                model.location = "Latest Shoot"
                 model.setReimportSelection([known.id], requested: false)
                 try await waitForImport(model)
                 let latestDraft = model.currentImportDraft
@@ -956,14 +995,6 @@ struct ScanBothSessionTests {
                 try await waitForImport(model)
                 #expect(model.previewRows.first { $0.id == known.id }?.willCopy == true)
                 #expect(model.previewSessions.first { $0.date == known.date }?.label == "Earlier Photos")
-            }
-            if (scenario == .firstVolumeDisconnectsBeforeSecond || scenario == .receiptAfterHistoryNavigation),
-               entry.volume == first {
-                let customDestination = root.appendingPathComponent("CustomDestination")
-                try fm.createDirectory(at: customDestination, withIntermediateDirectories: false)
-                model.photosPath = customDestination.path
-                model.videosPath = customDestination.path
-                model.destinationPathDidChange(clearFeedback: false)
             }
             if replacesParent {
                 model.useImportMediaSelection(.photosAndVideos)
@@ -1043,7 +1074,7 @@ struct ScanBothSessionTests {
             #expect(receipt.result.jobID == secondJobID)
             #expect(receipt.job?.id == secondJobID)
             #expect(receipt.files.filter { $0.copyStatus == .copied }.map(\.filename) == [secondFile.lastPathComponent])
-            #expect(receipt.files.first?.finalDestinationPath?.contains("/CustomDestination/") == false)
+            #expect(receipt.files.first?.finalDestinationPath?.contains("/CustomDestination/") == true)
             model.openImportInHistory(jobID: receipt.result.jobID)
             #expect(model.selectedJobID == secondJobID)
         case .firstCopyChangesSecondPlan:
@@ -1284,7 +1315,7 @@ struct ScanBothSessionTests {
             let conflictingOutput = alternate.appendingPathComponent(relativePath)
             try fm.createDirectory(at: conflictingOutput.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data("different recording at the alternate destination".utf8).write(to: conflictingOutput)
-            model.selectVideosPath(alternate.path)
+            model.setScanBothDestination(alternate)
             #expect(model.previewSessions.map(\.date) == initialDates)
             #expect(model.previewRows.first { $0.id == firstRow.id }?.disposition.attention == .blocking)
             #expect(!model.canImportPlannedFiles)
@@ -1299,6 +1330,11 @@ struct ScanBothSessionTests {
         }
 
         model.importCurrentJob()
+        if grouping == .byDay {
+            #expect(model.scanBothSession?.entries[1].confirmation == nil)
+            model.reviewScanBothVolume(session.entries[1].id)
+            model.importCurrentJob()
+        }
         try #require(model.canStartScanBothImports)
         model.startScanBothImports()
         try await waitForImport(model)

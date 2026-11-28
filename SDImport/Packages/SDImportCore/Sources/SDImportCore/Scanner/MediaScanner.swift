@@ -12,6 +12,7 @@ public struct ScanRequest: Sendable {
     public let portableReceiptsEnabled: Bool
     public let volumeMountPath: String?
     public let rescanOfJobID: String?
+    public let plansDestinations: Bool
 
     public init(
         mountURL: URL,
@@ -23,7 +24,8 @@ public struct ScanRequest: Sendable {
         jobID: String = JobID.make(),
         portableReceiptsEnabled: Bool = false,
         volumeMountPath: String? = nil,
-        rescanOfJobID: String? = nil
+        rescanOfJobID: String? = nil,
+        plansDestinations: Bool = true
     ) {
         self.mountURL = mountURL
         self.volumeName = volumeName
@@ -35,6 +37,7 @@ public struct ScanRequest: Sendable {
         self.portableReceiptsEnabled = portableReceiptsEnabled
         self.volumeMountPath = volumeMountPath
         self.rescanOfJobID = rescanOfJobID
+        self.plansDestinations = plansDestinations
     }
 }
 
@@ -194,13 +197,16 @@ public struct MediaScanner {
                 mediaKind: mediaKind,
                 attributes: attributes
             )
-            var destinationURL = destinationPlanner.destinationURL(
-                filename: fileURL.lastPathComponent,
-                mediaKind: mediaKind,
-                captureDate: captureDate,
-                location: request.location,
-                roots: request.roots
-            )
+            var destinationURL: URL?
+            if request.plansDestinations {
+                destinationURL = destinationPlanner.destinationURL(
+                    filename: fileURL.lastPathComponent,
+                    mediaKind: mediaKind,
+                    captureDate: captureDate,
+                    location: request.location,
+                    roots: request.roots
+                )
+            }
 
             var decision: FileDecision = alreadyImported ? .known : .new
             var copyStatus: CopyStatus = alreadyImported ? .skipped : .pending

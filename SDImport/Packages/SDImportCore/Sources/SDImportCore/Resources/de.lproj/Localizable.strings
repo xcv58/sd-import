@@ -124,6 +124,7 @@
 "Choose SD Card or Source Folder" = "SD-Karte oder Quellordner auswählen";
 "Choose Video Destination" = "Videoziel auswählen";
 "Choose a card or source folder" = "Karte oder Quellordner auswählen";
+"Choose %@ to restore access." = "Wähle %@, um den Zugriff wiederherzustellen.";
 "Choose a destination folder" = "Zielordner auswählen";
 "Choose a folder" = "Ordner auswählen";
 "Choose a retention period to preview or delete old history." = "Wählen Sie eine Aufbewahrungsdauer, um alte Einträge anzuzeigen oder zu löschen.";
@@ -496,6 +497,7 @@
 "Settings…" = "Einstellungen…";
 "Setup failed" = "Einrichtung fehlgeschlagen";
 "Setup skipped. Defaults can be changed in Settings." = "Einrichtung übersprungen. Standardwerte können in den Einstellungen geändert werden.";
+"Shared Destination" = "Gemeinsames Ziel";
 "Shareable with Family Sharing" = "Mit Familienfreigabe teilbar";
 "Shoot" = "Aufnahme";
 "Shoot name" = "Aufnahmename";
@@ -634,6 +636,7 @@
 "The import plan changed. Review it before copying." = "Der Importplan hat sich geändert. Prüfen Sie ihn vor dem Kopieren.";
 "Reconnect the original card or restore its source folder, then retry." = "Schließe die ursprüngliche Karte wieder an oder stelle ihren Quellordner wieder her und versuche es erneut.";
 "Scan Both" = "Beide scannen";
+"Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "„Beide scannen“ verwendet ein Ziel für beide Volumes. Wähle ein einzelnes Volume, um es an ein anderes Ziel zu importieren.";
 "Choose one or both storage volumes to scan." = "Wähle einen oder beide Datenträger zum Scannen aus.";
 "Access declined" = "Zugriff verweigert";
 "Review scan results" = "Scanergebnisse prüfen";

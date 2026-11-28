@@ -772,6 +772,9 @@ struct MediaScannerImportTests {
         let uncopied = try #require(interrupted.first { $0.copyStatus != .copied })
         let originalPath = try #require(copied.finalDestinationPath)
         let originalFolder = URL(fileURLWithPath: originalPath).deletingLastPathComponent()
+        #expect(Insta360RescanRecovery.foldersForIncompleteCopies(files: previousFiles).isEmpty)
+        #expect(Insta360RescanRecovery.foldersForIncompleteCopies(files: interrupted)
+            == [originalFolder.resolvingSymlinksInPath()])
         #expect(Set(initialPaths.filter { FileManager.default.fileExists(atPath: $0) }) == [originalPath])
         if scenario == .originalCopyMissing {
             try FileManager.default.removeItem(atPath: originalPath)

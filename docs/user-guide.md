@@ -31,7 +31,9 @@ pricing may vary.
 If copying stops, files already copied stay in the destination and in History.
 Reconnect the original card if needed, then choose `Rescan Source` from the
 interrupted import or its History entry. Choose the source folder and confirm
-the fresh import plan. The new scan can recognize files already copied.
+the fresh import plan. The new scan can recognize files already copied. macOS
+may ask for access to the original destination when completing an interrupted
+Insta360 recording.
 
 Select the original source folder on the card or Mac when choosing a folder to
 scan. Source paths through user-created symbolic links are rejected.
@@ -42,14 +44,18 @@ in the source menu.
 
 In `Settings > General`, `Prompt when a card is mounted` enables background card
 prompts. When the app recognizes your camera's internal storage and memory card
-as one device, choose either volume or `Scan Both` from the same prompt. With
-`Scan Both`, grant access to each volume as macOS asks. After both scans, the
-review shows both volumes together. Open either volume's `Review import` to
-inspect files and edit the destination on the same page, then choose
-`Confirm Plan` for that volume. The summary shows the planned destination
-once you open or confirm that volume's plan.
-Use `Skip` to leave a volume out. Select `Start Imports` to copy the confirmed
-volumes one at a time. If a plan changes before its copy starts, review it again.
+as one device, choose either volume or `Scan Both` from the same prompt.
+`Scan Both` uses one destination folder for both volumes. Select one volume at
+a time if you want to import to different destinations.
+
+Grant access to each volume as macOS asks. After both scans, choose the
+`Shared Destination` in the combined review. If your photo and video defaults
+use the same folder, it is selected for you. Open either volume's
+`Review import` to inspect its files and organization on the same page, then
+choose `Confirm Plan` for that volume. Use `Skip` to leave a volume out. Select
+`Start Imports` to copy the confirmed volumes one at a time. If you change the
+shared destination, confirm the plans again before starting. After files have
+been copied, the session keeps that destination.
 Keep both volumes mounted until the imports finish.
 
 The app asks before a new scan or source change discards pending Scan Both

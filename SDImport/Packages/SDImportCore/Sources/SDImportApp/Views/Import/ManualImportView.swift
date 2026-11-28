@@ -90,6 +90,9 @@ struct ManualImportView: View {
         ImportPreviewView(scanBothStatus: model.ejectedSourceJobID == nil ? nil : visibleStatus) {
             VStack(alignment: .leading, spacing: 14) {
                 phaseHeading(L10n.tr("Review import"), detail: session.deviceName)
+                if session.hasPendingResults || !session.destinationPath.isEmpty {
+                    scanBothDestination(session)
+                }
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 12) {
                         ForEach(session.entries) { entry in
@@ -118,6 +121,33 @@ struct ManualImportView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             scanBothReviewFooter(session)
+        }
+    }
+
+    private func scanBothDestination(_ session: ScanBothSession) -> some View {
+        let validation = model.scanBothDestinationValidation
+        let needsAccess = model.scanBothDestinationNeedsAccess
+        return AppSection(L10n.tr("Shared Destination"), systemImage: "folder") {
+            HStack {
+                if session.destinationPath.isEmpty {
+                    Text(L10n.tr("Choose a destination folder"))
+                        .foregroundStyle(.secondary)
+                } else {
+                    scanBothPath(session.destinationPath)
+                }
+                Spacer()
+                if session.hasPendingResults, session.canChangeDestination || needsAccess {
+                    Button(needsAccess ? L10n.tr("Allow Access") : L10n.tr("Choose…")) {
+                        model.chooseScanBothDestination()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(model.isWorking || model.isEjectingSource)
+                    .accessibilityIdentifier("import.scan-both.destination")
+                }
+            }
+            if !session.destinationPath.isEmpty, !validation.isUsable {
+                ValidationStatusView(result: validation)
+            }
         }
     }
 
@@ -287,7 +317,7 @@ struct ManualImportView: View {
                         model.reviewScanBothVolume(entry.id)
                     }
                     .buttonStyle(.bordered)
-                    .disabled(model.isWorking || model.isEjectingSource)
+                    .disabled(model.isWorking || model.isEjectingSource || model.scanBothSession?.destinationPath.isEmpty != false)
                     .accessibilityLabel(L10n.tr("Review \(title)"))
                     .accessibilityIdentifier("import.scan-both.review.\(entry.volume.mountPath)")
                 }
@@ -708,55 +738,34 @@ struct ImportDestinationFields: View {
                 ShootNameField(name: $model.location)
             }
 
-            switch model.importMediaSelection {
-            case .photosAndVideos:
-                switch model.destinationLayout {
-                case .singleLibrary:
-                    GridRow {
-                        Text(L10n.tr("Library"))
-                            .foregroundStyle(.secondary)
-                            .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
-                        FolderField(
-                            title: L10n.tr("Library"),
-                            path: $model.photosPath,
-                            validation: model.photosValidation,
-                            recentChoices: model.recentPhotosPathSuggestions,
-                            selectRecentPath: model.selectPhotosPath,
-                            action: model.choosePhotosFolder
-                        )
-                    }
-                case .separateMediaFolders:
-                    GridRow {
-                        Text(L10n.tr("Photos"))
-                            .foregroundStyle(.secondary)
-                            .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
-                        FolderField(
-                            title: L10n.tr("Photos"),
-                            path: $model.photosPath,
-                            validation: model.photosValidation,
-                            recentChoices: model.recentPhotosPathSuggestions,
-                            selectRecentPath: model.selectPhotosPath,
-                            action: model.choosePhotosFolder
-                        )
-                    }
+            if !model.isReviewingScanBothVolume {
+                destinationRows
+            }
+        }
+        .gridColumnAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-                    GridRow {
-                        Text(L10n.tr("Videos"))
-                            .foregroundStyle(.secondary)
-                            .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
-                        FolderField(
-                            title: L10n.tr("Videos"),
-                            path: $model.videosPath,
-                            validation: model.videosValidation,
-                            recentChoices: model.recentVideosPathSuggestions,
-                            selectRecentPath: model.selectVideosPath,
-                            action: model.chooseVideosFolder
-                        )
-                    }
-                case .footageBackup:
-                    EmptyView()
+    @ViewBuilder
+    private var destinationRows: some View {
+        switch model.importMediaSelection {
+        case .photosAndVideos:
+            switch model.destinationLayout {
+            case .singleLibrary:
+                GridRow {
+                    Text(L10n.tr("Library"))
+                        .foregroundStyle(.secondary)
+                        .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
+                    FolderField(
+                        title: L10n.tr("Library"),
+                        path: $model.photosPath,
+                        validation: model.photosValidation,
+                        recentChoices: model.recentPhotosPathSuggestions,
+                        selectRecentPath: model.selectPhotosPath,
+                        action: model.choosePhotosFolder
+                    )
                 }
-            case .photosOnly:
+            case .separateMediaFolders:
                 GridRow {
                     Text(L10n.tr("Photos"))
                         .foregroundStyle(.secondary)
@@ -770,7 +779,7 @@ struct ImportDestinationFields: View {
                         action: model.choosePhotosFolder
                     )
                 }
-            case .videosOnly:
+
                 GridRow {
                     Text(L10n.tr("Videos"))
                         .foregroundStyle(.secondary)
@@ -784,10 +793,38 @@ struct ImportDestinationFields: View {
                         action: model.chooseVideosFolder
                     )
                 }
+            case .footageBackup:
+                EmptyView()
+            }
+        case .photosOnly:
+            GridRow {
+                Text(L10n.tr("Photos"))
+                    .foregroundStyle(.secondary)
+                    .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
+                FolderField(
+                    title: L10n.tr("Photos"),
+                    path: $model.photosPath,
+                    validation: model.photosValidation,
+                    recentChoices: model.recentPhotosPathSuggestions,
+                    selectRecentPath: model.selectPhotosPath,
+                    action: model.choosePhotosFolder
+                )
+            }
+        case .videosOnly:
+            GridRow {
+                Text(L10n.tr("Videos"))
+                    .foregroundStyle(.secondary)
+                    .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
+                FolderField(
+                    title: L10n.tr("Videos"),
+                    path: $model.videosPath,
+                    validation: model.videosValidation,
+                    recentChoices: model.recentVideosPathSuggestions,
+                    selectRecentPath: model.selectVideosPath,
+                    action: model.chooseVideosFolder
+                )
             }
         }
-        .gridColumnAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

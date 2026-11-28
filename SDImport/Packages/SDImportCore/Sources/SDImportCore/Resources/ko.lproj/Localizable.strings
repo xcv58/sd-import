@@ -124,6 +124,7 @@
 "Choose SD Card or Source Folder" = "SD 카드 또는 소스 폴더 선택";
 "Choose Video Destination" = "동영상 대상 선택";
 "Choose a card or source folder" = "카드 또는 소스 폴더 선택";
+"Choose %@ to restore access." = "접근 권한을 복원하려면 %@을(를) 선택하세요.";
 "Choose a destination folder" = "대상 폴더 선택";
 "Choose a folder" = "폴더 선택";
 "Choose a retention period to preview or delete old history." = "보관 기간을 선택하여 이전 기록을 미리 보거나 삭제하세요.";
@@ -496,6 +497,7 @@
 "Settings…" = "설정…";
 "Setup failed" = "설정 실패";
 "Setup skipped. Defaults can be changed in Settings." = "설정을 건너뛰었습니다. 기본값은 설정에서 변경할 수 있습니다.";
+"Shared Destination" = "공유 저장 위치";
 "Shareable with Family Sharing" = "가족 공유 가능";
 "Shoot" = "촬영";
 "Shoot name" = "촬영 이름";
@@ -634,6 +636,7 @@
 "The import plan changed. Review it before copying." = "가져오기 계획이 변경되었습니다. 복사하기 전에 확인하세요.";
 "Reconnect the original card or restore its source folder, then retry." = "원래 카드를 다시 연결하거나 소스 폴더를 복원한 후 다시 시도하세요.";
 "Scan Both" = "둘 다 스캔";
+"Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "두 볼륨 스캔은 두 볼륨에 같은 저장 위치를 사용합니다. 다른 위치로 가져오려면 볼륨 하나를 선택하세요.";
 "Choose one or both storage volumes to scan." = "스캔할 저장 볼륨을 하나 또는 둘 다 선택하세요.";
 "Access declined" = "접근이 거부됨";
 "Review scan results" = "스캔 결과 검토";
