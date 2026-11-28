@@ -235,8 +235,15 @@ struct ManualImportView: View {
     }
 
     private func scanBothReviewFooter(_ session: ScanBothSession) -> some View {
+        let disconnectMessage = model.scanBothReviewDisconnectMessage
         let feedback = model.folderAccessFeedback?.text
         return VStack(alignment: .leading, spacing: 8) {
+            if let disconnectMessage {
+                AppStatusLabel(title: disconnectMessage, systemImage: "exclamationmark.triangle", role: .warning)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("import.scan-both.review-disconnect")
+            }
             if let feedback, !feedback.isEmpty {
                 AppStatusLabel(title: feedback, systemImage: "exclamationmark.triangle.fill", role: .error)
                     .font(.callout)
@@ -263,8 +270,8 @@ struct ManualImportView: View {
         .padding(.vertical, 12)
         .background(AppSurfacePalette.contentBackground)
         .overlay(alignment: .top) { Divider() }
-        .onChange(of: feedback, initial: true) { _, message in
-            guard let message, !message.isEmpty else { return }
+        .onChange(of: [disconnectMessage, feedback].compactMap { $0 }.joined(separator: "\n"), initial: true) { _, message in
+            guard !message.isEmpty else { return }
             AccessibilityNotification.Announcement(message).post()
         }
     }
@@ -286,14 +293,21 @@ struct ManualImportView: View {
 
     @ViewBuilder
     private func scanBothFooterActions(_ session: ScanBothSession) -> some View {
-        if session.reviewingEntry != nil {
-            ImportReviewUpdateControls()
+        if let entry = session.reviewingEntry {
+            let needsRescan = entry.summary.map { model.needsRescan($0.jobID) } == true
+            if !needsRescan {
+                ImportReviewUpdateControls()
+            }
             Button(L10n.tr("Close")) {
                 model.returnToScanBothResults()
             }
             .buttonStyle(.bordered)
             .disabled(model.isWorking)
-            ImportReviewPrimaryAction()
+            if needsRescan, let summary = entry.summary {
+                scanBothRescanAction(summary, title: session.volumeTitle(for: entry))
+            } else {
+                ImportReviewPrimaryAction()
+            }
         } else if session.hasPendingResults {
             Button {
                 model.startScanBothImports()
@@ -325,12 +339,9 @@ struct ManualImportView: View {
             }
             if let summary = entry.summary {
                 if model.needsRescan(summary.jobID) {
-                    Button(L10n.tr("Rescan Source")) {
-                        model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
+                    if !isEditing {
+                        scanBothRescanAction(summary, title: title)
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(model.isWorking || model.isEjectingSource)
-                    .accessibilityValue(title)
                 } else if !isEditing {
                     let canEdit = entry.confirmation != nil && model.scanBothSession?.hasStartedImports == false
                     Button(canEdit ? L10n.tr("Edit Plan") : L10n.tr("Review import")) {
@@ -347,6 +358,15 @@ struct ManualImportView: View {
         case .skipped:
             Text(L10n.tr("Skipped")).foregroundStyle(.secondary)
         }
+    }
+
+    private func scanBothRescanAction(_ summary: ScanSummary, title: String) -> some View {
+        Button(L10n.tr("Rescan Source")) {
+            model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
+        }
+        .buttonStyle(.bordered)
+        .disabled(model.isWorking || model.isEjectingSource)
+        .accessibilityValue(title)
     }
 
     @ViewBuilder

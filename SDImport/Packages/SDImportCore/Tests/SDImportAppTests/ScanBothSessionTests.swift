@@ -529,6 +529,33 @@ struct ScanBothSessionTests {
         }
     }
 
+    @Test("the active Scan Both review reports a disconnect and keeps the sibling confirmed")
+    func reportsDisconnectInActiveReview() async throws {
+        try await withScannedInlinePlans { model, session, _ in
+            let editing = session.entries[0]
+            let sibling = session.entries[1]
+            model.reviewScanBothVolume(sibling.id)
+            model.importCurrentJob()
+            let approval = try #require(model.scanBothSession?.entries[1].confirmation)
+
+            model.reviewScanBothVolume(editing.id)
+            let jobID = try #require(model.currentSummary?.jobID)
+            try #require(model.canImportPlannedFiles)
+            #expect(model.scanBothReviewDisconnectMessage == nil)
+
+            model.invalidateScansAtUnmount(editing.volume.mountURL)
+            #expect(model.scanBothSession?.reviewingEntry?.id == editing.id)
+            #expect(model.scanBothReviewDisconnectMessage == L10n.tr("Card is not mounted"))
+            #expect(model.needsRescan(jobID))
+            #expect(!model.canImportPlannedFiles)
+            #expect(model.scanBothSession?.entries[1].confirmation?.plans == approval.plans)
+
+            model.returnToScanBothResults()
+            #expect(model.scanBothReviewDisconnectMessage == nil)
+            #expect(model.scanBothSession?.entries[1].confirmation?.plans == approval.plans)
+        }
+    }
+
     @Test("cancelling a new scan restores the edited draft and requires another confirmation")
     func restoresEditedDraftAfterCancelledScan() async throws {
         try await withScannedInlinePlans { model, session, roots in

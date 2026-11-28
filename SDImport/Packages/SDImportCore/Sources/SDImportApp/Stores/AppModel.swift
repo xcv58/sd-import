@@ -452,6 +452,7 @@ private enum ImportRetryContext {
 private struct RescanContext: Sendable {
     let jobID: String
     let access: [SecurityScopedResourceAccess]
+    var preparation: Insta360RescanRecovery.Preparation? = nil
 }
 
 private struct SourceDeviceEjectionError: LocalizedError {
@@ -905,6 +906,11 @@ final class AppModel: ObservableObject {
     var isReviewingScanBothVolume: Bool { scanBothSession?.reviewingJobID != nil }
     var isScanBothPlanLocked: Bool {
         isReviewingScanBothVolume && scanBothSession?.hasStartedImports == true
+    }
+    var scanBothReviewDisconnectMessage: String? {
+        guard let session = scanBothSession, let entry = session.reviewingEntry,
+              session.removedMountPaths.contains(entry.volume.mountPath) else { return nil }
+        return L10n.tr("Card is not mounted")
     }
     private var reviewSharedDestinationPath: String? {
         isReviewingScanBothVolume ? scanBothSession?.destinationPath : nil
@@ -1830,23 +1836,42 @@ final class AppModel: ObservableObject {
             statusMessage = L10n.tr("Database is not ready")
             return
         }
-        let recovering = rescanContext
         validatePaths()
+        let selectedURL: URL?
         if sourceNeedsAccess {
-            guard let url = authorizeSelectedSource(),
-                  let path = validatedSelectedSourcePath(url) else { return }
-            retainPendingScanBothResults()
-            selectSourcePath(path)
-            startScan(at: path, databaseURL: databaseURL, recovering: recovering)
-            return
+            guard let url = chooseAccessForSelectedSource() else { return }
+            selectedURL = url
+        } else {
+            guard sourceValidation.isUsable else {
+                let validation = sourceValidation
+                setLocalizedStatusMessage { validation.message }
+                return
+            }
+            selectedURL = nil
         }
-        guard sourceValidation.isUsable else {
-            let validation = sourceValidation
-            setLocalizedStatusMessage { validation.message }
-            return
+        let sourceAccess = selectedURL.map { SecurityScopedResourceAccess(url: $0) }
+        defer { withExtendedLifetime(sourceAccess) {} }
+        let path: String
+        if let selectedURL {
+            guard let chosenPath = validatedSelectedSourcePath(selectedURL) else { return }
+            path = chosenPath
+        } else {
+            path = resolvedPath(cardPath, validation: sourceValidation)
         }
 
-        startScan(at: resolvedPath(cardPath, validation: sourceValidation), databaseURL: databaseURL, recovering: recovering)
+        let recovering: RescanContext?
+        if let rescanContext {
+            guard let context = prepareRescan(rescanContext.jobID, sourcePath: path) else { return }
+            recovering = context
+        } else {
+            recovering = nil
+        }
+        if let selectedURL {
+            guard retainSelectedFolderAccess(.source, url: selectedURL, persistBookmark: true) else { return }
+            retainPendingScanBothResults()
+            selectSourcePath(path)
+        }
+        startScan(at: path, databaseURL: databaseURL, recovering: recovering)
     }
 
     private func validatedSelectedSourcePath(_ url: URL) -> String? {
@@ -1901,7 +1926,7 @@ final class AppModel: ObservableObject {
                 if let recovering {
                     try RecoveryService(
                         jobRepository: repositories.jobRepository, portableReceiptsEnabled: request.portableReceiptsEnabled
-                    ).recoverInterruptedImport(jobID: recovering.jobID)
+                    ).recoverInterruptedImport(jobID: recovering.jobID, preparation: recovering.preparation)
                     try Task.checkCancellation()
                 }
                 let scanner = MediaScanner(
@@ -4365,21 +4390,16 @@ final class AppModel: ObservableObject {
         let sourceAccess = SecurityScopedResourceAccess(url: url)
         defer { withExtendedLifetime(sourceAccess) {} }
         guard let chosenPath = validatedSelectedSourcePath(url),
-              let recoveryAccess = destinationAccessForRescan(recoveringJobID, sourcePath: chosenPath),
+              let recovering = prepareRescan(recoveringJobID, sourcePath: chosenPath),
               retainSelectedFolderAccess(.source, url: url, persistBookmark: true) else { return }
         retainPendingScanBothResults()
         selectSourcePath(chosenPath)
         resetImportDraftFromDefaults()
         selection = .import
-        startScan(
-            at: chosenPath, databaseURL: databaseURL,
-            recovering: RescanContext(jobID: recoveringJobID, access: recoveryAccess)
-        )
+        startScan(at: chosenPath, databaseURL: databaseURL, recovering: recovering)
     }
 
-    private func destinationAccessForRescan(
-        _ jobID: String, sourcePath: String
-    ) -> [SecurityScopedResourceAccess]? {
+    private func prepareRescan(_ jobID: String, sourcePath: String) -> RescanContext? {
         let belongsToSession = scanBothSession?.entry(for: jobID) != nil
         // The check below matches live grants to destination folders across rescans.
         let previousAccess = rescanContext?.access ?? []
@@ -4388,7 +4408,10 @@ final class AppModel: ObservableObject {
         var access = (sessionAccess + previousAccess + Array(folderAccesses.values)).filter {
             $0.isActive && grantedPaths.insert($0.url.standardizedFileURL.path).inserted
         }
-        guard AppDistribution.current == .macAppStore, let jobRepository else { return access }
+        guard let jobRepository else {
+            showFolderAccessError { L10n.tr("Database is not ready") }
+            return nil
+        }
 
         let sourceURL = URL(fileURLWithPath: sourcePath, isDirectory: true)
         let request = scanRequest(
@@ -4396,29 +4419,31 @@ final class AppModel: ObservableObject {
             sourceVolume: VolumeDetector().removableSourceVolume(containing: sourceURL),
             rescanOfJobID: jobID
         )
-        let sharedPath = belongsToSession ? scanBothSession?.destinationPath : nil
-        let sharedFolder = sharedPath.flatMap {
-            $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true)
-        }
-        let originalFolders: [URL]
+        let preparation: Insta360RescanRecovery.Preparation
         do {
-            originalFolders = try Insta360RescanRecovery.recordedDestinationFolders(
+            preparation = try Insta360RescanRecovery.prepare(
                 request: request, jobRepository: jobRepository
             )
         } catch {
             showFolderAccessError { Self.errorMessage(for: error) }
             return nil
         }
+        func context() -> RescanContext {
+            RescanContext(jobID: jobID, access: access, preparation: preparation)
+        }
+        guard AppDistribution.current == .macAppStore else { return context() }
+
+        let sharedFolder = belongsToSession ? scanBothSession?.destinationRoot?.url : nil
         func canVerifyCopies(in folder: URL) -> Bool {
             access.contains { Self.isSameOrDescendant(folder, of: $0.url) }
                 && PathValidator().validate(path: folder.path, purpose: .destination).status != .unwritable
         }
         var missingFolders: [URL: [URL]] = [:]
-        for folder in originalFolders where !canVerifyCopies(in: folder) {
+        for folder in preparation.destinationFolders where !canVerifyCopies(in: folder) {
             let suggested = sharedFolder.flatMap { Self.isSameOrDescendant(folder, of: $0) ? $0 : nil } ?? folder
             missingFolders[suggested, default: []].append(folder)
         }
-        guard !missingFolders.isEmpty else { return access }
+        guard !missingFolders.isEmpty else { return context() }
 
         let alert = NSAlert()
         alert.messageText = L10n.tr("Allow Access to Original Destinations")
@@ -4428,7 +4453,7 @@ final class AppModel: ObservableObject {
         alert.addButton(withTitle: L10n.tr("Cancel")).keyEquivalent = "\u{1b}"
         switch alert.runModal() {
         case .alertSecondButtonReturn:
-            return access
+            return context()
         case .alertFirstButtonReturn:
             break
         default:
@@ -4450,7 +4475,7 @@ final class AppModel: ObservableObject {
             }
             access.append(grant)
         }
-        return access
+        return context()
     }
 
     private func requireRescan(for jobID: String) {
@@ -5502,7 +5527,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func authorizeSelectedSource() -> URL? {
+    private func chooseAccessForSelectedSource() -> URL? {
         folderAccessFeedback = nil
         let sourcePath = sourceValidation.expandedPath
         let sourceURL = URL(fileURLWithPath: sourcePath, isDirectory: true)
@@ -5518,9 +5543,6 @@ final class AppModel: ObservableObject {
         }
         guard Self.isSameOrDescendant(selectedURL, of: sourceURL) else {
             showFolderAccessError { L10n.tr("Choose \(sourceName) or one of its subfolders.") }
-            return nil
-        }
-        guard retainSelectedFolderAccess(.source, url: selectedURL, persistBookmark: true) else {
             return nil
         }
         return selectedURL

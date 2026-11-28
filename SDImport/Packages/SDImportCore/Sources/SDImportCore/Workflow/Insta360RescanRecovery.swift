@@ -68,33 +68,44 @@ public struct Insta360RescanRecovery: Sendable {
         recordingsBySourcePath[sourcePath] != nil
     }
 
-    public static func recordedDestinationFolders(
+    public struct Preparation: Sendable {
+        public let destinationFolders: [URL]
+        let earlierAttempts: [(jobID: String, attemptIDs: Set<UUID>)]
+    }
+
+    public static func prepare(
         request: ScanRequest, jobRepository: JobRepository
-    ) throws -> [URL] {
+    ) throws -> Preparation {
         var attempts = PreviousAttempts(jobID: request.rescanOfJobID, jobRepository: jobRepository)
         var matchedMasters: Set<String> = []
         var folders: Set<URL> = []
+        var earlierAttempts: [(jobID: String, attemptIDs: Set<UUID>)] = []
         while let previous = try attempts.next() {
             guard let paths = MatchingPaths(previous: previous, current: request) else { continue }
-            // The app replays this job's journal after obtaining folder access.
-            // A journal entry suggests a folder but does not establish that a copy exists.
-            let pendingFoldersByFile = previous.id == request.rescanOfJobID
-                ? try pendingDestinationFolders(jobID: previous.id, jobRepository: jobRepository) : [:]
+            let pendingCopies = try pendingCopiesByFile(jobID: previous.id, jobRepository: jobRepository)
+            var attemptIDs: Set<UUID> = []
             for group in try lensPairs(jobID: previous.id, jobRepository: jobRepository) {
                 let masters = group.masterFiles.compactMap {
                     paths.previousKeyInScope($0, current: request)
                 }
                 guard masters.count == group.masterFiles.count,
                       matchedMasters.isDisjoint(with: masters) else { continue }
-                folders.formUnion(group.masterFiles.compactMap { file in
-                    file.id.flatMap { pendingFoldersByFile[$0] }
-                })
+                for file in group.masterFiles {
+                    guard let id = file.id, let copy = pendingCopies[id] else { continue }
+                    folders.insert(parentFolder(copy.destination))
+                    attemptIDs.insert(copy.id)
+                }
                 guard group.masterFiles.contains(where: { recordedCopy(of: $0) != nil }) else { continue }
                 matchedMasters.formUnion(masters)
                 folders.formUnion(group.files.compactMap(recordedCopy).map(parentFolder))
             }
+            // The selected job is recovered as usual. For older jobs, replay only
+            // the copy entries relevant to the recordings in this rescan.
+            if previous.id != request.rescanOfJobID, !attemptIDs.isEmpty {
+                earlierAttempts.append((previous.id, attemptIDs))
+            }
         }
-        return folders.sorted { $0.path < $1.path }
+        return Preparation(destinationFolders: folders.sorted { $0.path < $1.path }, earlierAttempts: earlierAttempts)
     }
 
     func recording(for sourcePath: String) -> Recording? {
@@ -183,15 +194,15 @@ public struct Insta360RescanRecovery: Sendable {
         return Insta360ClipDetector().groups(files: files).filter { $0.masterFiles.count > 1 }
     }
 
-    private static func pendingDestinationFolders(
+    private static func pendingCopiesByFile(
         jobID: String, jobRepository: JobRepository
-    ) throws -> [Int64: URL] {
+    ) throws -> [Int64: ImportCopyAttempt] {
         let attempts = try jobRepository.copyAttempts(jobID: jobID)
         return Dictionary(uniqueKeysWithValues: attempts.compactMap { attempt in
             guard attempt.localCopyCommitted != true, attempt.destinationDirectory != nil,
                   attempt.staged != nil || (attempt.reservedDestination != nil && attempt.directCopyDigest != nil)
             else { return nil }
-            return (attempt.fileID, parentFolder(attempt.destination))
+            return (attempt.fileID, attempt)
         })
     }
 

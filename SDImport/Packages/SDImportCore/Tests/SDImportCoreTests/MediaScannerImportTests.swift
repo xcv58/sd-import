@@ -800,9 +800,9 @@ struct MediaScannerImportTests {
                 location: "TEST", roots: defaultRoots, jobID: jobID,
                 portableReceiptsEnabled: true, volumeMountPath: mount.path, rescanOfJobID: previous
             )
-            let folders = try Insta360RescanRecovery.recordedDestinationFolders(
+            let folders = try Insta360RescanRecovery.prepare(
                 request: request, jobRepository: fixture.jobRepository
-            )
+            ).destinationFolders
             #expect(folders == (scenario == .differentVolumeAtNewPath ? [] : [originalFolder.resolvingSymlinksInPath()]))
             _ = try fixture.scanner.scan(request)
             let files = try fixture.jobRepository.fetchJobFiles(jobID: jobID)
@@ -908,8 +908,8 @@ struct MediaScannerImportTests {
         }
     }
 
-    @Test("rescan finds the destination of an Insta360 lens published before the copy was committed")
-    func rescanFindsUncommittedInsta360Destination() throws {
+    @Test("direct and repeated rescans find a lens published before the copy was committed", arguments: [false, true])
+    func rescanFindsUncommittedInsta360Destination(repeated: Bool) throws {
         let fixture = try Fixture()
         let source = fixture.mountURL.appendingPathComponent("DCIM/Camera01", isDirectory: true)
         let names = ["VID_20181001_210458_00_009.insv", "VID_20181001_210458_10_009.insv"]
@@ -942,23 +942,50 @@ struct MediaScannerImportTests {
         #expect(FileManager.default.fileExists(atPath: attempt.destinationPath))
         #expect(try fixture.jobRepository.fetchJobFiles(jobID: previousJobID).allSatisfy { $0.copyStatus == .pending })
 
-        let request = ScanRequest(
-            mountURL: source, volumeName: "CARD", volumeUUID: volumeUUID, location: "TEST", roots: roots,
-            jobID: "fresh-review", volumeMountPath: fixture.mountURL.path, rescanOfJobID: previousJobID
-        )
-        #expect(try Insta360RescanRecovery.recordedDestinationFolders(
-            request: request, jobRepository: fixture.jobRepository
-        ) == [folder])
+        func rescanRequest(_ jobID: String, previous: String) -> ScanRequest {
+            ScanRequest(
+                mountURL: source, volumeName: "CARD", volumeUUID: volumeUUID, location: "TEST", roots: roots,
+                jobID: jobID, volumeMountPath: fixture.mountURL.path, rescanOfJobID: previous
+            )
+        }
+        let replay = RecoveryService(jobRepository: fixture.jobRepository)
+        var rescanOfJobID = previousJobID
+        if repeated {
+            let unavailable = custom.deletingLastPathComponent().appendingPathComponent("Temporarily unavailable")
+            let manager = FileManager.default
+            try manager.moveItem(at: custom, to: unavailable)
+            try replay.recoverInterruptedImport(jobID: previousJobID)
+            #expect(try fixture.jobRepository.copyAttempts(jobID: previousJobID).count == 1)
+            let firstRescan = rescanRequest("cancelled-rescan", previous: previousJobID)
+            _ = try fixture.scanner.scan(firstRescan)
+            #expect(throws: SDImportError.cancelled) {
+                try fixture.importEngine.importFiles(
+                    jobID: firstRescan.jobID, requiresReviewedDestinations: true, shouldCancel: { true }
+                )
+            }
+            try manager.moveItem(at: unavailable, to: custom)
+            rescanOfJobID = firstRescan.jobID
+        }
+
+        let request = rescanRequest("fresh-review", previous: rescanOfJobID)
+        let preparation = try Insta360RescanRecovery.prepare(request: request, jobRepository: fixture.jobRepository)
+        #expect(preparation.destinationFolders == [folder])
         let otherSource = ScanRequest(
             mountURL: fixture.mountURL.appendingPathComponent("DCIM/Camera02", isDirectory: true),
             volumeName: "CARD", volumeUUID: volumeUUID, location: "TEST", roots: roots,
-            jobID: "other-source", volumeMountPath: fixture.mountURL.path, rescanOfJobID: previousJobID
+            jobID: "other-source", volumeMountPath: fixture.mountURL.path, rescanOfJobID: rescanOfJobID
         )
-        #expect(try Insta360RescanRecovery.recordedDestinationFolders(
+        let otherPreparation = try Insta360RescanRecovery.prepare(
             request: otherSource, jobRepository: fixture.jobRepository
-        ).isEmpty)
+        )
+        #expect(otherPreparation.destinationFolders.isEmpty)
+        if repeated {
+            try replay.recoverInterruptedImport(jobID: rescanOfJobID, preparation: otherPreparation)
+            #expect(try fixture.jobRepository.copyAttempts(jobID: previousJobID).count == 1)
+        }
 
-        try RecoveryService(jobRepository: fixture.jobRepository).recoverInterruptedImport(jobID: previousJobID)
+        try replay.recoverInterruptedImport(jobID: rescanOfJobID, preparation: preparation)
+        #expect(try fixture.jobRepository.copyAttempts(jobID: previousJobID).isEmpty)
         _ = try fixture.scanner.scan(request)
         let files = try fixture.jobRepository.fetchJobFiles(jobID: request.jobID)
         let recovery = try Insta360RescanRecovery(request: request, scannedFiles: files, jobRepository: fixture.jobRepository)
@@ -1026,9 +1053,9 @@ struct MediaScannerImportTests {
             volumeMountPath: fixture.mountURL.path, rescanOfJobID: previousJob
         )
         let originalFolder = otherLensURL.deletingLastPathComponent().resolvingSymlinksInPath()
-        #expect(try Insta360RescanRecovery.recordedDestinationFolders(
+        #expect(try Insta360RescanRecovery.prepare(
             request: request, jobRepository: fixture.jobRepository
-        ) == [originalFolder])
+        ).destinationFolders == [originalFolder])
         _ = try fixture.scanner.scan(request)
         let scanned = try fixture.jobRepository.fetchJobFiles(jobID: request.jobID)
         let recovery = try Insta360RescanRecovery(
