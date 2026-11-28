@@ -541,17 +541,17 @@ struct ScanBothSessionTests {
             model.reviewScanBothVolume(editing.id)
             let jobID = try #require(model.currentSummary?.jobID)
             try #require(model.canImportPlannedFiles)
-            #expect(model.scanBothReviewDisconnectMessage == nil)
+            #expect(model.scanBothSession?.removedMountPaths.isEmpty == true)
 
             model.invalidateScansAtUnmount(editing.volume.mountURL)
             #expect(model.scanBothSession?.reviewingEntry?.id == editing.id)
-            #expect(model.scanBothReviewDisconnectMessage == L10n.tr("Card is not mounted"))
+            #expect(model.scanBothSession?.removedMountPaths == [editing.volume.mountPath])
             #expect(model.needsRescan(jobID))
             #expect(!model.canImportPlannedFiles)
             #expect(model.scanBothSession?.entries[1].confirmation?.plans == approval.plans)
 
             model.returnToScanBothResults()
-            #expect(model.scanBothReviewDisconnectMessage == nil)
+            #expect(model.scanBothSession?.removedMountPaths == [editing.volume.mountPath])
             #expect(model.scanBothSession?.entries[1].confirmation?.plans == approval.plans)
         }
     }
@@ -918,6 +918,154 @@ struct ScanBothSessionTests {
             #expect(model.scanBothSession?.entries.contains(where: \.reviewNeedsAttention) == false)
             model.reviewScanBothVolume(cardID)
             #expect(!model.previewNeedsAttention)
+        }
+    }
+
+    @Test("one shared review starts both volumes in order and uses a common shoot folder")
+    func startsSharedPlanInVolumeOrder() async throws {
+        try await withScannedInlinePlans(populateSources: { internalFolder, cardFolder in
+            let photo = internalFolder.appendingPathComponent("Internal.jpg")
+            let video = cardFolder.appendingPathComponent("Card.mp4")
+            for (index, file) in [photo, video].enumerated() {
+                try Data(file.lastPathComponent.utf8).write(to: file)
+                try FileManager.default.setAttributes(
+                    [.modificationDate: Date(timeIntervalSince1970: 1_700_000_000 + Double(index) * 172_800)],
+                    ofItemAtPath: file.path
+                )
+            }
+        }) { model, session, _ in
+            model.updateSharedScanBothReview(\.shootName, to: "Hawaii")
+            model.updateSharedScanBothReview(\.mediaSelection, to: .photosOnly)
+            let internalID = session.entries[0].id
+            let cardID = session.entries[1].id
+            #expect(model.scanBothSession?.sharedReview?.volumes[cardID]?.totals.copyFiles == 0)
+            model.updateSharedScanBothReview(\.mediaSelection, to: .photosAndVideos)
+            model.updateSharedScanBothReview(\.folderGrouping, to: .oneShootFolder)
+
+            model.skipScanBothImport(cardID)
+            let skipped = try #require(model.scanBothSession)
+            #expect(skipped.sharedReview?.queuedEntries(in: skipped).map(\.id) == [internalID])
+            model.includeScanBothImport(cardID)
+            let included = try #require(model.scanBothSession)
+            let review = try #require(included.sharedReview)
+            #expect(review.queuedEntries(in: included).map(\.id) == [internalID, cardID])
+            #expect(review.totals(in: included).copyFiles == 2)
+            #expect(review.volumes[cardID]?.paths == review.volumes[internalID]?.paths)
+            let destination = try #require(review.volumes[internalID]?.paths.first)
+            #expect(destination.contains("Hawaii"))
+            #expect(included.entries.allSatisfy { $0.confirmation == nil })
+            try #require(model.canStartSharedScanBothImports)
+
+            model.startSharedScanBothImports()
+            try await waitForImport(model)
+
+            #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+            #expect(model.scanBothSession?.hasStartedImports == true)
+            model.updateSharedScanBothReview(\.shootName, to: "Other")
+            #expect(model.scanBothSession?.sharedReview?.shootName == "Hawaii")
+            let files = try FileManager.default.contentsOfDirectory(atPath: destination)
+            #expect(Set(files) == ["Internal.jpg", "Card.mp4"])
+        }
+    }
+
+    @Test("the shared review stops before any copy if only one volume would fit")
+    func blocksWhenCombinedSpaceDoesNotFit() async throws {
+        try await withScannedInlinePlans(destinationCapacity: { path in
+            VolumeCapacity(volumeID: "fixture", displayPath: path, availableBytes: 9, totalBytes: 100)
+        }) { model, _, roots in
+            model.updateSharedScanBothReview(\.mediaSelection, to: .photosAndVideos)
+            #expect(model.scanBothSession?.sharedReview?.blockingMessage?.contains("Not enough space") == true)
+            model.startSharedScanBothImports()
+            #expect(!model.isWorking)
+            #expect(model.scanBothSession?.hasStartedImports == false)
+            let files = try FileManager.default.contentsOfDirectory(atPath: roots.photosURL.path)
+            #expect(files.isEmpty)
+        }
+    }
+
+    @Test("the shared review blocks a cross-volume filename collision before any copy")
+    func blocksSharedFilenameCollision() async throws {
+        try await withScannedInlinePlans(populateSources: { internalFolder, cardFolder in
+            try Data("internal".utf8).write(to: internalFolder.appendingPathComponent("IMG_001.jpg"))
+            try Data("card".utf8).write(to: cardFolder.appendingPathComponent("IMG_001.jpg"))
+        }) { model, session, roots in
+            model.updateSharedScanBothReview(\.mediaSelection, to: .photosAndVideos)
+            model.updateSharedScanBothReview(\.folderGrouping, to: .oneShootFolder)
+            #expect(model.scanBothSession?.sharedReview?.blockingMessage?.contains("IMG_001.jpg") == true)
+            model.startSharedScanBothImports()
+            #expect(model.scanBothSession?.hasStartedImports == false)
+            #expect(try FileManager.default.contentsOfDirectory(atPath: roots.photosURL.path).isEmpty)
+            model.skipScanBothImport(session.entries[1].id)
+            #expect(model.scanBothSession?.sharedReview?.blockingMessage == nil)
+            model.startSharedScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1])
+        }
+    }
+
+    @Test("a changed second destination stops the whole batch and appears in the shared review")
+    func refreshesBothVolumesBeforeStarting() async throws {
+        try await withScannedInlinePlans { model, session, roots in
+            model.updateSharedScanBothReview(\.mediaSelection, to: .photosAndVideos)
+            let cardID = session.entries[1].id
+            let path = try #require(model.scanBothSession?.sharedReview?.volumes[cardID]?.rows.first?.destinationPath)
+            let planned = URL(fileURLWithPath: path)
+            try FileManager.default.createDirectory(at: planned.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("conflicting destination".utf8).write(to: planned)
+
+            model.startSharedScanBothImports()
+
+            #expect(model.scanBothSession?.hasStartedImports == false)
+            #expect(model.folderAccessFeedback?.text.contains("The import plan changed") == true)
+            let refreshed = model.scanBothSession?.sharedReview?.volumes[cardID]?.rows.first?.destinationPath
+            #expect(refreshed != path)
+            #expect(try FileManager.default.subpathsOfDirectory(atPath: roots.photosURL.path).allSatisfy {
+                !$0.hasSuffix("Internal.jpg")
+            })
+        }
+    }
+
+    @Test("the shared plan refuses to start if a scanned source folder disappears")
+    func blocksSharedPlanWhenSecondSourceIsGone() async throws {
+        try await withScannedInlinePlans { model, session, roots in
+            let card = session.entries[1].volume
+            let moved = card.mountURL.deletingLastPathComponent().appendingPathComponent("Removed")
+            try FileManager.default.moveItem(at: card.mountURL, to: moved)
+            model.startSharedScanBothImports()
+            #expect(model.scanBothSession?.hasStartedImports == false)
+            let jobID = try #require(model.scanBothSession?.entries[1].jobID)
+            #expect(model.needsRescan(jobID))
+            let files = try FileManager.default.contentsOfDirectory(atPath: roots.photosURL.path)
+            #expect(files.isEmpty)
+        }
+    }
+
+    @Test("a re-import choice in the shared review stays with its source volume")
+    func appliesSharedReimportToOneVolume() async throws {
+        try await withScannedInlinePlans { model, session, roots in
+            model.startSharedScanBothImports()
+            try await waitForImport(model)
+            try #require(model.scanBothSession?.entries.allSatisfy { $0.result?.importedFiles == 1 } == true)
+
+            model.beginScanBoth(session)
+            try await waitForImport(model)
+            model.setScanBothDestination(roots.videosURL)
+            let internalID = session.entries[0].id
+            let cardID = session.entries[1].id
+            let review = try #require(model.scanBothSession?.sharedReview)
+            let eligibleFile = review.volumes[internalID]?.rows.first(where: \.canReimport)
+            let known = try #require(eligibleFile)
+            #expect(review.volumes[internalID]?.totals.copyFiles == 0)
+            #expect(review.volumes[cardID]?.totals.copyFiles == 0)
+
+            model.setReimportSelection([known.id], requested: true, volumeID: internalID)
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.sharedReview?.volumes[internalID]?.totals.copyFiles == 1)
+            #expect(model.scanBothSession?.sharedReview?.volumes[cardID]?.totals.copyFiles == 0)
+
+            model.setReimportSelection([known.id], requested: false, volumeID: internalID)
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.sharedReview?.volumes[internalID]?.totals.copyFiles == 0)
         }
     }
 

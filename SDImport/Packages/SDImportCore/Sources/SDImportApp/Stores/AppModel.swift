@@ -24,6 +24,7 @@ struct ScanBothSession {
         let destinations: ReviewedImportDestinations
         let copyFileCount: Int
         let destinationPaths: [String]
+        var sharedBuilder: ImportPlanBuilder?
     }
 
     struct Entry: Identifiable {
@@ -98,6 +99,7 @@ struct ScanBothSession {
 
     let deviceName: String
     var entries: [Entry]
+    var sharedReview: ScanBothReview?
     var removedMountPaths: Set<String> = []
     var reviewingJobID: String?
     private(set) var destinationRoot: ReviewedImportDestinations.Root?
@@ -256,6 +258,17 @@ struct ScanBothSession {
         entries[index].draft = nil
         entries[index].reviewNeedsAttention = false
         entries[index].confirmation = nil
+    }
+
+    func canInclude(_ entry: Entry) -> Bool {
+        guard !hasStartedImports, case .skipped = entry.disposition,
+              entry.summary != nil, !removedMountPaths.contains(entry.volume.mountPath) else { return false }
+        return true
+    }
+
+    mutating func includeEntry(_ id: UUID) {
+        guard let index = entries.firstIndex(where: { $0.id == id && canInclude($0) }) else { return }
+        entries[index].disposition = .pending
     }
 
     mutating func recordImportDestinations(_ paths: Set<String>?, for jobID: String) {
@@ -915,11 +928,6 @@ final class AppModel: ObservableObject {
     var isScanBothPlanLocked: Bool {
         isReviewingScanBothVolume && scanBothSession?.hasStartedImports == true
     }
-    var scanBothReviewDisconnectMessage: String? {
-        guard let session = scanBothSession, let entry = session.reviewingEntry,
-              session.removedMountPaths.contains(entry.volume.mountPath) else { return nil }
-        return L10n.tr("Card is not mounted")
-    }
     private var reviewSharedDestinationPath: String? {
         isReviewingScanBothVolume ? scanBothSession?.destinationPath : nil
     }
@@ -1359,6 +1367,7 @@ final class AppModel: ObservableObject {
             return
         }
         folderAccessFeedback = nil
+        rebuildSharedScanBothReview()
         if isReviewingScanBothVolume {
             destinationPathDidChange()
         }
@@ -2451,13 +2460,15 @@ final class AppModel: ObservableObject {
         return components.joined(separator: "/")
     }
 
-    private func buildPreviewSpaceRequirements(rows: [ImportPreviewRow]) -> [ImportPreviewSpaceRequirement] {
+    private func buildPreviewSpaceRequirements(
+        rows: [ImportPreviewRow], usingPlanHistory: Bool = false
+    ) -> [ImportPreviewSpaceRequirement] {
         var grouped: [String: (capacity: VolumeCapacity, requiredBytes: Int64)] = [:]
         var unknownRequirements: [ImportPreviewSpaceRequirement] = []
         let rowsNeedingSpace = rows.filter { row in
             row.willCopy
                 && row.size > 0
-                && (isReviewingScanBothVolume || !isKnownImportedFile(row))
+                && (usingPlanHistory || isReviewingScanBothVolume || !isKnownImportedFile(row))
         }
         let requiredByDirectory = Dictionary(grouping: rowsNeedingSpace) { row in
             row.destinationPath.map {
@@ -2646,15 +2657,29 @@ final class AppModel: ObservableObject {
         return plan
     }
 
-    func setReimportSelection(_ fileIDs: Set<Int64>, requested: Bool) {
+    func setReimportSelection(_ fileIDs: Set<Int64>, requested: Bool, volumeID: UUID? = nil) {
         guard !isWorking, !isEjectingSource, !isScanBothPlanLocked, importUIPhase == .review,
-              let jobID = currentSummary?.jobID, let databaseURL else { return }
+              let databaseURL else { return }
+        let jobID: String
+        let rows: [ImportPreviewRow]
+        if let volumeID {
+            guard let session = scanBothSession, !session.hasStartedImports,
+                  let entry = session.entries.first(where: { $0.id == volumeID && $0.awaitsImport }),
+                  let id = entry.jobID, !needsRescan(id),
+                  let volumePlan = session.sharedReview?.volumes[volumeID] else { return }
+            jobID = id
+            rows = volumePlan.rows
+        } else {
+            guard let id = currentSummary?.jobID else { return }
+            jobID = id
+            rows = previewRows
+        }
 
         // Treat a multi-lens recording as one selection, even from a single lens row.
-        let recordings = Set(previewRows.compactMap { row in
+        let recordings = Set(rows.compactMap { row in
             fileIDs.contains(row.id) && row.visualGroupKind == .insta360Clip ? row.visualGroupID : nil
         })
-        let selectedIDs = Set(previewRows.compactMap { row -> Int64? in
+        let selectedIDs = Set(rows.compactMap { row -> Int64? in
             guard requested ? row.canReimport : row.canSkipReimport else { return nil }
             let selectedRecording = row.visualGroupKind == .insta360Clip
                 && row.visualGroupID.map(recordings.contains) == true
@@ -2683,6 +2708,12 @@ final class AppModel: ObservableObject {
 
                 await MainActor.run {
                     guard self.importAttempt?.accepts(attemptID) == true else { return }
+                    if volumeID != nil {
+                        self.loadSharedScanBothReview()
+                        if self.selectedJobID == jobID { self.selectedJobFiles = files }
+                        self.finishImportAttempt(attemptID, event: .endAuxiliaryOperation)
+                        return
+                    }
                     self.refreshScanBothReviewHistory(files: files)
                     self.currentPreviewFiles = files
                     if self.selectedJobID == jobID {
@@ -3308,6 +3339,9 @@ final class AppModel: ObservableObject {
         sourcePathDidChange()
         resetImportDraftFromDefaults()
         selection = .import
+        session.sharedReview = ScanBothReview(
+            shootName: location, mediaSelection: importMediaSelection, folderGrouping: folderGrouping
+        )
         let sharedPhotos = validateScanBothDestination(photosPath)
         let sharedVideos = validateScanBothDestination(videosPath)
         if sharedPhotos.isUsable, sharedVideos.isUsable,
@@ -3339,6 +3373,7 @@ final class AppModel: ObservableObject {
                 )
             } else {
                 statusMessage = ""
+                loadSharedScanBothReview()
                 finishScanAttempt(attemptID, event: .scanSucceeded)
             }
         }
@@ -3352,7 +3387,7 @@ final class AppModel: ObservableObject {
                 path: sourceURL.path, purpose: .source, allowsWhitespaceFallback: false
             )
             guard validation.isUsable else { throw ScanBothIssue.failed(validation.message) }
-            // The individual review checks destinations using the shared folder and the confirmed plan options.
+            // Destination paths are planned after both sources have been scanned.
             let request = scanRequest(
                 mountURL: URL(fileURLWithPath: validation.expandedPath, isDirectory: true),
                 sourceVolume: volume, plansDestinations: false
@@ -3417,6 +3452,211 @@ final class AppModel: ObservableObject {
     private func liveScanBothVolume(matching volume: MountedVolume) -> MountedVolume? {
         guard scanBothSession?.removedMountPaths.contains(volume.mountPath) == false else { return nil }
         return scanBothMountLookup(volume)
+    }
+
+    func updateSharedScanBothReview<Value>(_ field: WritableKeyPath<ScanBothReview, Value>, to value: Value) {
+        guard !isWorking, !isEjectingSource, scanBothSession?.hasStartedImports == false else { return }
+        scanBothSession?.sharedReview?[keyPath: field] = value
+        folderAccessFeedback = nil
+        rebuildSharedScanBothReview()
+    }
+
+    func includeScanBothImport(_ entryID: UUID) {
+        guard !isWorking, !isEjectingSource else { return }
+        scanBothSession?.includeEntry(entryID)
+        folderAccessFeedback = nil
+        rebuildSharedScanBothReview()
+    }
+
+    @discardableResult
+    private func loadSharedScanBothReview() -> Bool {
+        guard var session = scanBothSession, var review = session.sharedReview,
+              let jobRepository, let dedupeRepository else { return false }
+        do {
+            for entry in session.entries {
+                guard let summary = entry.summary, !session.removedMountPaths.contains(entry.volume.mountPath) else {
+                    review.sources[entry.id] = nil
+                    continue
+                }
+                let files = try jobRepository.fetchJobFiles(jobID: summary.jobID)
+                let engine = ImportEngine(
+                    jobRepository: jobRepository, dedupeRepository: dedupeRepository,
+                    portableReceiptsEnabled: portableImportReceiptsEnabled, reviewedSourceFiles: entry.reviewedSourceFiles
+                )
+                review.sources[entry.id] = ScanBothReview.Source(
+                    files: files, history: engine.refreshedReviewHistory(files: files, sourcePath: summary.mountPath)
+                )
+            }
+            session.sharedReview = review
+            scanBothSession = session
+            rebuildSharedScanBothReview()
+            return true
+        } catch {
+            showFolderAccessError { Self.errorMessage(for: error) }
+            return false
+        }
+    }
+
+    private func rebuildSharedScanBothReview() {
+        guard var session = scanBothSession, var review = session.sharedReview else { return }
+        // A single shoot uses the same capture-date range for every included volume.
+        if !session.hasStartedImports {
+            let files = session.entries.filter(\.awaitsImport).flatMap { review.sources[$0.id]?.files ?? [] }
+            review.sessions = makePreviewSessions(
+                files: files.filter { review.mediaSelection.includes($0.mediaKind) },
+                defaultLabel: review.shootName, existing: [:],
+                inclusion: (review.mediaSelection.includes(.photo), review.mediaSelection.includes(.video), false)
+            )
+        }
+        let root = session.destinationRoot
+        let usableRoot = root.flatMap { $0.matches() ? $0 : nil }
+        review.volumes = Dictionary(uniqueKeysWithValues: session.entries.compactMap { entry in
+            guard let summary = entry.summary, let source = review.sources[entry.id] else { return nil }
+            let volume = makeSharedScanBothVolumePlan(
+                summary: summary, source: source, review: review, root: usableRoot
+            )
+            return (entry.id, volume)
+        })
+        review.blockingMessage = sharedScanBothBlockingMessage(session: session, review: review)
+        session.sharedReview = review
+        scanBothSession = session
+    }
+
+    private func makeSharedScanBothVolumePlan(
+        summary: ScanSummary, source: ScanBothReview.Source, review: ScanBothReview,
+        root: ReviewedImportDestinations.Root?
+    ) -> ScanBothReview.VolumePlan {
+        guard let root else {
+            let plans = source.files.map { file in
+                let disposition = file.knownSource.map { ImportPlanDisposition.known($0) } ?? .notReady
+                return ImportFilePlan(update: nil, willCopy: false, disposition: disposition, destinationPath: nil)
+            }
+            return ScanBothReview.VolumePlan(
+                rows: makePreviewRows(files: source.files, plans: plans), totals: .empty, paths: [], confirmation: nil
+            )
+        }
+        let draft = ImportDraft(
+            sourcePath: summary.mountPath, photosPath: root.url.path, videosPath: root.url.path,
+            shootName: review.shootName, workflowProfile: .mixedShootSession,
+            mediaSelection: review.mediaSelection, destinationLayout: .singleLibrary,
+            folderGrouping: review.folderGrouping, sessions: review.sessions
+        )
+        let builder = ImportPlanBuilder(
+            sessions: review.sessions, mediaSelection: review.mediaSelection,
+            organizationPreset: draft.destinationLayout.organizationPreset, folderGrouping: review.folderGrouping,
+            roots: DestinationRoots(photosURL: root.resolvedURL, videosURL: root.resolvedURL),
+            fallbackLocation: Self.defaultSessionLabel(for: review.shootName), volumeName: summary.volumeName
+        )
+        let plans = builder.plans(files: source.files, refreshedHistory: source.history)
+        let rows = makePreviewRows(files: source.files, plans: plans)
+        let totals = buildPreviewTotals(rows: rows)
+        let paths = Set(plans.compactMap { plan in
+            plan.willCopy ? plan.destinationPath.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path } : nil
+        }).sorted()
+        let confirmation = ReviewedImportDestinations(plans: plans, root: root).map {
+            ScanBothSession.Confirmation(
+                draft: draft, plans: plans, destinations: $0, copyFileCount: totals.copyFiles,
+                destinationPaths: paths, sharedBuilder: builder
+            )
+        }
+        return ScanBothReview.VolumePlan(rows: rows, totals: totals, paths: paths, confirmation: confirmation)
+    }
+
+    private func sharedScanBothBlockingMessage(session: ScanBothSession, review: ScanBothReview) -> String? {
+        guard session.destinationRoot != nil else { return nil }
+        let pending = session.entries.filter(\.awaitsImport)
+        guard !pending.isEmpty else { return nil }
+        let volumes = pending.compactMap { review.volumes[$0.id] }
+        if volumes.contains(where: \.hasConflict) {
+            return L10n.tr("Resolve filename conflicts before starting imports.")
+        }
+        if volumes.count != pending.count || volumes.contains(where: { $0.confirmation == nil }) {
+            return L10n.tr("The destination folder is unavailable.")
+        }
+        let approvals = volumes.compactMap(\.confirmation)
+        if approvals.count == 2,
+           let filename = approvals[0].destinations.firstFilenameCollision(
+               in: approvals[0].plans, with: approvals[1].destinations, siblingPlans: approvals[1].plans
+           ) {
+            return L10n.tr("Both volumes target \(filename) in the same folder. Skip one volume to continue.")
+        }
+        if let failure = buildPreviewSpaceRequirements(
+            rows: volumes.flatMap(\.rows), usingPlanHistory: true
+        ).first(where: { !$0.isSatisfied }) {
+            return failure.isKnown ? L10n.tr("Not enough space in \(failure.displayPath)")
+                : L10n.tr("Could not check available space in \(failure.displayPath)")
+        }
+        return nil
+    }
+
+    var canStartSharedScanBothImports: Bool {
+        guard !isWorking, !isEjectingSource,
+              let session = scanBothSession, let review = session.sharedReview,
+              session.destinationRoot != nil, session.entries.allSatisfy({ entry in
+                  entry.isResolved || entry.awaitsImport && entry.jobID.map { !needsRescan($0) } == true
+              }) else { return false }
+        return !review.queuedEntries(in: session).isEmpty || review.blockingMessage != nil
+    }
+
+    func startSharedScanBothImports() {
+        guard canStartSharedScanBothImports, let previous = scanBothSession?.sharedReview,
+              let session = scanBothSession else { return }
+        guard let root = session.destinationRoot, root.matches(), scanBothDestinationValidation.isUsable,
+              !scanBothDestinationNeedsAccess else {
+            showFolderAccessError { [weak self] in
+                self?.scanBothDestinationChangeMessage ?? L10n.tr("Choose usable destination folders")
+            }
+            return
+        }
+        for volume in session.plannedCopyVolumes where liveScanBothVolume(matching: volume) == nil {
+            invalidateScansAtUnmount(volume.mountURL)
+            showFolderAccessError { Self.importDisconnectedMessage(volume.name) }
+            return
+        }
+        guard loadAndValidateSharedScanBothReview(previous, session: session) else { return }
+        guard purchaseManager.canStartImport else {
+            purchaseManager.isShowingPurchase = true
+            return
+        }
+        guard let refreshed = scanBothSession?.sharedReview, !refreshed.queuedEntries(in: session).isEmpty else { return }
+        for entry in session.entries where entry.awaitsImport {
+            guard let jobID = entry.jobID, let volume = refreshed.volumes[entry.id] else { return }
+            if volume.totals.copyFiles == 0 {
+                scanBothSession?.skipEntry(entry.id)
+            } else {
+                scanBothSession?.setConfirmation(volume.confirmation, for: jobID)
+            }
+        }
+        folderAccessFeedback = nil
+        isRunningScanBothImports = true
+        startNextScanBothImport()
+    }
+
+    private func loadAndValidateSharedScanBothReview(_ previous: ScanBothReview, session: ScanBothSession) -> Bool {
+        guard loadSharedScanBothReview(), let refreshed = scanBothSession?.sharedReview else { return false }
+        if let message = refreshed.blockingMessage {
+            showFolderAccessError { message }
+            return false
+        }
+        for entry in session.entries where entry.awaitsImport {
+            guard let summary = entry.summary, let files = refreshed.sources[entry.id]?.files,
+                  let volume = refreshed.volumes[entry.id], let confirmation = volume.confirmation else { return false }
+            let validation = PathValidator().validate(path: summary.mountPath, purpose: .source, allowsWhitespaceFallback: false)
+            guard validation.isUsable,
+                  entry.reviewedSourceFiles.map({
+                      ReviewedFileIdentity.matchesSources(of: confirmation.plans, files: files, scanned: $0)
+                  }) != false else {
+                requireRescan(for: summary.jobID)
+                return false
+            }
+            let shown = previous.volumes[entry.id]
+            guard volume.rows == shown?.rows, confirmation.plans == shown?.confirmation?.plans,
+                  shown?.confirmation?.destinations.matches() == true else {
+                showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
+                return false
+            }
+        }
+        return true
     }
 
     func reviewScanBothVolume(_ entryID: UUID) {
@@ -3486,6 +3726,24 @@ final class AppModel: ObservableObject {
             showFolderAccessError { Self.importDisconnectedMessage(missing.name) }
             return
         }
+        if let builder = confirmation.sharedBuilder {
+            guard confirmation.destinations.matches() else {
+                scanBothSession?.setConfirmation(nil, for: summary.jobID)
+                returnToScanBothResults()
+                showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
+                return
+            }
+            activateSharedScanBothVolume(summary)
+            let siblingApprovals = session.entries.compactMap { sibling in
+                sibling.id == entry.id ? nil : sibling.confirmation?.destinations
+            }
+            startImport(
+                jobID: summary.jobID, databaseURL: databaseURL,
+                builder: builder, approvedPlans: confirmation.plans,
+                reviewedDestinations: confirmation.destinations.sharingMaterializedDirectories(with: siblingApprovals)
+            )
+            return
+        }
         guard openScanBothVolume(entry, summary: summary) else {
             scanBothSession?.setConfirmation(nil, for: summary.jobID)
             return
@@ -3502,6 +3760,16 @@ final class AppModel: ObservableObject {
             builder: plan.builder, approvedPlans: confirmation.plans,
             reviewedDestinations: confirmation.destinations.sharingMaterializedDirectories(with: siblingApprovals)
         )
+    }
+
+    private func activateSharedScanBothVolume(_ summary: ScanSummary) {
+        scanBothSession?.reviewingJobID = summary.jobID
+        currentSummary = summary
+        rescanContext = nil
+        insta360RescanRecovery = nil
+        folderAccessFeedback = nil
+        currentPreviewFiles = []
+        recoverImportWorkspace()
     }
 
     private func openScanBothVolume(_ entry: ScanBothSession.Entry, summary: ScanSummary) -> Bool {
@@ -3584,6 +3852,7 @@ final class AppModel: ObservableObject {
         clearPreviewPlanCache()
         resetImportDraftFromDefaults()
         transitionImportWorkspace(.recover(hasScannedJob: true))
+        loadSharedScanBothReview()
     }
 
     func skipScanBothImport(_ entryID: UUID) {
@@ -3593,6 +3862,7 @@ final class AppModel: ObservableObject {
             returnToScanBothResults()
         }
         scanBothSession?.skipEntry(entryID)
+        rebuildSharedScanBothReview()
         if folderAccessFeedbackIsScanBothCollision {
             folderAccessFeedback = nil
         }
@@ -4811,6 +5081,7 @@ final class AppModel: ObservableObject {
 
         try dedupeRepository.forgetImportedFiles(jobID: job.id)
         refreshHistory()
+        loadSharedScanBothReview()
     }
 
     func selectedJob() -> ImportJob? {
@@ -5295,10 +5566,11 @@ final class AppModel: ObservableObject {
     private func makePreviewSessions(
         files: [JobFileRecord],
         defaultLabel: String,
-        existing: [String: ImportPreviewSession]
+        existing: [String: ImportPreviewSession],
+        inclusion: (photos: Bool, videos: Bool, sidecars: Bool)? = nil
     ) -> [ImportPreviewSession] {
         let grouped = Dictionary(grouping: files) { ImportPlanBuilder.sessionDate(for: $0) }
-        let defaults = defaultDateInclusion
+        let defaults = inclusion ?? defaultDateInclusion
         let normalizedDefaultLabel = Self.defaultSessionLabel(for: defaultLabel)
         let cardHasVideos = files.contains { $0.mediaKind == .video }
 

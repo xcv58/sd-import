@@ -198,17 +198,26 @@ public struct ReviewedImportDestinations: Sendable {
     public func firstRecordingFilenameCollision(
         in plans: [ImportFilePlan], with sibling: Self, siblingPlans: [ImportFilePlan]
     ) -> String? {
-        let destinations = Set(recordingCopyDestinations(in: plans).map(\.key))
-        guard !destinations.isEmpty else { return nil }
-        return sibling.recordingCopyDestinations(in: siblingPlans).first { destinations.contains($0.key) }?.filename
+        firstFilenameCollision(in: plans, with: sibling, siblingPlans: siblingPlans, recordingOnly: true)
     }
 
-    private func recordingCopyDestinations(in plans: [ImportFilePlan]) -> [(key: String, filename: String)] {
+    public func firstFilenameCollision(
+        in plans: [ImportFilePlan], with sibling: Self, siblingPlans: [ImportFilePlan], recordingOnly: Bool = false
+    ) -> String? {
+        let destinations = Set(copyDestinations(in: plans, recordingOnly: recordingOnly).map(\.key))
+        guard !destinations.isEmpty else { return nil }
+        return sibling.copyDestinations(in: siblingPlans, recordingOnly: recordingOnly)
+            .first { destinations.contains($0.key) }?.filename
+    }
+
+    private func copyDestinations(
+        in plans: [ImportFilePlan], recordingOnly: Bool
+    ) -> [(key: String, filename: String)] {
         var caseSensitivity: [URL: Bool] = [:]
         return plans.compactMap { plan in
             guard plan.willCopy, let path = plan.destinationPath else { return nil }
             let url = URL(fileURLWithPath: path)
-            guard Insta360ClipDetector.isProprietaryRecordingExtension(url.pathExtension),
+            guard !recordingOnly || Insta360ClipDetector.isProprietaryRecordingExtension(url.pathExtension),
                   let directory = directories[url.deletingLastPathComponent().path] else { return nil }
 
             let ancestor = directory.resolvedAncestor

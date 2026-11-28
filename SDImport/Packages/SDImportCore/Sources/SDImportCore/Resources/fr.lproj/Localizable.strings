@@ -663,3 +663,7 @@
 "The plan includes both Insta360 lens files in the selected destination." = "Le plan inclut les deux fichiers d’objectif Insta360 dans la destination sélectionnée.";
 "The source is missing an Insta360 lens file. Scan the folder containing both files." = "Il manque un fichier d’objectif Insta360 dans la source. Analysez le dossier qui contient les deux fichiers.";
 "An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "Un fichier d’objectif Insta360 existant n’a pas pu être vérifié. Choisissez un autre dossier pour les deux fichiers.";
+"Resolve filename conflicts before starting imports." = "Résolvez les conflits de noms de fichiers avant de lancer les imports.";
+"Both volumes target %@ in the same folder. Skip one volume to continue." = "Les deux volumes prévoient de copier %@ dans le même dossier. Ignorez un volume pour continuer.";
+"Import order" = "Ordre d’importation";
+"Include" = "Inclure";
