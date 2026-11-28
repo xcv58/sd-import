@@ -78,14 +78,12 @@ struct HistoryDetailView: View {
                 Text(HistoryJobPresentation.title(for: job))
                     .font(.title2)
                     .fontWeight(.semibold)
+                if job.localTracking == .forgotten {
+                    HistoryForgottenBadge()
+                }
                 Text(HistoryJobPresentation.subtitle(for: job))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                if let localTrackingStatus = HistoryJobPresentation.localTrackingStatus(for: job) {
-                    Text(localTrackingStatus)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
                 Text(job.id)
                     .font(.caption)
                     .foregroundStyle(.secondary)

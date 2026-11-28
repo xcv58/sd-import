@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%1$@ · 已跳过 %2$lld";
 "%@ · Nothing selected" = "%1$@ · 未选择任何文件";
 "%@, %@" = "%1$@，%2$@";
-"%@, %@, %lld files, %@" = "%1$@，%2$@，%3$lld 个文件，%4$@";
+"%@, %@, %@, %@" = "%1$@，%2$@，%3$@，%4$@";
 "%@, excluded by Copy selection" = "%1$@，已被复制选项排除";
 "%lld" = "%1$lld";
 "%lld attention" = "%1$lld 项需注意";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%1$lld，共 %2$lld";
 "%lld old jobs would be deleted" = "将删除 %1$lld 个旧任务";
 "%lld photos" = "%1$lld 张照片";
-"%lld scanned files · %@" = "已扫描 %1$lld 个文件 · %2$@";
 "%lld support files" = "%1$lld 个支持文件";
 "%lld videos" = "%1$lld 个视频";
 "1 copy" = "1 次复制";
@@ -68,9 +67,11 @@
 "Include All Previously Imported Files" = "包括所有已导入的文件";
 "Skip Again" = "再次跳过";
 "Start Imports" = "开始导入";
+"%@ and %@ both target %@ in the same folder. Change one volume’s Shoot name or Folder label in Customize Dates, or skip that volume." = "%@ 和 %@ 都会将 %@ 复制到同一文件夹。请更改一个卷的拍摄名称，或在“自定义日期”中更改文件夹标签，也可以跳过该卷。";
 "Updating re-import selection…" = "正在更新重新导入选择…";
 "macOS needs your permission to read this source." = "macOS 需要你的许可才能读取此来源。";
 "Allow Access to %@" = "允许访问 %1$@";
+"Allow Access to Original Destinations" = "允许访问原目标文件夹";
 "Allow Access to Source" = "允许访问来源";
 "Allow Scan" = "允许扫描";
 "Already Exists" = "已存在";
@@ -125,6 +126,7 @@
 "Choose SD Card or Source Folder" = "选择 SD 卡或来源文件夹";
 "Choose Video Destination" = "选择视频目标位置";
 "Choose a card or source folder" = "选择存储卡或来源文件夹";
+"Choose %@ to restore access." = "请选择%@以恢复访问权限。";
 "Choose a destination folder" = "选择目标文件夹";
 "Choose a folder" = "选择文件夹";
 "Choose a retention period to preview or delete old history." = "选择保留期限，以预览或删除旧历史。";
@@ -185,6 +187,7 @@
 "Could not save settings: %@" = "无法保存设置：%1$@";
 "Could not update background helper diagnostics" = "无法更新后台辅助程序诊断信息";
 "Could not update background prompt: %@" = "无法更新后台提示：%1$@";
+"Continue Without Access" = "不授权并继续";
 "Couldn’t Continue" = "无法继续";
 "Couldn’t check available space · %@ planned" = "无法检查可用空间 · 计划使用 %1$@";
 "Crash Reports" = "崩溃报告";
@@ -292,6 +295,7 @@
 "Imported with errors" = "已导入，但有错误";
 "Importing" = "正在导入";
 "Importing %lld of %lld files" = "正在导入 %1$lld/%2$lld 个文件";
+"Importing %lld of 1 file" = "正在导入 %lld/1 个文件";
 "Importing %lld%% at %@/s" = "正在导入 %1$lld%%，速度 %2$@/秒";
 "Include camera support files (%lld)" = "包含相机支持文件（%1$lld）";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "在视频素材备份中包含元数据、代理、音频、缩略图和其他相机支持文件。";
@@ -496,6 +500,8 @@
 "Settings…" = "设置…";
 "Setup failed" = "设置失败";
 "Setup skipped. Defaults can be changed in Settings." = "已跳过设置。可在“设置”中更改默认值。";
+"Plan settings are locked after imports start." = "开始导入后，计划设置将锁定。";
+"Shared Destination" = "共用目标文件夹";
 "Shareable with Family Sharing" = "可通过家人共享";
 "Shoot" = "拍摄";
 "Shoot name" = "拍摄名称";
@@ -547,6 +553,7 @@
 "The bundled background helper could not be found. Reinstall %@ in Applications." = "找不到内置后台辅助程序。请将 %1$@ 重新安装到“应用程序”。";
 "The current scan and review will be discarded. No copied files are deleted." = "将丢弃当前扫描和预览结果，不会删除任何已复制的文件。";
 "The destination folder is unavailable." = "目标文件夹不可用。";
+"The shared destination changed. Choose the folder again." = "共用目标文件夹已改变。请重新选择文件夹。";
 "The import database contains an invalid value." = "导入数据库包含无效值。";
 "The portable import ledger is not a regular file at %@" = "%1$@ 处的便携导入账本不是常规文件";
 "The portable import ledger is too large (%@)" = "便携导入账本过大（%1$@）";
@@ -596,7 +603,7 @@
 "macOS returned an unrecognized background helper status." = "macOS 返回了无法识别的后台辅助程序状态。";
 "used %lld times" = "已使用 %1$lld 次";
 "used once" = "已使用 1 次";
-"└─ %@ · %lld files · %@" = "└─ %1$@ · %2$lld 个文件 · %3$@";
+"└─ %@ · %@ · %@" = "└─ %1$@ · %2$@ · %3$@";
 "14-day trial available" = "可开始 14 天试用";
 "Buy Lifetime for %@" = "以 %@ 买断";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "每张存储卡都可免费预览。开始试用或一次性购买，即可不限次数完成导入。";
@@ -633,7 +640,9 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "请重试。如果你已经激活试用或购买了终身使用权限，请选择“恢复购买”。";
 "The import plan changed. Review it before copying." = "导入计划已更改。请在复制前重新检查。";
 "Reconnect the original card or restore its source folder, then retry." = "重新连接原来的存储卡或恢复其源文件夹，然后重试。";
+"SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan." = "允许访问文件夹后，SD Card Import 可以检查已复制的 Insta360 文件。如果不授权就继续，这些文件可能会出现在新的导入计划中。";
 "Scan Both" = "扫描两者";
+"Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "“扫描两者”会为两个卷使用同一个目标文件夹。若要导入到其他位置，请单独选择一个卷。";
 "Choose one or both storage volumes to scan." = "选择一个或两个存储卷进行扫描。";
 "Access declined" = "访问权限已拒绝";
 "Review scan results" = "查看扫描结果";
@@ -642,6 +651,7 @@
 "%lld files scanned" = "已扫描 %lld 个文件";
 "Review %@" = "查看 %@";
 "Rescan Source" = "重新扫描来源";
+"Restore the original destination folder or start a new scan." = "请恢复原目标文件夹或开始新的扫描。";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "开始新的扫描会结束本次双卷扫描。剩余的存储卷需要重新扫描。";
 "Import stopped because %@ disconnected." = "%@ 已断开连接，导入已停止。";
 "Discard pending scan results?" = "要丢弃尚未导入的扫描结果吗？";

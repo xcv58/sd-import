@@ -98,6 +98,22 @@
 			<string>%1$lld 個檔案已就緒</string>
 		</dict>
 	</dict>
+	<key>%lld files scanned</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>已掃描 %lld 個檔案</string>
+			<key>other</key>
+			<string>已掃描 %lld 個檔案</string>
+		</dict>
+	</dict>
 	<key>%lld files were imported on another Mac</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

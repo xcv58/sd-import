@@ -83,27 +83,40 @@ in USB file-transfer mode. Use a camera with media on both storage volumes.
 Record the build number and per-volume counts.
 
 1. Confirm the two volumes appear in one prompt with individual choices and
-   **Scan Both**. If the mounts are staggered, confirm the second volume joins
-   the open prompt.
+   **Scan Both**. Confirm the prompt explains that both volumes use one
+   destination. If the mounts are staggered, confirm the second volume joins the
+   open prompt.
 2. Select **Scan Both** and grant folder access when macOS asks. Confirm
    internal storage finishes scanning before the SD card starts scanning.
-3. Confirm the review shows each volume's label, sample filenames, and file
-   count. Open each volume's **Review import** and check its file list and
-   destination. Choose **Confirm Plan** and check the volume is **Ready**
-   and the destination is still empty. Confirm both, then choose **Start
-   Imports** once. Watch Internal copy first and SD Card follow without an
-   additional prompt. Check the receipt and History for both imports.
+3. Confirm the review shows both volumes with their scan counts and any
+   warnings. Choose a **Shared Destination**. Open each volume's **Review
+   import** to check its file list and planned folders on the same page.
+   Choose **Confirm Plan** and check the volume is **Ready** and the
+   destination is still empty. Change the shared destination and confirm both
+   plans require confirmation again. Confirm both, then choose **Start
+   Imports** once. Watch Internal copy first and SD Card follow. Verify that
+   both imported into the chosen destination, then check the receipt and
+   History for both imports.
 4. Repeat and decline access to one volume when asked. Confirm the skipped
    volume shows its reason and the sibling's scan result remains available.
    If the device can unmount one volume separately, repeat by safely
    unmounting that volume before its scan starts.
 5. Reconnect and choose one volume directly. Confirm the app opens that volume's
    import review.
-6. Open a volume's **Review import** and grant access to a temporary destination.
-   In Settings, choose a different default destination for the same media type.
-   Return to Import, go back to the combined results, and reopen the volume.
-   Confirm the custom destination still has access and **Confirm Plan** is
-   available. Repeat with a review that started with the previous default.
+6. Grant access to a temporary **Shared Destination**. In Settings, choose a
+   different default destination. Return to Import and open each plan. Confirm
+   the shared destination still has access and **Confirm Plan** is available
+   for each. Edit the shoot label and choose **Use as Defaults**. Verify that
+   Settings keeps the new default destination. Repeat with a review that started
+   with the previous shared default.
+7. Interrupt an Insta360 import after the first lens file copies. Open the
+   other volume's plan and choose **Rescan Source** for the interrupted volume.
+   Confirm the fresh review can copy the remaining lens beside the first.
+8. Rescan an interrupted Insta360 import whose original destination grant is
+   unavailable. Confirm the app offers the original folder, including when the
+   latest attempt was interrupted before copying. Cancel the access prompt or
+   folder picker and verify the current review stays open. Repeat and choose
+   **Continue Without Access**. Confirm the app opens a fresh review before copying.
 
 On November 25, 2026, internal TestFlight 1.2 (40) passed on an Insta360 Luna
 Ultra with two exFAT volumes on macOS 27.3. The SD Card joined the open

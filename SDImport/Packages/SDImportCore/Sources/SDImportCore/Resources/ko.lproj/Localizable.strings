@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%1$@ · 건너뜀 %2$lld";
 "%@ · Nothing selected" = "%1$@ · 선택 없음";
 "%@, %@" = "%1$@, %2$@";
-"%@, %@, %lld files, %@" = "%1$@, %2$@, 파일 %3$lld개, %4$@";
+"%@, %@, %@, %@" = "%1$@, %2$@, %3$@, %4$@";
 "%@, excluded by Copy selection" = "%1$@, 복사 선택에 의해 제외됨";
 "%lld" = "%1$lld";
 "%lld attention" = "주의 필요 %1$lld개";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%1$lld / %2$lld";
 "%lld old jobs would be deleted" = "이전 작업 %1$lld개가 삭제됩니다";
 "%lld photos" = "사진 %1$lld장";
-"%lld scanned files · %@" = "스캔한 파일 %1$lld개 · %2$@";
 "%lld support files" = "보조 파일 %1$lld개";
 "%lld videos" = "동영상 %1$lld개";
 "1 copy" = "복사 1개";
@@ -68,9 +67,11 @@
 "Include All Previously Imported Files" = "이전에 가져온 모든 파일 포함";
 "Skip Again" = "다시 건너뛰기";
 "Start Imports" = "가져오기 시작";
+"%@ and %@ both target %@ in the same folder. Change one volume’s Shoot name or Folder label in Customize Dates, or skip that volume." = "%@ 및 %@에서 %@을(를) 같은 폴더에 복사하려고 합니다. 한 볼륨의 촬영 이름이나 날짜 사용자화의 폴더 레이블을 변경하거나 해당 볼륨을 건너뛰세요.";
 "Updating re-import selection…" = "다시 가져올 파일 선택 업데이트 중…";
 "macOS needs your permission to read this source." = "macOS에서 이 소스를 읽으려면 사용자의 권한이 필요합니다.";
 "Allow Access to %@" = "%1$@ 접근 허용";
+"Allow Access to Original Destinations" = "원래 저장 위치에 대한 접근 허용";
 "Allow Access to Source" = "소스 접근 허용";
 "Allow Scan" = "스캔 허용";
 "Already Exists" = "이미 있음";
@@ -125,6 +126,7 @@
 "Choose SD Card or Source Folder" = "SD 카드 또는 소스 폴더 선택";
 "Choose Video Destination" = "동영상 대상 선택";
 "Choose a card or source folder" = "카드 또는 소스 폴더 선택";
+"Choose %@ to restore access." = "접근 권한을 복원하려면 %@을(를) 선택하세요.";
 "Choose a destination folder" = "대상 폴더 선택";
 "Choose a folder" = "폴더 선택";
 "Choose a retention period to preview or delete old history." = "보관 기간을 선택하여 이전 기록을 미리 보거나 삭제하세요.";
@@ -185,6 +187,7 @@
 "Could not save settings: %@" = "설정을 저장할 수 없습니다: %1$@";
 "Could not update background helper diagnostics" = "백그라운드 도우미의 진단 정보를 업데이트할 수 없습니다";
 "Could not update background prompt: %@" = "백그라운드 알림을 업데이트할 수 없습니다: %1$@";
+"Continue Without Access" = "접근 없이 계속";
 "Couldn’t Continue" = "계속할 수 없음";
 "Couldn’t check available space · %@ planned" = "여유 공간 확인 불가 · 예정 %1$@";
 "Crash Reports" = "충돌 보고서";
@@ -292,6 +295,7 @@
 "Imported with errors" = "오류와 함께 가져옴";
 "Importing" = "가져오는 중";
 "Importing %lld of %lld files" = "파일 %2$lld개 중 %1$lld개 가져오는 중";
+"Importing %lld of 1 file" = "파일 1개 중 %lld개 가져오는 중";
 "Importing %lld%% at %@/s" = "가져오는 중 %1$lld%%, %2$@/초";
 "Include camera support files (%lld)" = "카메라 보조 파일 포함(%1$lld)";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "영상 백업에 메타데이터, 프록시, 오디오, 썸네일 및 기타 카메라 보조 파일을 포함합니다.";
@@ -496,6 +500,8 @@
 "Settings…" = "설정…";
 "Setup failed" = "설정 실패";
 "Setup skipped. Defaults can be changed in Settings." = "설정을 건너뛰었습니다. 기본값은 설정에서 변경할 수 있습니다.";
+"Plan settings are locked after imports start." = "가져오기를 시작하면 계획 설정을 변경할 수 없습니다.";
+"Shared Destination" = "공유 저장 위치";
 "Shareable with Family Sharing" = "가족 공유 가능";
 "Shoot" = "촬영";
 "Shoot name" = "촬영 이름";
@@ -547,6 +553,7 @@
 "The bundled background helper could not be found. Reinstall %@ in Applications." = "포함된 백그라운드 도우미를 찾을 수 없습니다. %1$@을(를) 응용 프로그램에 다시 설치하세요.";
 "The current scan and review will be discarded. No copied files are deleted." = "현재 스캔과 검토 내용이 삭제됩니다. 복사된 파일은 삭제되지 않습니다.";
 "The destination folder is unavailable." = "대상 폴더를 사용할 수 없습니다.";
+"The shared destination changed. Choose the folder again." = "공유 저장 위치가 변경되었습니다. 폴더를 다시 선택하세요.";
 "The import database contains an invalid value." = "가져오기 데이터베이스에 잘못된 값이 있습니다.";
 "The portable import ledger is not a regular file at %@" = "%1$@의 이동식 가져오기 원장이 일반 파일이 아닙니다";
 "The portable import ledger is too large (%@)" = "이동식 가져오기 원장이 너무 큽니다(%1$@)";
@@ -596,7 +603,7 @@
 "macOS returned an unrecognized background helper status." = "macOS가 인식할 수 없는 백그라운드 도우미 상태를 반환했습니다.";
 "used %lld times" = "%1$lld회 사용";
 "used once" = "1회 사용";
-"└─ %@ · %lld files · %@" = "└─ %1$@ · 파일 %2$lld개 · %3$@";
+"└─ %@ · %@ · %@" = "└─ %1$@ · %2$@ · %3$@";
 "14-day trial available" = "14일 체험 사용 가능";
 "Buy Lifetime for %@" = "%@에 평생 이용권 구매";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "모든 카드를 계속 무료로 미리 보세요. 체험을 시작하거나 한 번만 구매하면 무제한으로 가져올 수 있습니다.";
@@ -633,7 +640,9 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "다시 시도해 주세요. 이미 체험을 활성화했거나 평생 이용권을 구매했다면 구입 항목 복원을 선택하세요.";
 "The import plan changed. Review it before copying." = "가져오기 계획이 변경되었습니다. 복사하기 전에 확인하세요.";
 "Reconnect the original card or restore its source folder, then retry." = "원래 카드를 다시 연결하거나 소스 폴더를 복원한 후 다시 시도하세요.";
+"SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan." = "폴더에 대한 접근을 허용하면 SD Card Import에서 이미 복사한 Insta360 파일을 확인할 수 있습니다. 접근 없이 계속하면 해당 파일이 새 계획에 포함될 수 있습니다.";
 "Scan Both" = "둘 다 스캔";
+"Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "두 볼륨 스캔은 두 볼륨에 같은 저장 위치를 사용합니다. 다른 위치로 가져오려면 볼륨 하나를 선택하세요.";
 "Choose one or both storage volumes to scan." = "스캔할 저장 볼륨을 하나 또는 둘 다 선택하세요.";
 "Access declined" = "접근이 거부됨";
 "Review scan results" = "스캔 결과 검토";
@@ -642,6 +651,7 @@
 "%lld files scanned" = "파일 %lld개 스캔 완료";
 "Review %@" = "%@ 검토";
 "Rescan Source" = "소스 다시 스캔";
+"Restore the original destination folder or start a new scan." = "원래 대상 폴더를 복원하거나 새로 스캔하세요.";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "새 스캔을 시작하면 현재의 두 볼륨 스캔 세션이 종료됩니다. 남은 볼륨은 다시 스캔해야 합니다.";
 "Import stopped because %@ disconnected." = "%@의 연결이 끊어져 가져오기가 중지되었습니다.";
 "Discard pending scan results?" = "대기 중인 스캔 결과를 삭제할까요?";

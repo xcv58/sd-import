@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%1$@ · スキップ %2$lld";
 "%@ · Nothing selected" = "%1$@ · 選択なし";
 "%@, %@" = "%1$@、%2$@";
-"%@, %@, %lld files, %@" = "%1$@、%2$@、%3$lld ファイル、%4$@";
+"%@, %@, %@, %@" = "%1$@、%2$@、%3$@、%4$@";
 "%@, excluded by Copy selection" = "%1$@、コピーの選択により除外";
 "%lld" = "%1$lld";
 "%lld attention" = "要確認 %1$lld 件";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%1$lld / %2$lld";
 "%lld old jobs would be deleted" = "古いジョブ %1$lld 件が削除対象です";
 "%lld photos" = "%1$lld 枚の写真";
-"%lld scanned files · %@" = "スキャン済み %1$lld ファイル · %2$@";
 "%lld support files" = "%1$lld 個の補助ファイル";
 "%lld videos" = "%1$lld 本のビデオ";
 "1 copy" = "1 件コピー";
@@ -68,9 +67,11 @@
 "Include All Previously Imported Files" = "読み込み済みのファイルをすべて含める";
 "Skip Again" = "再びスキップ";
 "Start Imports" = "インポートを開始";
+"%@ and %@ both target %@ in the same folder. Change one volume’s Shoot name or Folder label in Customize Dates, or skip that volume." = "%@ と %@ は %@ を同じフォルダにコピーします。どちらかのボリュームの撮影名か、「日付をカスタマイズ」のフォルダラベルを変更するか、そのボリュームをスキップしてください。";
 "Updating re-import selection…" = "再読み込みの選択を更新中…";
 "macOS needs your permission to read this source." = "この読み込み元を読み取るには、macOS でアクセスを許可する必要があります。";
 "Allow Access to %@" = "%1$@ へのアクセスを許可";
+"Allow Access to Original Destinations" = "元の保存先へのアクセスを許可";
 "Allow Access to Source" = "読み込み元へのアクセスを許可";
 "Allow Scan" = "スキャンを許可";
 "Already Exists" = "すでに存在";
@@ -125,6 +126,7 @@
 "Choose SD Card or Source Folder" = "SD カードまたは読み込み元フォルダを選択";
 "Choose Video Destination" = "ビデオの保存先を選択";
 "Choose a card or source folder" = "カードまたは読み込み元フォルダを選択";
+"Choose %@ to restore access." = "アクセスを復元するには%@を選択してください。";
 "Choose a destination folder" = "保存先フォルダを選択";
 "Choose a folder" = "フォルダを選択";
 "Choose a retention period to preview or delete old history." = "保存期間を選択して、古い履歴をプレビューまたは削除します。";
@@ -185,6 +187,7 @@
 "Could not save settings: %@" = "設定を保存できませんでした：%1$@";
 "Could not update background helper diagnostics" = "バックグラウンドヘルパーの診断情報を更新できませんでした";
 "Could not update background prompt: %@" = "バックグラウンド通知を更新できませんでした：%1$@";
+"Continue Without Access" = "アクセスせずに続ける";
 "Couldn’t Continue" = "続行できませんでした";
 "Couldn’t check available space · %@ planned" = "空き容量を確認できません · 予定 %1$@";
 "Crash Reports" = "クラッシュレポート";
@@ -292,6 +295,7 @@
 "Imported with errors" = "エラーありで読み込み済み";
 "Importing" = "読み込み中";
 "Importing %lld of %lld files" = "%2$lld ファイル中 %1$lld 件を読み込み中";
+"Importing %lld of 1 file" = "1 ファイル中 %lld 件を読み込み中";
 "Importing %lld%% at %@/s" = "読み込み中 %1$lld%%、%2$@/秒";
 "Include camera support files (%lld)" = "カメラの補助ファイルを含める（%1$lld）";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "映像のバックアップにメタデータ、プロキシ、音声、サムネイルなどのカメラ補助ファイルを含めます。";
@@ -496,6 +500,8 @@
 "Settings…" = "設定…";
 "Setup failed" = "設定に失敗しました";
 "Setup skipped. Defaults can be changed in Settings." = "設定をスキップしました。既定値は「設定」で変更できます。";
+"Plan settings are locked after imports start." = "読み込みの開始後はプランの設定を変更できません。";
+"Shared Destination" = "共通の保存先";
 "Shareable with Family Sharing" = "ファミリー共有に対応";
 "Shoot" = "撮影";
 "Shoot name" = "撮影名";
@@ -547,6 +553,7 @@
 "The bundled background helper could not be found. Reinstall %@ in Applications." = "同梱のバックグラウンドヘルパーが見つかりません。%1$@ を「アプリケーション」に再インストールしてください。";
 "The current scan and review will be discarded. No copied files are deleted." = "現在のスキャンと確認内容は破棄されます。コピー済みファイルは削除されません。";
 "The destination folder is unavailable." = "保存先フォルダを利用できません。";
+"The shared destination changed. Choose the folder again." = "共通の保存先が変わりました。フォルダを選び直してください。";
 "The import database contains an invalid value." = "読み込みデータベースに無効な値が含まれています。";
 "The portable import ledger is not a regular file at %@" = "%1$@ のポータブル読み込み台帳は通常のファイルではありません";
 "The portable import ledger is too large (%@)" = "ポータブル読み込み台帳が大きすぎます（%1$@）";
@@ -596,7 +603,7 @@
 "macOS returned an unrecognized background helper status." = "macOS が認識できないバックグラウンドヘルパーの状態を返しました。";
 "used %lld times" = "%1$lld 回使用";
 "used once" = "1 回使用";
-"└─ %@ · %lld files · %@" = "└─ %1$@ · %2$lld ファイル · %3$@";
+"└─ %@ · %@ · %@" = "└─ %1$@ · %2$@ · %3$@";
 "14-day trial available" = "14日間のトライアルを利用できます";
 "Buy Lifetime for %@" = "買い切り版を%@で購入";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "カードのプレビューはいつでも無料です。トライアルを開始するか、買い切り版を購入すると無制限に読み込めます。";
@@ -633,7 +640,9 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "もう一度お試しください。トライアルをすでに有効にした場合、または買い切りの無期限アクセスを購入済みの場合は、「購入を復元」を選択してください。";
 "The import plan changed. Review it before copying." = "読み込みプランが変更されました。コピーする前に確認してください。";
 "Reconnect the original card or restore its source folder, then retry." = "元のカードを再接続するか、ソースフォルダを元に戻してから、もう一度お試しください。";
+"SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan." = "フォルダへのアクセスを許可すると、SD Card Importはコピー済みのInsta360ファイルを確認できます。アクセスせずに続けると、これらのファイルが新しいプランに含まれる場合があります。";
 "Scan Both" = "両方をスキャン";
+"Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "「両方をスキャン」では2つのボリュームに同じ保存先を使います。別の保存先に読み込むには、ボリュームを1つ選んでください。";
 "Choose one or both storage volumes to scan." = "スキャンするボリュームを1つまたは両方選択してください。";
 "Access declined" = "アクセスが拒否されました";
 "Review scan results" = "スキャン結果を確認";
@@ -642,6 +651,7 @@
 "%lld files scanned" = "%lld個のファイルをスキャン済み";
 "Review %@" = "%@を確認";
 "Rescan Source" = "ソースを再スキャン";
+"Restore the original destination folder or start a new scan." = "元の保存先フォルダを復元するか、新しいスキャンを開始してください。";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "新しいスキャンを開始すると、両方をスキャンする現在のセッションが終了します。残りのボリュームは再スキャンが必要です。";
 "Import stopped because %@ disconnected." = "%@ が接続解除されたため、読み込みを停止しました。";
 "Discard pending scan results?" = "保留中のスキャン結果を破棄しますか？";

@@ -1,3 +1,4 @@
+import Accessibility
 import SDImportCore
 import SwiftUI
 
@@ -14,7 +15,7 @@ struct ManualImportView: View {
             case .scanning:
                 scanningPage
             case .review:
-                if let session = model.scanBothSession, model.isShowingScanBothResults {
+                if let session = model.scanBothSession {
                     scanBothReviewPage(session)
                 } else {
                     ImportPreviewView()
@@ -62,7 +63,7 @@ struct ManualImportView: View {
                     AppSection(session.deviceName, systemImage: "externaldrive") {
                         ForEach(session.entries) { entry in
                             HStack {
-                                Text(entry.volume.name).fontWeight(.medium)
+                                Text(session.volumeTitle(for: entry)).fontWeight(.medium)
                                 Spacer()
                                 scanBothStatus(entry.state)
                             }
@@ -87,63 +88,26 @@ struct ManualImportView: View {
     }
 
     private func scanBothReviewPage(_ session: ScanBothSession) -> some View {
-        AppPage(
-            status: model.folderAccessFeedback?.text ?? (model.ejectedSourceJobID == nil ? nil : visibleStatus),
-            statusRole: model.folderAccessFeedback == nil ? .neutral : .error
-        ) {
-            VStack(alignment: .leading, spacing: 18) {
-                phaseHeading(L10n.tr("Review scan results"), detail: session.deviceName)
-                ForEach(session.entries) { entry in
-                    AppSection(entry.volume.name, systemImage: "externaldrive") {
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            scanBothStatus(entry.state)
-                            Spacer()
-                            scanBothReviewActions(entry)
+        ImportPreviewView(scanBothStatus: model.ejectedSourceJobID == nil ? nil : visibleStatus) {
+            VStack(alignment: .leading, spacing: 14) {
+                phaseHeading(L10n.tr("Review import"), detail: session.deviceName)
+                if session.hasPendingResults || !session.destinationPath.isEmpty {
+                    scanBothDestination(session)
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(session.entries) { entry in
+                            scanBothVolumeCard(entry, in: session)
+                                .frame(minWidth: 250, idealWidth: 250, maxWidth: .infinity)
                         }
-                        if model.ejectedSourceJobID == nil, session.removedMountPaths.contains(entry.volume.mountPath) {
-                            AppStatusLabel(
-                                title: L10n.tr("Card is not mounted"),
-                                systemImage: "exclamationmark.triangle",
-                                role: .warning
-                            )
-                        }
-                        if let result = entry.result {
-                            scanBothCopySummary(result, interruption: entry.copyInterruption)
-                        }
-                        if case .complete(let summary, let filenames, _, _) = entry.state {
-                            let scannedPath = URL(fileURLWithPath: summary.mountPath, isDirectory: true)
-                                .standardizedFileURL.path
-                            if scannedPath != entry.volume.mountPath {
-                                Text(verbatim: scannedPath)
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                    .help(scannedPath)
-                            }
-                            ScanPortableReceiptWarning(summary: summary)
-                            ForEach(filenames.indices, id: \.self) { index in
-                                Text(verbatim: filenames[index])
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
+                    }
+                    VStack(spacing: 12) {
+                        ForEach(session.entries) { entry in
+                            scanBothVolumeCard(entry, in: session)
                         }
                     }
                 }
-                if session.hasPendingResults {
-                    Button {
-                        model.startScanBothImports()
-                    } label: {
-                        Label(L10n.tr("Start Imports"), systemImage: "square.and.arrow.down")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(!model.canStartScanBothImports)
-                    .accessibilityIdentifier("import.scan-both.start")
-                }
-                if AppDistribution.current.supportsSourceEjection {
+                if session.reviewingEntry == nil, AppDistribution.current.supportsSourceEjection {
                     SourceEjectionControl(
                         sourceName: session.deviceName,
                         volumeCount: session.entries.count,
@@ -154,40 +118,236 @@ struct ManualImportView: View {
                         model.ejectScanBoth()
                     }
                 }
-                Button(L10n.tr("Change Source")) {
-                    model.changeScanBothSource()
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            scanBothReviewFooter(session)
+        }
+    }
+
+    private func scanBothDestination(_ session: ScanBothSession) -> some View {
+        let validation = model.scanBothDestinationValidation
+        let needsAccess = model.scanBothDestinationNeedsAccess
+        return AppSection(L10n.tr("Shared Destination"), systemImage: "folder") {
+            HStack {
+                if session.destinationPath.isEmpty {
+                    Text(L10n.tr("Choose a destination folder"))
+                        .foregroundStyle(.secondary)
+                } else {
+                    scanBothPath(session.destinationPath)
                 }
-                .buttonStyle(.bordered)
+                Spacer()
+                if session.hasPendingResults, !session.hasStartedImports || needsAccess {
+                    Button(needsAccess ? L10n.tr("Allow Access") : L10n.tr("Choose…")) {
+                        model.chooseScanBothDestination()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(model.isWorking || model.isEjectingSource)
+                    .accessibilityIdentifier("import.scan-both.destination")
+                }
+            }
+            if let message = model.scanBothDestinationChangeMessage {
+                AppStatusLabel(title: message, systemImage: "exclamationmark.triangle", role: .warning)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if !session.destinationPath.isEmpty, !validation.isUsable {
+                ValidationStatusView(result: validation)
+            }
+        }
+    }
+
+    private func scanBothVolumeCard(_ entry: ScanBothSession.Entry, in session: ScanBothSession) -> some View {
+        let isEditing = session.reviewingEntry?.id == entry.id
+        let volumeTitle = session.volumeTitle(for: entry)
+        return AppSection(entry.volume.name, systemImage: "externaldrive") {
+            VStack(alignment: .leading, spacing: 6) {
+                scanBothStatus(entry.state)
+                let scannedPath = entry.summary.map {
+                    URL(fileURLWithPath: $0.mountPath, isDirectory: true).standardizedFileURL.path
+                }
+                if let scannedPath, scannedPath != entry.volume.mountPath {
+                    scanBothPath(scannedPath)
+                } else if session.hasDuplicateVolumeName(for: entry) {
+                    scanBothPath(entry.volume.mountPath)
+                }
+                if let summary = entry.summary {
+                    ScanPortableReceiptWarning(summary: summary)
+                    if entry.awaitsImport {
+                        scanBothPlanSummary(entry, summary: summary, isEditing: isEditing)
+                    }
+                }
+                if model.ejectedSourceJobID == nil, session.removedMountPaths.contains(entry.volume.mountPath) {
+                    AppStatusLabel(
+                        title: L10n.tr("Card is not mounted"), systemImage: "exclamationmark.triangle", role: .warning
+                    )
+                }
+                if let result = entry.result {
+                    scanBothCopySummary(result, interruption: entry.copyInterruption)
+                }
+            }
+            .font(.callout)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { scanBothReviewActions(entry, title: volumeTitle, isEditing: isEditing) }
+                VStack(alignment: .leading, spacing: 6) { scanBothReviewActions(entry, title: volumeTitle, isEditing: isEditing) }
+            }
+        }
+        .overlay {
+            if isEditing {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.accentColor, lineWidth: 1.5)
+                    .allowsHitTesting(false)
             }
         }
     }
 
     @ViewBuilder
-    private func scanBothReviewActions(_ entry: ScanBothSession.Entry) -> some View {
+    private func scanBothPlanSummary(_ entry: ScanBothSession.Entry, summary: ScanSummary, isEditing: Bool) -> some View {
+        if let readyCount = isEditing ? model.previewTotals.copyFiles : entry.confirmation?.copyFileCount {
+            LabeledContent(L10n.tr("Copy"), value: L10n.tr("\(readyCount) files"))
+        } else {
+            LabeledContent(L10n.tr("New"), value: L10n.tr("\(summary.newFiles) files"))
+        }
+
+        let destinations = isEditing ? model.previewDestinations.map(\.path) : entry.confirmation?.destinationPaths ?? []
+        if destinations.count > 1 {
+            LabeledContent(L10n.tr("Destinations"), value: L10n.tr("\(destinations.count) folders"))
+        } else if let destination = destinations.first {
+            LabeledContent {
+                scanBothPath(destination)
+            } label: {
+                Text(L10n.tr("Destination"))
+            }
+        }
+
+        let needsAttention = isEditing ? model.previewNeedsAttention : entry.reviewNeedsAttention
+        if needsAttention {
+            AppStatusLabel(title: L10n.tr("Needs attention"), systemImage: "exclamationmark.triangle", role: .warning)
+        }
+    }
+
+    private func scanBothPath(_ path: String) -> some View {
+        Text(verbatim: (path as NSString).abbreviatingWithTildeInPath)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .help(path)
+    }
+
+    private func scanBothReviewFooter(_ session: ScanBothSession) -> some View {
+        let disconnectMessage = model.scanBothReviewDisconnectMessage
+        let feedback = model.folderAccessFeedback?.text
+        return VStack(alignment: .leading, spacing: 8) {
+            if let disconnectMessage {
+                AppStatusLabel(title: disconnectMessage, systemImage: "exclamationmark.triangle", role: .warning)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("import.scan-both.review-disconnect")
+            }
+            if let feedback, !feedback.isEmpty {
+                AppStatusLabel(title: feedback, systemImage: "exclamationmark.triangle.fill", role: .error)
+                    .font(.callout)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .help(feedback)
+                    .accessibilityIdentifier("import.scan-both.review-error")
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    scanBothFooterContext(session)
+                    Spacer(minLength: 0)
+                    scanBothFooterActions(session)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    scanBothFooterContext(session)
+                    scanBothFooterActions(session)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(AppSurfacePalette.contentBackground)
+        .overlay(alignment: .top) { Divider() }
+        .onChange(of: [disconnectMessage, feedback].compactMap { $0 }.joined(separator: "\n"), initial: true) { _, message in
+            guard !message.isEmpty else { return }
+            AccessibilityNotification.Announcement(message).post()
+        }
+    }
+
+    @ViewBuilder
+    private func scanBothFooterContext(_ session: ScanBothSession) -> some View {
+        if let entry = session.reviewingEntry {
+            Label(session.volumeTitle(for: entry), systemImage: "externaldrive")
+                .font(.callout.weight(.semibold))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        } else {
+            Button(L10n.tr("Change Source")) {
+                model.changeScanBothSource()
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private func scanBothFooterActions(_ session: ScanBothSession) -> some View {
+        if let entry = session.reviewingEntry {
+            let needsRescan = entry.summary.map { model.needsRescan($0.jobID) } == true
+            ImportReviewUpdateControls()
+            Button(L10n.tr("Close")) {
+                model.returnToScanBothResults()
+            }
+            .buttonStyle(.bordered)
+            .disabled(model.isWorking)
+            if needsRescan, let summary = entry.summary {
+                scanBothRescanAction(summary, title: session.volumeTitle(for: entry))
+            } else {
+                ImportReviewPrimaryAction()
+            }
+        } else if session.hasPendingResults {
+            Button {
+                model.startScanBothImports()
+            } label: {
+                Label(L10n.tr("Start Imports"), systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(!model.canStartScanBothImports)
+            .accessibilityIdentifier("import.scan-both.start")
+        }
+    }
+
+    @ViewBuilder
+    private func scanBothReviewActions(_ entry: ScanBothSession.Entry, title: String, isEditing: Bool) -> some View {
         switch entry.disposition {
         case .pending:
-            if entry.confirmation != nil {
-                Text(L10n.tr("Ready")).foregroundStyle(.secondary)
+            if entry.confirmation != nil, !isEditing {
+                Label(L10n.tr("Ready"), systemImage: "checkmark.circle.fill")
+                    .font(.callout.weight(.semibold))
             }
             if entry.canSkip {
                 Button(L10n.tr("Skip")) {
                     model.skipScanBothImport(entry.id)
                 }
                 .buttonStyle(.bordered)
-                .disabled(model.isEjectingSource)
+                .disabled(model.isWorking || model.isEjectingSource)
+                .accessibilityValue(title)
             }
             if let summary = entry.summary {
                 if model.needsRescan(summary.jobID) {
-                    Button(L10n.tr("Rescan Source")) {
-                        model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
+                    if !isEditing {
+                        scanBothRescanAction(summary, title: title)
                     }
-                    .buttonStyle(.bordered)
-                } else {
-                    Button(entry.confirmation == nil ? L10n.tr("Review import") : L10n.tr("Edit Plan")) {
+                } else if !isEditing {
+                    let canEdit = entry.confirmation != nil && model.scanBothSession?.hasStartedImports == false
+                    Button(canEdit ? L10n.tr("Edit Plan") : L10n.tr("Review import")) {
                         model.reviewScanBothVolume(entry.id)
                     }
                     .buttonStyle(.bordered)
-                    .accessibilityLabel(L10n.tr("Review \(entry.volume.name)"))
+                    .disabled(model.isWorking || model.isEjectingSource || model.scanBothSession?.destinationPath.isEmpty != false)
+                    .accessibilityLabel(L10n.tr("Review \(title)"))
                     .accessibilityIdentifier("import.scan-both.review.\(entry.volume.mountPath)")
                 }
             }
@@ -196,6 +356,15 @@ struct ManualImportView: View {
         case .skipped:
             Text(L10n.tr("Skipped")).foregroundStyle(.secondary)
         }
+    }
+
+    private func scanBothRescanAction(_ summary: ScanSummary, title: String) -> some View {
+        Button(L10n.tr("Rescan Source")) {
+            model.rescanSource(startingAt: summary.mountPath, recoveringJobID: summary.jobID)
+        }
+        .buttonStyle(.bordered)
+        .disabled(model.isWorking || model.isEjectingSource)
+        .accessibilityValue(title)
     }
 
     @ViewBuilder
@@ -224,7 +393,7 @@ struct ManualImportView: View {
                 .foregroundStyle(.secondary)
         case .scanning:
             Text(L10n.tr("Scanning"))
-        case .complete(let summary, _, _, _):
+        case .complete(let summary, _, _):
             Text(L10n.tr("\(summary.scannedFiles) files scanned"))
                 .foregroundStyle(.secondary)
         case .skipped(let issue):
@@ -286,13 +455,13 @@ struct ManualImportView: View {
                     if let session = model.scanBothSession, session.entry(for: result.jobID) != nil {
                         ForEach(session.entries) { entry in
                             if let earlierResult = entry.result, earlierResult.jobID != result.jobID {
-                                AppSection(entry.volume.name, systemImage: "externaldrive") {
+                                AppSection(session.volumeTitle(for: entry), systemImage: "externaldrive") {
                                     scanBothCopySummary(earlierResult, interruption: entry.copyInterruption)
                                 }
                             }
                         }
-                        if let name = session.entry(for: result.jobID)?.volume.name {
-                            Text(name).font(.headline)
+                        if let entry = session.entry(for: result.jobID) {
+                            Text(session.volumeTitle(for: entry)).font(.headline)
                         }
                     }
                     ImportResultView(receipt: receipt)
@@ -570,7 +739,8 @@ struct ImportSourceSummaryView: View {
             return volume.detailText
         }
         if let summary = model.currentSummary {
-            return L10n.tr("\(summary.scannedFiles) scanned files · \(model.importSourcePath)")
+            let scanned = L10n.tr("\(summary.scannedFiles) files scanned")
+            return L10n.tr("\(scanned) · \(model.importSourcePath)")
         }
         return model.importSourcePath
     }
@@ -606,55 +776,34 @@ struct ImportDestinationFields: View {
                 ShootNameField(name: $model.location)
             }
 
-            switch model.importMediaSelection {
-            case .photosAndVideos:
-                switch model.destinationLayout {
-                case .singleLibrary:
-                    GridRow {
-                        Text(L10n.tr("Library"))
-                            .foregroundStyle(.secondary)
-                            .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
-                        FolderField(
-                            title: L10n.tr("Library"),
-                            path: $model.photosPath,
-                            validation: model.photosValidation,
-                            recentChoices: model.recentPhotosPathSuggestions,
-                            selectRecentPath: model.selectPhotosPath,
-                            action: model.choosePhotosFolder
-                        )
-                    }
-                case .separateMediaFolders:
-                    GridRow {
-                        Text(L10n.tr("Photos"))
-                            .foregroundStyle(.secondary)
-                            .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
-                        FolderField(
-                            title: L10n.tr("Photos"),
-                            path: $model.photosPath,
-                            validation: model.photosValidation,
-                            recentChoices: model.recentPhotosPathSuggestions,
-                            selectRecentPath: model.selectPhotosPath,
-                            action: model.choosePhotosFolder
-                        )
-                    }
+            if !model.isReviewingScanBothVolume {
+                destinationRows
+            }
+        }
+        .gridColumnAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-                    GridRow {
-                        Text(L10n.tr("Videos"))
-                            .foregroundStyle(.secondary)
-                            .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
-                        FolderField(
-                            title: L10n.tr("Videos"),
-                            path: $model.videosPath,
-                            validation: model.videosValidation,
-                            recentChoices: model.recentVideosPathSuggestions,
-                            selectRecentPath: model.selectVideosPath,
-                            action: model.chooseVideosFolder
-                        )
-                    }
-                case .footageBackup:
-                    EmptyView()
+    @ViewBuilder
+    private var destinationRows: some View {
+        switch model.importMediaSelection {
+        case .photosAndVideos:
+            switch model.destinationLayout {
+            case .singleLibrary:
+                GridRow {
+                    Text(L10n.tr("Library"))
+                        .foregroundStyle(.secondary)
+                        .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
+                    FolderField(
+                        title: L10n.tr("Library"),
+                        path: $model.photosPath,
+                        validation: model.photosValidation,
+                        recentChoices: model.recentPhotosPathSuggestions,
+                        selectRecentPath: model.selectPhotosPath,
+                        action: model.choosePhotosFolder
+                    )
                 }
-            case .photosOnly:
+            case .separateMediaFolders:
                 GridRow {
                     Text(L10n.tr("Photos"))
                         .foregroundStyle(.secondary)
@@ -668,7 +817,7 @@ struct ImportDestinationFields: View {
                         action: model.choosePhotosFolder
                     )
                 }
-            case .videosOnly:
+
                 GridRow {
                     Text(L10n.tr("Videos"))
                         .foregroundStyle(.secondary)
@@ -682,10 +831,38 @@ struct ImportDestinationFields: View {
                         action: model.chooseVideosFolder
                     )
                 }
+            case .footageBackup:
+                EmptyView()
+            }
+        case .photosOnly:
+            GridRow {
+                Text(L10n.tr("Photos"))
+                    .foregroundStyle(.secondary)
+                    .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
+                FolderField(
+                    title: L10n.tr("Photos"),
+                    path: $model.photosPath,
+                    validation: model.photosValidation,
+                    recentChoices: model.recentPhotosPathSuggestions,
+                    selectRecentPath: model.selectPhotosPath,
+                    action: model.choosePhotosFolder
+                )
+            }
+        case .videosOnly:
+            GridRow {
+                Text(L10n.tr("Videos"))
+                    .foregroundStyle(.secondary)
+                    .frame(width: ImportFormLayout.labelWidth, alignment: .leading)
+                FolderField(
+                    title: L10n.tr("Videos"),
+                    path: $model.videosPath,
+                    validation: model.videosValidation,
+                    recentChoices: model.recentVideosPathSuggestions,
+                    selectRecentPath: model.selectVideosPath,
+                    action: model.chooseVideosFolder
+                )
             }
         }
-        .gridColumnAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

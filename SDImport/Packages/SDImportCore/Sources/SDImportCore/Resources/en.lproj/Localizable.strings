@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%@ · %lld skipped";
 "%@ · Nothing selected" = "%@ · Nothing selected";
 "%@, %@" = "%@, %@";
-"%@, %@, %lld files, %@" = "%@, %@, %lld files, %@";
+"%@, %@, %@, %@" = "%@, %@, %@, %@";
 "%@, excluded by Copy selection" = "%@, excluded by Copy selection";
 "%lld" = "%lld";
 "%lld attention" = "%lld attention";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%lld of %lld";
 "%lld old jobs would be deleted" = "%lld old jobs would be deleted";
 "%lld photos" = "%lld photos";
-"%lld scanned files · %@" = "%lld scanned files · %@";
 "%lld support files" = "%lld support files";
 "%lld videos" = "%lld videos";
 "1 copy" = "1 copy";
@@ -68,9 +67,11 @@
 "Include All Previously Imported Files" = "Include All Previously Imported Files";
 "Skip Again" = "Skip Again";
 "Start Imports" = "Start Imports";
+"%@ and %@ both target %@ in the same folder. Change one volume’s Shoot name or Folder label in Customize Dates, or skip that volume." = "%@ and %@ both target %@ in the same folder. Change one volume’s Shoot name or Folder label in Customize Dates, or skip that volume.";
 "Updating re-import selection…" = "Updating re-import selection…";
 "macOS needs your permission to read this source." = "macOS needs your permission to read this source.";
 "Allow Access to %@" = "Allow Access to %@";
+"Allow Access to Original Destinations" = "Allow Access to Original Destinations";
 "Allow Access to Source" = "Allow Access to Source";
 "Allow Scan" = "Allow Scan";
 "Already Exists" = "Already Exists";
@@ -125,6 +126,7 @@
 "Choose SD Card or Source Folder" = "Choose SD Card or Source Folder";
 "Choose Video Destination" = "Choose Video Destination";
 "Choose a card or source folder" = "Choose a card or source folder";
+"Choose %@ to restore access." = "Choose %@ to restore access.";
 "Choose a destination folder" = "Choose a destination folder";
 "Choose a folder" = "Choose a folder";
 "Choose a retention period to preview or delete old history." = "Choose a retention period to preview or delete old history.";
@@ -185,6 +187,7 @@
 "Could not save settings: %@" = "Could not save settings: %@";
 "Could not update background helper diagnostics" = "Could not update background helper diagnostics";
 "Could not update background prompt: %@" = "Could not update background prompt: %@";
+"Continue Without Access" = "Continue Without Access";
 "Couldn’t Continue" = "Couldn’t Continue";
 "Couldn’t check available space · %@ planned" = "Couldn’t check available space · %@ planned";
 "Crash Reports" = "Crash Reports";
@@ -292,6 +295,7 @@
 "Imported with errors" = "Imported with errors";
 "Importing" = "Importing";
 "Importing %lld of %lld files" = "Importing %lld of %lld files";
+"Importing %lld of 1 file" = "Importing %lld of 1 file";
 "Importing %lld%% at %@/s" = "Importing %lld%% at %@/s";
 "Include camera support files (%lld)" = "Include camera support files (%lld)";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups.";
@@ -496,6 +500,8 @@
 "Settings…" = "Settings…";
 "Setup failed" = "Setup failed";
 "Setup skipped. Defaults can be changed in Settings." = "Setup skipped. Defaults can be changed in Settings.";
+"Plan settings are locked after imports start." = "Plan settings are locked after imports start.";
+"Shared Destination" = "Shared Destination";
 "Shareable with Family Sharing" = "Shareable with Family Sharing";
 "Shoot" = "Shoot";
 "Shoot name" = "Shoot name";
@@ -547,6 +553,7 @@
 "The bundled background helper could not be found. Reinstall %@ in Applications." = "The bundled background helper could not be found. Reinstall %@ in Applications.";
 "The current scan and review will be discarded. No copied files are deleted." = "The current scan and review will be discarded. No copied files are deleted.";
 "The destination folder is unavailable." = "The destination folder is unavailable.";
+"The shared destination changed. Choose the folder again." = "The shared destination changed. Choose the folder again.";
 "The import database contains an invalid value." = "The import database contains an invalid value.";
 "The portable import ledger is not a regular file at %@" = "The portable import ledger is not a regular file at %@";
 "The portable import ledger is too large (%@)" = "The portable import ledger is too large (%@)";
@@ -596,7 +603,7 @@
 "macOS returned an unrecognized background helper status." = "macOS returned an unrecognized background helper status.";
 "used %lld times" = "used %lld times";
 "used once" = "used once";
-"└─ %@ · %lld files · %@" = "└─ %@ · %lld files · %@";
+"└─ %@ · %@ · %@" = "└─ %@ · %@ · %@";
 "14-day trial available" = "14-day trial available";
 "Buy Lifetime for %@" = "Buy Lifetime for %@";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports.";
@@ -633,7 +640,9 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases.";
 "The import plan changed. Review it before copying." = "The import plan changed. Review it before copying.";
 "Reconnect the original card or restore its source folder, then retry." = "Reconnect the original card or restore its source folder, then retry.";
+"SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan." = "SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan.";
 "Scan Both" = "Scan Both";
+"Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination.";
 "Choose one or both storage volumes to scan." = "Choose one or both storage volumes to scan.";
 "Access declined" = "Access declined";
 "Review scan results" = "Review scan results";
@@ -642,6 +651,7 @@
 "%lld files scanned" = "%lld files scanned";
 "Review %@" = "Review %@";
 "Rescan Source" = "Rescan Source";
+"Restore the original destination folder or start a new scan." = "Restore the original destination folder or start a new scan.";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan.";
 "Import stopped because %@ disconnected." = "Import stopped because %@ disconnected.";
 "Discard pending scan results?" = "Discard pending scan results?";

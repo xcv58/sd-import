@@ -43,11 +43,20 @@ public struct RecoveryService {
         return RecoverySummary(recoveredJobs: recoveredJobs, removedPartFiles: removedPartFiles)
     }
 
-    public func recoverInterruptedImport(jobID: String) throws {
+    public func recoverInterruptedImport(
+        jobID: String, preparation: Insta360RescanRecovery.Preparation? = nil
+    ) throws {
         guard try jobRepository.withImportLock(jobID: jobID, {
             try recoverJobWhileLocked(jobID: jobID)
         }) != nil else {
             throw SDImportError.invalidArgument(L10n.tr("Finish the current scan or import first"))
+        }
+        // Older attempts are supplemental. A busy job keeps its journal for later recovery.
+        for previous in preparation?.earlierAttempts ?? [] {
+            try Task.checkCancellation()
+            _ = try jobRepository.withImportLock(jobID: previous.jobID) {
+                try recoverJobWhileLocked(jobID: previous.jobID, attemptIDs: previous.attemptIDs)
+            }
         }
     }
 
@@ -61,11 +70,12 @@ public struct RecoveryService {
         var copiedSourcePaths: [String] = []
     }
 
-    func recoverJobWhileLocked(jobID: String) throws -> JobRecovery {
+    func recoverJobWhileLocked(jobID: String, attemptIDs: Set<UUID>? = nil) throws -> JobRecovery {
         var outcome = JobRecovery()
         guard let job = try jobRepository.fetchJob(id: jobID) else { return outcome }
-        let attempts = try jobRepository.copyAttempts(jobID: jobID)
-        guard job.status == .importing || !attempts.isEmpty else { return outcome }
+        let allAttempts = try jobRepository.copyAttempts(jobID: jobID)
+        let attempts = attemptIDs.map { ids in allAttempts.filter { ids.contains($0.id) } } ?? allAttempts
+        guard !attempts.isEmpty || (attemptIDs == nil && job.status == .importing) else { return outcome }
         outcome.recovered = job.status == .importing || attempts.contains { $0.localCopyCommitted != true }
 
         for attempt in attempts {
@@ -106,8 +116,12 @@ public struct RecoveryService {
         guard outcome.recovered else { return outcome }
         try jobRepository.resetPendingFilesAfterInterruption(jobID: jobID)
         let files = try jobRepository.fetchJobFiles(jobID: jobID)
+        let hasOtherPendingCopies = attemptIDs.map { ids in
+            allAttempts.contains { $0.localCopyCommitted != true && !ids.contains($0.id) }
+        } ?? false
         let fullyCopied = outcome.unavailableFileID == nil
             && !outcome.needsReview
+            && !hasOtherPendingCopies
             && files.contains { $0.copyStatus == .copied }
             && !files.contains(where: \.isPendingImport)
         try jobRepository.refreshImportTotals(

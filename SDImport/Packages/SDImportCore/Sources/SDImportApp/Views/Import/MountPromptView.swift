@@ -47,6 +47,13 @@ struct MountPromptView: View {
                     }
                 }
 
+                if group.volumes.count == 2 {
+                    Text(L10n.tr("Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination."))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 HStack {
                     Spacer()
                     Button(skipButtonTitle) {

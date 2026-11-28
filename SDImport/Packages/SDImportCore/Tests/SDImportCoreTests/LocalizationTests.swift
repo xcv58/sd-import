@@ -344,6 +344,21 @@ struct LocalizationTests {
     }
 
     @Test
+    func singleFileScanAndDestinationCounts() {
+        let one = 1, two = 2, zero = 0
+        #expect(L10n.tr("\(one) files scanned", language: "en") == "1 file scanned")
+        #expect(L10n.tr("\(two) files scanned", language: "en") == "2 files scanned")
+        #expect(L10n.tr("\(one) files scanned", language: "de") == "1 Datei gescannt")
+        #expect(L10n.tr("\(zero) files scanned", language: "fr") == "0 fichier analysé")
+        #expect(L10n.tr("Importing \(zero) of 1 file", language: "en") == "Importing 0 of 1 file")
+
+        let count = L10n.tr("\(one) files", language: "es")
+        let folder = "Shoot", size = "1 KB", root = "Library"
+        #expect(L10n.tr("└─ \(folder) · \(count) · \(size)", language: "es") == "└─ Shoot · 1 archivo · 1 KB")
+        #expect(L10n.tr("\(root), \(folder), \(count), \(size)", language: "es") == "Library, Shoot, 1 archivo, 1 KB")
+    }
+
+    @Test
     func completeCountMessagesUsePluralRules() {
         let one = 1, two = 2
         #expect(L10n.tr("Scan complete. \(one) files were imported on another Mac", language: "en") == "Scan complete. 1 file was imported on another Mac")

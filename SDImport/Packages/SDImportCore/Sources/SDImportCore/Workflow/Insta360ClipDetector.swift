@@ -137,7 +137,11 @@ public struct Insta360ClipDetector: Sendable {
     }
 
     public static func isProprietaryRecordingFile(_ file: JobFileRecord) -> Bool {
-        let ext = file.ext.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        isProprietaryRecordingExtension(file.ext)
+    }
+
+    static func isProprietaryRecordingExtension(_ fileExtension: String) -> Bool {
+        let ext = fileExtension.trimmingCharacters(in: CharacterSet(charactersIn: "."))
             .lowercased(with: Locale(identifier: "en_US_POSIX"))
         return ext == "insv" || ext == "lrv"
     }

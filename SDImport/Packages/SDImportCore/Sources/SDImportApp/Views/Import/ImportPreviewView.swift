@@ -3,7 +3,7 @@ import SDImportCommerce
 import SDImportCore
 import SwiftUI
 
-struct ImportPreviewView: View {
+struct ImportPreviewView<Overview: View>: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.locale) private var locale
     @AppStorage("SDImport.importPreviewMode") private var previewMode = ImportPreviewMode.grid
@@ -14,11 +14,26 @@ struct ImportPreviewView: View {
     @State private var showsDateCustomization = false
     @StateObject private var thumbnailProvider = ImportThumbnailProvider()
     @StateObject private var quickLook = ImportQuickLookController()
+    @FocusState private var inlineReviewHeadingHasKeyboardFocus: Bool
     @AccessibilityFocusState private var reviewHeadingIsFocused: Bool
 
+    private let scanBothOverview: Overview?
+    private let scanBothStatus: String?
     private let filePageSize = 100
 
+    init() where Overview == EmptyView {
+        scanBothOverview = nil
+        scanBothStatus = nil
+    }
+
+    init(scanBothStatus: String?, @ViewBuilder overview: () -> Overview) {
+        scanBothOverview = overview()
+        self.scanBothStatus = scanBothStatus
+    }
+
     private enum ScrollTarget {
+        case overview
+        case inlineReview
         case files
     }
 
@@ -64,43 +79,45 @@ struct ImportPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            reviewHeader
+            if scanBothOverview == nil {
+                reviewHeader
+            }
 
             ScrollViewReader { scroll in
-                AppPage(status: model.folderAccessFeedback?.text, statusRole: .error, maxContentWidth: .infinity) {
-                    LazyVStack(
-                        alignment: .leading,
-                        spacing: 14,
-                        pinnedViews: [.sectionHeaders]
-                    ) {
-                        ImportSourceSummaryView(
-                            allowsChange: !model.isReviewingScanBothVolume,
-                            allowsRescan: !model.isReviewingScanBothVolume
-                                && model.currentSummary.map { !model.needsRescan($0.jobID) } == true,
-                            compact: true
-                        )
-                        if model.isReviewingScanBothVolume, let summary = model.currentSummary {
-                            ScanPortableReceiptWarning(summary: summary)
-                        }
-
-                        if model.previewTotals.copyFiles == 0 {
-                            zeroCopyCard
-                        } else {
-                            importPlanCard
-                        }
-                        fileBrowser
+                AppPage(
+                    status: scanBothOverview == nil ? model.folderAccessFeedback?.text : scanBothStatus,
+                    statusRole: scanBothOverview == nil ? .error : .neutral,
+                    maxContentWidth: .infinity
+                ) {
+                    if let scanBothOverview {
+                        scanBothOverview
+                            .id(ScrollTarget.overview)
+                    }
+                    if scanBothOverview != nil, let session = model.scanBothSession, let entry = session.reviewingEntry {
+                        inlineReviewHeading(for: entry, in: session)
+                    }
+                    if scanBothOverview == nil || model.isReviewingScanBothVolume {
+                        previewContent.disabled(isUpdatingReimportSelection)
                     }
                 }
-                .disabled(isUpdatingReimportSelection)
                 .onChange(of: selectedFileFilter) { _, filter in
                     guard filter != nil else { return }
                     // Filtering can replace a tall page with the empty state.
                     scroll.scrollTo(ScrollTarget.files, anchor: .top)
                 }
+                .onChange(of: model.scanBothSession?.reviewingJobID, initial: true) { previousJobID, jobID in
+                    guard scanBothOverview != nil, previousJobID != nil || jobID != nil else { return }
+                    resetFileBrowser()
+                    if jobID == nil {
+                        scroll.scrollTo(ScrollTarget.overview, anchor: .top)
+                    } else {
+                        scroll.scrollTo(ScrollTarget.inlineReview, anchor: .top)
+                    }
+                }
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if model.previewTotals.copyFiles > 0 {
+            if scanBothOverview == nil, model.previewTotals.copyFiles > 0 {
                 ImportReviewFooter()
                     .environmentObject(model)
             }
@@ -116,16 +133,8 @@ struct ImportPreviewView: View {
                 .disabled(isUpdatingReimportSelection)
             }
         }
-        .onAppear {
-            reviewHeadingIsFocused = true
-        }
         .onChange(of: model.cardPath) {
-            thumbnailProvider.cancelAll()
-            quickLook.dismiss()
-            selectedFileFilter = nil
-            pinnedAutomaticFileFilter = nil
-            filePage = 0
-            selectedRowID = nil
+            resetFileBrowser()
         }
         .onChange(of: model.previewRows.count) {
             filePage = 0
@@ -133,12 +142,59 @@ struct ImportPreviewView: View {
                 selectedRowID = nil
             }
         }
-        .onChange(of: model.importUIPhase) {
-            if model.importUIPhase != .review {
-                thumbnailProvider.cancelAll()
-                quickLook.dismiss()
-            }
+        .onDisappear {
+            thumbnailProvider.cancelAll()
+            quickLook.dismiss()
         }
+    }
+
+    private var previewContent: some View {
+        LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
+            if scanBothOverview == nil {
+                ImportSourceSummaryView(
+                    allowsChange: true,
+                    allowsRescan: model.currentSummary.map { !model.needsRescan($0.jobID) } == true,
+                    compact: true
+                )
+            }
+
+            if model.isScanBothPlanLocked {
+                Label(L10n.tr("Plan settings are locked after imports start."), systemImage: "lock")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            if model.previewTotals.copyFiles == 0 {
+                zeroCopyCard
+            } else {
+                importPlanCard
+            }
+            fileBrowser
+        }
+    }
+
+    private func inlineReviewHeading(for entry: ScanBothSession.Entry, in session: ScanBothSession) -> some View {
+        Text(L10n.tr("Review \(session.volumeTitle(for: entry))"))
+            .font(.title3.weight(.semibold))
+            .focusable()
+            .focused($inlineReviewHeadingHasKeyboardFocus)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityFocused($reviewHeadingIsFocused)
+            .accessibilityIdentifier("import.scan-both.plan-heading")
+            .padding(.top, 12)
+            .id(ScrollTarget.inlineReview)
+            .task(id: entry.id) {
+                inlineReviewHeadingHasKeyboardFocus = true
+                reviewHeadingIsFocused = true
+            }
+    }
+
+    private func resetFileBrowser() {
+        thumbnailProvider.cancelAll()
+        quickLook.dismiss()
+        selectedFileFilter = nil
+        pinnedAutomaticFileFilter = nil
+        filePage = 0
+        selectedRowID = nil
     }
 
     private var reviewHeader: some View {
@@ -149,6 +205,7 @@ struct ImportPreviewView: View {
                     .fontWeight(.semibold)
                     .accessibilityFocused($reviewHeadingIsFocused)
                     .accessibilityIdentifier("import.phase.review.heading")
+                    .onAppear { reviewHeadingIsFocused = true }
                 Text(L10n.tr("Confirm what will be copied and where it will go."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -156,24 +213,7 @@ struct ImportPreviewView: View {
 
             Spacer(minLength: 12)
 
-            if isUpdatingReimportSelection {
-                ProgressView()
-                    .controlSize(.small)
-                    .accessibilityLabel(L10n.tr("Updating re-import selection…"))
-                Button(L10n.tr("Cancel"), role: .cancel) {
-                    model.cancelImport()
-                }
-                .buttonStyle(.bordered)
-                .disabled(!model.canCancelReimportSelection)
-            }
-
-            if model.isReviewingScanBothVolume {
-                Button(L10n.tr("Back to Scan Results")) {
-                    model.returnToScanBothResults()
-                }
-                .buttonStyle(.bordered)
-                .disabled(isUpdatingReimportSelection)
-            }
+            ImportReviewUpdateControls()
 
             if let summary = model.currentSummary, model.needsRescan(summary.jobID) {
                 Button(L10n.tr("Rescan Source")) {
@@ -207,10 +247,7 @@ struct ImportPreviewView: View {
             importOptionControls
 
             if hasSupportedMedia {
-                ImportDestinationFields()
-                insta360RescanOptions
-                defaultsAction
-                sessionControls
+                planSettingsFields
             }
 
             reimportControls
@@ -225,6 +262,17 @@ struct ImportPreviewView: View {
                 .font(.caption)
             }
         }
+    }
+
+    @ViewBuilder
+    private var planSettingsFields: some View {
+        Group {
+            ImportDestinationFields()
+            insta360RescanOptions
+            defaultsAction
+        }
+        .disabled(model.isScanBothPlanLocked)
+        sessionControls
     }
 
     @ViewBuilder
@@ -348,6 +396,7 @@ struct ImportPreviewView: View {
                 )
             }
         }
+        .disabled(model.isScanBothPlanLocked)
     }
 
     private func optionRow<Content: View>(
@@ -428,6 +477,7 @@ struct ImportPreviewView: View {
                 isOn: allSessionsBinding(\.includeSidecars)
             )
             .help(L10n.tr("Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups."))
+            .disabled(model.isScanBothPlanLocked)
         }
 
         if model.canCustomizeDates
@@ -436,6 +486,7 @@ struct ImportPreviewView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach($model.previewSessions) { $session in
                         sessionEditor(session: $session)
+                            .disabled(model.isScanBothPlanLocked)
                     }
                 }
                 .padding(.top, 8)
@@ -533,6 +584,7 @@ struct ImportPreviewView: View {
                     .buttonStyle(.bordered)
                 }
             }
+            .disabled(model.isScanBothPlanLocked)
         }
     }
 
@@ -588,10 +640,7 @@ struct ImportPreviewView: View {
             if hasSupportedMedia {
                 Divider()
                 importOptionControls
-                ImportDestinationFields()
-                insta360RescanOptions
-                defaultsAction
-                sessionControls
+                planSettingsFields
             }
 
             reimportControls
@@ -612,6 +661,7 @@ struct ImportPreviewView: View {
                     .buttonStyle(.bordered)
                 }
             }
+            .disabled(model.isScanBothPlanLocked)
         }
     }
 
@@ -941,7 +991,7 @@ struct ImportPreviewView: View {
     }
 
     private var showsMixedDestinationLayout: Bool {
-        model.importMediaSelection == .photosAndVideos
+        !model.isReviewingScanBothVolume && model.importMediaSelection == .photosAndVideos
             && (model.mediaContentProfile?.photoCount ?? 1) > 0
             && (model.mediaContentProfile?.videoCount ?? 1) > 0
     }
@@ -1178,7 +1228,25 @@ struct ImportPreviewView: View {
     }
 }
 
-private struct ImportReviewPrimaryAction: View {
+struct ImportReviewUpdateControls: View {
+    @Environment(\.locale) private var locale
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        if model.activeImportOperation == .reimportSelection {
+            ProgressView()
+                .controlSize(.small)
+                .accessibilityLabel(L10n.tr("Updating re-import selection…"))
+            Button(L10n.tr("Cancel"), role: .cancel) {
+                model.cancelImport()
+            }
+            .buttonStyle(.bordered)
+            .disabled(!model.canCancelReimportSelection)
+        }
+    }
+}
+
+struct ImportReviewPrimaryAction: View {
     @Environment(\.locale) private var locale
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var purchaseManager: PurchaseManager
@@ -1463,7 +1531,7 @@ private struct DestinationTreeRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(rootTitle)
                     .fontWeight(.medium)
-                Text(L10n.tr("└─ \(relativePath) · \(destination.fileCount) files · \(bytes)"))
+                Text(L10n.tr("└─ \(relativePath) · \(fileCount) · \(bytes)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -1472,8 +1540,10 @@ private struct DestinationTreeRow: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(L10n.tr("\(rootTitle), \(relativePath), \(destination.fileCount) files, \(bytes)"))
+        .accessibilityLabel(L10n.tr("\(rootTitle), \(relativePath), \(fileCount), \(bytes)"))
     }
+
+    private var fileCount: String { L10n.tr("\(destination.fileCount) files") }
 
     private var relativePath: String {
         destination.relativePath.isEmpty ? L10n.tr("Root") : destination.relativePath
@@ -1739,19 +1809,20 @@ private struct ImportFileInspector: View {
 }
 
 private struct ReimportSelectionActions: View {
+    @EnvironmentObject private var model: AppModel
     let rows: [ImportPreviewRow]
     let setReimportSelection: (Set<Int64>, Bool) -> Void
 
     var body: some View {
         let eligible = rows.filter(\.canReimport)
         let selected = rows.filter(\.canSkipReimport)
-        if !eligible.isEmpty {
+        if !model.isScanBothPlanLocked, !eligible.isEmpty {
             Button(L10n.tr("Import Anyway")) {
                 setReimportSelection(Set(eligible.map(\.id)), true)
             }
             .accessibilityIdentifier("import.review.reimport-selection")
         }
-        if !selected.isEmpty {
+        if !model.isScanBothPlanLocked, !selected.isEmpty {
             Button(L10n.tr("Skip Again")) {
                 setReimportSelection(Set(selected.map(\.id)), false)
             }

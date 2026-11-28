@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%1$@ · %2$lld ignorés";
 "%@ · Nothing selected" = "%1$@ · Aucune sélection";
 "%@, %@" = "%1$@, %2$@";
-"%@, %@, %lld files, %@" = "%1$@, %2$@, %3$lld fichiers, %4$@";
+"%@, %@, %@, %@" = "%1$@, %2$@, %3$@, %4$@";
 "%@, excluded by Copy selection" = "%1$@, exclu par le choix des fichiers à copier";
 "%lld" = "%1$lld";
 "%lld attention" = "%1$lld à vérifier";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%1$lld sur %2$lld";
 "%lld old jobs would be deleted" = "%1$lld anciennes tâches seraient supprimées";
 "%lld photos" = "%1$lld photos";
-"%lld scanned files · %@" = "%1$lld fichiers analysés · %2$@";
 "%lld support files" = "%1$lld fichiers auxiliaires";
 "%lld videos" = "%1$lld vidéos";
 "1 copy" = "1 copie";
@@ -68,9 +67,11 @@
 "Include All Previously Imported Files" = "Inclure tous les fichiers déjà importés";
 "Skip Again" = "Ignorer de nouveau";
 "Start Imports" = "Lancer les imports";
+"%@ and %@ both target %@ in the same folder. Change one volume’s Shoot name or Folder label in Customize Dates, or skip that volume." = "%@ et %@ copieraient %@ dans le même dossier. Pour un volume, modifiez le nom de la séance ou le libellé du dossier dans Personnaliser les dates, ou ignorez ce volume.";
 "Updating re-import selection…" = "Mise à jour de la sélection de réimportation…";
 "macOS needs your permission to read this source." = "macOS a besoin de votre autorisation pour lire cette source.";
 "Allow Access to %@" = "Autoriser l’accès à %1$@";
+"Allow Access to Original Destinations" = "Autoriser l’accès aux destinations d’origine";
 "Allow Access to Source" = "Autoriser l’accès à la source";
 "Allow Scan" = "Autoriser l’analyse";
 "Already Exists" = "Déjà présent";
@@ -125,6 +126,7 @@
 "Choose SD Card or Source Folder" = "Choisir une carte SD ou un dossier source";
 "Choose Video Destination" = "Choisir la destination des vidéos";
 "Choose a card or source folder" = "Choisir une carte ou un dossier source";
+"Choose %@ to restore access." = "Choisissez %@ pour rétablir l’accès.";
 "Choose a destination folder" = "Choisir un dossier de destination";
 "Choose a folder" = "Choisir un dossier";
 "Choose a retention period to preview or delete old history." = "Choisissez une durée de conservation pour prévisualiser ou supprimer l’ancien historique.";
@@ -185,6 +187,7 @@
 "Could not save settings: %@" = "Impossible d’enregistrer les réglages : %1$@";
 "Could not update background helper diagnostics" = "Impossible de mettre à jour le diagnostic de l’assistant en arrière-plan";
 "Could not update background prompt: %@" = "Impossible de mettre à jour la notification en arrière-plan : %1$@";
+"Continue Without Access" = "Continuer sans accès";
 "Couldn’t Continue" = "Impossible de continuer";
 "Couldn’t check available space · %@ planned" = "Espace disponible non vérifiable · %1$@ prévus";
 "Crash Reports" = "Rapports de plantage";
@@ -292,6 +295,7 @@
 "Imported with errors" = "Importé avec des erreurs";
 "Importing" = "Importation en cours";
 "Importing %lld of %lld files" = "Importation de %1$lld fichiers sur %2$lld";
+"Importing %lld of 1 file" = "Importation du fichier (%lld/1)";
 "Importing %lld%% at %@/s" = "Importation à %1$lld %%, %2$@/s";
 "Include camera support files (%lld)" = "Inclure les fichiers auxiliaires de l’appareil (%1$lld)";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "Inclut les métadonnées, proxies, fichiers audio, miniatures et autres fichiers auxiliaires dans les sauvegardes vidéo.";
@@ -496,6 +500,8 @@
 "Settings…" = "Réglages…";
 "Setup failed" = "Échec de la configuration";
 "Setup skipped. Defaults can be changed in Settings." = "Configuration ignorée. Vous pouvez modifier les valeurs par défaut dans Réglages.";
+"Plan settings are locked after imports start." = "Les réglages du plan sont verrouillés une fois les imports lancés.";
+"Shared Destination" = "Destination commune";
 "Shareable with Family Sharing" = "Compatible avec le partage familial";
 "Shoot" = "Séance";
 "Shoot name" = "Nom de la séance";
@@ -547,6 +553,7 @@
 "The bundled background helper could not be found. Reinstall %@ in Applications." = "L’assistant en arrière-plan intégré est introuvable. Réinstallez %1$@ dans Applications.";
 "The current scan and review will be discarded. No copied files are deleted." = "L’analyse et la vérification actuelles seront abandonnées. Aucun fichier copié ne sera supprimé.";
 "The destination folder is unavailable." = "Le dossier de destination est indisponible.";
+"The shared destination changed. Choose the folder again." = "La destination commune a changé. Choisissez à nouveau le dossier.";
 "The import database contains an invalid value." = "La base de données d’importation contient une valeur invalide.";
 "The portable import ledger is not a regular file at %@" = "Le registre d’importation portable dans %1$@ n’est pas un fichier ordinaire";
 "The portable import ledger is too large (%@)" = "Le registre d’importation portable est trop volumineux (%1$@)";
@@ -596,7 +603,7 @@
 "macOS returned an unrecognized background helper status." = "macOS a renvoyé un état d’assistant en arrière-plan non reconnu.";
 "used %lld times" = "utilisé %1$lld fois";
 "used once" = "utilisé une fois";
-"└─ %@ · %lld files · %@" = "└─ %1$@ · %2$lld fichiers · %3$@";
+"└─ %@ · %@ · %@" = "└─ %1$@ · %2$@ · %3$@";
 "14-day trial available" = "Essai de 14 jours disponible";
 "Buy Lifetime for %@" = "Acheter l’accès à vie pour %@";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "Continuez à prévisualiser chaque carte gratuitement. Démarrez un essai ou effectuez un achat unique pour des importations illimitées.";
@@ -633,7 +640,9 @@
 "Try again. If you already activated your trial or bought lifetime access, choose Restore Purchases." = "Réessayez. Si vous avez déjà activé votre essai ou acheté l’accès à vie, choisissez Restaurer les achats.";
 "The import plan changed. Review it before copying." = "Le plan d’importation a changé. Vérifiez-le avant de copier.";
 "Reconnect the original card or restore its source folder, then retry." = "Reconnectez la carte d’origine ou restaurez son dossier source, puis réessayez.";
+"SD Card Import can check the Insta360 files already copied if you allow access to their folders. Continuing without access may include those files in the new plan." = "SD Card Import peut vérifier les fichiers Insta360 déjà copiés si vous autorisez l’accès à leurs dossiers. Si vous continuez sans accès, ces fichiers pourront figurer dans le nouveau plan.";
 "Scan Both" = "Analyser les deux";
+"Scan Both uses one destination for both volumes. Choose one volume to import it to a different destination." = "Scanner les deux utilise la même destination pour les deux volumes. Choisissez un seul volume pour l’importer vers une autre destination.";
 "Choose one or both storage volumes to scan." = "Choisissez un ou deux volumes à analyser.";
 "Access declined" = "Accès refusé";
 "Review scan results" = "Vérifier les résultats de l’analyse";
@@ -642,6 +651,7 @@
 "%lld files scanned" = "%lld fichiers analysés";
 "Review %@" = "Vérifier %@";
 "Rescan Source" = "Réanalyser la source";
+"Restore the original destination folder or start a new scan." = "Rétablissez le dossier de destination d’origine ou lancez une nouvelle analyse.";
 "Starting a new scan closes this Scan Both session. Any remaining volumes will need a new scan." = "Une nouvelle analyse met fin à cette session d’analyse des deux volumes. Vous devrez analyser à nouveau les volumes restants.";
 "Import stopped because %@ disconnected." = "L’importation s’est arrêtée à la suite de la déconnexion de %@.";
 "Discard pending scan results?" = "Abandonner les résultats de l’analyse en attente ?";
