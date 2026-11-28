@@ -62,7 +62,7 @@ struct ManualImportView: View {
                     AppSection(session.deviceName, systemImage: "externaldrive") {
                         ForEach(session.entries) { entry in
                             HStack {
-                                Text(entry.volume.name).fontWeight(.medium)
+                                Text(session.volumeTitle(for: entry)).fontWeight(.medium)
                                 Spacer()
                                 scanBothStatus(entry.state)
                             }
@@ -123,14 +123,19 @@ struct ManualImportView: View {
 
     private func scanBothVolumeCard(_ entry: ScanBothSession.Entry, in session: ScanBothSession) -> some View {
         let isEditing = session.reviewingEntry?.id == entry.id
+        let volumeTitle = session.volumeTitle(for: entry)
         return AppSection(entry.volume.name, systemImage: "externaldrive") {
             VStack(alignment: .leading, spacing: 6) {
                 scanBothStatus(entry.state)
+                let scannedPath = entry.summary.map {
+                    URL(fileURLWithPath: $0.mountPath, isDirectory: true).standardizedFileURL.path
+                }
+                if let scannedPath, scannedPath != entry.volume.mountPath {
+                    scanBothPath(scannedPath)
+                } else if session.hasDuplicateVolumeName(for: entry) {
+                    scanBothPath(entry.volume.mountPath)
+                }
                 if let summary = entry.summary {
-                    let scannedPath = URL(fileURLWithPath: summary.mountPath, isDirectory: true).standardizedFileURL.path
-                    if scannedPath != entry.volume.mountPath {
-                        scanBothPath(scannedPath)
-                    }
                     ScanPortableReceiptWarning(summary: summary)
                     if entry.awaitsImport {
                         scanBothPlanSummary(entry, summary: summary, isEditing: isEditing)
@@ -148,8 +153,8 @@ struct ManualImportView: View {
             .font(.callout)
 
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { scanBothReviewActions(entry, isEditing: isEditing) }
-                VStack(alignment: .leading, spacing: 6) { scanBothReviewActions(entry, isEditing: isEditing) }
+                HStack(spacing: 8) { scanBothReviewActions(entry, title: volumeTitle, isEditing: isEditing) }
+                VStack(alignment: .leading, spacing: 6) { scanBothReviewActions(entry, title: volumeTitle, isEditing: isEditing) }
             }
         }
         .overlay {
@@ -218,9 +223,10 @@ struct ManualImportView: View {
     @ViewBuilder
     private func scanBothFooterContext(_ session: ScanBothSession) -> some View {
         if let entry = session.reviewingEntry {
-            Label(entry.volume.name, systemImage: "externaldrive")
+            Label(session.volumeTitle(for: entry), systemImage: "externaldrive")
                 .font(.callout.weight(.semibold))
                 .lineLimit(1)
+                .truncationMode(.middle)
         } else {
             Button(L10n.tr("Change Source")) {
                 model.changeScanBothSource()
@@ -253,7 +259,7 @@ struct ManualImportView: View {
     }
 
     @ViewBuilder
-    private func scanBothReviewActions(_ entry: ScanBothSession.Entry, isEditing: Bool) -> some View {
+    private func scanBothReviewActions(_ entry: ScanBothSession.Entry, title: String, isEditing: Bool) -> some View {
         switch entry.disposition {
         case .pending:
             if entry.confirmation != nil, !isEditing {
@@ -266,6 +272,7 @@ struct ManualImportView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(model.isWorking || model.isEjectingSource)
+                .accessibilityValue(title)
             }
             if let summary = entry.summary {
                 if model.needsRescan(summary.jobID) {
@@ -274,13 +281,14 @@ struct ManualImportView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(model.isWorking || model.isEjectingSource)
+                    .accessibilityValue(title)
                 } else if !isEditing {
                     Button(entry.confirmation == nil ? L10n.tr("Review import") : L10n.tr("Edit Plan")) {
                         model.reviewScanBothVolume(entry.id)
                     }
                     .buttonStyle(.bordered)
                     .disabled(model.isWorking || model.isEjectingSource)
-                    .accessibilityLabel(L10n.tr("Review \(entry.volume.name)"))
+                    .accessibilityLabel(L10n.tr("Review \(title)"))
                     .accessibilityIdentifier("import.scan-both.review.\(entry.volume.mountPath)")
                 }
             }
@@ -379,13 +387,13 @@ struct ManualImportView: View {
                     if let session = model.scanBothSession, session.entry(for: result.jobID) != nil {
                         ForEach(session.entries) { entry in
                             if let earlierResult = entry.result, earlierResult.jobID != result.jobID {
-                                AppSection(entry.volume.name, systemImage: "externaldrive") {
+                                AppSection(session.volumeTitle(for: entry), systemImage: "externaldrive") {
                                     scanBothCopySummary(earlierResult, interruption: entry.copyInterruption)
                                 }
                             }
                         }
-                        if let name = session.entry(for: result.jobID)?.volume.name {
-                            Text(name).font(.headline)
+                        if let entry = session.entry(for: result.jobID) {
+                            Text(session.volumeTitle(for: entry)).font(.headline)
                         }
                     }
                     ImportResultView(receipt: receipt)
@@ -663,7 +671,8 @@ struct ImportSourceSummaryView: View {
             return volume.detailText
         }
         if let summary = model.currentSummary {
-            return L10n.tr("\(summary.scannedFiles) scanned files · \(model.importSourcePath)")
+            let scanned = L10n.tr("\(summary.scannedFiles) files scanned")
+            return L10n.tr("\(scanned) · \(model.importSourcePath)")
         }
         return model.importSourcePath
     }

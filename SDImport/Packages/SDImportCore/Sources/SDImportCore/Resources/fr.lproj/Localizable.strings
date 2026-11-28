@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%1$@ · %2$lld ignorés";
 "%@ · Nothing selected" = "%1$@ · Aucune sélection";
 "%@, %@" = "%1$@, %2$@";
-"%@, %@, %lld files, %@" = "%1$@, %2$@, %3$lld fichiers, %4$@";
+"%@, %@, %@, %@" = "%1$@, %2$@, %3$@, %4$@";
 "%@, excluded by Copy selection" = "%1$@, exclu par le choix des fichiers à copier";
 "%lld" = "%1$lld";
 "%lld attention" = "%1$lld à vérifier";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%1$lld sur %2$lld";
 "%lld old jobs would be deleted" = "%1$lld anciennes tâches seraient supprimées";
 "%lld photos" = "%1$lld photos";
-"%lld scanned files · %@" = "%1$lld fichiers analysés · %2$@";
 "%lld support files" = "%1$lld fichiers auxiliaires";
 "%lld videos" = "%1$lld vidéos";
 "1 copy" = "1 copie";
@@ -292,6 +291,7 @@
 "Imported with errors" = "Importé avec des erreurs";
 "Importing" = "Importation en cours";
 "Importing %lld of %lld files" = "Importation de %1$lld fichiers sur %2$lld";
+"Importing %lld of 1 file" = "Importation du fichier (%lld/1)";
 "Importing %lld%% at %@/s" = "Importation à %1$lld %%, %2$@/s";
 "Include camera support files (%lld)" = "Inclure les fichiers auxiliaires de l’appareil (%1$lld)";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "Inclut les métadonnées, proxies, fichiers audio, miniatures et autres fichiers auxiliaires dans les sauvegardes vidéo.";
@@ -596,7 +596,7 @@
 "macOS returned an unrecognized background helper status." = "macOS a renvoyé un état d’assistant en arrière-plan non reconnu.";
 "used %lld times" = "utilisé %1$lld fois";
 "used once" = "utilisé une fois";
-"└─ %@ · %lld files · %@" = "└─ %1$@ · %2$lld fichiers · %3$@";
+"└─ %@ · %@ · %@" = "└─ %1$@ · %2$@ · %3$@";
 "14-day trial available" = "Essai de 14 jours disponible";
 "Buy Lifetime for %@" = "Acheter l’accès à vie pour %@";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "Continuez à prévisualiser chaque carte gratuitement. Démarrez un essai ou effectuez un achat unique pour des importations illimitées.";

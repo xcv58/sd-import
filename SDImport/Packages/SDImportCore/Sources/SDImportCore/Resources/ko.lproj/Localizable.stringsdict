@@ -98,6 +98,22 @@
 			<string>파일 %1$lld개 준비됨</string>
 		</dict>
 	</dict>
+	<key>%lld files scanned</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>파일 %lld개 스캔 완료</string>
+			<key>other</key>
+			<string>파일 %lld개 스캔 완료</string>
+		</dict>
+	</dict>
 	<key>%lld files were imported on another Mac</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

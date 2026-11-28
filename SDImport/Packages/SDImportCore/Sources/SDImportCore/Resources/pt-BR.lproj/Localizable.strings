@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%1$@ · %2$lld ignorados";
 "%@ · Nothing selected" = "%1$@ · Nada selecionado";
 "%@, %@" = "%1$@, %2$@";
-"%@, %@, %lld files, %@" = "%1$@, %2$@, %3$lld arquivos, %4$@";
+"%@, %@, %@, %@" = "%1$@, %2$@, %3$@, %4$@";
 "%@, excluded by Copy selection" = "%1$@, excluído pela seleção de cópia";
 "%lld" = "%1$lld";
 "%lld attention" = "%1$lld requerem atenção";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%1$lld de %2$lld";
 "%lld old jobs would be deleted" = "%1$lld tarefas antigas seriam excluídas";
 "%lld photos" = "%1$lld fotos";
-"%lld scanned files · %@" = "%1$lld arquivos verificados · %2$@";
 "%lld support files" = "%1$lld arquivos auxiliares";
 "%lld videos" = "%1$lld vídeos";
 "1 copy" = "1 cópia";
@@ -292,6 +291,7 @@
 "Imported with errors" = "Importado com erros";
 "Importing" = "Importando";
 "Importing %lld of %lld files" = "Importando %1$lld de %2$lld arquivos";
+"Importing %lld of 1 file" = "Importando %lld de 1 arquivo";
 "Importing %lld%% at %@/s" = "Importando %1$lld%% a %2$@/s";
 "Include camera support files (%lld)" = "Incluir arquivos auxiliares da câmera (%1$lld)";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "Inclui metadados, proxies, áudio, miniaturas e outros arquivos auxiliares nos backups de vídeo.";
@@ -596,7 +596,7 @@
 "macOS returned an unrecognized background helper status." = "O macOS retornou um estado de auxiliar em segundo plano não reconhecido.";
 "used %lld times" = "usado %1$lld vezes";
 "used once" = "usado uma vez";
-"└─ %@ · %lld files · %@" = "└─ %1$@ · %2$lld arquivos · %3$@";
+"└─ %@ · %@ · %@" = "└─ %1$@ · %2$@ · %3$@";
 "14-day trial available" = "Teste de 14 dias disponível";
 "Buy Lifetime for %@" = "Comprar acesso vitalício por %@";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "Continue visualizando todos os cartões gratuitamente. Inicie um teste ou faça uma compra única para importações ilimitadas.";

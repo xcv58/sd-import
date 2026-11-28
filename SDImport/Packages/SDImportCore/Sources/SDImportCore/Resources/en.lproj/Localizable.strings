@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%@ · %lld skipped";
 "%@ · Nothing selected" = "%@ · Nothing selected";
 "%@, %@" = "%@, %@";
-"%@, %@, %lld files, %@" = "%@, %@, %lld files, %@";
+"%@, %@, %@, %@" = "%@, %@, %@, %@";
 "%@, excluded by Copy selection" = "%@, excluded by Copy selection";
 "%lld" = "%lld";
 "%lld attention" = "%lld attention";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%lld of %lld";
 "%lld old jobs would be deleted" = "%lld old jobs would be deleted";
 "%lld photos" = "%lld photos";
-"%lld scanned files · %@" = "%lld scanned files · %@";
 "%lld support files" = "%lld support files";
 "%lld videos" = "%lld videos";
 "1 copy" = "1 copy";
@@ -292,6 +291,7 @@
 "Imported with errors" = "Imported with errors";
 "Importing" = "Importing";
 "Importing %lld of %lld files" = "Importing %lld of %lld files";
+"Importing %lld of 1 file" = "Importing %lld of 1 file";
 "Importing %lld%% at %@/s" = "Importing %lld%% at %@/s";
 "Include camera support files (%lld)" = "Include camera support files (%lld)";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups.";
@@ -596,7 +596,7 @@
 "macOS returned an unrecognized background helper status." = "macOS returned an unrecognized background helper status.";
 "used %lld times" = "used %lld times";
 "used once" = "used once";
-"└─ %@ · %lld files · %@" = "└─ %@ · %lld files · %@";
+"└─ %@ · %@ · %@" = "└─ %@ · %@ · %@";
 "14-day trial available" = "14-day trial available";
 "Buy Lifetime for %@" = "Buy Lifetime for %@";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports.";

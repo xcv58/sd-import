@@ -139,6 +139,18 @@ struct ScanBothSession {
         entries.first { $0.jobID == jobID }
     }
 
+    func hasDuplicateVolumeName(for entry: Entry) -> Bool {
+        entries.contains {
+            $0.id != entry.id && $0.volume.name.localizedStandardCompare(entry.volume.name) == .orderedSame
+        }
+    }
+
+    func volumeTitle(for entry: Entry) -> String {
+        hasDuplicateVolumeName(for: entry)
+            ? L10n.tr("\(entry.volume.name) · \(entry.volume.mountPath)")
+            : entry.volume.name
+    }
+
     var hasPendingResults: Bool {
         entries.contains(where: \.awaitsImport)
     }
@@ -876,7 +888,10 @@ final class AppModel: ObservableObject {
         isShowingScanBothResults && !isWorking && !isEjectingSource && scanBothSession?.canStartImports == true
     }
     var activeScanBothImportVolumeName: String? {
-        isRunningScanBothImports ? scanBothSession?.reviewingEntry?.volume.name : nil
+        guard isRunningScanBothImports, let session = scanBothSession, let entry = session.reviewingEntry else {
+            return nil
+        }
+        return session.volumeTitle(for: entry)
     }
     var importSourcePath: String {
         if isReviewingScanBothVolume, let currentSummary { return currentSummary.mountPath }
@@ -5594,6 +5609,9 @@ final class AppModel: ObservableObject {
             if progress.throughputBytesPerSecond > 1 {
                 let speed = L10n.fileSize(Int64(progress.throughputBytesPerSecond))
                 return L10n.tr("Importing \(percent)% at \(speed)/s")
+            }
+            if progress.totalFiles == 1 {
+                return L10n.tr("Importing \(progress.doneFiles) of 1 file")
             }
             return L10n.tr("Importing \(progress.doneFiles) of \(progress.totalFiles) files")
         }

@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%1$@ · %2$lld omitidos";
 "%@ · Nothing selected" = "%1$@ · Ningún archivo seleccionado";
 "%@, %@" = "%1$@, %2$@";
-"%@, %@, %lld files, %@" = "%1$@, %2$@, %3$lld archivos, %4$@";
+"%@, %@, %@, %@" = "%1$@, %2$@, %3$@, %4$@";
 "%@, excluded by Copy selection" = "%1$@, excluido por la selección de copia";
 "%lld" = "%1$lld";
 "%lld attention" = "%1$lld requieren atención";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%1$lld de %2$lld";
 "%lld old jobs would be deleted" = "Se eliminarían %1$lld tareas antiguas";
 "%lld photos" = "%1$lld fotos";
-"%lld scanned files · %@" = "%1$lld archivos analizados · %2$@";
 "%lld support files" = "%1$lld archivos auxiliares";
 "%lld videos" = "%1$lld vídeos";
 "1 copy" = "1 copia";
@@ -292,6 +291,7 @@
 "Imported with errors" = "Importado con errores";
 "Importing" = "Importando";
 "Importing %lld of %lld files" = "Importando %1$lld de %2$lld archivos";
+"Importing %lld of 1 file" = "Importando %lld de 1 archivo";
 "Importing %lld%% at %@/s" = "Importando %1$lld%% a %2$@/s";
 "Include camera support files (%lld)" = "Incluir archivos auxiliares de la cámara (%1$lld)";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "Incluye metadatos, proxies, audio, miniaturas y otros archivos auxiliares en las copias de seguridad de vídeo.";
@@ -596,7 +596,7 @@
 "macOS returned an unrecognized background helper status." = "macOS devolvió un estado del asistente en segundo plano no reconocido.";
 "used %lld times" = "usado %1$lld veces";
 "used once" = "usado una vez";
-"└─ %@ · %lld files · %@" = "└─ %1$@ · %2$lld archivos · %3$@";
+"└─ %@ · %@ · %@" = "└─ %1$@ · %2$@ · %3$@";
 "14-day trial available" = "Prueba de 14 días disponible";
 "Buy Lifetime for %@" = "Comprar acceso de por vida por %@";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "Sigue previsualizando cada tarjeta gratis. Inicia una prueba o haz una compra única para completar importaciones ilimitadas.";

@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%1$@ · 已跳过 %2$lld";
 "%@ · Nothing selected" = "%1$@ · 未选择任何文件";
 "%@, %@" = "%1$@，%2$@";
-"%@, %@, %lld files, %@" = "%1$@，%2$@，%3$lld 个文件，%4$@";
+"%@, %@, %@, %@" = "%1$@，%2$@，%3$@，%4$@";
 "%@, excluded by Copy selection" = "%1$@，已被复制选项排除";
 "%lld" = "%1$lld";
 "%lld attention" = "%1$lld 项需注意";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%1$lld，共 %2$lld";
 "%lld old jobs would be deleted" = "将删除 %1$lld 个旧任务";
 "%lld photos" = "%1$lld 张照片";
-"%lld scanned files · %@" = "已扫描 %1$lld 个文件 · %2$@";
 "%lld support files" = "%1$lld 个支持文件";
 "%lld videos" = "%1$lld 个视频";
 "1 copy" = "1 次复制";
@@ -292,6 +291,7 @@
 "Imported with errors" = "已导入，但有错误";
 "Importing" = "正在导入";
 "Importing %lld of %lld files" = "正在导入 %1$lld/%2$lld 个文件";
+"Importing %lld of 1 file" = "正在导入 %lld/1 个文件";
 "Importing %lld%% at %@/s" = "正在导入 %1$lld%%，速度 %2$@/秒";
 "Include camera support files (%lld)" = "包含相机支持文件（%1$lld）";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "在视频素材备份中包含元数据、代理、音频、缩略图和其他相机支持文件。";
@@ -596,7 +596,7 @@
 "macOS returned an unrecognized background helper status." = "macOS 返回了无法识别的后台辅助程序状态。";
 "used %lld times" = "已使用 %1$lld 次";
 "used once" = "已使用 1 次";
-"└─ %@ · %lld files · %@" = "└─ %1$@ · %2$lld 个文件 · %3$@";
+"└─ %@ · %@ · %@" = "└─ %1$@ · %2$@ · %3$@";
 "14-day trial available" = "可开始 14 天试用";
 "Buy Lifetime for %@" = "以 %@ 买断";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "每张存储卡都可免费预览。开始试用或一次性购买，即可不限次数完成导入。";

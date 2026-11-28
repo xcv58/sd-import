@@ -457,6 +457,23 @@ struct ScanBothSessionTests {
         )
     }
 
+    @Test("equal volume names use their distinct mount paths")
+    func disambiguatesDuplicateVolumeNames() throws {
+        let first = Self.volume("CAMERA", disk: "disk4", at: URL(fileURLWithPath: "/Volumes/CAMERA"))
+        let second = Self.volume("CAMERA", disk: "disk5", at: URL(fileURLWithPath: "/Volumes/CAMERA 1"))
+        let session = try #require(ScanBothSession(deviceName: "Fixture Camera", entries: [
+            .init(id: UUID(), volume: first), .init(id: UUID(), volume: second)
+        ]))
+        let titles = session.entries.map { session.volumeTitle(for: $0) }
+        #expect(titles[0].hasSuffix(first.mountPath))
+        #expect(titles[1].hasSuffix(second.mountPath))
+        #expect(titles[0] != titles[1])
+
+        let distinctSession = try scannedSession()
+        #expect(distinctSession.entries.map { distinctSession.volumeTitle(for: $0) }
+            == distinctSession.entries.map(\.volume.name))
+    }
+
     @Test("switching inline plans saves the draft and keeps the sibling approved")
     func switchesInlinePlans() async throws {
         try await withScannedInlinePlans { model, session, roots in

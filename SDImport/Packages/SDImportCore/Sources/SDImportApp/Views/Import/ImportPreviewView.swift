@@ -140,8 +140,8 @@ struct ImportPreviewView<Overview: View>: View {
 
     private var previewContent: some View {
         LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
-            if let entry = model.scanBothSession?.reviewingEntry, scanBothOverview != nil {
-                Text(L10n.tr("Review \(entry.volume.name)"))
+            if let session = model.scanBothSession, let entry = session.reviewingEntry, scanBothOverview != nil {
+                Text(L10n.tr("Review \(session.volumeTitle(for: entry))"))
                     .font(.title3.weight(.semibold))
                     .accessibilityAddTraits(.isHeader)
             } else {
@@ -1493,7 +1493,7 @@ private struct DestinationTreeRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(rootTitle)
                     .fontWeight(.medium)
-                Text(L10n.tr("└─ \(relativePath) · \(destination.fileCount) files · \(bytes)"))
+                Text(L10n.tr("└─ \(relativePath) · \(fileCount) · \(bytes)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -1502,8 +1502,10 @@ private struct DestinationTreeRow: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(L10n.tr("\(rootTitle), \(relativePath), \(destination.fileCount) files, \(bytes)"))
+        .accessibilityLabel(L10n.tr("\(rootTitle), \(relativePath), \(fileCount), \(bytes)"))
     }
+
+    private var fileCount: String { L10n.tr("\(destination.fileCount) files") }
 
     private var relativePath: String {
         destination.relativePath.isEmpty ? L10n.tr("Root") : destination.relativePath

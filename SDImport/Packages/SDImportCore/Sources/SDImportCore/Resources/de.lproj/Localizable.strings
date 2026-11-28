@@ -27,7 +27,7 @@
 "%@ · %lld skipped" = "%1$@ · %2$lld übersprungen";
 "%@ · Nothing selected" = "%1$@ · Nichts ausgewählt";
 "%@, %@" = "%1$@, %2$@";
-"%@, %@, %lld files, %@" = "%1$@, %2$@, %3$lld Dateien, %4$@";
+"%@, %@, %@, %@" = "%1$@, %2$@, %3$@, %4$@";
 "%@, excluded by Copy selection" = "%1$@, durch Kopierauswahl ausgeschlossen";
 "%lld" = "%1$lld";
 "%lld attention" = "%1$lld zu prüfen";
@@ -44,7 +44,6 @@
 "%lld of %lld" = "%1$lld von %2$lld";
 "%lld old jobs would be deleted" = "%1$lld alte Aufträge würden gelöscht";
 "%lld photos" = "%1$lld Fotos";
-"%lld scanned files · %@" = "%1$lld gescannte Dateien · %2$@";
 "%lld support files" = "%1$lld Begleitdateien";
 "%lld videos" = "%1$lld Videos";
 "1 copy" = "1 Kopie";
@@ -292,6 +291,7 @@
 "Imported with errors" = "Mit Fehlern importiert";
 "Importing" = "Wird importiert";
 "Importing %lld of %lld files" = "%1$lld von %2$lld Dateien werden importiert";
+"Importing %lld of 1 file" = "Datei wird importiert (%lld/1)";
 "Importing %lld%% at %@/s" = "Import %1$lld%% mit %2$@/s";
 "Include camera support files (%lld)" = "Kamera-Begleitdateien einschließen (%1$lld)";
 "Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups." = "Schließt Metadaten, Proxys, Audio, Vorschaubilder und weitere Kamera-Begleitdateien in Videobackups ein.";
@@ -596,7 +596,7 @@
 "macOS returned an unrecognized background helper status." = "macOS hat einen unbekannten Hintergrundhelfer-Status zurückgegeben.";
 "used %lld times" = "%1$lld-mal verwendet";
 "used once" = "einmal verwendet";
-"└─ %@ · %lld files · %@" = "└─ %1$@ · %2$lld Dateien · %3$@";
+"└─ %@ · %@ · %@" = "└─ %1$@ · %2$@ · %3$@";
 "14-day trial available" = "14-tägige Testversion verfügbar";
 "Buy Lifetime for %@" = "Dauerhaften Zugriff für %@ kaufen";
 "Keep previewing every card for free. Start a trial or make a one-time purchase for unlimited completed imports." = "Zeige weiterhin jede Karte kostenlos in der Vorschau an. Starte eine Testversion oder kaufe mit einer einmaligen Zahlung unbegrenzte Importe.";
