@@ -3424,7 +3424,21 @@ final class AppModel: ObservableObject {
     }
 
     func startScanBothImports() {
-        guard canStartScanBothImports else { return }
+        guard canStartScanBothImports, let session = scanBothSession else { return }
+        let first = session.entries[0]
+        let second = session.entries[1]
+        if !session.hasStartedImports, first.awaitsImport, second.awaitsImport,
+           let firstPlan = first.confirmation, let secondPlan = second.confirmation,
+           let filename = firstPlan.destinations.firstRecordingFilenameCollision(
+               in: firstPlan.plans, with: secondPlan.destinations, siblingPlans: secondPlan.plans
+           ) {
+            let firstVolume = session.volumeTitle(for: first)
+            let secondVolume = session.volumeTitle(for: second)
+            showFolderAccessError {
+                L10n.tr("\(firstVolume) and \(secondVolume) both target \(filename) in the same folder. Change the Shoot name for one volume or skip it.")
+            }
+            return
+        }
         guard purchaseManager.canStartImport else {
             purchaseManager.isShowingPurchase = true
             return

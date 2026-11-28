@@ -195,6 +195,35 @@ public struct ReviewedImportDestinations: Sendable {
             && skippedFiles.allSatisfy { $0.value.matches(path: $0.key) }
     }
 
+    public func firstRecordingFilenameCollision(
+        in plans: [ImportFilePlan], with sibling: Self, siblingPlans: [ImportFilePlan]
+    ) -> String? {
+        let destinations = Set(recordingCopyDestinations(in: plans).map(\.key))
+        guard !destinations.isEmpty else { return nil }
+        return sibling.recordingCopyDestinations(in: siblingPlans).first { destinations.contains($0.key) }?.filename
+    }
+
+    private func recordingCopyDestinations(in plans: [ImportFilePlan]) -> [(key: String, filename: String)] {
+        var caseSensitivity: [URL: Bool] = [:]
+        return plans.compactMap { plan in
+            guard plan.willCopy, let path = plan.destinationPath else { return nil }
+            let url = URL(fileURLWithPath: path)
+            guard Insta360ClipDetector.isProprietaryRecordingExtension(url.pathExtension),
+                  let directory = directories[url.deletingLastPathComponent().path] else { return nil }
+
+            let ancestor = directory.resolvedAncestor
+            let supportsCaseSensitiveNames = caseSensitivity[ancestor] ?? (
+                (try? ancestor.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey]))?
+                    .volumeSupportsCaseSensitiveNames == true
+            )
+            caseSensitivity[ancestor] = supportsCaseSensitiveNames
+            let resolvedPath = directory.resolvedPath.appendingPathComponent(url.lastPathComponent).path
+                .precomposedStringWithCanonicalMapping
+            let key = supportsCaseSensitiveNames ? resolvedPath : resolvedPath.lowercased()
+            return (key, url.lastPathComponent)
+        }
+    }
+
     func matches(_ directory: URL) -> Bool {
         root?.matches() != false && matchesApprovedDirectory(directory)
     }

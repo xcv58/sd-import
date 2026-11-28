@@ -67,6 +67,7 @@
 "Include All Previously Imported Files" = "包括所有已导入的文件";
 "Skip Again" = "再次跳过";
 "Start Imports" = "开始导入";
+"%@ and %@ both target %@ in the same folder. Change the Shoot name for one volume or skip it." = "%@ 和 %@ 都会将 %@ 复制到同一文件夹。请更改其中一个卷的拍摄名称，或跳过该卷。";
 "Updating re-import selection…" = "正在更新重新导入选择…";
 "macOS needs your permission to read this source." = "macOS 需要你的许可才能读取此来源。";
 "Allow Access to %@" = "允许访问 %1$@";

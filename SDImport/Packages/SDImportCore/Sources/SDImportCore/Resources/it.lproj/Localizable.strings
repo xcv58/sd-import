@@ -67,6 +67,7 @@
 "Include All Previously Imported Files" = "Includi tutti i file già importati";
 "Skip Again" = "Ignora di nuovo";
 "Start Imports" = "Avvia importazioni";
+"%@ and %@ both target %@ in the same folder. Change the Shoot name for one volume or skip it." = "%@ e %@ copierebbero %@ nella stessa cartella. Cambia il nome della sessione di uno dei volumi o saltalo.";
 "Updating re-import selection…" = "Aggiornamento della selezione per la reimportazione…";
 "macOS needs your permission to read this source." = "macOS ha bisogno del tuo permesso per leggere questa sorgente.";
 "Allow Access to %@" = "Consenti accesso a %1$@";

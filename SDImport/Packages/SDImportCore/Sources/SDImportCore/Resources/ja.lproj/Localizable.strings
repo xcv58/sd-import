@@ -67,6 +67,7 @@
 "Include All Previously Imported Files" = "読み込み済みのファイルをすべて含める";
 "Skip Again" = "再びスキップ";
 "Start Imports" = "インポートを開始";
+"%@ and %@ both target %@ in the same folder. Change the Shoot name for one volume or skip it." = "%@ と %@ は %@ を同じフォルダにコピーします。どちらかのボリュームの撮影名を変更するか、スキップしてください。";
 "Updating re-import selection…" = "再読み込みの選択を更新中…";
 "macOS needs your permission to read this source." = "この読み込み元を読み取るには、macOS でアクセスを許可する必要があります。";
 "Allow Access to %@" = "%1$@ へのアクセスを許可";

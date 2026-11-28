@@ -556,6 +556,60 @@ struct ScanBothSessionTests {
         }
     }
 
+    @Test("Scan Both catches shared recording names before any copy starts", arguments: [false, true])
+    func detectsRecordingCollisionBeforeStarting(skipsSecondVolume: Bool) async throws {
+        let filenames = ["VID_20181001_210458_00_009.insv", "VID_20181001_210458_10_009.insv"]
+        let manager = FileManager.default
+        try await withScannedInlinePlans(populateSources: { internalFolder, cardFolder in
+            let date = Date(timeIntervalSince1970: 1_700_000_000)
+            for folder in [internalFolder, cardFolder] {
+                for filename in filenames {
+                    let file = folder.appendingPathComponent(filename)
+                    try Data("\(folder.lastPathComponent): \(filename)".utf8).write(to: file)
+                    try manager.setAttributes([.creationDate: date, .modificationDate: date], ofItemAtPath: file.path)
+                }
+            }
+        }) { model, session, roots in
+            for entry in session.entries {
+                model.reviewScanBothVolume(entry.id)
+                model.importCurrentJob()
+            }
+            try #require(model.canStartScanBothImports)
+            let approvedSession = try #require(model.scanBothSession)
+            let approvals = approvedSession.entries.compactMap(\.confirmation)
+            try #require(approvals.count == 2)
+            #expect(approvals[0].plans.compactMap(\.destinationPath) == approvals[1].plans.compactMap(\.destinationPath))
+
+            model.startScanBothImports()
+            await Task.yield()
+            #expect(model.isShowingScanBothResults)
+            #expect(!model.isWorking)
+            #expect(model.scanBothSession?.hasStartedImports == false)
+            #expect(model.scanBothSession?.entries.allSatisfy { $0.confirmation != nil && $0.result == nil } == true)
+            let message = try #require(model.folderAccessFeedback?.text)
+            #expect(message.contains(session.entries[0].volume.name))
+            #expect(message.contains(session.entries[1].volume.name))
+            #expect(filenames.contains { message.contains($0) })
+            #expect(try manager.contentsOfDirectory(atPath: roots.photosURL.path).isEmpty)
+
+            let second = session.entries[1]
+            if skipsSecondVolume {
+                model.skipScanBothImport(second.id)
+            } else {
+                model.reviewScanBothVolume(second.id)
+                #expect(!model.isScanBothPlanLocked)
+                model.location = "Different Shoot"
+                model.importCurrentJob()
+            }
+            try #require(model.canStartScanBothImports)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == (skipsSecondVolume ? [1] : [1, 1]))
+            let outputs = try manager.subpathsOfDirectory(atPath: roots.photosURL.path).filter { $0.hasSuffix(".insv") }
+            #expect(outputs.count == (skipsSecondVolume ? 2 : 4))
+        }
+    }
+
     @Test("cancelling a new scan restores the edited draft and requires another confirmation")
     func restoresEditedDraftAfterCancelledScan() async throws {
         try await withScannedInlinePlans { model, session, roots in
@@ -821,6 +875,7 @@ struct ScanBothSessionTests {
         usesSharedDefault: Bool = true,
         destinationCapacity: @escaping DestinationSpaceChecker.CapacityProvider = DestinationSpaceChecker.fileSystemCapacity,
         observeCopyProgress: (@Sendable (ImportProgress) -> Void)? = nil,
+        populateSources: ((URL, URL) throws -> Void)? = nil,
         _ test: (AppModel, ScanBothSession, DestinationRoots) async throws -> Void
     ) async throws {
         let manager = FileManager.default
@@ -841,8 +896,12 @@ struct ScanBothSessionTests {
         for folder in [internalFolder, cardFolder, roots.photosURL, roots.videosURL] {
             try manager.createDirectory(at: folder, withIntermediateDirectories: true)
         }
-        try Data("internal".utf8).write(to: internalFolder.appendingPathComponent("Internal.jpg"))
-        try Data("card".utf8).write(to: cardFolder.appendingPathComponent("Card.mp4"))
+        if let populateSources {
+            try populateSources(internalFolder, cardFolder)
+        } else {
+            try Data("internal".utf8).write(to: internalFolder.appendingPathComponent("Internal.jpg"))
+            try Data("card".utf8).write(to: cardFolder.appendingPathComponent("Card.mp4"))
+        }
         let session = try #require(ScanBothSession(deviceName: "Fixture Camera", entries: [
             .init(id: UUID(), volume: Self.volume("Internal", disk: "disk4", at: internalFolder)),
             .init(id: UUID(), volume: Self.volume("SD Card", disk: "disk5", at: cardFolder))
@@ -860,6 +919,30 @@ struct ScanBothSessionTests {
         model.beginScanBoth(session)
         try await waitForImport(model)
         try await test(model, session, roots)
+    }
+
+    @Test("cross-volume collision detection uses resolved recording destinations")
+    func detectsRecordingCollisionThroughDestinationAlias() throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let actual = root.appendingPathComponent("Actual", isDirectory: true)
+        let alias = root.appendingPathComponent("Alias", isDirectory: true)
+        try manager.createDirectory(at: actual, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+        try manager.createSymbolicLink(at: alias, withDestinationURL: actual)
+
+        for filename in ["VID_20181001_210458_00_009.INSV", "Photo.jpg"] {
+            let plans = [actual, alias].map { folder in
+                ImportFilePlan(
+                    update: nil, willCopy: true, disposition: .copy,
+                    destinationPath: folder.appendingPathComponent("Pending Shoot/\(filename)").path
+                )
+            }
+            let first = try #require(ReviewedImportDestinations(plans: [plans[0]]))
+            let second = try #require(ReviewedImportDestinations(plans: [plans[1]]))
+            let collision = first.firstRecordingFilenameCollision(in: [plans[0]], with: second, siblingPlans: [plans[1]])
+            #expect(collision == (filename.hasSuffix(".INSV") ? filename : nil))
+        }
     }
 
     @Test("destination approvals allow new folders and reject a retargeted path")
