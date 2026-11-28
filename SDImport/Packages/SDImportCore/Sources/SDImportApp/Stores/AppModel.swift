@@ -751,7 +751,14 @@ final class AppModel: ObservableObject {
     }
     @Published var isShowingFeedbackEmailUnavailable = false
     @Published private(set) var settingsFeedback: SettingsFeedback?
-    @Published private(set) var folderAccessFeedback: RelocalizableMessage?
+    @Published private(set) var folderAccessFeedback: RelocalizableMessage? {
+        didSet {
+            if folderAccessFeedback == nil {
+                folderAccessFeedbackIsScanBothCollision = false
+            }
+        }
+    }
+    private var folderAccessFeedbackIsScanBothCollision = false
     private var statusMessageRenderer: (() -> String)?
     private var statusMessageIsBackgroundPromptFeedback = false
     private var importFailureRenderer: (() -> String)?
@@ -761,8 +768,9 @@ final class AppModel: ObservableObject {
         statusMessageRenderer = render
     }
 
-    private func showFolderAccessError(_ render: @escaping () -> String) {
+    private func showFolderAccessError(isScanBothCollision: Bool = false, _ render: @escaping () -> String) {
         setLocalizedStatusMessage(render)
+        folderAccessFeedbackIsScanBothCollision = isScanBothCollision
         folderAccessFeedback = RelocalizableMessage(statusMessage, render: render)
     }
 
@@ -3424,27 +3432,41 @@ final class AppModel: ObservableObject {
     }
 
     func startScanBothImports() {
-        guard canStartScanBothImports, let session = scanBothSession else { return }
-        let first = session.entries[0]
-        let second = session.entries[1]
-        if !session.hasStartedImports, first.awaitsImport, second.awaitsImport,
-           let firstPlan = first.confirmation, let secondPlan = second.confirmation,
-           let filename = firstPlan.destinations.firstRecordingFilenameCollision(
-               in: firstPlan.plans, with: secondPlan.destinations, siblingPlans: secondPlan.plans
-           ) {
-            let firstVolume = session.volumeTitle(for: first)
-            let secondVolume = session.volumeTitle(for: second)
-            showFolderAccessError {
-                L10n.tr("\(firstVolume) and \(secondVolume) both target \(filename) in the same folder. Change the Shoot name for one volume or skip it.")
-            }
-            return
-        }
+        guard canStartScanBothImports, let session = scanBothSession,
+              session.hasStartedImports || validateScanBothDestinations(session) else { return }
         guard purchaseManager.canStartImport else {
             purchaseManager.isShowingPurchase = true
             return
         }
         isRunningScanBothImports = true
         startNextScanBothImport()
+    }
+
+    private func validateScanBothDestinations(_ session: ScanBothSession) -> Bool {
+        let changedJobs = session.entries.compactMap { entry in
+            entry.awaitsImport && entry.confirmation?.destinations.matches() == false ? entry.jobID : nil
+        }
+        guard changedJobs.isEmpty else {
+            for jobID in changedJobs {
+                scanBothSession?.setConfirmation(nil, for: jobID)
+            }
+            showFolderAccessError { L10n.tr("The import plan changed. Review it before copying.") }
+            return false
+        }
+
+        let first = session.entries[0]
+        let second = session.entries[1]
+        guard first.awaitsImport, second.awaitsImport,
+              let firstPlan = first.confirmation, let secondPlan = second.confirmation,
+              let filename = firstPlan.destinations.firstRecordingFilenameCollision(
+                  in: firstPlan.plans, with: secondPlan.destinations, siblingPlans: secondPlan.plans
+              ) else { return true }
+        let firstVolume = session.volumeTitle(for: first)
+        let secondVolume = session.volumeTitle(for: second)
+        showFolderAccessError(isScanBothCollision: true) {
+            L10n.tr("\(firstVolume) and \(secondVolume) both target \(filename) in the same folder. Change one volume’s Shoot name or Folder label in Customize Dates, or skip that volume.")
+        }
+        return false
     }
 
     private func startNextScanBothImport() {
@@ -3571,6 +3593,9 @@ final class AppModel: ObservableObject {
             returnToScanBothResults()
         }
         scanBothSession?.skipEntry(entryID)
+        if folderAccessFeedbackIsScanBothCollision {
+            folderAccessFeedback = nil
+        }
     }
 
     private func promptContains(_ volume: MountedVolume, id: UUID, mountID: UUID) -> Bool {

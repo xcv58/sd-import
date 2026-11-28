@@ -219,7 +219,9 @@ public struct ReviewedImportDestinations: Sendable {
             caseSensitivity[ancestor] = supportsCaseSensitiveNames
             let resolvedPath = directory.resolvedPath.appendingPathComponent(url.lastPathComponent).path
                 .precomposedStringWithCanonicalMapping
-            let key = supportsCaseSensitiveNames ? resolvedPath : resolvedPath.lowercased()
+            let key = supportsCaseSensitiveNames ? resolvedPath : resolvedPath.folding(
+                options: .caseInsensitive, locale: Locale(identifier: "en_US_POSIX")
+            )
             return (key, url.lastPathComponent)
         }
     }

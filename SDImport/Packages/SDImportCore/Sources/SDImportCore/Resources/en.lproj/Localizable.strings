@@ -67,7 +67,7 @@
 "Include All Previously Imported Files" = "Include All Previously Imported Files";
 "Skip Again" = "Skip Again";
 "Start Imports" = "Start Imports";
-"%@ and %@ both target %@ in the same folder. Change the Shoot name for one volume or skip it." = "%@ and %@ both target %@ in the same folder. Change the Shoot name for one volume or skip it.";
+"%@ and %@ both target %@ in the same folder. Change one volume’s Shoot name or Folder label in Customize Dates, or skip that volume." = "%@ and %@ both target %@ in the same folder. Change one volume’s Shoot name or Folder label in Customize Dates, or skip that volume.";
 "Updating re-import selection…" = "Updating re-import selection…";
 "macOS needs your permission to read this source." = "macOS needs your permission to read this source.";
 "Allow Access to %@" = "Allow Access to %@";

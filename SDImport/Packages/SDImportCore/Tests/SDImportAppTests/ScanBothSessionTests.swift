@@ -556,8 +556,16 @@ struct ScanBothSessionTests {
         }
     }
 
-    @Test("Scan Both catches shared recording names before any copy starts", arguments: [false, true])
-    func detectsRecordingCollisionBeforeStarting(skipsSecondVolume: Bool) async throws {
+    enum RecordingCollisionScenario: CaseIterable {
+        case shootName
+        case skipVolume
+        case customDateFolder
+        case unicodeShootNames
+        case redirectedFolder
+    }
+
+    @Test("Scan Both checks destinations before copying and keeps the plans editable", arguments: RecordingCollisionScenario.allCases)
+    func detectsRecordingCollisionBeforeStarting(scenario: RecordingCollisionScenario) async throws {
         let filenames = ["VID_20181001_210458_00_009.insv", "VID_20181001_210458_10_009.insv"]
         let manager = FileManager.default
         try await withScannedInlinePlans(populateSources: { internalFolder, cardFolder in
@@ -570,40 +578,82 @@ struct ScanBothSessionTests {
                 }
             }
         }) { model, session, roots in
-            for entry in session.entries {
+            for (index, entry) in session.entries.enumerated() {
                 model.reviewScanBothVolume(entry.id)
+                switch scenario {
+                case .unicodeShootNames:
+                    model.location = index == 0 ? "Straße" : "Strasse"
+                case .redirectedFolder where index == 1:
+                    model.location = "Other Shoot"
+                case .customDateFolder:
+                    model.previewSessions[0].label = "Custom Date Folder"
+                default:
+                    break
+                }
                 model.importCurrentJob()
             }
             try #require(model.canStartScanBothImports)
             let approvedSession = try #require(model.scanBothSession)
             let approvals = approvedSession.entries.compactMap(\.confirmation)
             try #require(approvals.count == 2)
-            #expect(approvals[0].plans.compactMap(\.destinationPath) == approvals[1].plans.compactMap(\.destinationPath))
+            let firstPath = try #require(approvals[0].plans.first?.destinationPath)
+            let secondPath = try #require(approvals[1].plans.first?.destinationPath)
+            let firstFolder = URL(fileURLWithPath: firstPath).deletingLastPathComponent()
+            let secondFolder = URL(fileURLWithPath: secondPath).deletingLastPathComponent()
+            if scenario == .redirectedFolder {
+                try manager.createDirectory(at: firstFolder, withIntermediateDirectories: true)
+                try manager.createSymbolicLink(at: secondFolder, withDestinationURL: firstFolder)
+            }
+
+            if scenario == .unicodeShootNames,
+               try roots.photosURL.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey])
+                   .volumeSupportsCaseSensitiveNames == true {
+                model.startScanBothImports()
+                try await waitForImport(model)
+                #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+                return
+            }
 
             model.startScanBothImports()
             await Task.yield()
             #expect(model.isShowingScanBothResults)
             #expect(!model.isWorking)
             #expect(model.scanBothSession?.hasStartedImports == false)
-            #expect(model.scanBothSession?.entries.allSatisfy { $0.confirmation != nil && $0.result == nil } == true)
+            #expect(model.scanBothSession?.entries.allSatisfy { $0.result == nil } == true)
             let message = try #require(model.folderAccessFeedback?.text)
-            #expect(message.contains(session.entries[0].volume.name))
-            #expect(message.contains(session.entries[1].volume.name))
-            #expect(filenames.contains { message.contains($0) })
-            #expect(try manager.contentsOfDirectory(atPath: roots.photosURL.path).isEmpty)
+            if scenario == .redirectedFolder {
+                #expect(message == L10n.tr("The import plan changed. Review it before copying."))
+                #expect(model.scanBothSession?.entries[0].confirmation?.plans == approvals[0].plans)
+                #expect(model.scanBothSession?.entries[1].confirmation == nil)
+                try manager.removeItem(at: secondFolder)
+            } else {
+                #expect(message.contains(session.entries[0].volume.name))
+                #expect(message.contains(session.entries[1].volume.name))
+                #expect(filenames.contains { message.contains($0) })
+                #expect(model.scanBothSession?.entries.allSatisfy { $0.confirmation != nil } == true)
+            }
+            #expect(try manager.subpathsOfDirectory(atPath: roots.photosURL.path).allSatisfy { !$0.hasSuffix(".insv") })
 
             let second = session.entries[1]
-            if skipsSecondVolume {
+            if scenario == .skipVolume {
                 model.skipScanBothImport(second.id)
             } else {
                 model.reviewScanBothVolume(second.id)
                 #expect(!model.isScanBothPlanLocked)
-                model.location = "Different Shoot"
+                if scenario == .customDateFolder {
+                    #expect(message.localizedCaseInsensitiveContains(L10n.tr("Customize Dates")))
+                    #expect(message.localizedCaseInsensitiveContains(L10n.tr("Folder label")))
+                    model.previewSessions[0].label = "Different Date Folder"
+                } else {
+                    model.location = "Different Shoot"
+                }
                 model.importCurrentJob()
             }
+            #expect(model.folderAccessFeedback == nil)
             try #require(model.canStartScanBothImports)
             model.startScanBothImports()
             try await waitForImport(model)
+            let skipsSecondVolume = scenario == .skipVolume
             #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == (skipsSecondVolume ? [1] : [1, 1]))
             let outputs = try manager.subpathsOfDirectory(atPath: roots.photosURL.path).filter { $0.hasSuffix(".insv") }
             #expect(outputs.count == (skipsSecondVolume ? 2 : 4))

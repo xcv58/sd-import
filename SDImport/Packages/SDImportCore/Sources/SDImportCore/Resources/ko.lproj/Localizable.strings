@@ -67,7 +67,7 @@
 "Include All Previously Imported Files" = "이전에 가져온 모든 파일 포함";
 "Skip Again" = "다시 건너뛰기";
 "Start Imports" = "가져오기 시작";
-"%@ and %@ both target %@ in the same folder. Change the Shoot name for one volume or skip it." = "%@ 및 %@에서 %@을(를) 같은 폴더에 복사하려고 합니다. 한 볼륨의 촬영 이름을 변경하거나 해당 볼륨을 건너뛰세요.";
+"%@ and %@ both target %@ in the same folder. Change one volume’s Shoot name or Folder label in Customize Dates, or skip that volume." = "%@ 및 %@에서 %@을(를) 같은 폴더에 복사하려고 합니다. 한 볼륨의 촬영 이름이나 날짜 사용자화의 폴더 레이블을 변경하거나 해당 볼륨을 건너뛰세요.";
 "Updating re-import selection…" = "다시 가져올 파일 선택 업데이트 중…";
 "macOS needs your permission to read this source." = "macOS에서 이 소스를 읽으려면 사용자의 권한이 필요합니다.";
 "Allow Access to %@" = "%1$@ 접근 허용";
