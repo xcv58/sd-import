@@ -597,6 +597,58 @@ struct ScanBothSessionTests {
         }
     }
 
+    @Test("Scan Both requires choosing a renamed destination before copying", arguments: [false, true])
+    func requiresSelectingRenamedDestination(confirmedBeforeRename: Bool) async throws {
+        try await withScannedInlinePlans { model, session, roots in
+            let fixtureRoot = roots.photosURL.deletingLastPathComponent()
+            let original = fixtureRoot.appendingPathComponent("Library ", isDirectory: true)
+            let renamed = fixtureRoot.appendingPathComponent("Library", isDirectory: true)
+            let manager = FileManager.default
+            try manager.createDirectory(at: original, withIntermediateDirectories: false)
+            model.setScanBothDestination(original)
+            try #require(model.scanBothDestinationValidation.isUsable)
+
+            if confirmedBeforeRename {
+                for entry in session.entries {
+                    model.reviewScanBothVolume(entry.id)
+                    model.importCurrentJob()
+                }
+                try #require(model.canStartScanBothImports)
+            } else {
+                model.reviewScanBothVolume(session.entries[0].id)
+                try #require(model.canImportPlannedFiles)
+            }
+
+            try manager.moveItem(at: original, to: renamed)
+            #expect(model.scanBothDestinationValidation.status == .missing)
+            if confirmedBeforeRename {
+                model.startScanBothImports()
+            } else {
+                model.importCurrentJob()
+            }
+            #expect(model.activeImportOperation == nil)
+            #expect(model.scanBothSession?.entries[0].confirmation == nil)
+            #expect(!model.canImportPlannedFiles)
+            #expect(!manager.fileExists(atPath: original.path))
+            #expect(try manager.contentsOfDirectory(atPath: renamed.path).isEmpty)
+
+            model.setScanBothDestination(renamed)
+            model.returnToScanBothResults()
+            for entry in session.entries {
+                model.reviewScanBothVolume(entry.id)
+                model.importCurrentJob()
+            }
+            try #require(model.canStartScanBothImports)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+            #expect(!manager.fileExists(atPath: original.path))
+            let paths = try manager.subpathsOfDirectory(atPath: renamed.path)
+            #expect(paths.contains { $0.hasSuffix("/Internal.jpg") })
+            #expect(paths.contains { $0.hasSuffix("/Card.mp4") })
+        }
+    }
+
     @Test("saving a Scan Both plan as defaults keeps destination settings changed during review")
     func savingPlanDefaultsKeepsDestinations() async throws {
         try await withScannedInlinePlans { model, session, roots in

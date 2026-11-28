@@ -896,7 +896,7 @@ final class AppModel: ObservableObject {
         isReviewingScanBothVolume ? scanBothSession?.destinationPath : nil
     }
     var scanBothDestinationValidation: PathValidationResult {
-        PathValidator().validate(path: scanBothSession?.destinationPath ?? "", purpose: .destination)
+        validateScanBothDestination(scanBothSession?.destinationPath ?? "")
     }
     var scanBothDestinationNeedsAccess: Bool {
         let validation = scanBothDestinationValidation
@@ -1303,7 +1303,7 @@ final class AppModel: ObservableObject {
             return
         }
         let access = SecurityScopedResourceAccess(url: url)
-        let validation = PathValidator().validate(path: path, purpose: .destination)
+        let validation = validateScanBothDestination(path)
         guard validation.isUsable else {
             showFolderAccessError { validation.message }
             return
@@ -1317,6 +1317,10 @@ final class AppModel: ObservableObject {
         if isReviewingScanBothVolume {
             destinationPathDidChange()
         }
+    }
+
+    private func validateScanBothDestination(_ path: String) -> PathValidationResult {
+        PathValidator().validate(path: path, purpose: .destination, allowsWhitespaceFallback: false)
     }
 
     func chooseDefaultPhotosFolder() {
@@ -3228,9 +3232,11 @@ final class AppModel: ObservableObject {
         sourcePathDidChange()
         resetImportDraftFromDefaults()
         selection = .import
-        if photosValidation.isUsable, videosValidation.isUsable,
-           photosValidation.expandedPath == videosValidation.expandedPath {
-            let path = photosValidation.expandedPath
+        let sharedPhotos = validateScanBothDestination(photosPath)
+        let sharedVideos = validateScanBothDestination(videosPath)
+        if sharedPhotos.isUsable, sharedVideos.isUsable,
+           sharedPhotos.expandedPath == sharedVideos.expandedPath {
+            let path = sharedPhotos.expandedPath
             let root = URL(fileURLWithPath: path, isDirectory: true)
             let access = [folderAccesses[.photos], folderAccesses[.videos]].compactMap { $0 }.first {
                 $0.isActive && Self.isSameOrDescendant(root, of: $0.url)
