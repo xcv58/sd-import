@@ -284,7 +284,7 @@ Terminal progress states:
 - Whenever a verified removable source is selected and no scan or copy is active, the Source panel offers a manual eject action. This lets the user safely disconnect before scanning, after scanning, or instead of importing. A scan never triggers automatic ejection.
 - `Eject source device after a successful import` is an opt-in setting and defaults off.
 - Automatic ejection requires at least one copied file, an error-free imported job, and a currently mounted removable volume whose UUID matches the scanned job.
-- In Scan Both, confirm each plan separately, then use Start Imports to copy the confirmed volumes in order. A changed plan requires a fresh confirmation. Device ejection waits for both volumes to finish or be explicitly skipped.
+- In Scan Both, review one plan with shared settings and file details for each volume. Skip or include each volume before starting. Start Imports checks the whole plan before copying the included volumes in order. If the copy plan changes, the app shows the updated review before copying. Device ejection waits for both volumes to be resolved.
 - A failed or cancelled scan of a still-mounted volume can be explicitly skipped. The combined results retain the scan error and show a manual Eject action. It becomes available when the session is resolved and the device passes the eject checks.
 - In Scan Both, only a successful copy can trigger automatic ejection. Skipping a volume never triggers it. If a user skips an attempted import that did not succeed, the session offers manual ejection instead.
 - Non-removable volumes, disk images, UUID mismatches, cancelled imports, and imports with failures are never ejected automatically.

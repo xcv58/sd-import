@@ -89,14 +89,14 @@ Record the build number and per-volume counts.
 2. Select **Scan Both** and grant folder access when macOS asks. Confirm
    internal storage finishes scanning before the SD card starts scanning.
 3. Confirm the review shows both volumes with their scan counts and any
-   warnings. Choose a **Shared Destination**. Open each volume's **Review
-   import** to check its file list and planned folders on the same page.
-   Choose **Confirm Plan** and check the volume is **Ready** and the
-   destination is still empty. Change the shared destination and confirm both
-   plans require confirmation again. Confirm both, then choose **Start
-   Imports** once. Watch Internal copy first and SD Card follow. Verify that
-   both imported into the chosen destination, then check the receipt and
-   History for both imports.
+   warnings. Choose a **Shared Destination**, then change the shared shoot
+   name, media types, and folder organization. Check that both volumes'
+   copy counts and planned folders update. Expand **File Details** for both.
+   Skip one volume and confirm the footer updates. Include it again and
+   confirm that both volumes appear in the import order. Check that the
+   destination is still empty. Choose **Start Imports** once. Watch Internal
+   copy first and SD Card follow. Verify the files in the chosen destination,
+   then check the receipt and History for both imports.
 4. Repeat and decline access to one volume when asked. Confirm the skipped
    volume shows its reason and the sibling's scan result remains available.
    If the device can unmount one volume separately, repeat by safely
@@ -104,13 +104,12 @@ Record the build number and per-volume counts.
 5. Reconnect and choose one volume directly. Confirm the app opens that volume's
    import review.
 6. Grant access to a temporary **Shared Destination**. In Settings, choose a
-   different default destination. Return to Import and open each plan. Confirm
-   the shared destination still has access and **Confirm Plan** is available
-   for each. Edit the shoot label and choose **Use as Defaults**. Verify that
-   Settings keeps the new default destination. Repeat with a review that started
-   with the previous shared default.
-7. Interrupt an Insta360 import after the first lens file copies. Open the
-   other volume's plan and choose **Rescan Source** for the interrupted volume.
+   different default destination. Return to Import and confirm the shared
+   plan still points to the temporary folder and can start without another
+   access prompt. Repeat with a review that started with the previous shared
+   default.
+7. Interrupt an Insta360 import after the first lens file copies. Return to
+   the shared review and choose **Rescan Source** for the interrupted volume.
    Confirm the fresh review can copy the remaining lens beside the first.
 8. Rescan an interrupted Insta360 import whose original destination grant is
    unavailable. Confirm the app offers the original folder, including when the
@@ -128,9 +127,10 @@ result and reported the SD Card as unmounted. After restoring both mounts,
 choosing SD Card by itself opened its individual review. The camera scans
 recorded zero imported files.
 
-The native fixture tests verify that confirmations leave the destinations empty,
-the other plan stays ready during the first copy, and a new filename conflict
-requires a revised plan.
+The shared review fixture tests verify that Start Imports copies both volumes
+in order, that Skip and Include update the queue, and that a changed plan,
+filename conflict, missing source, or insufficient combined space blocks
+copying during preflight.
 
 ## Disclosure headers
 

@@ -663,3 +663,7 @@
 "The plan includes both Insta360 lens files in the selected destination." = "選択した保存先に Insta360 の両方のレンズファイルを保存するプランです。";
 "The source is missing an Insta360 lens file. Scan the folder containing both files." = "読み込み元に Insta360 のレンズファイルが 1 つありません。両方のファイルがあるフォルダをスキャンしてください。";
 "An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "既存の Insta360 のレンズファイルを確認できませんでした。両方のファイルを保存する別のフォルダを選択してください。";
+"Resolve filename conflicts before starting imports." = "読み込みを開始する前に、ファイル名の競合を解消してください。";
+"Both volumes target %@ in the same folder. Skip one volume to continue." = "両方のボリュームが同じフォルダに%@をコピーします。続けるには片方をスキップしてください。";
+"Import order" = "読み込み順";
+"Include" = "含める";

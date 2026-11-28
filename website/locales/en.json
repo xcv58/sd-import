@@ -320,6 +320,6 @@
   "beta.step3.title": "Share your feedback.",
   "beta.step3.body": "Send feedback from TestFlight, or email us with the app version and what happened.",
   "beta.feedback": "Email beta feedback",
-  "guide.scan_both": "Use {0}Scan Both{/0} to scan the camera’s internal storage and memory card together. Choose one destination for both, confirm each volume’s plan, then start the imports in sequence with one click.",
+  "guide.scan_both": "Use {0}Scan Both{/0} to scan the camera’s internal storage and memory card together. Review one shared plan, expand file details or skip either volume, then start the included imports in sequence with one click.",
   "guide.rescan": "If copying is interrupted, completed files stay in your destination. Reconnect the source if needed, choose {0}Rescan Source{/0} in History, and review the new plan."
 }

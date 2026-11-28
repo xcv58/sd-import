@@ -50,14 +50,14 @@ as one device, choose either volume or `Scan Both` from the same prompt.
 a time if you want to import to different destinations.
 
 Grant access to each volume as macOS asks. After both scans, choose the
-`Shared Destination` in the combined review. If your photo and video defaults
-use the same folder, it is selected for you. Open either volume's
-`Review import` to inspect its files and organization on the same page, then
-choose `Confirm Plan` for that volume. Use `Skip` to leave a volume out. Select
-`Start Imports` to copy the confirmed volumes one at a time. If you change the
-shared destination, confirm the plans again before starting. Once imports
-start, the shared destination and plan settings stay locked for that session.
-Keep both volumes mounted until the imports finish.
+`Shared Destination`, shoot name, media types, and folder organization once
+for both volumes. If your photo and video defaults use the same folder, it is
+selected for you. Both volumes show their copy counts and planned folders.
+Expand `File Details` for either volume, or use `Skip` to leave it out and
+`Include` to add it back. The footer shows the combined file count, size, and
+copy order. Select `Start Imports` to copy the included volumes one at a time.
+Once copying starts, the shared plan settings stay locked for that session.
+Keep the included volumes mounted until the imports finish.
 
 The app asks before a new scan or source change discards pending Scan Both
 results. `Keep Scan Results` returns to those results. You can use `Eject`

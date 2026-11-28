@@ -663,3 +663,7 @@
 "The plan includes both Insta360 lens files in the selected destination." = "此计划将在所选目标位置保留两个 Insta360 镜头文件。";
 "The source is missing an Insta360 lens file. Scan the folder containing both files." = "源位置缺少一个 Insta360 镜头文件。请扫描包含两个文件的文件夹。";
 "An existing Insta360 lens file could not be verified. Choose a different folder for both files." = "无法验证现有的 Insta360 镜头文件。请选择其他文件夹来保存两个文件。";
+"Resolve filename conflicts before starting imports." = "请先解决文件名冲突，再开始导入。";
+"Both volumes target %@ in the same folder. Skip one volume to continue." = "两个卷都要将 %@ 复制到同一文件夹。请跳过其中一个卷以继续。";
+"Import order" = "导入顺序";
+"Include" = "包括";
