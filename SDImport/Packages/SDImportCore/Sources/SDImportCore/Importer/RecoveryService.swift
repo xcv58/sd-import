@@ -46,18 +46,17 @@ public struct RecoveryService {
     public func recoverInterruptedImport(
         jobID: String, preparation: Insta360RescanRecovery.Preparation? = nil
     ) throws {
-        try recoverInterruptedImport(jobID: jobID, attemptIDs: nil)
-        for previous in preparation?.earlierAttempts ?? [] {
-            try Task.checkCancellation()
-            try recoverInterruptedImport(jobID: previous.jobID, attemptIDs: previous.attemptIDs)
-        }
-    }
-
-    private func recoverInterruptedImport(jobID: String, attemptIDs: Set<UUID>?) throws {
         guard try jobRepository.withImportLock(jobID: jobID, {
-            try recoverJobWhileLocked(jobID: jobID, attemptIDs: attemptIDs)
+            try recoverJobWhileLocked(jobID: jobID)
         }) != nil else {
             throw SDImportError.invalidArgument(L10n.tr("Finish the current scan or import first"))
+        }
+        // Older attempts are supplemental. A busy job keeps its journal for later recovery.
+        for previous in preparation?.earlierAttempts ?? [] {
+            try Task.checkCancellation()
+            _ = try jobRepository.withImportLock(jobID: previous.jobID) {
+                try recoverJobWhileLocked(jobID: previous.jobID, attemptIDs: previous.attemptIDs)
+            }
         }
     }
 
