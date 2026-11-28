@@ -14,6 +14,7 @@ struct ImportPreviewView<Overview: View>: View {
     @State private var showsDateCustomization = false
     @StateObject private var thumbnailProvider = ImportThumbnailProvider()
     @StateObject private var quickLook = ImportQuickLookController()
+    @FocusState private var inlineReviewHeadingHasKeyboardFocus: Bool
     @AccessibilityFocusState private var reviewHeadingIsFocused: Bool
 
     private let scanBothOverview: Overview?
@@ -31,6 +32,8 @@ struct ImportPreviewView<Overview: View>: View {
     }
 
     private enum ScrollTarget {
+        case overview
+        case inlineReview
         case files
     }
 
@@ -88,6 +91,10 @@ struct ImportPreviewView<Overview: View>: View {
                 ) {
                     if let scanBothOverview {
                         scanBothOverview
+                            .id(ScrollTarget.overview)
+                    }
+                    if scanBothOverview != nil, let session = model.scanBothSession, let entry = session.reviewingEntry {
+                        inlineReviewHeading(for: entry, in: session)
                     }
                     if scanBothOverview == nil || model.isReviewingScanBothVolume {
                         previewContent.disabled(isUpdatingReimportSelection)
@@ -98,8 +105,14 @@ struct ImportPreviewView<Overview: View>: View {
                     // Filtering can replace a tall page with the empty state.
                     scroll.scrollTo(ScrollTarget.files, anchor: .top)
                 }
-                .onChange(of: model.scanBothSession?.reviewingJobID) {
+                .onChange(of: model.scanBothSession?.reviewingJobID, initial: true) { previousJobID, jobID in
+                    guard scanBothOverview != nil, previousJobID != nil || jobID != nil else { return }
                     resetFileBrowser()
+                    if jobID == nil {
+                        scroll.scrollTo(ScrollTarget.overview, anchor: .top)
+                    } else if model.folderAccessFeedback == nil {
+                        scroll.scrollTo(ScrollTarget.inlineReview, anchor: .top)
+                    }
                 }
             }
         }
@@ -120,9 +133,6 @@ struct ImportPreviewView<Overview: View>: View {
                 .disabled(isUpdatingReimportSelection)
             }
         }
-        .onAppear {
-            reviewHeadingIsFocused = true
-        }
         .onChange(of: model.cardPath) {
             resetFileBrowser()
         }
@@ -140,11 +150,7 @@ struct ImportPreviewView<Overview: View>: View {
 
     private var previewContent: some View {
         LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
-            if let session = model.scanBothSession, let entry = session.reviewingEntry, scanBothOverview != nil {
-                Text(L10n.tr("Review \(session.volumeTitle(for: entry))"))
-                    .font(.title3.weight(.semibold))
-                    .accessibilityAddTraits(.isHeader)
-            } else {
+            if scanBothOverview == nil {
                 ImportSourceSummaryView(
                     allowsChange: true,
                     allowsRescan: model.currentSummary.map { !model.needsRescan($0.jobID) } == true,
@@ -159,6 +165,24 @@ struct ImportPreviewView<Overview: View>: View {
             }
             fileBrowser
         }
+    }
+
+    private func inlineReviewHeading(for entry: ScanBothSession.Entry, in session: ScanBothSession) -> some View {
+        Text(L10n.tr("Review \(session.volumeTitle(for: entry))"))
+            .font(.title3.weight(.semibold))
+            .focusable()
+            .focused($inlineReviewHeadingHasKeyboardFocus)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityFocused($reviewHeadingIsFocused)
+            .accessibilityIdentifier("import.scan-both.plan-heading")
+            .padding(.top, 12)
+            .id(ScrollTarget.inlineReview)
+            .task(id: entry.id) {
+                // A failed batch start opens the affected plan and displays its error above the overview.
+                guard model.folderAccessFeedback == nil else { return }
+                inlineReviewHeadingHasKeyboardFocus = true
+                reviewHeadingIsFocused = true
+            }
     }
 
     private func resetFileBrowser() {
@@ -178,6 +202,7 @@ struct ImportPreviewView<Overview: View>: View {
                     .fontWeight(.semibold)
                     .accessibilityFocused($reviewHeadingIsFocused)
                     .accessibilityIdentifier("import.phase.review.heading")
+                    .onAppear { reviewHeadingIsFocused = true }
                 Text(L10n.tr("Confirm what will be copied and where it will go."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
