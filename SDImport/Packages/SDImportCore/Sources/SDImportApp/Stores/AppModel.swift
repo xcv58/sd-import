@@ -4348,7 +4348,8 @@ final class AppModel: ObservableObject {
         _ jobID: String, sourcePath: String
     ) -> [SecurityScopedResourceAccess]? {
         let belongsToSession = scanBothSession?.entry(for: jobID) != nil
-        let previousAccess = rescanContext?.jobID == jobID ? rescanContext?.access ?? [] : []
+        // The check below matches live grants to destination folders across rescans.
+        let previousAccess = rescanContext?.access ?? []
         let sessionAccess = belongsToSession ? scanBothDestinationAccess : []
         var grantedPaths: Set<String> = []
         var access = (sessionAccess + previousAccess + Array(folderAccesses.values)).filter {
