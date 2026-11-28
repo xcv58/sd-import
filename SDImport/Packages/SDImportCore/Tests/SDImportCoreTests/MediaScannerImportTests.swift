@@ -908,6 +908,69 @@ struct MediaScannerImportTests {
         }
     }
 
+    @Test("rescan finds the destination of an Insta360 lens published before the copy was committed")
+    func rescanFindsUncommittedInsta360Destination() throws {
+        let fixture = try Fixture()
+        let source = fixture.mountURL.appendingPathComponent("DCIM/Camera01", isDirectory: true)
+        let names = ["VID_20181001_210458_00_009.insv", "VID_20181001_210458_10_009.insv"]
+        for name in names {
+            try fixture.writeFile(source.appendingPathComponent(name), bytes: Data(name.utf8))
+        }
+        let volumeUUID = "original-card"
+        let previousJobID = "interrupted-before-commit"
+        let roots = DestinationRoots(photosURL: fixture.photosURL, videosURL: fixture.videosURL)
+        let custom = fixture.videosURL.appendingPathComponent("Original destination", isDirectory: true)
+        let originalRoots = DestinationRoots(photosURL: fixture.photosURL, videosURL: custom)
+        _ = try fixture.scanner.scan(ScanRequest(
+            mountURL: fixture.mountURL, volumeName: "CARD", volumeUUID: volumeUUID,
+            location: "TEST", roots: originalRoots, jobID: previousJobID, volumeMountPath: fixture.mountURL.path
+        ))
+        try fixture.pool.write { db in
+            try db.execute(sql: """
+                CREATE TRIGGER fail_copy_commit BEFORE INSERT ON items
+                BEGIN SELECT RAISE(ABORT, 'injected commit failure'); END
+                """)
+        }
+        #expect(throws: DatabaseError.self) {
+            try fixture.importEngine.importFiles(jobID: previousJobID, requiresReviewedDestinations: true)
+        }
+        try fixture.pool.write { db in
+            try db.execute(sql: "DROP TRIGGER fail_copy_commit")
+        }
+        let attempt = try #require(fixture.jobRepository.copyAttempts(jobID: previousJobID).first)
+        let folder = attempt.destination.deletingLastPathComponent().resolvingSymlinksInPath()
+        #expect(FileManager.default.fileExists(atPath: attempt.destinationPath))
+        #expect(try fixture.jobRepository.fetchJobFiles(jobID: previousJobID).allSatisfy { $0.copyStatus == .pending })
+
+        let request = ScanRequest(
+            mountURL: source, volumeName: "CARD", volumeUUID: volumeUUID, location: "TEST", roots: roots,
+            jobID: "fresh-review", volumeMountPath: fixture.mountURL.path, rescanOfJobID: previousJobID
+        )
+        #expect(try Insta360RescanRecovery.recordedDestinationFolders(
+            request: request, jobRepository: fixture.jobRepository
+        ) == [folder])
+        let otherSource = ScanRequest(
+            mountURL: fixture.mountURL.appendingPathComponent("DCIM/Camera02", isDirectory: true),
+            volumeName: "CARD", volumeUUID: volumeUUID, location: "TEST", roots: roots,
+            jobID: "other-source", volumeMountPath: fixture.mountURL.path, rescanOfJobID: previousJobID
+        )
+        #expect(try Insta360RescanRecovery.recordedDestinationFolders(
+            request: otherSource, jobRepository: fixture.jobRepository
+        ).isEmpty)
+
+        try RecoveryService(jobRepository: fixture.jobRepository).recoverInterruptedImport(jobID: previousJobID)
+        _ = try fixture.scanner.scan(request)
+        let files = try fixture.jobRepository.fetchJobFiles(jobID: request.jobID)
+        let recovery = try Insta360RescanRecovery(request: request, scannedFiles: files, jobRepository: fixture.jobRepository)
+        let plan = ImportPlanBuilder(
+            sessions: [], organizationPreset: .classicDatedFolders, roots: roots,
+            fallbackLocation: "TEST", volumeName: "CARD", insta360Recovery: recovery
+        ).plans(files: files)
+        #expect(plan.filter { $0.disposition == .alreadyExists }.count == 1)
+        let remaining = try #require(plan.first(where: \.willCopy)?.destinationPath)
+        #expect(URL(fileURLWithPath: remaining).deletingLastPathComponent().resolvingSymlinksInPath() == folder)
+    }
+
     @Test("rescan verifies destination records before treating an Insta360 pair as complete", arguments: [false, true])
     func rescanVerifiesPreviouslyRecordedLensPair(wrongLensAtDestination: Bool) throws {
         let fixture = try Fixture()

@@ -76,12 +76,20 @@ public struct Insta360RescanRecovery: Sendable {
         var folders: Set<URL> = []
         while let previous = try attempts.next() {
             guard let paths = MatchingPaths(previous: previous, current: request) else { continue }
-            for group in try recordedGroups(jobID: previous.id, jobRepository: jobRepository) {
+            // The app replays this job's journal after obtaining folder access.
+            // A journal entry suggests a folder but does not establish that a copy exists.
+            let pendingFoldersByFile = previous.id == request.rescanOfJobID
+                ? try pendingDestinationFolders(jobID: previous.id, jobRepository: jobRepository) : [:]
+            for group in try lensPairs(jobID: previous.id, jobRepository: jobRepository) {
                 let masters = group.masterFiles.compactMap {
                     paths.previousKeyInScope($0, current: request)
                 }
                 guard masters.count == group.masterFiles.count,
                       matchedMasters.isDisjoint(with: masters) else { continue }
+                folders.formUnion(group.masterFiles.compactMap { file in
+                    file.id.flatMap { pendingFoldersByFile[$0] }
+                })
+                guard group.masterFiles.contains(where: { recordedCopy(of: $0) != nil }) else { continue }
                 matchedMasters.formUnion(masters)
                 folders.formUnion(group.files.compactMap(recordedCopy).map(parentFolder))
             }
@@ -104,7 +112,8 @@ public struct Insta360RescanRecovery: Sendable {
         while !unmatched.isEmpty, let previous = try attempts.next() {
             guard let paths = MatchingPaths(previous: previous, current: request) else { continue }
             var previousByMaster: [String: Insta360ClipGroup] = [:]
-            for group in try Self.recordedGroups(jobID: previous.id, jobRepository: jobRepository) {
+            for group in try Self.lensPairs(jobID: previous.id, jobRepository: jobRepository)
+            where group.masterFiles.contains(where: { Self.recordedCopy(of: $0) != nil }) {
                 for file in group.masterFiles {
                     if let key = paths.previousKey(file) { previousByMaster[key] = group }
                 }
@@ -167,13 +176,23 @@ public struct Insta360RescanRecovery: Sendable {
         }
     }
 
-    private static func recordedGroups(
+    private static func lensPairs(
         jobID: String, jobRepository: JobRepository
     ) throws -> [Insta360ClipGroup] {
         let files = try jobRepository.fetchJobFiles(jobID: jobID)
-        return Insta360ClipDetector().groups(files: files).filter { group in
-            group.masterFiles.count > 1 && group.masterFiles.contains { recordedCopy(of: $0) != nil }
-        }
+        return Insta360ClipDetector().groups(files: files).filter { $0.masterFiles.count > 1 }
+    }
+
+    private static func pendingDestinationFolders(
+        jobID: String, jobRepository: JobRepository
+    ) throws -> [Int64: URL] {
+        let attempts = try jobRepository.copyAttempts(jobID: jobID)
+        return Dictionary(uniqueKeysWithValues: attempts.compactMap { attempt in
+            guard attempt.localCopyCommitted != true, attempt.destinationDirectory != nil,
+                  attempt.staged != nil || (attempt.reservedDestination != nil && attempt.directCopyDigest != nil)
+            else { return nil }
+            return (attempt.fileID, parentFolder(attempt.destination))
+        })
     }
 
     private static func makeRecording(
