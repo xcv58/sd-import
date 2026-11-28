@@ -46,6 +46,7 @@ struct ScanBothSession {
         var disposition: Disposition = .pending
         var hasStartedImport = false
         var draft: ImportDraft?
+        var reviewNeedsAttention = false
         var confirmation: Confirmation?
         var result: ImportResult?
         var copyInterruption: String?
@@ -174,17 +175,19 @@ struct ScanBothSession {
         if destinationPath != path {
             for index in entries.indices {
                 entries[index].confirmation = nil
+                entries[index].reviewNeedsAttention = false
             }
         }
         destinationPath = path
         destinationAccess = access
     }
 
-    mutating func saveDraft(_ draft: ImportDraft, for jobID: String) {
+    mutating func saveDraft(_ draft: ImportDraft, needsAttention: Bool, for jobID: String) {
         guard let index = entries.firstIndex(where: { $0.jobID == jobID && $0.awaitsImport }),
               !removedMountPaths.contains(entries[index].volume.mountPath)
         else { return }
         entries[index].draft = draft
+        entries[index].reviewNeedsAttention = needsAttention
         if entries[index].confirmation?.draft != draft {
             entries[index].confirmation = nil
         }
@@ -202,6 +205,7 @@ struct ScanBothSession {
         guard let index = entries.firstIndex(where: { $0.volume.mountPath == path }) else { return nil }
         removedMountPaths.insert(path)
         entries[index].draft = nil
+        entries[index].reviewNeedsAttention = false
         entries[index].confirmation = nil
         return entries[index].jobID
     }
@@ -219,6 +223,7 @@ struct ScanBothSession {
         if result.failedFiles == 0 {
             entries[index].disposition = .imported
             entries[index].draft = nil
+            entries[index].reviewNeedsAttention = false
         }
     }
 
@@ -241,6 +246,7 @@ struct ScanBothSession {
         guard let index = entries.firstIndex(where: { $0.id == id && $0.canSkip }) else { return }
         entries[index].disposition = .skipped
         entries[index].draft = nil
+        entries[index].reviewNeedsAttention = false
         entries[index].confirmation = nil
     }
 
@@ -1768,6 +1774,11 @@ final class AppModel: ObservableObject {
         previewSpaceRequirements.filter { !$0.isSatisfied }.count
     }
 
+    var previewNeedsAttention: Bool {
+        previewRows.contains { $0.disposition.attention >= .attention }
+            || previewSpaceRequirements.contains { !$0.isSatisfied }
+    }
+
     var canCustomizeDates: Bool {
         guard folderGrouping == .byDay, let date = previewSessions.first else { return false }
         let label = date.label.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1962,7 +1973,7 @@ final class AppModel: ObservableObject {
     private func retainPendingScanBothResults() {
         guard var session = scanBothSession, session.hasPendingResults else { return }
         if let jobID = session.reviewingJobID, currentSummary?.jobID == jobID {
-            session.saveDraft(currentImportDraft, for: jobID)
+            session.saveDraft(currentImportDraft, needsAttention: previewNeedsAttention, for: jobID)
         }
         session.reviewingJobID = nil
         previousScanBothSession = session
@@ -2485,7 +2496,7 @@ final class AppModel: ObservableObject {
                 return
             }
             let draft = currentImportDraft
-            scanBothSession?.saveDraft(draft, for: jobID)
+            scanBothSession?.saveDraft(draft, needsAttention: previewNeedsAttention, for: jobID)
             scanBothSession?.setConfirmation(
                 .init(
                     draft: draft,
@@ -2615,7 +2626,7 @@ final class AppModel: ObservableObject {
                     self.rebuildPreviewSessions(files: files, defaultLabel: self.location)
                     if self.scanBothSession?.reviewingJobID == jobID {
                         let draft = self.currentImportDraft
-                        self.scanBothSession?.saveDraft(draft, for: jobID)
+                        self.scanBothSession?.saveDraft(draft, needsAttention: self.previewNeedsAttention, for: jobID)
                         self.scanBothSession?.setConfirmation(nil, for: jobID)
                     }
                     self.statusMessage = ""
@@ -3465,7 +3476,7 @@ final class AppModel: ObservableObject {
     func returnToScanBothResults() {
         guard let jobID = scanBothSession?.reviewingJobID, !isWorking, !isEjectingSource else { return }
         let draft = currentImportDraft
-        scanBothSession?.saveDraft(draft, for: jobID)
+        scanBothSession?.saveDraft(draft, needsAttention: previewNeedsAttention, for: jobID)
         scanBothSession?.reviewingJobID = nil
         folderAccessFeedback = nil
         currentSummary = nil

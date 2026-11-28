@@ -163,14 +163,11 @@ struct ImportPreviewView<Overview: View>: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
-            Group {
-                if model.previewTotals.copyFiles == 0 {
-                    zeroCopyCard
-                } else {
-                    importPlanCard
-                }
+            if model.previewTotals.copyFiles == 0 {
+                zeroCopyCard
+            } else {
+                importPlanCard
             }
-            .disabled(model.isScanBothPlanLocked)
             fileBrowser
         }
     }
@@ -250,10 +247,7 @@ struct ImportPreviewView<Overview: View>: View {
             importOptionControls
 
             if hasSupportedMedia {
-                ImportDestinationFields()
-                insta360RescanOptions
-                defaultsAction
-                sessionControls
+                planSettingsFields
             }
 
             reimportControls
@@ -268,6 +262,17 @@ struct ImportPreviewView<Overview: View>: View {
                 .font(.caption)
             }
         }
+    }
+
+    @ViewBuilder
+    private var planSettingsFields: some View {
+        Group {
+            ImportDestinationFields()
+            insta360RescanOptions
+            defaultsAction
+        }
+        .disabled(model.isScanBothPlanLocked)
+        sessionControls
     }
 
     @ViewBuilder
@@ -391,6 +396,7 @@ struct ImportPreviewView<Overview: View>: View {
                 )
             }
         }
+        .disabled(model.isScanBothPlanLocked)
     }
 
     private func optionRow<Content: View>(
@@ -471,6 +477,7 @@ struct ImportPreviewView<Overview: View>: View {
                 isOn: allSessionsBinding(\.includeSidecars)
             )
             .help(L10n.tr("Includes metadata, proxy, audio, thumbnail, and other camera support files in footage backups."))
+            .disabled(model.isScanBothPlanLocked)
         }
 
         if model.canCustomizeDates
@@ -479,6 +486,7 @@ struct ImportPreviewView<Overview: View>: View {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach($model.previewSessions) { $session in
                         sessionEditor(session: $session)
+                            .disabled(model.isScanBothPlanLocked)
                     }
                 }
                 .padding(.top, 8)
@@ -576,6 +584,7 @@ struct ImportPreviewView<Overview: View>: View {
                     .buttonStyle(.bordered)
                 }
             }
+            .disabled(model.isScanBothPlanLocked)
         }
     }
 
@@ -631,10 +640,7 @@ struct ImportPreviewView<Overview: View>: View {
             if hasSupportedMedia {
                 Divider()
                 importOptionControls
-                ImportDestinationFields()
-                insta360RescanOptions
-                defaultsAction
-                sessionControls
+                planSettingsFields
             }
 
             reimportControls
@@ -655,6 +661,7 @@ struct ImportPreviewView<Overview: View>: View {
                     .buttonStyle(.bordered)
                 }
             }
+            .disabled(model.isScanBothPlanLocked)
         }
     }
 

@@ -216,9 +216,7 @@ struct ManualImportView: View {
             }
         }
 
-        let needsAttention = isEditing
-            ? model.previewAttentionCount > 0 || model.previewDestinationIssueCount > 0
-            : summary.conflictFiles > 0 && entry.confirmation == nil
+        let needsAttention = isEditing ? model.previewNeedsAttention : entry.reviewNeedsAttention
         if needsAttention {
             AppStatusLabel(title: L10n.tr("Needs attention"), systemImage: "exclamationmark.triangle", role: .warning)
         }

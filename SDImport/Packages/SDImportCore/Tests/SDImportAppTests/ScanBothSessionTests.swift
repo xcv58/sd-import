@@ -669,8 +669,42 @@ struct ScanBothSessionTests {
         }
     }
 
+    @Test("Scan Both keeps each volume's warning until a fresh review or destination change")
+    func retainsRelevantReviewWarnings() async throws {
+        let hasSpace = OSAllocatedUnfairLock(initialState: false)
+        try await withScannedInlinePlans(destinationCapacity: { path in
+            VolumeCapacity(
+                volumeID: "fixture", displayPath: path,
+                availableBytes: hasSpace.withLock { $0 } ? 1_000_000 : 0, totalBytes: 1_000_000
+            )
+        }) { model, session, roots in
+            let internalID = session.entries[0].id
+            let cardID = session.entries[1].id
+            model.reviewScanBothVolume(internalID)
+            #expect(model.previewNeedsAttention)
+
+            model.reviewScanBothVolume(cardID)
+            #expect(model.scanBothSession?.entries[0].reviewNeedsAttention == true)
+            model.returnToScanBothResults()
+            #expect(model.scanBothSession?.entries.allSatisfy(\.reviewNeedsAttention) == true)
+
+            hasSpace.withLock { $0 = true }
+            model.reviewScanBothVolume(internalID)
+            #expect(!model.previewNeedsAttention)
+            model.returnToScanBothResults()
+            #expect(model.scanBothSession?.entries[0].reviewNeedsAttention == false)
+            #expect(model.scanBothSession?.entries[1].reviewNeedsAttention == true)
+
+            model.setScanBothDestination(roots.videosURL)
+            #expect(model.scanBothSession?.entries.contains(where: \.reviewNeedsAttention) == false)
+            model.reviewScanBothVolume(cardID)
+            #expect(!model.previewNeedsAttention)
+        }
+    }
+
     private func withScannedInlinePlans(
         usesSharedDefault: Bool = true,
+        destinationCapacity: @escaping DestinationSpaceChecker.CapacityProvider = DestinationSpaceChecker.fileSystemCapacity,
         _ test: (AppModel, ScanBothSession, DestinationRoots) async throws -> Void
     ) async throws {
         let manager = FileManager.default
@@ -699,7 +733,8 @@ struct ScanBothSessionTests {
         ]))
         let model = AppModel(
             purchaseManager: PurchaseManager(distribution: .direct, startsStoreTask: false),
-            defaults: defaults, startsBootstrap: false, scanBothMountLookup: { $0 }
+            defaults: defaults, startsBootstrap: false, scanBothMountLookup: { $0 },
+            destinationCapacity: destinationCapacity
         )
         model.bootstrap(at: root.appendingPathComponent("State"), startsRuntimeServices: false)
         model.ejectAfterSuccessfulImport = false
