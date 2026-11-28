@@ -227,7 +227,8 @@ struct ScanBothSessionTests {
             review.setConfirmation(.init(
                 draft: draft(sourcePath: summary.mountPath, roots: roots),
                 plans: plans,
-                destinations: try #require(ReviewedImportDestinations(plans: plans))
+                destinations: try #require(ReviewedImportDestinations(plans: plans)),
+                copyFileCount: 0, destinationPaths: []
             ), for: jobID)
             #expect(review.canStartImports == (jobID == firstJob.id))
         }
@@ -264,7 +265,8 @@ struct ScanBothSessionTests {
             #expect(review.entry(for: firstJob.id)?.result == result)
             review.setConfirmation(.init(
                 draft: secondConfirmation.draft, plans: freshSecondPlans,
-                destinations: try #require(ReviewedImportDestinations(plans: freshSecondPlans))
+                destinations: try #require(ReviewedImportDestinations(plans: freshSecondPlans)),
+                copyFileCount: 0, destinationPaths: []
             ), for: siblingJob.id)
         }
         let approvedSecond = try #require(review.nextConfirmedEntry?.confirmation)
@@ -294,7 +296,8 @@ struct ScanBothSessionTests {
             let jobID = try #require(entry.jobID)
             session.setConfirmation(.init(
                 draft: draft(sourcePath: entry.volume.mountPath, roots: roots), plans: [],
-                destinations: try #require(ReviewedImportDestinations(plans: []))
+                destinations: try #require(ReviewedImportDestinations(plans: [])),
+                copyFileCount: 0, destinationPaths: []
             ), for: jobID)
         }
         #expect(session.canStartImports)
@@ -456,52 +459,120 @@ struct ScanBothSessionTests {
 
     @Test("switching inline plans saves the draft and keeps the sibling approved")
     func switchesInlinePlans() async throws {
+        try await withScannedInlinePlans { model, session, roots in
+            let internalID = session.entries[0].id
+            let cardID = session.entries[1].id
+
+            model.reviewScanBothVolume(internalID)
+            model.location = "Modified Internal Plan"
+            model.reviewScanBothVolume(cardID)
+            #expect(model.importUIPhase == .review)
+            #expect(model.scanBothSession?.reviewingEntry?.id == cardID)
+            #expect(model.scanBothSession?.entries[0].draft?.settings.shootName == "Modified Internal Plan")
+            #expect(model.importMediaSelection == .videosOnly)
+            let previewPaths = model.previewDestinations.map(\.path)
+            try #require(previewPaths.count == 1)
+            #expect(previewPaths[0].hasPrefix(roots.videosURL.path + "/"))
+            model.importCurrentJob()
+            let approvedCard = try #require(model.scanBothSession?.entries[1].confirmation)
+            #expect(approvedCard.copyFileCount == 1)
+            #expect(approvedCard.destinationPaths == previewPaths)
+            #expect(!model.canStartScanBothImports)
+
+            model.reviewScanBothVolume(internalID)
+            #expect(model.location == "Modified Internal Plan")
+            #expect(model.scanBothSession?.entries[1].confirmation?.destinationPaths == previewPaths)
+            #expect(model.scanBothSession?.entries[1].confirmation?.plans == approvedCard.plans)
+            model.skipScanBothImport(internalID)
+            #expect(model.scanBothSession?.reviewingEntry == nil)
+            #expect(model.scanBothSession?.entries[0].disposition == .skipped)
+            #expect(model.canStartScanBothImports)
+            #expect(try FileManager.default.contentsOfDirectory(atPath: roots.videosURL.path).isEmpty)
+        }
+    }
+
+    @Test("cancelling a new scan restores the edited draft and requires another confirmation")
+    func restoresEditedDraftAfterCancelledScan() async throws {
+        try await withScannedInlinePlans { model, session, roots in
+            for entry in session.entries {
+                model.reviewScanBothVolume(entry.id)
+                model.importCurrentJob()
+            }
+            try #require(model.canStartScanBothImports)
+            let cardApproval = try #require(model.scanBothSession?.entries[1].confirmation)
+
+            let internalID = session.entries[0].id
+            model.reviewScanBothVolume(internalID)
+            let editedDestination = roots.photosURL.deletingLastPathComponent()
+                .appendingPathComponent("Edited", isDirectory: true)
+            try FileManager.default.createDirectory(at: editedDestination, withIntermediateDirectories: false)
+            model.photosPath = editedDestination.path
+            model.destinationPathDidChange(clearFeedback: false)
+
+            model.beginScanBoth(session)
+            model.cancelImport()
+            try await waitForImport(model)
+            let restored = try #require(model.scanBothSession)
+            #expect(model.importUIPhase == .review)
+            #expect(restored.reviewingEntry == nil)
+            #expect(restored.entries[0].draft?.settings.photosPath == editedDestination.path)
+            #expect(restored.entries[0].confirmation == nil)
+            #expect(restored.entries[1].confirmation?.plans == cardApproval.plans)
+            #expect(!model.canStartScanBothImports)
+
+            model.reviewScanBothVolume(internalID)
+            #expect(model.photosPath == editedDestination.path)
+            model.importCurrentJob()
+            try #require(model.canStartScanBothImports)
+            model.startScanBothImports()
+            try await waitForImport(model)
+            #expect(model.scanBothSession?.entries.compactMap(\.result).map(\.importedFiles) == [1, 1])
+            #expect(try FileManager.default.contentsOfDirectory(atPath: roots.photosURL.path).isEmpty)
+            #expect(try FileManager.default.subpathsOfDirectory(atPath: editedDestination.path).contains {
+                $0.hasSuffix("/Internal.jpg")
+            })
+        }
+    }
+
+    private func withScannedInlinePlans(
+        _ test: (AppModel, ScanBothSession, DestinationRoots) async throws -> Void
+    ) async throws {
         let manager = FileManager.default
-        let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? manager.removeItem(at: root) }
+        let identifier = UUID().uuidString
+        let root = manager.temporaryDirectory.appendingPathComponent(identifier, isDirectory: true)
+        let suite = "SDImportTests.InlinePlans.\(identifier)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? manager.removeItem(at: root)
+        }
         let internalFolder = root.appendingPathComponent("Internal", isDirectory: true)
         let cardFolder = root.appendingPathComponent("SD Card", isDirectory: true)
-        let destination = root.appendingPathComponent("Library", isDirectory: true)
-        for folder in [internalFolder, cardFolder, destination] {
+        let roots = DestinationRoots(
+            photosURL: root.appendingPathComponent("Photos", isDirectory: true).resolvingSymlinksInPath(),
+            videosURL: root.appendingPathComponent("Videos", isDirectory: true).resolvingSymlinksInPath()
+        )
+        for folder in [internalFolder, cardFolder, roots.photosURL, roots.videosURL] {
             try manager.createDirectory(at: folder, withIntermediateDirectories: true)
         }
         try Data("internal".utf8).write(to: internalFolder.appendingPathComponent("Internal.jpg"))
-        try Data("card".utf8).write(to: cardFolder.appendingPathComponent("Card.jpg"))
+        try Data("card".utf8).write(to: cardFolder.appendingPathComponent("Card.mp4"))
         let session = try #require(ScanBothSession(deviceName: "Fixture Camera", entries: [
             .init(id: UUID(), volume: Self.volume("Internal", disk: "disk4", at: internalFolder)),
             .init(id: UUID(), volume: Self.volume("SD Card", disk: "disk5", at: cardFolder))
         ]))
         let model = AppModel(
             purchaseManager: PurchaseManager(distribution: .direct, startsStoreTask: false),
-            startsBootstrap: false, scanBothMountLookup: { $0 }
+            defaults: defaults, startsBootstrap: false, scanBothMountLookup: { $0 }
         )
         model.bootstrap(at: root.appendingPathComponent("State"), startsRuntimeServices: false)
-        model.importDefaults.photosPath = destination.path
-        model.importDefaults.videosPath = destination.path
+        model.ejectAfterSuccessfulImport = false
+        model.importDefaults.photosPath = roots.photosURL.path
+        model.importDefaults.videosPath = roots.videosURL.path
+        model.importDefaults.destinationLayout = .singleLibrary
         model.beginScanBoth(session)
         try await waitForImport(model)
-        let internalID = session.entries[0].id
-        let cardID = session.entries[1].id
-
-        model.reviewScanBothVolume(internalID)
-        model.location = "Modified Internal Plan"
-        model.reviewScanBothVolume(cardID)
-        #expect(model.importUIPhase == .review)
-        #expect(model.scanBothSession?.reviewingEntry?.id == cardID)
-        #expect(model.scanBothSession?.entries[0].draft?.settings.shootName == "Modified Internal Plan")
-        model.importCurrentJob()
-        let approvedCard = try #require(model.scanBothSession?.entries[1].confirmation)
-        #expect(approvedCard.copyFileCount == 1)
-        #expect(!model.canStartScanBothImports)
-
-        model.reviewScanBothVolume(internalID)
-        #expect(model.location == "Modified Internal Plan")
-        #expect(model.scanBothSession?.entries[1].confirmation?.plans == approvedCard.plans)
-        model.skipScanBothImport(internalID)
-        #expect(model.scanBothSession?.reviewingEntry == nil)
-        #expect(model.scanBothSession?.entries[0].disposition == .skipped)
-        #expect(model.canStartScanBothImports)
-        #expect(try manager.contentsOfDirectory(atPath: destination.path).isEmpty)
+        try await test(model, session, roots)
     }
 
     @Test("destination approvals allow new folders and reject a retargeted path")

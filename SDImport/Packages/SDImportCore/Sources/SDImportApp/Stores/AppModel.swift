@@ -28,13 +28,7 @@ struct ScanBothSession {
         let plans: [ImportFilePlan]
         let destinations: ReviewedImportDestinations
         let copyFileCount: Int
-
-        init(draft: ImportDraft, plans: [ImportFilePlan], destinations: ReviewedImportDestinations) {
-            self.draft = draft
-            self.plans = plans
-            self.destinations = destinations
-            self.copyFileCount = plans.lazy.filter(\.willCopy).count
-        }
+        let destinationPaths: [String]
     }
 
     struct Entry: Identifiable {
@@ -1878,8 +1872,12 @@ final class AppModel: ObservableObject {
     }
 
     private func retainPendingScanBothResults() {
-        guard scanBothSession?.hasPendingResults == true else { return }
-        previousScanBothSession = scanBothSession
+        guard var session = scanBothSession, session.hasPendingResults else { return }
+        if let jobID = session.reviewingJobID, currentSummary?.jobID == jobID {
+            session.saveDraft(currentScanBothDraft, for: jobID)
+        }
+        session.reviewingJobID = nil
+        previousScanBothSession = session
     }
 
     private func finishScanAttempt(
@@ -1893,7 +1891,6 @@ final class AppModel: ObservableObject {
         if let previous, event != .scanSucceeded {
             singleScanMount = nil
             scanBothSession = previous
-            scanBothSession?.reviewingJobID = nil
             if let failureRenderer { showFolderAccessError(failureRenderer) }
             finishImportAttempt(id, event: .recover(hasScannedJob: true))
         } else {
@@ -2393,7 +2390,11 @@ final class AppModel: ObservableObject {
             scanBothSession?.saveDraft(draft, for: jobID)
             scanBothSession?.setConfirmation(
                 .init(
-                    draft: draft.settings, plans: plan.files, destinations: destinations
+                    draft: draft.settings,
+                    plans: plan.files,
+                    destinations: destinations,
+                    copyFileCount: previewTotals.copyFiles,
+                    destinationPaths: previewDestinations.map(\.path)
                 ),
                 for: jobID
             )

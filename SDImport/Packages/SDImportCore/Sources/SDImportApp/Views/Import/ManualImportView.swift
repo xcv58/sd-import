@@ -169,21 +169,14 @@ struct ManualImportView: View {
             LabeledContent(L10n.tr("New"), value: L10n.tr("\(summary.newFiles) files"))
         }
 
-        let draft = isEditing ? model.currentImportDraft : entry.draft?.settings
-        let defaults = model.importDefaults
-        let photosPath = draft?.photosPath ?? defaults.photosPath
-        let videosPath = draft?.videosPath ?? defaults.videosPath
-        switch draft?.mediaSelection ?? defaults.mediaSelection {
-        case .photosOnly:
-            scanBothDestination(L10n.tr("Destination"), path: photosPath)
-        case .videosOnly:
-            scanBothDestination(L10n.tr("Destination"), path: videosPath)
-        case .photosAndVideos:
-            if (draft?.destinationLayout ?? defaults.destinationLayout) == .separateMediaFolders, photosPath != videosPath {
-                scanBothDestination(L10n.tr("Photos"), path: photosPath)
-                scanBothDestination(L10n.tr("Videos"), path: videosPath)
-            } else {
-                scanBothDestination(L10n.tr("Library"), path: photosPath)
+        let destinations = isEditing ? model.previewDestinations.map(\.path) : entry.confirmation?.destinationPaths ?? []
+        if destinations.count > 1 {
+            LabeledContent(L10n.tr("Destinations"), value: L10n.tr("\(destinations.count) folders"))
+        } else if let destination = destinations.first {
+            LabeledContent {
+                scanBothPath(destination)
+            } label: {
+                Text(L10n.tr("Destination"))
             }
         }
 
@@ -192,14 +185,6 @@ struct ManualImportView: View {
             : summary.conflictFiles > 0 && entry.confirmation == nil
         if needsAttention {
             AppStatusLabel(title: L10n.tr("Needs attention"), systemImage: "exclamationmark.triangle", role: .warning)
-        }
-    }
-
-    private func scanBothDestination(_ title: String, path: String) -> some View {
-        LabeledContent {
-            scanBothPath(path)
-        } label: {
-            Text(title)
         }
     }
 

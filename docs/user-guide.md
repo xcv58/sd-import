@@ -46,7 +46,8 @@ as one device, choose either volume or `Scan Both` from the same prompt. With
 `Scan Both`, grant access to each volume as macOS asks. After both scans, the
 review shows both volumes together. Open either volume's `Review import` to
 inspect files and edit the destination on the same page, then choose
-`Confirm Plan` for that volume.
+`Confirm Plan` for that volume. The summary shows the planned destination
+once you open or confirm that volume's plan.
 Use `Skip` to leave a volume out. Select `Start Imports` to copy the confirmed
 volumes one at a time. If a plan changes before its copy starts, review it again.
 Keep both volumes mounted until the imports finish.
