@@ -162,23 +162,24 @@ private struct HistoryRow: View {
     @Environment(\.locale) private var locale
     let job: ImportJob
 
+    private var isForgotten: Bool { job.localTracking == .forgotten }
+
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: job.failedFiles > 0 ? "exclamationmark.triangle" : "checkmark.circle")
-                .foregroundStyle(job.failedFiles > 0 ? .red : .secondary)
+            Image(systemName: statusImage)
+                .foregroundStyle(statusStyle)
                 .frame(width: 18)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(HistoryJobPresentation.title(for: job))
                     .lineLimit(1)
+                if isForgotten {
+                    HistoryForgottenBadge(showsIcon: false)
+                }
                 Text(HistoryJobPresentation.subtitle(for: job))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                if let localTrackingStatus = HistoryJobPresentation.localTrackingStatus(for: job) {
-                    Text(localTrackingStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
             Spacer(minLength: 0)
         }
@@ -186,5 +187,36 @@ private struct HistoryRow: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    private var statusImage: String {
+        if isForgotten { return HistoryForgottenBadge.systemImage }
+        return job.failedFiles > 0 ? "exclamationmark.triangle" : "checkmark.circle"
+    }
+
+    private var statusStyle: AnyShapeStyle {
+        if isForgotten { return AnyShapeStyle(.primary) }
+        return job.failedFiles > 0 ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary)
+    }
+}
+
+struct HistoryForgottenBadge: View {
+    static let systemImage = "minus.circle.fill"
+
+    var showsIcon = true
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if showsIcon {
+                Image(systemName: Self.systemImage)
+                    .accessibilityHidden(true)
+            }
+            Text(L10n.tr("Forgotten on this Mac"))
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(.quaternary, in: Capsule())
     }
 }

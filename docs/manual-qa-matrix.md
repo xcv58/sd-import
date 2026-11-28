@@ -87,9 +87,9 @@ Record the build number and per-volume counts.
    the open prompt.
 2. Select **Scan Both** and grant folder access when macOS asks. Confirm
    internal storage finishes scanning before the SD card starts scanning.
-3. Confirm the review shows each volume's label, sample filenames, and file
-   count. Open each volume's **Review import** and check its file list and
-   destination. Choose **Confirm Plan** and check the volume is **Ready**
+3. Confirm the review shows both volumes with their file counts, destinations,
+   and any warnings. Open each volume's **Review import** and check its file
+   list and destination on the same page. Choose **Confirm Plan** and check the volume is **Ready**
    and the destination is still empty. Confirm both, then choose **Start
    Imports** once. Watch Internal copy first and SD Card follow without an
    additional prompt. Check the receipt and History for both imports.
@@ -101,7 +101,7 @@ Record the build number and per-volume counts.
    import review.
 6. Open a volume's **Review import** and grant access to a temporary destination.
    In Settings, choose a different default destination for the same media type.
-   Return to Import, go back to the combined results, and reopen the volume.
+   Return to Import, close its plan, and reopen the volume.
    Confirm the custom destination still has access and **Confirm Plan** is
    available. Repeat with a review that started with the previous default.
 

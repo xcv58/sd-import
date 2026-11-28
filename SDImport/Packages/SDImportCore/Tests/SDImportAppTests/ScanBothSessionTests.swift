@@ -105,7 +105,6 @@ struct ScanBothSessionTests {
                     volumeUUID: volume.volumeUUID, location: "Camera", scannedFiles: 1, newFiles: 1,
                     knownFiles: 0, unsupportedFiles: 0, conflictFiles: 0
                 ),
-                ["clip.mp4"],
                 nil
             )
         }
@@ -113,9 +112,8 @@ struct ScanBothSessionTests {
         #expect(order == [internalStorage.name, card.name])
         let completed = states[declineFirst ? 1 : 0]
         let skipped = states[declineFirst ? 0 : 1]
-        if case .complete(let summary, let filenames, _, _) = completed {
+        if case .complete(let summary, _, _) = completed {
             #expect(summary.volumeName == completedVolume.name)
-            #expect(filenames == ["clip.mp4"])
         } else {
             Issue.record("Expected the sibling's scan result")
         }
@@ -184,8 +182,7 @@ struct ScanBothSessionTests {
                 location: "Camera",
                 roots: roots
             ))
-            let preview = try repository.previewFilenames(jobID: summary.jobID, limit: 5)
-            return .complete(summary, preview, nil)
+            return .complete(summary, nil)
         }
 
         #expect(scannedVolumes == [internalStorage.name, card.name])
@@ -202,7 +199,7 @@ struct ScanBothSessionTests {
             review.reviewingJobID = job.id
             let entry = try #require(review.reviewingEntry)
             #expect(entry.volume == volume)
-            guard case .complete(let summary, let preview, _, _) = entry.state else {
+            guard let summary = entry.summary else {
                 Issue.record("Missing scan result for \(volume.name)")
                 return
             }
@@ -211,7 +208,6 @@ struct ScanBothSessionTests {
             #expect(summary.mountPath == sourceFolders[volume.name]?.path)
             let files = try repository.fetchJobFiles(jobID: job.id)
             #expect(Set(files.map(\.filename)) == Set(expectedNames))
-            #expect(preview == Array(files.prefix(5).map(\.filename)))
             #expect(files.allSatisfy { $0.copyStatus == .pending })
         }
 
@@ -445,7 +441,6 @@ struct ScanBothSessionTests {
                     volumeUUID: volume.volumeUUID, location: "Camera", scannedFiles: 1, newFiles: 1,
                     knownFiles: 0, unsupportedFiles: 0, conflictFiles: 0
                 ),
-                [],
                 nil
             )
         }
@@ -457,6 +452,56 @@ struct ScanBothSessionTests {
             id: name, name: name, mountURL: url ?? URL(fileURLWithPath: "/Volumes/\(name)"),
             volumeUUID: name, isRemovable: true, wholeDiskIdentifier: disk, deviceGroupIdentifier: device
         )
+    }
+
+    @Test("switching inline plans saves the draft and keeps the sibling approved")
+    func switchesInlinePlans() async throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? manager.removeItem(at: root) }
+        let internalFolder = root.appendingPathComponent("Internal", isDirectory: true)
+        let cardFolder = root.appendingPathComponent("SD Card", isDirectory: true)
+        let destination = root.appendingPathComponent("Library", isDirectory: true)
+        for folder in [internalFolder, cardFolder, destination] {
+            try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        try Data("internal".utf8).write(to: internalFolder.appendingPathComponent("Internal.jpg"))
+        try Data("card".utf8).write(to: cardFolder.appendingPathComponent("Card.jpg"))
+        let session = try #require(ScanBothSession(deviceName: "Fixture Camera", entries: [
+            .init(id: UUID(), volume: Self.volume("Internal", disk: "disk4", at: internalFolder)),
+            .init(id: UUID(), volume: Self.volume("SD Card", disk: "disk5", at: cardFolder))
+        ]))
+        let model = AppModel(
+            purchaseManager: PurchaseManager(distribution: .direct, startsStoreTask: false),
+            startsBootstrap: false, scanBothMountLookup: { $0 }
+        )
+        model.bootstrap(at: root.appendingPathComponent("State"), startsRuntimeServices: false)
+        model.importDefaults.photosPath = destination.path
+        model.importDefaults.videosPath = destination.path
+        model.beginScanBoth(session)
+        try await waitForImport(model)
+        let internalID = session.entries[0].id
+        let cardID = session.entries[1].id
+
+        model.reviewScanBothVolume(internalID)
+        model.location = "Modified Internal Plan"
+        model.reviewScanBothVolume(cardID)
+        #expect(model.importUIPhase == .review)
+        #expect(model.scanBothSession?.reviewingEntry?.id == cardID)
+        #expect(model.scanBothSession?.entries[0].draft?.settings.shootName == "Modified Internal Plan")
+        model.importCurrentJob()
+        let approvedCard = try #require(model.scanBothSession?.entries[1].confirmation)
+        #expect(approvedCard.copyFileCount == 1)
+        #expect(!model.canStartScanBothImports)
+
+        model.reviewScanBothVolume(internalID)
+        #expect(model.location == "Modified Internal Plan")
+        #expect(model.scanBothSession?.entries[1].confirmation?.plans == approvedCard.plans)
+        model.skipScanBothImport(internalID)
+        #expect(model.scanBothSession?.reviewingEntry == nil)
+        #expect(model.scanBothSession?.entries[0].disposition == .skipped)
+        #expect(model.canStartScanBothImports)
+        #expect(try manager.contentsOfDirectory(atPath: destination.path).isEmpty)
     }
 
     @Test("destination approvals allow new folders and reject a retargeted path")

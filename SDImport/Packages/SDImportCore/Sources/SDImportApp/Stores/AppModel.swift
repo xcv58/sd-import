@@ -27,13 +27,21 @@ struct ScanBothSession {
         let draft: ImportDraft
         let plans: [ImportFilePlan]
         let destinations: ReviewedImportDestinations
+        let copyFileCount: Int
+
+        init(draft: ImportDraft, plans: [ImportFilePlan], destinations: ReviewedImportDestinations) {
+            self.draft = draft
+            self.plans = plans
+            self.destinations = destinations
+            self.copyFileCount = plans.lazy.filter(\.willCopy).count
+        }
     }
 
     struct Entry: Identifiable {
         enum State {
             case waiting
             case scanning
-            case complete(ScanSummary, [String], SecurityScopedResourceAccess?, [String: ReviewedFileIdentity] = [:])
+            case complete(ScanSummary, SecurityScopedResourceAccess?, [String: ReviewedFileIdentity] = [:])
             case skipped(ScanBothIssue)
         }
 
@@ -54,19 +62,19 @@ struct ScanBothSession {
         var copyInterruption: String?
 
         var summary: ScanSummary? {
-            if case .complete(let summary, _, _, _) = state { return summary }
+            if case .complete(let summary, _, _) = state { return summary }
             return nil
         }
 
         var jobID: String? { summary?.jobID }
 
         var access: SecurityScopedResourceAccess? {
-            if case .complete(_, _, let access, _) = state { return access }
+            if case .complete(_, let access, _) = state { return access }
             return nil
         }
 
         var reviewedSourceFiles: [String: ReviewedFileIdentity]? {
-            if case .complete(_, _, _, let files) = state { return files }
+            if case .complete(_, _, let files) = state { return files }
             return nil
         }
 
@@ -3171,17 +3179,16 @@ final class AppModel: ObservableObject {
                     reviewedSources[path] = identity
                 }, shouldCancel: { Task.isCancelled })
                 try Task.checkCancellation()
-                let filenames = try repositories.jobRepository.previewFilenames(jobID: summary.jobID, limit: 5)
-                return (summary, filenames, reviewedSources)
+                return (summary, reviewedSources)
             }
-            let (summary, filenames, reviewedSources) = try await withTaskCancellationHandler {
+            let (summary, reviewedSources) = try await withTaskCancellationHandler {
                 try await worker.value
             } onCancel: {
                 worker.cancel()
             }
             try Task.checkCancellation()
             guard liveScanBothVolume(matching: volume) != nil else { throw ScanBothIssue.removed }
-            return .complete(summary, filenames, access, reviewedSources)
+            return .complete(summary, access, reviewedSources)
         } catch {
             if let issue = error as? ScanBothIssue { throw issue }
             guard liveScanBothVolume(matching: volume) != nil else { throw ScanBothIssue.removed }
@@ -3223,9 +3230,13 @@ final class AppModel: ObservableObject {
     }
 
     func reviewScanBothVolume(_ entryID: UUID) {
-        guard isShowingScanBothResults, !isWorking, !isEjectingSource,
+        guard !isWorking, !isEjectingSource,
               let entry = scanBothSession?.entries.first(where: { $0.id == entryID }),
-              entry.awaitsImport, let summary = entry.summary, !needsRescan(summary.jobID) else { return }
+              entry.awaitsImport, let summary = entry.summary, !needsRescan(summary.jobID),
+              scanBothSession?.reviewingJobID != summary.jobID else { return }
+        if isReviewingScanBothVolume {
+            returnToScanBothResults()
+        }
         _ = openScanBothVolume(entry, summary: summary)
     }
 
@@ -3375,7 +3386,11 @@ final class AppModel: ObservableObject {
     }
 
     func skipScanBothImport(_ entryID: UUID) {
-        guard isShowingScanBothResults, !isWorking, !isEjectingSource else { return }
+        guard !isWorking, !isEjectingSource,
+              let entry = scanBothSession?.entries.first(where: { $0.id == entryID }), entry.canSkip else { return }
+        if scanBothSession?.reviewingEntry?.id == entryID {
+            returnToScanBothResults()
+        }
         scanBothSession?.skipEntry(entryID)
     }
 
