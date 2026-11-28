@@ -55,8 +55,8 @@ use the same folder, it is selected for you. Open either volume's
 `Review import` to inspect its files and organization on the same page, then
 choose `Confirm Plan` for that volume. Use `Skip` to leave a volume out. Select
 `Start Imports` to copy the confirmed volumes one at a time. If you change the
-shared destination, confirm the plans again before starting. After files have
-been copied, the session keeps that destination.
+shared destination, confirm the plans again before starting. Once imports
+start, the shared destination and plan settings stay locked for that session.
 Keep both volumes mounted until the imports finish.
 
 The app asks before a new scan or source change discards pending Scan Both

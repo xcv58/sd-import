@@ -85,8 +85,8 @@ struct ImportPreviewView<Overview: View>: View {
 
             ScrollViewReader { scroll in
                 AppPage(
-                    status: model.folderAccessFeedback?.text ?? scanBothStatus,
-                    statusRole: model.folderAccessFeedback != nil || scanBothOverview == nil ? .error : .neutral,
+                    status: scanBothOverview == nil ? model.folderAccessFeedback?.text : scanBothStatus,
+                    statusRole: scanBothOverview == nil ? .error : .neutral,
                     maxContentWidth: .infinity
                 ) {
                     if let scanBothOverview {
@@ -110,7 +110,7 @@ struct ImportPreviewView<Overview: View>: View {
                     resetFileBrowser()
                     if jobID == nil {
                         scroll.scrollTo(ScrollTarget.overview, anchor: .top)
-                    } else if model.folderAccessFeedback == nil {
+                    } else {
                         scroll.scrollTo(ScrollTarget.inlineReview, anchor: .top)
                     }
                 }
@@ -158,11 +158,19 @@ struct ImportPreviewView<Overview: View>: View {
                 )
             }
 
-            if model.previewTotals.copyFiles == 0 {
-                zeroCopyCard
-            } else {
-                importPlanCard
+            if model.isScanBothPlanLocked {
+                Label(L10n.tr("Plan settings are locked after imports start."), systemImage: "lock")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
+            Group {
+                if model.previewTotals.copyFiles == 0 {
+                    zeroCopyCard
+                } else {
+                    importPlanCard
+                }
+            }
+            .disabled(model.isScanBothPlanLocked)
             fileBrowser
         }
     }
@@ -178,8 +186,6 @@ struct ImportPreviewView<Overview: View>: View {
             .padding(.top, 12)
             .id(ScrollTarget.inlineReview)
             .task(id: entry.id) {
-                // A failed batch start opens the affected plan and displays its error above the overview.
-                guard model.folderAccessFeedback == nil else { return }
                 inlineReviewHeadingHasKeyboardFocus = true
                 reviewHeadingIsFocused = true
             }
@@ -1796,19 +1802,20 @@ private struct ImportFileInspector: View {
 }
 
 private struct ReimportSelectionActions: View {
+    @EnvironmentObject private var model: AppModel
     let rows: [ImportPreviewRow]
     let setReimportSelection: (Set<Int64>, Bool) -> Void
 
     var body: some View {
         let eligible = rows.filter(\.canReimport)
         let selected = rows.filter(\.canSkipReimport)
-        if !eligible.isEmpty {
+        if !model.isScanBothPlanLocked, !eligible.isEmpty {
             Button(L10n.tr("Import Anyway")) {
                 setReimportSelection(Set(eligible.map(\.id)), true)
             }
             .accessibilityIdentifier("import.review.reimport-selection")
         }
-        if !selected.isEmpty {
+        if !model.isScanBothPlanLocked, !selected.isEmpty {
             Button(L10n.tr("Skip Again")) {
                 setReimportSelection(Set(selected.map(\.id)), false)
             }

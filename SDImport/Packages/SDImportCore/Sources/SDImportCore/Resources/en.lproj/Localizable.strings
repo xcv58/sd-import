@@ -499,6 +499,7 @@
 "Settings…" = "Settings…";
 "Setup failed" = "Setup failed";
 "Setup skipped. Defaults can be changed in Settings." = "Setup skipped. Defaults can be changed in Settings.";
+"Plan settings are locked after imports start." = "Plan settings are locked after imports start.";
 "Shared Destination" = "Shared Destination";
 "Shareable with Family Sharing" = "Shareable with Family Sharing";
 "Shoot" = "Shoot";

@@ -1,3 +1,4 @@
+import Accessibility
 import SDImportCore
 import SwiftUI
 
@@ -136,7 +137,7 @@ struct ManualImportView: View {
                     scanBothPath(session.destinationPath)
                 }
                 Spacer()
-                if session.hasPendingResults, session.canChangeDestination || needsAccess {
+                if session.hasPendingResults, !session.hasStartedImports || needsAccess {
                     Button(needsAccess ? L10n.tr("Allow Access") : L10n.tr("Choose…")) {
                         model.chooseScanBothDestination()
                     }
@@ -232,15 +233,27 @@ struct ManualImportView: View {
     }
 
     private func scanBothReviewFooter(_ session: ScanBothSession) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                scanBothFooterContext(session)
-                Spacer(minLength: 0)
-                scanBothFooterActions(session)
+        let feedback = model.folderAccessFeedback?.text
+        return VStack(alignment: .leading, spacing: 8) {
+            if let feedback, !feedback.isEmpty {
+                AppStatusLabel(title: feedback, systemImage: "exclamationmark.triangle.fill", role: .error)
+                    .font(.callout)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .help(feedback)
+                    .accessibilityIdentifier("import.scan-both.review-error")
             }
-            VStack(alignment: .leading, spacing: 8) {
-                scanBothFooterContext(session)
-                scanBothFooterActions(session)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    scanBothFooterContext(session)
+                    Spacer(minLength: 0)
+                    scanBothFooterActions(session)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    scanBothFooterContext(session)
+                    scanBothFooterActions(session)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -248,6 +261,10 @@ struct ManualImportView: View {
         .padding(.vertical, 12)
         .background(AppSurfacePalette.contentBackground)
         .overlay(alignment: .top) { Divider() }
+        .onChange(of: feedback, initial: true) { _, message in
+            guard let message, !message.isEmpty else { return }
+            AccessibilityNotification.Announcement(message).post()
+        }
     }
 
     @ViewBuilder
@@ -313,7 +330,8 @@ struct ManualImportView: View {
                     .disabled(model.isWorking || model.isEjectingSource)
                     .accessibilityValue(title)
                 } else if !isEditing {
-                    Button(entry.confirmation == nil ? L10n.tr("Review import") : L10n.tr("Edit Plan")) {
+                    let canEdit = entry.confirmation != nil && model.scanBothSession?.hasStartedImports == false
+                    Button(canEdit ? L10n.tr("Edit Plan") : L10n.tr("Review import")) {
                         model.reviewScanBothVolume(entry.id)
                     }
                     .buttonStyle(.bordered)

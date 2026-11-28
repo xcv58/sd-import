@@ -392,6 +392,12 @@ struct ScanBothSessionTests {
     func groupsInterruptedRecording(completePair: Bool) throws {
         var session = try scannedSession()
         let jobID = internalStorage.name
+        session.setDestination(path: "/tmp/Original", access: nil)
+        #expect(!session.hasStartedImports)
+        session.recordImportStarted(for: jobID)
+        #expect(session.hasStartedImports)
+        session.setDestination(path: "/tmp/Replacement", access: nil)
+        #expect(session.destinationPath == "/tmp/Original")
         let names = ["VID_20181001_210458_00_007.insv", "VID_20181001_210458_10_007.insv", "pending.mp4"]
         let files = names.enumerated().map { index, filename in
             JobFileRecord(
@@ -408,6 +414,9 @@ struct ScanBothSessionTests {
         #expect(session.entries[0].result?.failedFiles == (completePair ? 0 : 1))
         #expect(session.entries[0].copyInterruption == "Stopped")
         #expect(session.entries[0].awaitsImport)
+        session.skipEntry(session.entries[0].id)
+        session.setDestination(path: "/tmp/Replacement", access: nil)
+        #expect(session.destinationPath == "/tmp/Original")
     }
 
     @Test("replacing a Scan Both review needs confirmation while the sibling is still pending")
@@ -1102,6 +1111,12 @@ struct ScanBothSessionTests {
             #expect(after.entries[1].confirmation == nil)
             #expect(model.importUIPhase == .review)
             #expect(!model.needsRescan(try #require(after.entries[1].jobID)))
+            #expect(model.isScanBothPlanLocked)
+            let lockedDraft = model.currentImportDraft
+            model.useImportMediaSelection(.videosOnly)
+            model.useFolderGrouping(lockedDraft.folderGrouping == .byDay ? .oneShootFolder : .byDay)
+            model.setPreviewSessionInclusion(\.includePhotos, to: false)
+            #expect(model.currentImportDraft == lockedDraft)
             model.importCurrentJob()
             #expect(model.canStartScanBothImports)
             model.startScanBothImports()

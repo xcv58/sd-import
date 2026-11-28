@@ -499,6 +499,7 @@
 "Settings…" = "설정…";
 "Setup failed" = "설정 실패";
 "Setup skipped. Defaults can be changed in Settings." = "설정을 건너뛰었습니다. 기본값은 설정에서 변경할 수 있습니다.";
+"Plan settings are locked after imports start." = "가져오기를 시작하면 계획 설정을 변경할 수 없습니다.";
 "Shared Destination" = "공유 저장 위치";
 "Shareable with Family Sharing" = "가족 공유 가능";
 "Shoot" = "촬영";

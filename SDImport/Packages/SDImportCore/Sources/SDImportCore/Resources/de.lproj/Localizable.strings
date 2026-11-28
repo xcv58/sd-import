@@ -499,6 +499,7 @@
 "Settings…" = "Einstellungen…";
 "Setup failed" = "Einrichtung fehlgeschlagen";
 "Setup skipped. Defaults can be changed in Settings." = "Einrichtung übersprungen. Standardwerte können in den Einstellungen geändert werden.";
+"Plan settings are locked after imports start." = "Die Planeinstellungen sind nach dem Start des Imports gesperrt.";
 "Shared Destination" = "Gemeinsames Ziel";
 "Shareable with Family Sharing" = "Mit Familienfreigabe teilbar";
 "Shoot" = "Aufnahme";

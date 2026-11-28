@@ -499,6 +499,7 @@
 "Settings…" = "設定…";
 "Setup failed" = "設定失敗";
 "Setup skipped. Defaults can be changed in Settings." = "已跳過設定。可在“設定”中更改預設值。";
+"Plan settings are locked after imports start." = "開始匯入後，計畫設定將鎖定。";
 "Shared Destination" = "共用目的地資料夾";
 "Shareable with Family Sharing" = "可通過家人共享";
 "Shoot" = "拍攝";

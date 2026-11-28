@@ -499,6 +499,7 @@
 "Settings…" = "設定…";
 "Setup failed" = "設定に失敗しました";
 "Setup skipped. Defaults can be changed in Settings." = "設定をスキップしました。既定値は「設定」で変更できます。";
+"Plan settings are locked after imports start." = "読み込みの開始後はプランの設定を変更できません。";
 "Shared Destination" = "共通の保存先";
 "Shareable with Family Sharing" = "ファミリー共有に対応";
 "Shoot" = "撮影";

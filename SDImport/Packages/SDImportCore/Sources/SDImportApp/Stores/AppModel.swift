@@ -165,12 +165,12 @@ struct ScanBothSession {
         entries[index].confirmation = confirmation
     }
 
-    var canChangeDestination: Bool {
-        !entries.contains { ($0.result?.importedFiles ?? 0) > 0 }
+    var hasStartedImports: Bool {
+        entries.contains(where: \.hasStartedImport)
     }
 
     mutating func setDestination(path: String, access: SecurityScopedResourceAccess?) {
-        guard path == destinationPath || canChangeDestination else { return }
+        guard path == destinationPath || !hasStartedImports else { return }
         if destinationPath != path {
             for index in entries.indices {
                 entries[index].confirmation = nil
@@ -889,6 +889,9 @@ final class AppModel: ObservableObject {
         scanBothSession != nil && scanBothSession?.reviewingJobID == nil
     }
     var isReviewingScanBothVolume: Bool { scanBothSession?.reviewingJobID != nil }
+    var isScanBothPlanLocked: Bool {
+        isReviewingScanBothVolume && scanBothSession?.hasStartedImports == true
+    }
     private var reviewSharedDestinationPath: String? {
         isReviewingScanBothVolume ? scanBothSession?.destinationPath : nil
     }
@@ -1282,7 +1285,7 @@ final class AppModel: ObservableObject {
 
     func chooseScanBothDestination() {
         guard !isWorking, !isEjectingSource, let session = scanBothSession,
-              session.canChangeDestination || scanBothDestinationNeedsAccess,
+              !session.hasStartedImports || scanBothDestinationNeedsAccess,
               let url = FilePanelPresenter.chooseDirectoryURL(
                   title: L10n.tr("Shared Destination"),
                   initialPath: session.destinationPath,
@@ -1294,7 +1297,7 @@ final class AppModel: ObservableObject {
     func setScanBothDestination(_ url: URL) {
         guard !isWorking, !isEjectingSource, let session = scanBothSession else { return }
         let path = url.standardizedFileURL.path
-        guard session.canChangeDestination || path == session.destinationPath else {
+        guard !session.hasStartedImports || path == session.destinationPath else {
             let destination = session.destinationPath
             showFolderAccessError { L10n.tr("Choose \(destination) to restore access.") }
             return
@@ -1596,6 +1599,7 @@ final class AppModel: ObservableObject {
     }
 
     func saveImportDraftAsDefaults() {
+        guard !isScanBothPlanLocked else { return }
         let previousDefaults = importDefaults
         let savesDestinations = !isReviewingScanBothVolume
         importDefaults = ImportDefaults(
@@ -2011,6 +2015,7 @@ final class AppModel: ObservableObject {
     }
 
     func useImportMediaSelection(_ selection: ImportMediaSelection) {
+        guard !isScanBothPlanLocked else { return }
         rememberCurrentMixedDestinationLayout()
         importMediaSelection = selection
         switch selection {
@@ -2025,7 +2030,7 @@ final class AppModel: ObservableObject {
     }
 
     func useDestinationLayout(_ layout: ImportDestinationLayout) {
-        guard importMediaSelection == .photosAndVideos else {
+        guard !isScanBothPlanLocked, importMediaSelection == .photosAndVideos else {
             return
         }
         destinationLayout = layout == .footageBackup ? .singleLibrary : layout
@@ -2034,6 +2039,7 @@ final class AppModel: ObservableObject {
     }
 
     func useFolderGrouping(_ grouping: ImportFolderGrouping) {
+        guard !isScanBothPlanLocked else { return }
         folderGrouping = grouping
         folderGroupingDidChange()
     }
@@ -2042,6 +2048,7 @@ final class AppModel: ObservableObject {
         _ keyPath: WritableKeyPath<ImportPreviewSession, Bool>,
         to isIncluded: Bool
     ) {
+        guard !isScanBothPlanLocked else { return }
         updatePreviewSessionChoices { session in
             session[keyPath: keyPath] = isIncluded
         }
@@ -2072,6 +2079,7 @@ final class AppModel: ObservableObject {
     }
 
     func applyWorkflowProfile(_ profile: ImportWorkflowProfile, userInitiated: Bool = true) {
+        guard !userInitiated || !isScanBothPlanLocked else { return }
         workflowProfile = profile
         importMediaSelection = profile.mediaSelection
         destinationLayout = profile.mediaSelection == .photosAndVideos
@@ -2559,7 +2567,7 @@ final class AppModel: ObservableObject {
     }
 
     func setReimportSelection(_ fileIDs: Set<Int64>, requested: Bool) {
-        guard !isWorking, !isEjectingSource, importUIPhase == .review,
+        guard !isWorking, !isEjectingSource, !isScanBothPlanLocked, importUIPhase == .review,
               let jobID = currentSummary?.jobID, let databaseURL else { return }
 
         // Treat a multi-lens recording as one selection, even from a single lens row.
